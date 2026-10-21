@@ -11,13 +11,7 @@
     var closing = !open;
     PK.closed = closing;
     // the guests arrive while the gate is open
-    if (open) {
-      PK.spawnT -= dt;
-      if (PK.spawnT <= 0) {
-        PK.spawnT = randf(1.2, 2.8);                              // a busier gate: the lines should look like lines
-        if (PK.guests.length < PK_GUEST_MAX) pkSpawnGuest();
-      }
-    }
+    pkLotTick(dt, open);                                           // they come by car (part 19)
     // a clerk works the window on their own
     if (open && S.clerk) {
       PK.clerkT = (PK.clerkT || 0) - dt;
