@@ -145,6 +145,46 @@
     return g;
   }
 
+  // ── A working door ───────────────────────────────────────────────
+  // a leaf on a hinge: E opens it or shuts it, it swings, and while it is shut it blocks the way (the game's collides hook asks
+  // every door, from the leaf's own world position, so a booth the editor has moved keeps a door that blocks where it stands).
+  // The leaf runs along its local +z from the hinge; closedRy turns it into the wall, openDelta is how far it swings out.
+  var PK_BK_DOORS = [];
+  function pkBkDoor(parent, hx, y0, hz, closedRy, openDelta, w, h, mats, label) {
+    var hinge = new THREE.Group(); hinge.position.set(hx, y0, hz); hinge.rotation.y = closedRy; hinge.userData.dynamic = true; parent.add(hinge);
+    pkBevelBox(0.05, h, w - 0.04, mats.leaf, 0, h / 2, w / 2, hinge, 0.012);
+    pkBevelBox(0.055, 0.5, 0.34, mats.glass, 0, h * 0.72, w / 2, hinge, 0.008);
+    [-1, 1].forEach(function (f) { pkBevelBox(0.07, 0.035, 0.13, MAT.chrome, f * 0.045, h * 0.5, w - 0.12, hinge, 0.008); });
+    pkBevelBox(0.06, 0.16, w - 0.08, mats.kick, 0, 0.1, w / 2, hinge, 0.006);
+    [0.25, h - 0.25].forEach(function (yy) { pkRoundCyl(0.018, 0.12, MAT.chrome, 0, yy, 0.0, hinge, 8); });
+    var d = { hinge: hinge, w: w, closedRy: closedRy, openDelta: openDelta, open: 0, want: 0, label: label || 'the door',
+      setNow: function (v) { d.want = d.open = v ? 1 : 0; hinge.rotation.y = closedRy + openDelta * d.open; } };
+    hitBox(0.16, h, w, 0, h / 2, w / 2, {
+      prompt: function () { return (d.want > 0.5 ? 'Shut ' : 'Open ') + d.label; },
+      use: function () { d.want = d.want > 0.5 ? 0 : 1; sfx('click'); }
+    }, hinge);
+    pkCtlLive({ tick: function (dt) {
+      var k = d.open + (d.want - d.open) * Math.min(1, dt * 5);
+      if (Math.abs(k - d.open) > 1e-4) { d.open = k; hinge.rotation.y = closedRy + openDelta * k; }
+    } });
+    PK_BK_DOORS.push(d);
+    return d;
+  }
+  var PK_BK_DA = new THREE.Vector3(), PK_BK_DB = new THREE.Vector3();
+  function pkBkDoorBlocks(x, z) {
+    for (var i = 0; i < PK_BK_DOORS.length; i++) {
+      var d = PK_BK_DOORS[i]; if (d.open > 0.55) continue;
+      d.hinge.updateWorldMatrix(true, false);
+      PK_BK_DA.set(0, 0, 0).applyMatrix4(d.hinge.matrixWorld); PK_BK_DB.set(0, 0, d.w).applyMatrix4(d.hinge.matrixWorld);
+      var ax = PK_BK_DA.x, az = PK_BK_DA.z, bx = PK_BK_DB.x, bz = PK_BK_DB.z, ex = bx - ax, ez = bz - az, l2 = ex * ex + ez * ez;
+      var t = l2 ? clamp(((x - ax) * ex + (z - az) * ez) / l2, 0, 1) : 0, qx = ax + ex * t - x, qz = az + ez * t - z;
+      if (qx * qx + qz * qz < 0.32 * 0.32) return true;
+    }
+    return false;
+  }
+  var _pkBkPrevCollides = GAME.collides;
+  GAME.collides = function (x, z, opt) { return (_pkBkPrevCollides && _pkBkPrevCollides(x, z, opt)) || pkBkDoorBlocks(x, z); };
+
   // ── The ride's state, as lamps and words ─────────────────────────
   function pkBkWord(a) {
     var C = pkCtl(a);
@@ -387,7 +427,7 @@
   }
 
   // ── The booth ─────────────────────────────────────────────────────
-  var PK_BK = { W: 3.8, D: 2.9, FLOOR: 0.45, WALL: 2.5, SILL: 0.95, HEAD: 2.05, T: 0.14, DOORW: 0.95, DOORZ: -0.35 };
+  var PK_BK = { W: 3.8, D: 2.9, FLOOR: 0.45, WALL: 2.5, SILL: 0.95, HEAD: 2.05, T: 0.14, DOORW: 1.1, DOORZ: -0.35, STAIR: 0.45 };   // STAIR: the steps run this far past the door each side
   function pkRideBooth(a, plot, th) {
     // where it stands: beside the head of the queue, off the lane on the side away from the ride (or the plot's boothSide),
     // the window (local +Z) at the ride and the door in the side wall facing the queue
@@ -471,19 +511,15 @@
       pkBevelBox(T, WH - 2.05, DW, cream, wx, F + 2.05 + (WH - 2.05) / 2, DZ, g, 0.012);
       [d0 - 0.04, d1 + 0.04].forEach(function (jz) { pkBevelBox(T + 0.07, 2.1, 0.08, theme, wx, F + 1.05, jz, g, 0.01); });
       pkBevelBox(T + 0.07, 0.09, DW + 0.16, theme, wx, F + 2.08, DZ, g, 0.01);
-      // the door, propped open against the wall behind it, with its wired glass and push plate
-      var leaf = new THREE.Group(); leaf.position.set(wx + sx * 0.02, F, d0); leaf.rotation.y = sx * 1.55; g.add(leaf);
-      pkBevelBox(0.05, 2.0, DW - 0.06, cream, 0, 1.0, DW / 2, leaf, 0.012);
-      pkBevelBox(0.055, 0.5, 0.34, glass, 0, 1.45, DW / 2, leaf, 0.008);
-      pkBevelBox(0.065, 0.18, 0.08, MAT.chrome, sx * 0.02, 1.0, DW - 0.14, leaf, 0.01);
-      pkBevelBox(0.06, 0.16, DW - 0.1, dark, 0, 0.1, DW / 2, leaf, 0.006);
+      // the door: hung on the back jamb, it swings out over the landing; shut, it closes the booth
+      a.boothDoor = pkBkDoor(g, wx + sx * 0.02, F, d0, 0, sx * 1.55, DW, 2.0, { leaf: cream, glass: glass, kick: dark }, 'the booth door');
       // three steps up to the door, with a handrail each side, and the landing
       for (var st = 0; st < 3; st++) {
         var sh = F * (3 - st) / 3;
-        pkBevelBox(0.32, sh, DW + 0.4, pkMatStone(), wx + sx * (0.2 + st * 0.3), sh / 2, DZ, g, 0.02);
+        pkBevelBox(0.32, sh, DW + K.STAIR * 2, pkMatStone(), wx + sx * (0.2 + st * 0.3), sh / 2, DZ, g, 0.02);
       }
       [-1, 1].forEach(function (rz) {
-        var rzz = DZ + rz * (DW / 2 + 0.16);
+        var rzz = DZ + rz * (DW / 2 + K.STAIR - 0.05);
         pkRoundCyl(0.025, 0.95, MAT.steelDark, wx + sx * 1.0, 0.475, rzz, g, 8);
         pkRoundCyl(0.025, 0.95, MAT.steelDark, wx + sx * 0.2, F + 0.475, rzz, g, 8);
         pkRod(wx + sx * 1.0, 0.95, rzz, wx + sx * 0.2, F + 0.95, rzz, 0.022, MAT.steelDark, g, 6);
@@ -597,6 +633,14 @@
         solid(Math.min(p0[0], p1[0]) - 0.07, Math.max(p0[0], p1[0]) + 0.07, Math.min(p0[1], p1[1]) - 0.07, Math.max(p0[1], p1[1]) + 0.07, 0, F + WH + 0.3);
       }
     }
+    // a run of short solids along a line, padded: a rotated booth gets a collider that follows the line, not one box round it
+    function lineSolid(lx0, lz0, lx1, lz1, pad, y1, N) {
+      N = N || 6;
+      for (var i = 0; i < N; i++) {
+        var p0 = wp(lx0 + (lx1 - lx0) * i / N, lz0 + (lz1 - lz0) * i / N), p1 = wp(lx0 + (lx1 - lx0) * (i + 1) / N, lz0 + (lz1 - lz0) * (i + 1) / N);
+        solid(Math.min(p0[0], p1[0]) - pad, Math.max(p0[0], p1[0]) + pad, Math.min(p0[1], p1[1]) - pad, Math.max(p0[1], p1[1]) + pad, 0, y1);
+      }
+    }
     function boxSolid(lx, lz, hw, hd, y1) {
       var pts = [wp(lx - hw, lz - hd), wp(lx + hw, lz - hd), wp(lx - hw, lz + hd), wp(lx + hw, lz + hd)];
       var x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
@@ -605,15 +649,15 @@
     }
     wallSolid(-HW, bz0, HW, bz0);
     wallSolid(-HW, fz, HW, fz);
-    var owx = ds * (HW - T / 2), dgap = DW / 2 + 0.1;
+    var owx = ds * (HW - T / 2), dgap = DW / 2 + 0.12;
     wallSolid(owx, -HD, owx, DZ - dgap);
     wallSolid(owx, DZ + dgap, owx, HD);
     wallSolid(-owx, -HD, -owx, HD);
     for (var ci = 0; ci < 10; ci++) boxSolid(-1.3 + (ci + 0.5) * 0.26, HD - 0.5, 0.13, 0.28, F + 1.3);     // the desk
-    boxSolid(-ds * (HW - 0.3), -0.55, 0.16, 0.45, F + 2.0);                                               // the cabinet
+    lineSolid(-ds * (HW - 0.3), -0.95, -ds * (HW - 0.3), -0.15, 0.13, F + 2.0, 4);                          // the cabinet
     boxSolid(ds * (HW + 0.75), HD - 0.15, 0.09, 0.09, 2.3);                                               // the queue board's post
     // the handrails keep the steps to their width
-    [-1, 1].forEach(function (rz) { var p0 = wp(owx + ds * 0.2, DZ + rz * (DW / 2 + 0.16)), p1 = wp(owx + ds * 1.0, DZ + rz * (DW / 2 + 0.16)); solid(Math.min(p0[0], p1[0]) - 0.05, Math.max(p0[0], p1[0]) + 0.05, Math.min(p0[1], p1[1]) - 0.05, Math.max(p0[1], p1[1]) + 0.05, 0, 1.4); });
+    [-1, 1].forEach(function (rz) { lineSolid(owx + ds * 0.2, DZ + rz * (DW / 2 + K.STAIR - 0.05), owx + ds * 1.0, DZ + rz * (DW / 2 + K.STAIR - 0.05), 0.03, 1.4, 8); });
     return { g: g, screen: screen };
   }
 
@@ -625,7 +669,7 @@
       var lx = dx * c - dz * s, lz = dx * s + dz * c;
       if (Math.abs(lx) < PK_BK.W / 2 && Math.abs(lz) < PK_BK.D / 2) return PK_BK.FLOOR;
       var o = (lx - f.ds * PK_BK.W / 2) * f.ds;                           // out from the door wall
-      if (o >= 0 && o < 0.95 && Math.abs(lz - PK_BK.DOORZ) < PK_BK.DOORW / 2 + 0.2) return PK_BK.FLOOR * clamp(1 - o / 0.95, 0, 1);
+      if (o >= 0 && o < 0.95 && Math.abs(lz - PK_BK.DOORZ) < PK_BK.DOORW / 2 + PK_BK.STAIR) return PK_BK.FLOOR * clamp(1 - o / 0.95, 0, 1);
     }
     return 0;
   }

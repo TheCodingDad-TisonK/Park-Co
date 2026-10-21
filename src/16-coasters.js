@@ -691,6 +691,7 @@
     box(T, H - 2.1, d1 - d0, trim, xn, 2.1 + (H - 2.1) / 2, (d0 + d1) / 2, g);
     box(T, H, K.z1 - d1, trim, xn, H / 2, (d1 + K.z1) / 2, g);
     box(T + 0.06, 2.12, 0.08, band, xn, 1.06, d0 - 0.04, g); box(T + 0.06, 2.12, 0.08, band, xn, 1.06, d1 + 0.04, g);
+    a.boothDoor = pkBkDoor(g, xn - s * 0.03, 0.12, d1, Math.PI, s * 1.55, d1 - d0, 1.98, { leaf: trim, glass: glass, kick: std({ color: 0x20272c, roughness: 0.62 }) }, 'the cabin door');
     // the far wall and the back panel (the hall's own wall stands behind it)
     box(T, H, D, trim, xf, H / 2, cz, g);
     box(W, H, 0.06, std({ color: 0x34343c, roughness: 0.85 }), cx, H / 2, K.z1 - 0.05, g);
