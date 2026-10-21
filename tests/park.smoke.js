@@ -236,7 +236,7 @@ module.exports = `
   ok(T.PK.attractions.length === 17, 'seventeen rides besides the main coaster: ' + T.PK.attractions.length);
   ok(T.PK.attrById.carousel && T.PK.attrById.carousel.seats.length === 8, 'the carousel has eight horses');
   ok(T.PK.attrById.ferris && T.PK.attrById.ferris.seats.length === 16, 'the ferris wheel has eight cabins of two');
-  { const d = T.CO.npcs(); ok(d && d.characters && d.spawners.length === 3 && d.workers.length === 2, 'the crowd is described to the engine: ' + d.spawners.length + ' spawners, ' + d.workers.length + ' workers'); }
+  { const d = T.CO.npcs(); ok(d && d.characters && d.spawners.length === 5 && d.workers.length === 4 && Object.keys(d.spots).some((k) => d.spots[k].z < -60) && Object.keys(d.spots).some((k) => d.spots[k].x > 70), 'the crowd is described to the engine and its spots reach the far lands: ' + d.spawners.length + ' spawners, ' + d.workers.length + ' workers'); }
   { const a = T.PK.attrById.teacups; a.state = 'idle'; a.t = 0; a.queue.length = 0; a.riders = 0; a.ctl.fault = ''; T.pkAttrUnseatAll(a);
     for (let i = 0; i < 4; i++) { const g = T.pkSpawnGuest(); const s = T.pkAttrSlot(a, i); g.rec.x = s.x; g.rec.z = s.z; g.state = 'qwait'; g.slot = i; g.attr = a.id; a.queue.push(g); }
     T.pkAttrTick(a, 0.05);
@@ -443,6 +443,12 @@ module.exports = `
     const a = T.PK.attrById.carousel, C = T.pkCtl(a), bp = a.boothPanel; T.pkAttrUnseatAll(a); a.state = 'idle'; a.t = 0; T.pkSetRideKey(a, false); T.pkCtlTick(0.05); const off = !bp.ann.key.on;
     T.pkSetRideKey(a, true); C.fault = 'test'; T.pkCtlTick(0.05); const fault = bp.ann.fault.on === 'flash' && bp.ann.key.on; C.fault = ''; T.pkCtlTick(0.05);
     ok(a1 === 0 && a2 === 1 && a3 === 4 && off && fault && !bp.ann.fault.on, 'the status banks follow the rides: mimic ' + [a1, a2, a3].join('/') + ', booth key ' + off + ', fault ' + fault); }
+  // with no clerk at the window and nobody selling, the front of the ticket line buys at the machine and walks in
+  { const S0 = S.clerk, C0 = T.PK.closed; S.clerk = false; T.PK.closed = false; const b = T.PK.booths[0], gu = T.pkSpawnGuest(); T.PK.booths.forEach((x) => { x.queue.length = 0; });
+    gu.booth = 0; gu.state = 'boothQueue'; gu.rec.path = []; b.queue.push(gu); T.player.x = 0; T.player.z = 0;
+    let n = 0; while (gu.state === 'boothQueue' && n < 300) { T.pkGuestTick(0.05); n++; }
+    ok(!!b.machine && gu.ticket === true && gu.state === 'toTurn' && n > 100, 'an unstaffed window: the guest buys at the machine after ' + (n * 0.05).toFixed(1) + ' s');
+    S.clerk = S0; T.PK.closed = C0; gu.state = 'gone'; T.pkGuestTick(0.01); }
   // the save round trip
   T.save(); { const raw = JSON.parse(localStorage.getItem('park-co-slot1')); ok(!!raw && raw.bank === S.bank && raw.ticketPrice === S.ticketPrice && raw.auto === S.auto && raw.xp === T.PK.xp, 'save wrote the slot: ' + JSON.stringify({ bank: raw && raw.bank, s: S.bank, failed: !!T.save.failed })); }
   // the pure layer

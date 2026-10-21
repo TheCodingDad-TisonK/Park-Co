@@ -217,6 +217,18 @@ function pkTicketBoothBetter(b, i) {
   pkBevelBox(2.98, 0.9, 0.03, pkMatGlassRich(), 0, 1.45, 1.51, g, 0.01);
   // a projecting counter, with a till and a bell
   pkBevelBox(3.5, 0.09, 0.52, pkMatWoodRich(), 0, 0.965, 1.68, g, 0.03);
+  // the self-service ticket machine beside the counter on the outer side: a cabinet, a lit screen, a card slot. It sells
+  // when nobody staffs the window (part 02, pkGuestMachine); its screen blinks green as it does
+  var mx = -side * 2.25, mg = new THREE.Group(); mg.position.set(mx, 0, 1.9); g.add(mg);
+  pkBevelBox(0.62, 1.55, 0.46, std({ color: 0x21402e, roughness: 0.6, metalness: 0.2 }), 0, 0.78, 0, mg, 0.05);
+  pkBevelBox(0.66, 0.1, 0.5, std({ color: 0xc9a227, roughness: 0.35, metalness: 0.8 }), 0, 1.6, 0, mg, 0.03);
+  var mScr = std({ color: 0x0b1a12, emissive: 0x5fd38d, emissiveIntensity: 0.35, roughness: 0.3 });
+  pkBevelBox(0.42, 0.3, 0.02, mScr, 0, 1.22, 0.235, mg, 0.01);
+  pkBevelBox(0.16, 0.03, 0.02, MAT.steelDark, 0, 0.98, 0.235, mg, 0.005);
+  sign(['TICKETS'], 0.5, 0.12, 0, 1.47, 0.24, 0, { bg: '#21402e', fg: '#f6e2a6' }, mg);
+  b.machine = { blink: 0, mat: mScr };
+  animate(function (dt) { var m = b.machine; if (m.blink > 0) m.blink -= dt; m.mat.emissiveIntensity = m.blink > 0 && Math.sin(m.blink * 18) > 0 ? 1.4 : 0.35; });
+  solid(b.x + mx - 0.32, b.x + mx + 0.32, b.z + 1.66, b.z + 2.14, 0, 1.6);
   pkBevelBox(0.3, 0.04, 0.12, MAT.steelDark, -0.4, 0.92, 1.86, g, 0.01);
   var tillM = std({ color: 0x2a3138, roughness: 0.55 });
   pkBevelBox(0.36, 0.18, 0.3, tillM, 1.05, 1.1, 1.64, g, 0.03);
@@ -261,7 +273,7 @@ function pkTicketBoothBetter(b, i) {
   // the queue sign on a post, at the head of the line
   pkRoundCyl(0.05, 1.9, MAT.steelDark, side * 1.55, 0.95, 2.4, g, 8);
   pkSign3D(['QUEUE HERE'], 1.3, 0.28, side * 1.55, 1.9, 2.4, 0, { bg: '#0d1216', fg: '#eef1f5' }, g);
-  PK.booths.push({ i: i, x: b.x, z: b.z, turnstile: b.turnstile, queue: [], screen: sc, g: g });
+  PK.booths.push({ i: i, x: b.x, z: b.z, turnstile: b.turnstile, queue: [], screen: sc, g: g, machine: b.machine });
   solid(b.x - 1.72, b.x + 1.72, b.z - 1.62, b.z - 1.38, 0, 3.0);
   solid(b.x - 1.72, b.x - 1.48, b.z - 1.62, b.z + 1.62, 0, 3.0);
   solid(b.x + 1.48, b.x + 1.72, b.z - 1.62, b.z + 1.62, 0, 3.0);

@@ -3592,37 +3592,56 @@
         "steps": [
           {
             "do": "walk",
-            "to": "plaza"
-          },
-          {
-            "do": "wander",
-            "radius": 6,
-            "seconds": 12
-          },
-          {
-            "do": "walk",
             "to": "midway"
           },
           {
             "do": "wander",
             "radius": 4,
+            "seconds": 8
+          },
+          {
+            "do": "walk",
+            "to": "carousel"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 12
+          },
+          {
+            "do": "walk",
+            "to": "fairCross"
+          },
+          {
+            "do": "walk",
+            "to": "teacups"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
             "seconds": 10
           },
           {
             "do": "walk",
-            "to": "station"
+            "to": "kidsLane"
           },
           {
-            "do": "wait",
-            "seconds": 6
+            "do": "wander",
+            "radius": 5,
+            "seconds": 14
+          },
+          {
+            "do": "say",
+            "text": "Look at the little train!"
           },
           {
             "do": "walk",
             "to": "snack"
           },
           {
-            "do": "wait",
-            "seconds": 4
+            "do": "wander",
+            "radius": 3,
+            "seconds": 6
           },
           {
             "do": "walk",
@@ -3652,20 +3671,16 @@
         "steps": [
           {
             "do": "walk",
-            "to": "plaza"
-          },
-          {
-            "do": "walk",
-            "to": "carousel"
+            "to": "midway"
           },
           {
             "do": "wander",
-            "radius": 5,
-            "seconds": 14
+            "radius": 4,
+            "seconds": 8
           },
           {
             "do": "walk",
-            "to": "midway"
+            "to": "ferris"
           },
           {
             "do": "wander",
@@ -3674,11 +3689,33 @@
           },
           {
             "do": "walk",
-            "to": "ferris"
+            "to": "thrillCross"
+          },
+          {
+            "do": "walk",
+            "to": "dodgems"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 14
+          },
+          {
+            "do": "face",
+            "to": "baron"
           },
           {
             "do": "wait",
-            "seconds": 5
+            "seconds": 6
+          },
+          {
+            "do": "walk",
+            "to": "station"
+          },
+          {
+            "do": "wander",
+            "radius": 3,
+            "seconds": 6
           },
           {
             "do": "walk",
@@ -3708,12 +3745,43 @@
         "steps": [
           {
             "do": "walk",
-            "to": "midway"
+            "to": "fairCross"
           },
           {
             "do": "wander",
-            "radius": 7,
-            "seconds": 16
+            "radius": 3,
+            "seconds": 4
+          },
+          {
+            "do": "walk",
+            "to": "darkWoods"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 14
+          },
+          {
+            "do": "walk",
+            "to": "dropTower"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 10
+          },
+          {
+            "do": "walk",
+            "to": "promWest"
+          },
+          {
+            "do": "walk",
+            "to": "halls"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 12
           },
           {
             "do": "say",
@@ -3721,11 +3789,196 @@
           },
           {
             "do": "walk",
-            "to": "teacups"
+            "to": "gardenWalk"
           },
           {
             "do": "wander",
-            "radius": 4,
+            "radius": 5,
+            "seconds": 10
+          },
+          {
+            "do": "walk",
+            "to": "plaza"
+          },
+          {
+            "do": "leave"
+          }
+        ]
+      },
+      "visitorD": {
+        "names": [
+          "Lars",
+          "Julia",
+          "Bas",
+          "Roos",
+          "Milan",
+          "Fleur"
+        ],
+        "look": {
+          "shirt": "#7a4a8a",
+          "pants": "#2b2f36",
+          "skin": "#e2b48a",
+          "hair": "#4a2f1c"
+        },
+        "speed": 1.45,
+        "steps": [
+          {
+            "do": "walk",
+            "to": "thrillCross"
+          },
+          {
+            "do": "wander",
+            "radius": 3,
+            "seconds": 4
+          },
+          {
+            "do": "walk",
+            "to": "coasterCountry"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 12
+          },
+          {
+            "do": "walk",
+            "to": "promEast"
+          },
+          {
+            "do": "walk",
+            "to": "eastWalk"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 10
+          },
+          {
+            "do": "walk",
+            "to": "firebird"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 12
+          },
+          {
+            "do": "face",
+            "to": "firebirdTrack"
+          },
+          {
+            "do": "wait",
+            "seconds": 8
+          },
+          {
+            "do": "walk",
+            "to": "dragon"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 12
+          },
+          {
+            "do": "say",
+            "text": "That loop!"
+          },
+          {
+            "do": "walk",
+            "to": "promEast"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 6
+          },
+          {
+            "do": "walk",
+            "to": "plaza"
+          },
+          {
+            "do": "leave"
+          }
+        ]
+      },
+      "visitorE": {
+        "names": [
+          "Wim",
+          "Ellen",
+          "Jan",
+          "Ilse",
+          "Koen",
+          "Maud"
+        ],
+        "look": {
+          "shirt": "#c9a227",
+          "pants": "#3a3f48",
+          "skin": "#d39a72",
+          "hair": "#8a6a4a"
+        },
+        "speed": 1.2,
+        "steps": [
+          {
+            "do": "walk",
+            "to": "fairCross"
+          },
+          {
+            "do": "wander",
+            "radius": 3,
+            "seconds": 4
+          },
+          {
+            "do": "walk",
+            "to": "gardenWest"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 8
+          },
+          {
+            "do": "walk",
+            "to": "gardenWalk"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 12
+          },
+          {
+            "do": "walk",
+            "to": "clock"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 14
+          },
+          {
+            "do": "walk",
+            "to": "bandstand"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 16
+          },
+          {
+            "do": "walk",
+            "to": "maze"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 10
+          },
+          {
+            "do": "walk",
+            "to": "promWest"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
             "seconds": 8
           },
           {
@@ -3775,6 +4028,79 @@
             "do": "wander",
             "radius": 5,
             "seconds": 18
+          }
+        ]
+      },
+      "sweeperNorth": {
+        "names": [
+          "Joop"
+        ],
+        "look": {
+          "shirt": "#e0a92c",
+          "pants": "#2f3440",
+          "skin": "#c99266",
+          "hair": "#3a3a3a"
+        },
+        "speed": 1.1,
+        "steps": [
+          {
+            "do": "walk",
+            "to": "gardenWalk"
+          },
+          {
+            "do": "wander",
+            "radius": 9,
+            "seconds": 30
+          },
+          {
+            "do": "walk",
+            "to": "promWest"
+          },
+          {
+            "do": "wander",
+            "radius": 8,
+            "seconds": 25
+          },
+          {
+            "do": "walk",
+            "to": "promEast"
+          },
+          {
+            "do": "wander",
+            "radius": 8,
+            "seconds": 25
+          }
+        ]
+      },
+      "gardener": {
+        "names": [
+          "Truus"
+        ],
+        "look": {
+          "shirt": "#4d7a3a",
+          "pants": "#3a2f24",
+          "skin": "#e0b48e",
+          "hair": "#b8b8b8"
+        },
+        "speed": 1,
+        "steps": [
+          {
+            "do": "walk",
+            "to": "clock"
+          },
+          {
+            "do": "wander",
+            "radius": 6,
+            "seconds": 40
+          },
+          {
+            "do": "walk",
+            "to": "maze"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 30
           }
         ]
       },
@@ -3828,7 +4154,7 @@
         "x": -5,
         "z": 26,
         "every": 13,
-        "max": 5,
+        "max": 6,
         "hours": [
           9,
           22
@@ -3839,8 +4165,8 @@
         "character": "visitorB",
         "x": 5,
         "z": 26,
-        "every": 17,
-        "max": 4,
+        "every": 15,
+        "max": 5,
         "hours": [
           9,
           22
@@ -3851,7 +4177,31 @@
         "character": "visitorC",
         "x": 0,
         "z": 24,
-        "every": 21,
+        "every": 17,
+        "max": 5,
+        "hours": [
+          9,
+          22
+        ]
+      },
+      {
+        "id": "crowdD",
+        "character": "visitorD",
+        "x": 3,
+        "z": 24,
+        "every": 17,
+        "max": 5,
+        "hours": [
+          9,
+          22
+        ]
+      },
+      {
+        "id": "crowdE",
+        "character": "visitorE",
+        "x": -3,
+        "z": 24,
+        "every": 19,
         "max": 4,
         "hours": [
           9,
@@ -3865,6 +4215,36 @@
         "character": "sweeper",
         "x": 0,
         "z": 20,
+        "ry": 0,
+        "home": [
+          0,
+          24
+        ],
+        "hours": [
+          9,
+          22
+        ]
+      },
+      {
+        "id": "sweeperNorth",
+        "character": "sweeperNorth",
+        "x": 2,
+        "z": -44,
+        "ry": 0,
+        "home": [
+          0,
+          24
+        ],
+        "hours": [
+          9,
+          22
+        ]
+      },
+      {
+        "id": "gardener",
+        "character": "gardener",
+        "x": 4,
+        "z": -58,
         "ry": 0,
         "home": [
           0,
@@ -3896,6 +4276,10 @@
         "x": 0,
         "z": 26
       },
+      "gate": {
+        "x": 0,
+        "z": 28
+      },
       "midway": {
         "x": 0,
         "z": 14
@@ -3903,6 +4287,10 @@
       "station": {
         "x": 0,
         "z": 4
+      },
+      "coaster": {
+        "x": 0,
+        "z": -2
       },
       "snack": {
         "x": -11,
@@ -3912,21 +4300,93 @@
         "x": -14,
         "z": 19
       },
-      "teacups": {
-        "x": -14,
-        "z": 3
-      },
       "ferris": {
         "x": 13,
         "z": 19
       },
-      "coaster": {
-        "x": 0,
-        "z": -2
+      "fairCross": {
+        "x": -31,
+        "z": 3
       },
-      "gate": {
-        "x": 0,
-        "z": 28
+      "teacups": {
+        "x": -40,
+        "z": 3
+      },
+      "kidsLane": {
+        "x": -46.8,
+        "z": 36
+      },
+      "thrillCross": {
+        "x": 35,
+        "z": 3
+      },
+      "dodgems": {
+        "x": 42,
+        "z": 3
+      },
+      "baron": {
+        "x": 57,
+        "z": 19
+      },
+      "darkWoods": {
+        "x": -36,
+        "z": -24
+      },
+      "dropTower": {
+        "x": -36,
+        "z": -52
+      },
+      "promWest": {
+        "x": -20,
+        "z": -60
+      },
+      "halls": {
+        "x": -46.5,
+        "z": -70
+      },
+      "gardenWest": {
+        "x": -28,
+        "z": -44
+      },
+      "gardenWalk": {
+        "x": 2,
+        "z": -44
+      },
+      "clock": {
+        "x": 6,
+        "z": -58
+      },
+      "bandstand": {
+        "x": 2,
+        "z": -66
+      },
+      "maze": {
+        "x": 9.5,
+        "z": -72
+      },
+      "coasterCountry": {
+        "x": 40,
+        "z": -24
+      },
+      "promEast": {
+        "x": 50,
+        "z": -60
+      },
+      "eastWalk": {
+        "x": 76,
+        "z": -20
+      },
+      "firebird": {
+        "x": 77,
+        "z": -36
+      },
+      "firebirdTrack": {
+        "x": 100,
+        "z": -30
+      },
+      "dragon": {
+        "x": 77,
+        "z": -92
       }
     }
   });
@@ -5031,6 +5491,20 @@
     gu.lockWait = 0;
     pkGo(gu, randf(-6, 6), randf(8, 22), 'off');
   }
+  // The self-service machine beside each ticket window: with no clerk staffing the window and the player not at it, the guest
+  // at the front of the line waits a moment, then buys there at the same price, so the park keeps filling while you run a
+  // ride. Selling at the window yourself (or a clerk) still serves first.
+  var PK_MACHINE_WAIT = 6;
+  function pkGuestMachine(gu, dt) {
+    var b = PK.booths[gu.booth];
+    if (S.clerk || PK.closed || !b || b.queue[0] !== gu) { gu.mWait = 0; return; }
+    if (player && Math.hypot(player.x - b.x, player.z - (b.z + 2.0)) < 3.2) { gu.mWait = 0; return; }   // you are at the window
+    gu.mWait = (gu.mWait || 0) + dt;
+    if (gu.mWait < PK_MACHINE_WAIT) return;
+    gu.mWait = 0;
+    pkServe(gu.booth, true);
+    if (b.machine) b.machine.blink = 1.2;
+  }
   function pkGuestStep(gu, dt) {
     var rec = gu.rec, g = gu.g;
     gu.t += dt;
@@ -5043,7 +5517,8 @@
     } else if (gu.state === 'walkBooth') {
       if (arrived) { PK.booths[gu.booth].queue.push(gu); gu.state = 'boothQueue'; }
     } else if (gu.state === 'boothQueue') {
-      // the window serves the front of the line
+      // the window serves the front of the line; when nobody staffs it, the front of the line pays at the machine
+      pkGuestMachine(gu, dt);
     } else if (gu.state === 'toTurn') {
       var tb = PK.booths[gu.booth] || PK.booths[0];
       if (!rec.path.length) pkGo(gu, tb.turnstile, PK_GATE_Z + 2, 'walkTurn');
@@ -5148,7 +5623,7 @@
     });
   }
   // ── The ticket window ─────────────────────────────────────────────
-  function pkServe(bi) {
+  function pkServe(bi, machine) {
     if (PK.closed) { sfx('bad'); toast('The park is closed', 'bad'); return false; }
     var b = PK.booths[bi]; if (!b) return false;
     var gu = null;
@@ -5159,8 +5634,8 @@
     pkXp(1);
     gu.ticket = true; gu.state = 'toTurn'; gu.booth = bi;
     b.queue.splice(b.queue.indexOf(gu), 1);
-    sfx('cash'); say(gu.g, 'One, please!');
-    toast('Ticket sold - ' + money(S.ticketPrice), 'good');
+    if (machine) { say(gu.g, pick(['The machine, then', 'Card, beep, done', 'Got it!'])); PK.today.machine = (PK.today.machine || 0) + 1; }
+    else { sfx('cash'); say(gu.g, 'One, please!'); toast('Ticket sold - ' + money(S.ticketPrice), 'good'); }
     screenDirtyAll(); hudDirty = true;
     return true;
   }
@@ -7448,103 +7923,78 @@
   // The engine's NPC system (CO.npcs) makes people from data: a character, a spawner on a clock, and a list of steps.
   // These are the wanderers and the staff. They do not queue and they do not buy: they walk, they look at the rides,
   // they sit by the midway and they drift home. The queuing guests are a different machine, in part 02.
+  // Each visitor takes a tour of one part of the park and back (the spots are on the streets of every land), so the crowd is
+  // spread over the whole park rather than the midway; the staff keep their own corners.
   function pkBuildNpcs() {
+    var W = function (to, sec, r) { return [{ do: 'walk', to: to }, { do: 'wander', radius: r || 5, seconds: sec || 10 }]; };
+    var tour = function (list) { var st = []; list.forEach(function (x) { st = st.concat(Array.isArray(x) ? x : [x]); }); return st.concat([{ do: 'walk', to: 'plaza' }, { do: 'leave' }]); };
     CO.npcs({
       characters: {
-        visitorA: {
+        visitorA: {          // the Fairground and the kids' garden
           names: ['Anna', 'Bram', 'Sanne', 'Daan', 'Lotte', 'Sem'],
-          look: { shirt: '#3f6a9e', pants: '#2f3440', skin: '#d8a97c', hair: '#3a2a1c' },
-          speed: 1.35,
-          steps: [
-            { do: 'walk', to: 'plaza' },
-            { do: 'wander', radius: 6, seconds: 12 },
-            { do: 'walk', to: 'midway' },
-            { do: 'wander', radius: 4, seconds: 10 },
-            { do: 'walk', to: 'station' },
-            { do: 'wait', seconds: 6 },
-            { do: 'walk', to: 'snack' },
-            { do: 'wait', seconds: 4 },
-            { do: 'walk', to: 'plaza' },
-            { do: 'leave' }
-          ]
+          look: { shirt: '#3f6a9e', pants: '#2f3440', skin: '#d8a97c', hair: '#3a2a1c' }, speed: 1.35,
+          steps: tour([W('midway', 8, 4), W('carousel', 12), { do: 'walk', to: 'fairCross' }, W('teacups', 10), W('kidsLane', 14), { do: 'say', text: 'Look at the little train!' }, W('snack', 6, 3)])
         },
-        visitorB: {
+        visitorB: {          // Thrills and the wheel
           names: ['Femke', 'Thijs', 'Noor', 'Jesse', 'Mila', 'Ruben'],
-          look: { shirt: '#a8462f', pants: '#3a3f48', skin: '#e8c49b', hair: '#6b4a2a' },
-          speed: 1.28,
-          steps: [
-            { do: 'walk', to: 'plaza' },
-            { do: 'walk', to: 'carousel' },
-            { do: 'wander', radius: 5, seconds: 14 },
-            { do: 'walk', to: 'midway' },
-            { do: 'wander', radius: 5, seconds: 10 },
-            { do: 'walk', to: 'ferris' },
-            { do: 'wait', seconds: 5 },
-            { do: 'walk', to: 'plaza' },
-            { do: 'leave' }
-          ]
+          look: { shirt: '#a8462f', pants: '#3a3f48', skin: '#e8c49b', hair: '#6b4a2a' }, speed: 1.28,
+          steps: tour([W('midway', 8, 4), W('ferris', 10), { do: 'walk', to: 'thrillCross' }, W('dodgems', 14), { do: 'face', to: 'baron' }, { do: 'wait', seconds: 6 }, W('station', 6, 3)])
         },
-        visitorC: {
+        visitorC: {          // the Dark Woods, the drop tower and the show halls
           names: ['Omar', 'Yara', 'Sven', 'Iris', 'Timo', 'Eva'],
-          look: { shirt: '#5b8a52', pants: '#2d333b', skin: '#c99266', hair: '#1e1712' },
-          speed: 1.42,
-          steps: [
-            { do: 'walk', to: 'midway' },
-            { do: 'wander', radius: 7, seconds: 16 },
-            { do: 'say', text: 'Such a nice little park.' },
-            { do: 'walk', to: 'teacups' },
-            { do: 'wander', radius: 4, seconds: 8 },
-            { do: 'walk', to: 'plaza' },
-            { do: 'leave' }
-          ]
+          look: { shirt: '#5b8a52', pants: '#2d333b', skin: '#c99266', hair: '#1e1712' }, speed: 1.42,
+          steps: tour([W('fairCross', 4, 3), W('darkWoods', 14), W('dropTower', 10), { do: 'walk', to: 'promWest' }, W('halls', 12), { do: 'say', text: 'Such a nice little park.' }, W('gardenWalk', 10)])
+        },
+        visitorD: {          // Coaster Country and the East Walk
+          names: ['Lars', 'Julia', 'Bas', 'Roos', 'Milan', 'Fleur'],
+          look: { shirt: '#7a4a8a', pants: '#2b2f36', skin: '#e2b48a', hair: '#4a2f1c' }, speed: 1.45,
+          steps: tour([W('thrillCross', 4, 3), W('coasterCountry', 12), { do: 'walk', to: 'promEast' }, W('eastWalk', 10), W('firebird', 12), { do: 'face', to: 'firebirdTrack' }, { do: 'wait', seconds: 8 }, W('dragon', 12), { do: 'say', text: 'That loop!' }, W('promEast', 6)])
+        },
+        visitorE: {          // the gardens: the Garden Walk, the flower clock, the bandstand and the maze
+          names: ['Wim', 'Ellen', 'Jan', 'Ilse', 'Koen', 'Maud'],
+          look: { shirt: '#c9a227', pants: '#3a3f48', skin: '#d39a72', hair: '#8a6a4a' }, speed: 1.2,
+          steps: tour([W('fairCross', 4, 3), W('gardenWest', 8), W('gardenWalk', 12), W('clock', 14), W('bandstand', 16), W('maze', 10), W('promWest', 8)])
         },
         sweeper: {
-          names: ['Piet'],
-          look: { shirt: '#e0a92c', pants: '#2f3440', skin: '#d8a97c', hair: '#5a5a5a' },
-          speed: 1.1,
-          steps: [
-            { do: 'walk', to: 'midway' },
-            { do: 'wander', radius: 9, seconds: 25 },
-            { do: 'walk', to: 'plaza' },
-            { do: 'wander', radius: 6, seconds: 20 },
-            { do: 'walk', to: 'snack' },
-            { do: 'wander', radius: 5, seconds: 18 }
-          ]
+          names: ['Piet'], look: { shirt: '#e0a92c', pants: '#2f3440', skin: '#d8a97c', hair: '#5a5a5a' }, speed: 1.1,
+          steps: [].concat(W('midway', 25, 9), W('plaza', 20, 6), W('snack', 18, 5))
+        },
+        sweeperNorth: {
+          names: ['Joop'], look: { shirt: '#e0a92c', pants: '#2f3440', skin: '#c99266', hair: '#3a3a3a' }, speed: 1.1,
+          steps: [].concat(W('gardenWalk', 30, 9), W('promWest', 25, 8), W('promEast', 25, 8))
+        },
+        gardener: {
+          names: ['Truus'], look: { shirt: '#4d7a3a', pants: '#3a2f24', skin: '#e0b48e', hair: '#b8b8b8' }, speed: 1.0,
+          steps: [].concat(W('clock', 40, 6), W('maze', 30, 5))
         },
         watcher: {
-          names: ['Kees'],
-          look: { shirt: '#4a5a6a', pants: '#2f3440', skin: '#e0b48e', hair: '#2a2a2a' },
-          speed: 1.05,
-          steps: [
-            { do: 'walk', to: 'station' },
-            { do: 'face', to: 'coaster' },
-            { do: 'wait', seconds: 40 },
-            { do: 'walk', to: 'ferris' },
-            { do: 'wait', seconds: 30 },
-            { do: 'walk', to: 'carousel' },
-            { do: 'wait', seconds: 30 }
-          ]
+          names: ['Kees'], look: { shirt: '#4a5a6a', pants: '#2f3440', skin: '#e0b48e', hair: '#2a2a2a' }, speed: 1.05,
+          steps: [{ do: 'walk', to: 'station' }, { do: 'face', to: 'coaster' }, { do: 'wait', seconds: 40 }, { do: 'walk', to: 'ferris' },
+            { do: 'wait', seconds: 30 }, { do: 'walk', to: 'carousel' }, { do: 'wait', seconds: 30 }]
         }
       },
       spawners: [
-        { id: 'crowdA', character: 'visitorA', x: -5, z: 26, every: 13, max: 5, hours: [9, 22] },
-        { id: 'crowdB', character: 'visitorB', x: 5, z: 26, every: 17, max: 4, hours: [9, 22] },
-        { id: 'crowdC', character: 'visitorC', x: 0, z: 24, every: 21, max: 4, hours: [9, 22] }
+        { id: 'crowdA', character: 'visitorA', x: -5, z: 26, every: 13, max: 6, hours: [9, 22] },
+        { id: 'crowdB', character: 'visitorB', x: 5, z: 26, every: 15, max: 5, hours: [9, 22] },
+        { id: 'crowdC', character: 'visitorC', x: 0, z: 24, every: 17, max: 5, hours: [9, 22] },
+        { id: 'crowdD', character: 'visitorD', x: 3, z: 24, every: 17, max: 5, hours: [9, 22] },
+        { id: 'crowdE', character: 'visitorE', x: -3, z: 24, every: 19, max: 4, hours: [9, 22] }
       ],
       workers: [
         { id: 'sweeper', character: 'sweeper', x: 0, z: 20, ry: 0, home: [0, 24], hours: [9, 22] },
+        { id: 'sweeperNorth', character: 'sweeperNorth', x: 2, z: -44, ry: 0, home: [0, 24], hours: [9, 22] },
+        { id: 'gardener', character: 'gardener', x: 4, z: -58, ry: 0, home: [0, 24], hours: [9, 22] },
         { id: 'watcher', character: 'watcher', x: 0, z: 2, ry: Math.PI, home: [0, 24], hours: [9, 22] }
       ],
       spots: {
-        plaza: { x: 0, z: 26 },
-        midway: { x: 0, z: 14 },
-        station: { x: 0, z: 4 },
-        snack: { x: -11, z: 9 },
-        carousel: { x: -14, z: 19 },
-        teacups: { x: -14, z: 3 },
-        ferris: { x: 13, z: 19 },
-        coaster: { x: 0, z: -2 },
-        gate: { x: 0, z: 28 }
+        plaza: { x: 0, z: 26 }, gate: { x: 0, z: 28 }, midway: { x: 0, z: 14 }, station: { x: 0, z: 4 }, coaster: { x: 0, z: -2 },
+        snack: { x: -11, z: 9 }, carousel: { x: -14, z: 19 }, ferris: { x: 13, z: 19 },
+        fairCross: { x: -31, z: 3 }, teacups: { x: -40, z: 3 }, kidsLane: { x: -46.8, z: 36 },
+        thrillCross: { x: 35, z: 3 }, dodgems: { x: 42, z: 3 }, baron: { x: 57, z: 19 },
+        darkWoods: { x: -36, z: -24 }, dropTower: { x: -36, z: -52 }, promWest: { x: -20, z: -60 }, halls: { x: -46.5, z: -70 },
+        gardenWest: { x: -28, z: -44 }, gardenWalk: { x: 2, z: -44 }, clock: { x: 6, z: -58 }, bandstand: { x: 2, z: -66 }, maze: { x: 9.5, z: -72 },
+        coasterCountry: { x: 40, z: -24 }, promEast: { x: 50, z: -60 }, eastWalk: { x: 76, z: -20 },
+        firebird: { x: 77, z: -36 }, firebirdTrack: { x: 100, z: -30 }, dragon: { x: 77, z: -92 }
       }
     });
   }
@@ -8776,6 +9226,18 @@ function pkTicketBoothBetter(b, i) {
   pkBevelBox(2.98, 0.9, 0.03, pkMatGlassRich(), 0, 1.45, 1.51, g, 0.01);
   // a projecting counter, with a till and a bell
   pkBevelBox(3.5, 0.09, 0.52, pkMatWoodRich(), 0, 0.965, 1.68, g, 0.03);
+  // the self-service ticket machine beside the counter on the outer side: a cabinet, a lit screen, a card slot. It sells
+  // when nobody staffs the window (part 02, pkGuestMachine); its screen blinks green as it does
+  var mx = -side * 2.25, mg = new THREE.Group(); mg.position.set(mx, 0, 1.9); g.add(mg);
+  pkBevelBox(0.62, 1.55, 0.46, std({ color: 0x21402e, roughness: 0.6, metalness: 0.2 }), 0, 0.78, 0, mg, 0.05);
+  pkBevelBox(0.66, 0.1, 0.5, std({ color: 0xc9a227, roughness: 0.35, metalness: 0.8 }), 0, 1.6, 0, mg, 0.03);
+  var mScr = std({ color: 0x0b1a12, emissive: 0x5fd38d, emissiveIntensity: 0.35, roughness: 0.3 });
+  pkBevelBox(0.42, 0.3, 0.02, mScr, 0, 1.22, 0.235, mg, 0.01);
+  pkBevelBox(0.16, 0.03, 0.02, MAT.steelDark, 0, 0.98, 0.235, mg, 0.005);
+  sign(['TICKETS'], 0.5, 0.12, 0, 1.47, 0.24, 0, { bg: '#21402e', fg: '#f6e2a6' }, mg);
+  b.machine = { blink: 0, mat: mScr };
+  animate(function (dt) { var m = b.machine; if (m.blink > 0) m.blink -= dt; m.mat.emissiveIntensity = m.blink > 0 && Math.sin(m.blink * 18) > 0 ? 1.4 : 0.35; });
+  solid(b.x + mx - 0.32, b.x + mx + 0.32, b.z + 1.66, b.z + 2.14, 0, 1.6);
   pkBevelBox(0.3, 0.04, 0.12, MAT.steelDark, -0.4, 0.92, 1.86, g, 0.01);
   var tillM = std({ color: 0x2a3138, roughness: 0.55 });
   pkBevelBox(0.36, 0.18, 0.3, tillM, 1.05, 1.1, 1.64, g, 0.03);
@@ -8820,7 +9282,7 @@ function pkTicketBoothBetter(b, i) {
   // the queue sign on a post, at the head of the line
   pkRoundCyl(0.05, 1.9, MAT.steelDark, side * 1.55, 0.95, 2.4, g, 8);
   pkSign3D(['QUEUE HERE'], 1.3, 0.28, side * 1.55, 1.9, 2.4, 0, { bg: '#0d1216', fg: '#eef1f5' }, g);
-  PK.booths.push({ i: i, x: b.x, z: b.z, turnstile: b.turnstile, queue: [], screen: sc, g: g });
+  PK.booths.push({ i: i, x: b.x, z: b.z, turnstile: b.turnstile, queue: [], screen: sc, g: g, machine: b.machine });
   solid(b.x - 1.72, b.x + 1.72, b.z - 1.62, b.z - 1.38, 0, 3.0);
   solid(b.x - 1.72, b.x - 1.48, b.z - 1.62, b.z + 1.62, 0, 3.0);
   solid(b.x + 1.48, b.x + 1.72, b.z - 1.62, b.z + 1.62, 0, 3.0);
