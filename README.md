@@ -34,7 +34,7 @@ Fifteen rides beside the coaster, all open from the first day.
 
 ## The loop
 
-1. A guest arrives from the car park and joins the shorter ticket line.
+1. Guests come by car, one to four to a car: off the road, under the barrier and up the drive into a free bay. They get out and join the shorter ticket line. The lot fills through the day (41 bays, up to 110 guests in the park) and empties at closing: at the end of their day each party walks back to its car, gets in, backs out and drives away.
 2. You serve the window: the ticket is sold, the money lands, the guest walks to a turnstile.
 3. Past the turnstile the guest picks the ride with the shortest line — the coaster, or any open ride. A ride whose operator key is still OFF takes a line too: the guests stand and wait for it to open, and give up after a minute or two. Up to 90 guests are in the park at once, and each rides up to four times before going home.
 4. For the coaster: you open the gates and the front of the queue walks in, one seat at a time; pull the restraints down and dispatch.
@@ -68,6 +68,7 @@ Pull the lever and the coaster runs itself: gates, restraints, dispatch, round a
 | `16-coasters.js` | the coaster kit (track frames rolled by the felt force, speeds by physics), The Serpent, Baron's Drop, the three indoor coasters and the kids' rides |
 | `17-booths.js` | the operator booths and their kit, shared with the indoor coasters' cabins |
 | `18-hq.js` | Park Co HQ: Guest Services, Operations and the owner's office over three floors |
+| `19-arrivals.js` | the guests' cars: the bays, the drive and its barrier, a car's way in and out, the party getting out and back in |
 | `99-boot.js` | `CO.boot(GAME)` |
 
 The engine's contract, every hook and every page element, is in the engine repo under `docs/ENGINE.md`. `//@` lines at column 0 are notes for the reader and are left out of the build.
