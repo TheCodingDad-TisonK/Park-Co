@@ -11584,7 +11584,8 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     pkRoundCyl(0.035, 0.4, iron, 0, 0.21, 0, g, 8);
     for (var c = 0; c < 5; c++) { var arm = pkBevelBox(0.04, 0.035, 0.28, iron, Math.sin(c * 1.2566) * 0.13, 0.04, Math.cos(c * 1.2566) * 0.13, g, 0.008); arm.rotation.y = c * 1.2566; }
     // E sits you in it, facing the way it faces: at the desk, at desk height
-    hitBox(0.62, 1.05, 0.62, 0, 0.55, 0, { prompt: function () { return PK_SIT ? '' : 'Sit down'; }, use: function () { pkBkSit(g); } }, g);
+    // only the seat answers, and any control along the same line of sight wins over it (GAME.hitPriority below)
+    hitBox(0.5, 0.3, 0.5, 0, 0.42, 0, { chair: true, prompt: function () { return PK_SIT ? '' : 'Sit down'; }, use: function () { pkBkSit(g); } }, g);
     return g;
   }
   // ── Sitting down ──────────────────────────────────────────────────
@@ -11619,10 +11620,19 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     }
     return _pkBkPrevOverride ? _pkBkPrevOverride(dt) : false;
   };
+  // seated, E works whatever you are looking at - a button, a switch, the lever - and stands you up only when you look at
+  // nothing; walking off stands you up too
   var _pkBkPrevKey = GAME.key;
   GAME.key = function (e) {
-    if (PK_SIT && e.code === 'KeyE' && !e.repeat) return pkBkStand();
+    if (PK_SIT && e.code === 'KeyE' && !e.repeat && !focus) return pkBkStand();
     return _pkBkPrevKey ? _pkBkPrevKey(e) : false;
+  };
+  // a chair never takes the aim from a control behind it
+  var _pkBkPrevPriority = GAME.hitPriority;
+  GAME.hitPriority = function (hs, first) {
+    var a = first && first.object.userData.it, b = hs && hs.object.userData.it;
+    if (a && a.chair && b && !b.chair) return true;
+    return _pkBkPrevPriority ? _pkBkPrevPriority(hs, first) : false;
   };
 
   // ── The booth ─────────────────────────────────────────────────────

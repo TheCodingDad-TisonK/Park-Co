@@ -31,7 +31,9 @@ To see it: open this folder in the Co Engine editor, or `npm run dev`.
 - [x] 1b. Coaster control room: the coaster desk moved under the long window, facing the platform; the
       station desk with the CCTV moved to the north wall
 - [x] 1c. Sit in the chairs: E on any booth, cabin or control-room chair sits you at the desk; E or a step stands you up.
-      Chairs 25% bigger, seated eye higher; booth and cabin chairs turned to face their desks
+      Chairs 25% bigger, seated eye higher; booth and cabin chairs turned to face their desks.
+      Seated, E works the control you aim at (stands you up only when aiming at nothing); a chair never
+      takes the aim from a control behind it
 - [~] 1d. THE PARK OFFICE as a big building with floors; the top floor is your office (moved up, asked for)
 - [ ] 2. Every coaster's station dead level, straight and unbanked where the train stands
       (measured: Serpent 60° bank / 27° slope, Baron 17°, indoor 37–44°, Puffin 42°; main coaster OK)
