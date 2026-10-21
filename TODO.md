@@ -75,7 +75,10 @@ lamps, rich colour, planting and ornament, a themed entrance for every ride. Eac
 - [x] 4b. Queue lanes fold into switchbacks: rows of up to six slots, an odd number of rows (the entry stays at the outer
       end), centred on where the straight lane stood. The longest lane is 6.6 m (the ferris wheel's was 18.6 m, the teacups'
       and dodgems' 14.4); guests walk the rows slot by slot, never through a fence
-- [ ] 5. A proper station for every flat ride: platform, entry and exit, gates, canopy, sign
+- [x] 5. A station for every flat ride (carousel, teacups, ferris, dodgems, drop tower, the two kids' rides): a solid ring of
+      ornamental iron fence round the ride with the booth set into it, an entrance facing the line under a pointed-roof porch
+      with the name and lanterns (a low arch under the kids' canopies and the dodgems' eaves), a separate EXIT round the ring
+      where riders come off. The flume and the haunted manor keep the stations they have
 - [ ] 6. Guests arrive by car: drive in off the road, park in a free bay, get out, queue at the
       ticket window, walk in; and go home the same way. More guests in the park
 - [ ] 7. The desk panels made even better (booth desks; the coaster console too)
