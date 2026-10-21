@@ -5714,9 +5714,9 @@
     var R = PK.ride;
     if (PK.closed) return pkRefuse('The park is closed');
     if (R.fault) return pkRefuse('The ride is stopped');
-    if (R.state === 'ready' || R.state === 'dispatch' || R.state === 'running' || R.state === 'arrive') return pkRefuse('Not while the train is moving');
+    if (R.state === 'dispatch' || R.state === 'running' || R.state === 'arrive') return pkRefuse('Not while the train is moving');
     PK.gates.forEach(function (gt) { gt.open = true; });
-    if (R.state === 'idle' || R.state === 'unload') R.state = 'loading';
+    if (R.state === 'idle' || R.state === 'unload' || R.state === 'ready') R.state = 'loading';   // with the bars down too: back to boarding
     sfx('unlock'); hudDirty = true; return true;
   }
   function pkCloseGates() {
@@ -5726,14 +5726,16 @@
     PK.gates.forEach(function (gt) { gt.open = false; });
     sfx('lock'); hudDirty = true; return true;
   }
-  // one button for the gates: open to start boarding, close once the cars are full. The state decides, not the gate leaf,
-  // so after the train comes home (gates already open, state unload) the next press lets the queue in.
+  // one button for the gates: open to start boarding, close once the cars are full - whenever the train is in the station,
+  // line or no line, bars up or down. The state decides, not the gate leaf, so after the train comes home (gates already
+  // open, state unload) the next press lets the queue in.
   function pkGatesToggle() {
     var R = PK.ride;
     if (R.fault) return pkRefuse('The ride is stopped');
     if (R.state === 'idle' || R.state === 'unload') return pkOpenGates();
     if (R.state === 'loading') return pkCloseGates();
-    return pkRefuse(R.state === 'ready' ? 'The restraints are down' : 'Not while the train is moving');
+    if (R.state === 'ready') return PK.gates[0] && PK.gates[0].open ? pkCloseGates() : pkOpenGates();
+    return pkRefuse('Not while the train is moving');
   }
   function pkBarsDown() {
     var R = PK.ride;
@@ -8009,28 +8011,28 @@ function pkBoothStatus(a, C) {
   return String(a.state || 'UNKNOWN').toUpperCase();
 }
 
+// the gates open and shut whenever the operator likes, line or no line: only a ride in motion, a stop or the key in MAINT
+// holds them. Opening from idle, after a ride or with the bars down puts the ride to boarding; shutting an empty ride
+// that is boarding puts it back to idle.
 function pkBoothGates(a) {
   var C = pkCtl(a);
-  if (PK.closed && !a.riders) return pkBoothRefuse('The park is closed');
   if (C.fault) return pkBoothRefuse('Reset ' + a.name + ' first');
   if (C.maint) return pkBoothRefuse(a.name + ' is locked out - turn the key to RUN');
-  if (a.state === 'idle' || a.state === 'unloading') {
-    if (!a.queue.length) return pkBoothRefuse('Nobody is waiting at ' + a.name);
-    a.manualStart = true;
-    pkAttrBegin(a);
-    if (a.state !== 'boarding') { a.manualStart = false; return pkBoothRefuse('Nobody is ready to board'); }
-    sfx('ok'); toast(a.name + ': gates open', 'good');
+  if (a.state === 'running') return pkBoothRefuse('Not while ' + a.name + ' is running');
+  if (C.gates && a.state !== 'idle') {   // an idle ride's gates count as shut: a press there always opens them
+    C.gates = false;
+    if ((a.state === 'boarding' || a.state === 'ready') && !a.riders && !pkAttrWalkers(a)) { a.state = 'idle'; a.t = 0; a.manualStart = false; }
+    sfx('ok'); toast(a.name + ': gates shut', '');
     screenDirtyAll();
     return true;
   }
-  if (a.state === 'boarding') {
-    C.gates = !C.gates;
-    if (!C.gates && a.state === 'ready') a.state = 'boarding';
-    sfx('ok'); toast(a.name + ': gates ' + (C.gates ? 'open' : 'shut'), '');
-    screenDirtyAll();
-    return true;
-  }
-  return pkBoothRefuse('Not while ' + a.name + ' is ' + a.state);
+  if (PK.closed && !a.riders) return pkBoothRefuse('The park is closed');
+  if (a.state === 'idle' || a.state === 'unloading' || a.state === 'ready') { a.state = 'boarding'; a.t = 0; a.boarding = 0; a.manualStart = true; }
+  C.gates = true; C.barsWant = 0;
+  pkAttrReslot(a); pkAttrFill(a);
+  sfx('ok'); toast(a.name + ': gates open', 'good');
+  screenDirtyAll();
+  return true;
 }
 
 function pkBoothDispatch(a) {
