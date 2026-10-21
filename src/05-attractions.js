@@ -4,9 +4,38 @@
   // idle -> boarding -> ready -> running -> unloading -> idle. A guest is attached to a seat for the ride and let go after it.
   // Each ride has its own operator booth (part 09). On AUTO (the default, or with an operator hired) the ride works its own
   // gates, restraints and start; off AUTO it waits for the desk. The coaster keeps its own state machine in part 03.
+  // The queue lane folds into switchbacks: rows of at most six slots, 1.05 m apart, an odd number of rows 1.1 m apart so the
+  // entry is at the outer end. Slot 0 is at the boarding gate; row 0 runs out from the gate along qdx, row 1 back, row 2 out
+  // again, the rows stacked toward the plot's qside (+z unless the plot says -1) and centred on the old single lane's line
+  // (z0 is row 0), so the block keeps within a hand's width of where the straight lane stood. A line longer than the lane
+  // carries on straight out of the entry. The guests walk the rows slot by slot, never across a fence.
+  function pkAttrLane(a) {
+    if (a.laneGeo) return a.laneGeo;
+    var N = Math.max(4, a.cap || 8), rows = Math.ceil(N / 6);
+    if (rows % 2 === 0) rows++;
+    var R = Math.ceil(N / rows);
+    var sz = (a.plot && a.plot.qside) || 1;
+    a.laneGeo = { N: R * rows, R: R, rows: rows, dir: a.qdx >= 0 ? 1 : -1, sz: sz, step: 1.05, pitch: 1.1, z0: a.qz - sz * 1.1 * (rows - 1) / 2 };
+    return a.laneGeo;
+  }
   function pkAttrSlot(a, i) {
-    var dz = a.qdz === undefined ? 1 : a.qdz;
-    return { x: a.qx + (a.qdx || 0) * i * 1.05, z: a.qz + dz * i * 1.05 };
+    var L = pkAttrLane(a);
+    if (i >= L.N) { var e = pkAttrSlot(a, L.N - 1); return { x: e.x + L.dir * L.step * (i - L.N + 1), z: e.z }; }
+    var r = Math.floor(i / L.R), k = i % L.R, kk = r % 2 ? L.R - 1 - k : k;
+    return { x: a.qx + L.dir * L.step * kk, z: L.z0 + L.sz * L.pitch * r };
+  }
+  // the walk down the lane from slot 'from' (exclusive) to slot 'to', one slot at a time
+  function pkAttrLanePath(a, from, to) {
+    var p = [];
+    for (var i = from - 1; i >= to; i--) p.push(pkAttrSlot(a, i));
+    return p;
+  }
+  // a guest's way to slot i: over the park to the lane's entry (or the end of the line, if it runs out of the lane), then
+  // along the rows; a guest already in the lane just shuffles up it
+  function pkAttrWalkTo(a, gu, i, fromSlot) {
+    if (fromSlot !== undefined && fromSlot > i) return pkAttrLanePath(a, fromSlot, i);
+    var E = Math.max(i, pkAttrLane(a).N);
+    return route({ x: gu.rec.x, z: gu.rec.z }, pkAttrSlot(a, E)).concat(pkAttrLanePath(a, E, i));
   }
   // a seat's y is where the rider's feet line is: the sit pose puts the hips 0.86 above it, so a seat surface at s wants s - 0.76
   function pkAttrSeatWorld(seat) {
@@ -54,10 +83,10 @@
     for (var i = 0; i < a.queue.length; i++) {
       var gu = a.queue[i];
       if (gu.slot === i && gu.state !== 'walkAttr') continue;
+      var was = gu.slot;
       gu.slot = i;
       if (gu.state === 'walkAttr' || gu.state === 'qwait' || gu.state === 'qmove') {
-        var s = pkAttrSlot(a, i);
-        gu.rec.path = route({ x: gu.rec.x, z: gu.rec.z }, s);
+        gu.rec.path = pkAttrWalkTo(a, gu, i, gu.state === 'walkAttr' ? undefined : was);
         gu.state = gu.rec.path.length ? (gu.state === 'walkAttr' ? 'walkAttr' : 'qmove') : 'qwait';
       }
     }

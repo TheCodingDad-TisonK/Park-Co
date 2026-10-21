@@ -4884,7 +4884,7 @@
         pkAttrQueueJoin: pkAttrQueueJoin, pkAttrQueueLeave: pkAttrQueueLeave,
         pkPlayerRideJoin: pkPlayerRideJoin, pkPlayerRideStepOff: pkPlayerRideStepOff, pkPlayerRideExitTry: pkPlayerRideExitTry,
         pkPlayerRides: pkPlayerRides, pkPlayerTick: pkPlayerTick, pkLanes: function () { return PK.lanes; },
-        pkAttrTick: pkAttrTick, pkAttrSeat: pkAttrSeat, pkAttrUnseatAll: pkAttrUnseatAll, pkAttrSlot: pkAttrSlot,
+        pkAttrTick: pkAttrTick, pkAttrSeat: pkAttrSeat, pkAttrUnseatAll: pkAttrUnseatAll, pkAttrSlot: pkAttrSlot, pkAttrLanePath: pkAttrLanePath, pkLaneCollides: pkLaneCollides,
         pkTurnstiles: function () { return PK.turnstiles; }, pkGates: function () { return PK.gates; }, pkBooths: function () { return PK.booths; },
         pkSnack: function () { return PK.snack; }, pkScreen: function () { return PK.screen; },
         pkConsole: function () { return PK.console; },
@@ -4981,8 +4981,8 @@
     gu.lockWait = 0;
     gu.slot = a.queue.length;
     a.queue.push(gu);
-    var s = pkAttrSlot(a, gu.slot);
-    pkGo(gu, s.x, s.z, 'walkAttr');
+    gu.rec.path = pkAttrWalkTo(a, gu, gu.slot);
+    gu.state = 'walkAttr';
     return true;
   }
   function pkAttrQueueLeave(gu, a) {
@@ -4994,10 +4994,10 @@
     for (var i = 0; i < a.queue.length; i++) {
       var gu = a.queue[i];
       if (gu.slot === i) continue;
+      var was = gu.slot;
       gu.slot = i;
       if (gu.state === 'walkAttr' || gu.state === 'qwait' || gu.state === 'qmove') {
-        var s = pkAttrSlot(a, i);
-        gu.rec.path = route({ x: gu.rec.x, z: gu.rec.z }, s);
+        gu.rec.path = pkAttrWalkTo(a, gu, i, gu.state === 'walkAttr' ? undefined : was);
         gu.state = gu.rec.path.length ? (gu.state === 'walkAttr' ? 'walkAttr' : 'qmove') : 'qwait';
       }
     }
@@ -6200,9 +6200,38 @@
   // idle -> boarding -> ready -> running -> unloading -> idle. A guest is attached to a seat for the ride and let go after it.
   // Each ride has its own operator booth (part 09). On AUTO (the default, or with an operator hired) the ride works its own
   // gates, restraints and start; off AUTO it waits for the desk. The coaster keeps its own state machine in part 03.
+  // The queue lane folds into switchbacks: rows of at most six slots, 1.05 m apart, an odd number of rows 1.1 m apart so the
+  // entry is at the outer end. Slot 0 is at the boarding gate; row 0 runs out from the gate along qdx, row 1 back, row 2 out
+  // again, the rows stacked toward the plot's qside (+z unless the plot says -1) and centred on the old single lane's line
+  // (z0 is row 0), so the block keeps within a hand's width of where the straight lane stood. A line longer than the lane
+  // carries on straight out of the entry. The guests walk the rows slot by slot, never across a fence.
+  function pkAttrLane(a) {
+    if (a.laneGeo) return a.laneGeo;
+    var N = Math.max(4, a.cap || 8), rows = Math.ceil(N / 6);
+    if (rows % 2 === 0) rows++;
+    var R = Math.ceil(N / rows);
+    var sz = (a.plot && a.plot.qside) || 1;
+    a.laneGeo = { N: R * rows, R: R, rows: rows, dir: a.qdx >= 0 ? 1 : -1, sz: sz, step: 1.05, pitch: 1.1, z0: a.qz - sz * 1.1 * (rows - 1) / 2 };
+    return a.laneGeo;
+  }
   function pkAttrSlot(a, i) {
-    var dz = a.qdz === undefined ? 1 : a.qdz;
-    return { x: a.qx + (a.qdx || 0) * i * 1.05, z: a.qz + dz * i * 1.05 };
+    var L = pkAttrLane(a);
+    if (i >= L.N) { var e = pkAttrSlot(a, L.N - 1); return { x: e.x + L.dir * L.step * (i - L.N + 1), z: e.z }; }
+    var r = Math.floor(i / L.R), k = i % L.R, kk = r % 2 ? L.R - 1 - k : k;
+    return { x: a.qx + L.dir * L.step * kk, z: L.z0 + L.sz * L.pitch * r };
+  }
+  // the walk down the lane from slot 'from' (exclusive) to slot 'to', one slot at a time
+  function pkAttrLanePath(a, from, to) {
+    var p = [];
+    for (var i = from - 1; i >= to; i--) p.push(pkAttrSlot(a, i));
+    return p;
+  }
+  // a guest's way to slot i: over the park to the lane's entry (or the end of the line, if it runs out of the lane), then
+  // along the rows; a guest already in the lane just shuffles up it
+  function pkAttrWalkTo(a, gu, i, fromSlot) {
+    if (fromSlot !== undefined && fromSlot > i) return pkAttrLanePath(a, fromSlot, i);
+    var E = Math.max(i, pkAttrLane(a).N);
+    return route({ x: gu.rec.x, z: gu.rec.z }, pkAttrSlot(a, E)).concat(pkAttrLanePath(a, E, i));
   }
   // a seat's y is where the rider's feet line is: the sit pose puts the hips 0.86 above it, so a seat surface at s wants s - 0.76
   function pkAttrSeatWorld(seat) {
@@ -6250,10 +6279,10 @@
     for (var i = 0; i < a.queue.length; i++) {
       var gu = a.queue[i];
       if (gu.slot === i && gu.state !== 'walkAttr') continue;
+      var was = gu.slot;
       gu.slot = i;
       if (gu.state === 'walkAttr' || gu.state === 'qwait' || gu.state === 'qmove') {
-        var s = pkAttrSlot(a, i);
-        gu.rec.path = route({ x: gu.rec.x, z: gu.rec.z }, s);
+        gu.rec.path = pkAttrWalkTo(a, gu, i, gu.state === 'walkAttr' ? undefined : was);
         gu.state = gu.rec.path.length ? (gu.state === 'walkAttr' ? 'walkAttr' : 'qmove') : 'qwait';
       }
     }
@@ -7010,7 +7039,7 @@
         pkBunting(p.x - p.r - 1.2, p.z - p.r - 1.2, p.x - p.r - 1.2, p.z + p.r + 1.2, th, dg);
       }
       // the gateway over the queue, facing the midway
-      pkGatewayBetter(p.q[0], p.q[1], th.name, th, side, dg);
+      pkGatewayBetter(p.q[0], p.q[1], th.name, th, side, dg);   // centred on the switchbacks, its posts just outside them
       // the line itself: a fenced lane behind the arch with a boarding gate
       pkQueueLaneBetter(a, th, dg);
       // planters by the gateway and two lamps, where the plot has the room for them
@@ -7068,54 +7097,63 @@
     pkGatewayBetter(x, z, label, th, side, parent);
   }
   // ── The queue lane ────────────────────────────────────────────────
-  // Every ride runs a proper line: the gateway arch stands over the boarding gate at
-  // the front, a low steel fence holds the lane on both sides, and an open entry at the
-  // back carries the QUEUE sign. The slot the guests stand in is unchanged; the lane is
-  // built around it. The boarding gate opens with the ride's own gates (C.gates).
+  // Every ride runs a proper line, folded into switchbacks so it keeps to a small block beside the ride instead of a long
+  // strip out into the paths (pkAttrLane has the rows). The boarding gate stands at the front of row 0 under the gateway
+  // arch, a low steel fence runs round the block and between the rows (open at the turns), and an open entry at the end
+  // of the last row carries the QUEUE sign. The boarding gate opens with the ride's own gates (C.gates).
   function pkQueueLaneBetter(a, th, parent) {
-    var C = pkCtl(a);
-    var N = Math.max(4, a.cap || 8);
-    var dir = a.qdx >= 0 ? 1 : -1;
-    var qx = a.qx, qz = a.qz;
-    var xGate = qx - dir * 0.66;                       // under the arch, clear of slot 0
-    var xBack = qx + dir * (N * 1.05 + 1.1);           // open entry at the back
-    var zA = qz - 0.92, zB = qz + 0.92;
-    var lo = Math.min(xGate, xBack), hi = Math.max(xGate, xBack), mid = (lo + hi) / 2;
-    // the lane floor: a tinted strip with a stone kerb, a hand's width wider than the fence
-    box(hi - lo + 0.9, 0.10, 2.24, pkMats().kerb, mid, 0.012, qz, parent);
-    box(hi - lo + 0.6, 0.055, 1.98, pkPadMat(th.ground), mid, 0.035, qz, parent);
-    // a fence down each side, from the boarding gate to the entry
-    pkLaneFence(xGate, xBack, zA, parent);
-    pkLaneFence(xGate, xBack, zB, parent);
-    // the boarding gate: two steel leaves on the gate posts, under the arch. They swing
-    // toward the ride as C.gates opens, which is the same signal the platform gates use.
-    [-1, 1].forEach(function (sz) {
-      var z = sz < 0 ? zA - 0.02 : zB + 0.02;
-      pkRoundCyl(0.075, 1.30, MAT.steelDark, xGate, 0.65, z, parent, 8);
-      sphere(0.075, pkMats().gold, xGate, 1.33, z, parent);
+    var C = pkCtl(a), L = pkAttrLane(a), dir = L.dir, sz = L.sz, P = L.pitch;
+    var qx = a.qx, qz = L.z0;                                  // row 0, the boarding row
+    var xN = qx - dir * 0.66;                                   // the near end: the boarding gate, clear of slot 0
+    var xF = qx + dir * (L.step * (L.R - 1) + 0.66);           // the far end: the turns and the entry
+    var zb = function (r) { return qz + sz * P * (r + 0.5); }; // the fence line on the far side of row r (r = -1: row 0's near side)
+    var zRow = function (r) { return qz + sz * P * r; };
+    var lo = Math.min(xN, xF), hi = Math.max(xN, xF), zLo = Math.min(zb(-1), zb(L.rows - 1)), zHi = Math.max(zb(-1), zb(L.rows - 1));
+    // the lane floor: a tinted block with a stone kerb, a hand's width wider than the fence
+    box(hi - lo + 0.9, 0.10, zHi - zLo + 0.36, pkMats().kerb, (lo + hi) / 2, 0.012, (zLo + zHi) / 2, parent);
+    box(hi - lo + 0.6, 0.055, zHi - zLo + 0.1, pkPadMat(th.ground), (lo + hi) / 2, 0.035, (zLo + zHi) / 2, parent);
+    // the fences: round the block, and between the rows with the gap where the line turns
+    var segs = [], r;
+    var seg = function (x0, z0, x1, z1) { segs.push({ x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1) }); pkLaneFenceSeg(x0, z0, x1, z1, parent); };
+    seg(xN, zb(-1), xF, zb(-1));
+    seg(xN, zb(L.rows - 1), xF, zb(L.rows - 1));
+    for (r = 0; r < L.rows - 1; r++) {
+      if (r % 2 === 0) seg(xN, zb(r), xF - dir * 1.0, zb(r));          // row r turns into row r+1 at the far end
+      else seg(xN + dir * 1.0, zb(r), xF, zb(r));                      // and back at the near end
+    }
+    if (L.rows > 1) {
+      seg(xN, zb(0), xN, zb(L.rows - 1));                              // the near end, past the gate
+      seg(xF, zb(-1), xF, zb(L.rows - 2));                             // the far end, short of the entry
+    }
+    // the boarding gate: two steel leaves on the gate posts across row 0. They swing toward the ride as C.gates opens,
+    // which is the same signal the platform gates use.
+    var zA = qz - P / 2, zB = qz + P / 2;
+    [zA - 0.02, zB + 0.02].forEach(function (z) {
+      pkRoundCyl(0.075, 1.30, MAT.steelDark, xN, 0.65, z, parent, 8);
+      sphere(0.075, pkMats().gold, xN, 1.33, z, parent);
     });
-    var leafL = new THREE.Group(); leafL.position.set(xGate, 0, zA); parent.add(leafL);
-    var leafR = new THREE.Group(); leafR.position.set(xGate, 0, zB); parent.add(leafR);
-    var gateMat = std({ color: 0x2f3a42, roughness: 0.5, metalness: 0.35 });
-    pkBevelBox(0.055, 0.92, 0.86, gateMat, 0, 0.55, 0.44, leafL, 0.015);
-    pkBevelBox(0.055, 0.92, 0.86, gateMat, 0, 0.55, -0.44, leafR, 0.015);
-    pkBevelBox(0.075, 0.06, 0.80, pkMats().gold, 0, 0.98, 0.44, leafL, 0.01);
-    pkBevelBox(0.075, 0.06, 0.80, pkMats().gold, 0, 0.98, -0.44, leafR, 0.01);
-    pkBevelBox(0.07, 0.05, 0.80, MAT.steelDark, 0, 0.30, 0.44, leafL, 0.01);
-    pkBevelBox(0.07, 0.05, 0.80, MAT.steelDark, 0, 0.30, -0.44, leafR, 0.01);
+    var leafL = new THREE.Group(); leafL.position.set(xN, 0, zA); parent.add(leafL);
+    var leafR = new THREE.Group(); leafR.position.set(xN, 0, zB); parent.add(leafR);
+    var gateMat = std({ color: 0x2f3a42, roughness: 0.5, metalness: 0.35 }), lw = P / 2 - 0.03;
+    pkBevelBox(0.055, 0.92, lw, gateMat, 0, 0.55, lw / 2, leafL, 0.015);
+    pkBevelBox(0.055, 0.92, lw, gateMat, 0, 0.55, -lw / 2, leafR, 0.015);
+    pkBevelBox(0.075, 0.06, lw - 0.04, pkMats().gold, 0, 0.98, lw / 2, leafL, 0.01);
+    pkBevelBox(0.075, 0.06, lw - 0.04, pkMats().gold, 0, 0.98, -lw / 2, leafR, 0.01);
     C.gateObjs.push(function (t) { leafL.rotation.y = -t * 1.42; leafR.rotation.y = t * 1.42; });
-    // the entry arch at the back: two posts, a header and the sign facing the midway
-    [-1, 1].forEach(function (sz) {
-      pkRoundCyl(0.085, 2.30, MAT.steelDark, xBack, 1.15, qz + sz * 1.02, parent, 8);
-      sphere(0.09, pkMats().gold, xBack, 2.33, qz + sz * 1.02, parent);
+    // the entry at the end of the last row: two posts, a header and the sign facing out
+    var zE = zRow(L.rows - 1), xE = xF;
+    [-1, 1].forEach(function (k) {
+      pkRoundCyl(0.085, 2.30, MAT.steelDark, xE, 1.15, zE + k * (P / 2 + 0.04), parent, 8);
+      sphere(0.09, pkMats().gold, xE, 2.33, zE + k * (P / 2 + 0.04), parent);
     });
-    pkBevelBox(0.13, 0.16, 2.30, MAT.steelDark, xBack, 2.28, qz, parent, 0.02);
-    pkSign3D(['QUEUE', th.name.toUpperCase()], 1.72, 0.34, xBack, 2.58, qz, dir > 0 ? Math.PI / 2 : -Math.PI / 2, { bg: '#1b232c', fg: '#f5b53d' }, parent);
+    pkBevelBox(0.13, 0.16, P + 0.3, MAT.steelDark, xE, 2.28, zE, parent, 0.02);
+    pkSign3D(['QUEUE', th.name.toUpperCase()], 1.6, 0.34, xE, 2.58, zE, dir > 0 ? Math.PI / 2 : -Math.PI / 2, { bg: '#1b232c', fg: '#f5b53d' }, parent);
     // the line's own number plate, so the player can see where it starts
-    pkRoundCyl(0.045, 1.55, MAT.steelDark, xBack + dir * 0.30, 0.77, qz + 1.30, parent, 8);
-    pkSign3D(['QUEUE FROM HERE'], 1.25, 0.20, xBack + dir * 0.30, 1.62, qz + 1.30, dir > 0 ? Math.PI / 2 : -Math.PI / 2, { bg: '#1b232c', fg: '#eef1f5' }, parent);
+    var zPlate = zE + sz * (P / 2 + 0.5);
+    pkRoundCyl(0.045, 1.55, MAT.steelDark, xE + dir * 0.30, 0.77, zPlate, parent, 8);
+    pkSign3D(['QUEUE FROM HERE'], 1.25, 0.20, xE + dir * 0.30, 1.62, zPlate, dir > 0 ? Math.PI / 2 : -Math.PI / 2, { bg: '#1b232c', fg: '#eef1f5' }, parent);
     // the player's way in: press E at the entry to ride
-    hitBox(2.4, 2.2, 2.4, xBack, 1.1, qz, {
+    hitBox(2.0, 2.2, 2.0, xE + dir * 0.4, 1.1, zE, {
       prompt: function () {
         if (!a.open || PK.playerRide) return '';
         if (PK.playerWait && PK.playerWait.a === a) return 'Waiting for ' + a.name + ' - press E to leave the line';
@@ -7124,18 +7162,22 @@
       use: function () { pkPlayerRideJoin(a); }
     }, parent);
     // the fences block the player, but only while the ride is open and the lane is drawn
-    PK.lanes.push({ a: a, x0: Math.min(xGate, xBack), x1: Math.max(xGate, xBack), zA: zA, zB: zB, gx: xGate, leafL: leafL, leafR: leafR });
+    PK.lanes.push({ a: a, x0: lo, x1: hi, zA: zLo, zB: zHi, gx: xN, gz0: zA, gz1: zB, segs: segs, rows: L.rows, leafL: leafL, leafR: leafR });
   }
-  function pkLaneFence(x0, x1, z, parent) {
-    var n = Math.max(1, Math.round(Math.abs(x1 - x0) / 1.65));
+  // a run of lane fence between two points on a line along x or along z: posts, a top rail and a mid rail
+  function pkLaneFenceSeg(x0, z0, x1, z1, parent) {
+    var len = Math.hypot(x1 - x0, z1 - z0); if (len < 0.05) return;
+    var n = Math.max(1, Math.round(len / 1.65)), alongX = Math.abs(x1 - x0) >= Math.abs(z1 - z0);
     for (var i = 0; i <= n; i++) {
-      var x = x0 + (x1 - x0) * (i / n);
+      var x = x0 + (x1 - x0) * (i / n), z = z0 + (z1 - z0) * (i / n);
       pkRoundCyl(0.055, 1.06, MAT.steelDark, x, 0.53, z, parent, 8);
       sphere(0.052, pkMats().gold, x, 1.09, z, parent);
     }
-    pkBevelBox(Math.abs(x1 - x0), 0.05, 0.05, MAT.steelDark, (x0 + x1) / 2, 0.99, z, parent, 0.008);
-    pkBevelBox(Math.abs(x1 - x0), 0.045, 0.045, MAT.steelDark, (x0 + x1) / 2, 0.52, z, parent, 0.008);
+    var mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
+    pkBevelBox(alongX ? len : 0.05, 0.05, alongX ? 0.05 : len, MAT.steelDark, mx, 0.99, mz, parent, 0.008);
+    pkBevelBox(alongX ? len : 0.045, 0.045, alongX ? 0.045 : len, MAT.steelDark, mx, 0.52, mz, parent, 0.008);
   }
+  function pkLaneFence(x0, x1, z, parent) { pkLaneFenceSeg(x0, z, x1, z, parent); }
   // the beds by a ride's gateway stand in the world on their own, not inside the ride's dressing group, so the editor can
   // pick each one up: move it, turn it, copy it or take it away (the parent is kept in the call only for the old signature)
   function pkBedIn(x, z, parent) {
@@ -10313,12 +10355,13 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     for (var i = 0; i < PK.lanes.length; i++) {
       var L = PK.lanes[i];
       if (!L.a.open) continue;
-      if (x > L.x0 - 0.10 && x < L.x1 + 0.10) {
-        if (z > L.zA - 0.14 && z < L.zA + 0.14) return true;
-        if (z > L.zB - 0.14 && z < L.zB + 0.14) return true;
+      if (x < L.x0 - 0.3 || x > L.x1 + 0.3 || z < L.zA - 0.3 || z > L.zB + 0.3) continue;
+      for (var k = 0; k < L.segs.length; k++) {
+        var S = L.segs[k];
+        if (x > S.x0 - 0.12 && x < S.x1 + 0.12 && z > S.z0 - 0.12 && z < S.z1 + 0.12) return true;
       }
-      // a closed boarding gate carries across the lane
-      if (!(L.a.ctl && L.a.ctl.gates) && x > L.gx - 0.14 && x < L.gx + 0.14 && z > L.zA && z < L.zB) return true;
+      // a closed boarding gate carries across row 0
+      if (!(L.a.ctl && L.a.ctl.gates) && x > L.gx - 0.14 && x < L.gx + 0.14 && z > L.gz0 && z < L.gz1) return true;
     }
     return false;
   }
