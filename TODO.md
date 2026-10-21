@@ -27,6 +27,10 @@ To see it: open this folder in the Co Engine editor, or `npm run dev`.
 
 ## Next, in this order
 
+**The look, for everything from here on (your call, 21 Oct): the Efteling vibe.** A fairy-tale park, not sheds with signs:
+every ride, building and corner tells its own story - stepped Dutch gables, towers with pointed roofs, carved trim, warm
+lamps, rich colour, planting and ornament, a themed entrance for every ride. Each item below is built to that.
+
 - [x] 1. HUD: the pill now reads "Coaster: boarding (auto) · 16 of 16 rides open", and "Riding …" only while you are on one
 - [x] 1b. Coaster control room: the coaster desk moved under the long window, facing the platform; the
       station desk with the CCTV moved to the north wall
@@ -59,14 +63,21 @@ To see it: open this folder in the Co Engine editor, or `npm run dev`.
 - [x] 4a. Guests you can see: every new guest was made but never put in the world, so the crowd walked, queued and rode
       unseen (only the odd one recycled from the pool showed). Fixed. Also: a ride whose key is OFF now takes a line (the guests
       wait for it to open and give up after 1-3 minutes), up to 90 guests (was 40) arrive faster and ride up to four times
-- [~] 4. Indoor coasters bigger and better looking: bigger, taller halls (north fence moves back),
-      longer tracks, proper facades and theming
+- [x] 4. Indoor coasters bigger and better looking: the halls are 31.5 m deep (was 15.5) and 14 m tall (was 9), the north
+      fence moved back to z -118 with trees behind the halls. New circuits 117-141 m (were 70-84), an 11 m lift (was 6.4),
+      up to 45-47 km/h, laps 27-30 s, all under 4.5 g: Nocturne's turn-and-a-half helix round a bigger moon, The Wreck's
+      figure-eight round a bigger ship, Moonwood's camelback and three-quarter ring under the crown. Fairy-tale fronts after
+      Efteling (stepped gable, towers, emblem, marquee); a starfield, a sea floor and lanterns, fireflies inside
+- [ ] 4c. The main coaster made far better: it has the whole middle of the park to use; a longer, bigger layout built with
+      the same track kit and checks as the halls (your call, 21 Oct: keep it in the middle rather than move it north-east)
 - [ ] 4b. Queue lanes take far too much room: every lane is one straight run as long as the ride has seats (1 m a seat,
       18 m+ for the bigger rides). Fold them into compact switchbacks
 - [ ] 5. A proper station for every flat ride: platform, entry and exit, gates, canopy, sign
 - [ ] 6. Guests arrive by car: drive in off the road, park in a free bay, get out, queue at the
       ticket window, walk in; and go home the same way. More guests in the park
 - [ ] 7. The desk panels made even better (booth desks; the coaster console too)
+- [ ] 8. The whole park in the Efteling vibe: a pass over every ride's surroundings and entrance, the gate and the ticket
+      windows, the shops and stands, the lamps, the signs, the paths and the planting, so the park reads as one fairy tale
 - [ ] 9. More full coasters like the main one, each with its own big control room
 - [ ] 10. One big coaster that runs partly indoors and partly outdoors
 - [ ] 11. Odd-angle audit of the whole park: overlaps, floating things, odd placement — and fix them
@@ -79,6 +90,4 @@ To see it: open this folder in the Co Engine editor, or `npm run dev`.
 
 - [ ] "The controls of the coaster seem messed up": in my tests the console works end to end (gates,
       load, bars, dispatch, home, AUTO). What exactly looks wrong?
-- [ ] Moving the main coaster into the north-east (the layout map) — still wanted now that more
-      coasters are coming (item 9), or keep it at the station?
 - [ ] Play it hands-on: everything here is checked by the smoke suite and screenshots, not by playing
