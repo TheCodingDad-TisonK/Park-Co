@@ -345,10 +345,15 @@ module.exports = `
   { const kmh = (v) => Math.round(v * 3.6), top = {};
     ['serpent', 'baron', 'nocturne', 'wreck', 'moonwood'].forEach((id) => { top[id] = kmh(T.PK.attrById[id].extra.vTop); });
     const P = T.pkCoProfile(T.PK.curve, T.PK.len, T.PK.stationU, { lift: T.PK.liftU }), main = kmh(Math.max.apply(null, P.V));
-    ok(top.serpent > 50 && top.serpent < 80 && top.baron > 55 && top.baron < 85 && top.nocturne > 30 && top.nocturne < 55 && main > 40 && main < 65,
+    ok(top.serpent > 50 && top.serpent < 80 && top.baron > 55 && top.baron < 85 && top.nocturne > 30 && top.nocturne < 55 && main > 55 && main < 80,
       'coaster top speeds are real-world: coaster ' + main + ', ' + JSON.stringify(top) + ' km/h');
     ok(Math.abs(T.pkSpeedAt((T.PK.liftU[0] + T.PK.liftU[1]) / 2) - 2.4) < 0.01 && T.PK.attrById.ferris.run >= 40 && T.PK.attrById.droptower.run >= 18,
       'the lift climbs at chain speed, the wheel turns slowly, the tower holds before it drops');
+    // the main coaster is the big one: a long lap, a 20 m lift, a loop and a corkscrew it rides upside down, a trim brake
+    { const F = T.PK.F, len = T.PK.len; let ymax = 0, upMin = 1; for (let i = 0; i < F.n; i++) { ymax = Math.max(ymax, F.p[i].y); upMin = Math.min(upMin, F.up[i].y); }
+      const tu = (T.pkCoUAt(T.PK.curve, -11, -28.3)), vt = T.pkSpeedAt(tu);
+      let corkUp = 1; for (let i = 0; i < F.n; i++) { const p = F.p[i]; if (p.x > -6 && p.x < 13 && p.z > -31 && p.z < -25.5 && p.y > 7.5) corkUp = Math.min(corkUp, F.up[i].y); }
+      ok(len > 280 && ymax > 18 && upMin < -0.9 && corkUp < -0.8 && vt <= 6.05, 'the main coaster: ' + len.toFixed(0) + ' m, lift to ' + ymax.toFixed(1) + ' m, upside down in the loop (up ' + upMin.toFixed(2) + ') and the corkscrew (' + corkUp.toFixed(2) + '), trimmed to ' + vt.toFixed(1) + ' m/s'); }
     let worst = 0;
     ['serpent', 'nocturne', 'wreck', 'moonwood'].forEach((id) => { const E = T.PK.attrById[id].extra, F = E.F, L = T.pkCoProfile(E.curve, E.len, E.uPark);
       for (let j = L.lift[0]; j <= L.lift[1]; j++) { const i = Math.round(((E.uPark + j / L.K) % 1) * F.n) % F.n, t = F.t[i];
