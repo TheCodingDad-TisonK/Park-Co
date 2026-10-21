@@ -5,7 +5,7 @@
   // for the coaster and ride it. The player works the window and the ride.
   var PK_GATE_Z = 30, PK_PLATFORM_Y = 0.6, PK_STATION_Z = -4.6, PK_KIDS_Z = 56;   // PK_KIDS_Z: the south fence of the kids' garden
   // the park is a long rectangle: the gate at the south, the coaster across the north, and rides either side of the midway
-  var PK_PARK = { x0: -72, x1: 72, z0: -95, z1: 70 };
+  var PK_PARK = { x0: -72, x1: 72, z0: -118, z1: 70 };   // z0 was -95: the north fence moved back for the bigger indoor halls
   var PK_BOOTHS = [{ x: -9, z: 36, turnstile: -6 }, { x: 9, z: 36, turnstile: 6 }];
   var PK_TURNSTILES = [-6, -2, 2, 6];
   // the coaster queue: a single lane beside the platform, fenced on both sides. Guests join at the back (PK_QUEUE_ENTRY,
@@ -220,6 +220,7 @@
     if (Math.abs(z - 20) < 5 && Math.abs(x) < 32) return false;   // the carousel and ferris paths
     if (Math.abs(z - 3) < 5 && Math.abs(x) < 32) return false;    // the teacup and dodgem paths
     if (z > 27) return false;
+    if (typeof PK_INDOOR !== 'undefined') for (var k in PK_INDOOR) { var hb = PK_INDOOR[k].box; if (x > hb[0] - 3 && x < hb[1] + 3 && z > hb[2] - 3 && z < hb[3] + 3) return false; }
     if (typeof pkThemeKeepClear === 'function' && pkThemeKeepClear(x, z)) return false;
     return true;
   }
@@ -250,11 +251,21 @@
         if (seed % 5 === 0) pkConifer(px, pz, ps, null, seed); else pkTree(px, pz, ps, null, seed);
       }
     }
+    // the strip the north fence gave up behind the indoor halls, on its own seed so the trees above keep their places
+    var rng3 = pkRng(20261021);
+    for (tx = -68; tx <= 68; tx += 9) {
+      for (tz = -113; tz <= -104; tz += 9) {
+        px = tx + (rng3() - 0.5) * 6; pz = tz + (rng3() - 0.5) * 5; keep = rng3(); ps = 0.85 + rng3() * 0.8;
+        if (keep < 0.42 || !pkTreeOK(px, pz)) continue;
+        seed = Math.abs(Math.round(px * 13 + pz * 7));
+        if (seed % 5 === 0) pkConifer(px, pz, ps, null, seed); else pkTree(px, pz, ps, null, seed);
+      }
+    }
     // a forest wraps the park, so the palisade is the edge of the trees rather than of a bare green field
     var rng2 = pkRng(77123);
     for (var fx = -88; fx <= 88; fx += 7) {
-      for (var fz = -104; fz <= 88; fz += 7) {
-        if (fx > -75 && fx < 75 && fz > -98 && fz < 71) continue;   // the park and a breathing margin
+      for (var fz = -127; fz <= 88; fz += 7) {
+        if (fx > -75 && fx < 75 && fz > -121 && fz < 71) continue;   // the park and a breathing margin
         if (fz >= 72 && fz <= 80) continue;                         // the road runs along z 76
         var jx = (rng2() - 0.5) * 4, jz = (rng2() - 0.5) * 4, thin = rng2(), sc = 0.95 + rng2() * 1.2;
         if (thin < 0.28) continue;                                  // thin the ring a little
@@ -399,7 +410,10 @@
       pkBuildNpcs();
       pkDefProps(); buildProps();
       buildSky({ clouds: 6, rainN: 2500, snowN: 1200 });
-      navSetup({ x0: PK_PARK.x0 - 4, z0: PK_PARK.z0 - 4, width: (PK_PARK.x1 - PK_PARK.x0) + 8, depth: (PK_PARK.z1 - PK_PARK.z0) + 8, cell: 0.6 });
+      // the grid keeps the cell lattice it was tuned on (origin z -99 when the fence stood at -95): moving the fence by a
+      // distance that is not a whole number of cells shifts every cell edge and can shut a narrow way through
+      var navZ0 = -99 - 0.6 * Math.ceil((-99 - (PK_PARK.z0 - 4)) / 0.6 - 1e-9);
+      navSetup({ x0: PK_PARK.x0 - 4, z0: navZ0, width: (PK_PARK.x1 - PK_PARK.x0) + 8, depth: (PK_PARK.z1 - navZ0) + 4, cell: 0.6 });
     },
     afterBuild: function (loaded) { pkSyncSaved(); },
     onEnter: function (loaded) { pkLog('The gate opens. Day ' + S.day + '.'); if (!loaded && S.clerk) toast('Your clerk works the ticket window - wages from day 2', 'good'); },
