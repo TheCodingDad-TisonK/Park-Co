@@ -163,18 +163,21 @@
   // ── Who picks which ride ─────────────────────────────────────────
   function pkAttrPick(gu) {
     var open = [];
-    for (var i = 0; i < PK.attractions.length; i++) { var at = PK.attractions[i]; if (at.open && at.ctl && at.ctl.key && !at.ctl.fault && !at.ctl.maint && at.queue.length < at.seats.length * 2) open.push(at); }   // nobody queues for a locked ride
+    // a ride with its operator key OFF still takes a line (the guests wait for it to open), but one that is running is
+    // preferred; a ride in a fault or in MAINT takes nobody, and a guest does not go back to a line they gave up on
+    for (var i = 0; i < PK.attractions.length; i++) { var at = PK.attractions[i]; if (at.open && at.ctl && !at.ctl.fault && !at.ctl.maint && at.queue.length < at.seats.length * 2 && !(gu.gaveUp && gu.gaveUp[at.id])) open.push(at); }
     if (!open.length) return false;
     // the shortest line wins, with a little spread so the crowd is not one queue
-    open.sort(function (a, b) { return a.queue.length - b.queue.length; });
+    var cost = function (a) { return a.queue.length + (a.ctl.key ? 0 : 6); };
+    open.sort(function (a, b) { return cost(a) - cost(b); });
     var pick = open[Math.floor(randf(0, Math.min(3, open.length)))];
     return pkAttrQueueJoin(gu, pick);
   }
   function pkGuestPickRide(gu) {
-    var coasterOk = PK.ride.state !== 'fault' && !!S.coasterKey;
+    var coasterOk = PK.ride.state !== 'fault' && !(gu.gaveUp && gu.gaveUp.coaster);
     var anyOpen = false;
     for (var i = 0; i < PK.attractions.length; i++) if (PK.attractions[i].open) { anyOpen = true; break; }
-    if (coasterOk && (!anyOpen || randf(0, 1) < 0.45)) {
+    if (coasterOk && (!anyOpen || randf(0, 1) < (S.coasterKey ? 0.45 : 0.15))) {
       if (pkQueueJoin(gu)) return;      // the coaster line is never longer than its lane
       // the line is full: fall through to another ride, or wander the midway
     }

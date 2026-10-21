@@ -56,8 +56,13 @@ To see it: open this folder in the Co Engine editor, or `npm run dev`.
       with a hold at the top and no bounce (was 118). Also fixed on the way: the tracks' roll wound up round the
       lap (the Serpent's lift was ridden 134° on its side, the indoor lifts ~120°); every lift is upright now,
       turns bank by speed, loops invert, Baron crests upright
-- [ ] 4. Indoor coasters bigger and better looking: bigger, taller halls (north fence moves back),
+- [x] 4a. Guests you can see: every new guest was made but never put in the world, so the crowd walked, queued and rode
+      unseen (only the odd one recycled from the pool showed). Fixed. Also: a ride whose key is OFF now takes a line (the guests
+      wait for it to open and give up after 1-3 minutes), up to 90 guests (was 40) arrive faster and ride up to four times
+- [~] 4. Indoor coasters bigger and better looking: bigger, taller halls (north fence moves back),
       longer tracks, proper facades and theming
+- [ ] 4b. Queue lanes take far too much room: every lane is one straight run as long as the ride has seats (1 m a seat,
+      18 m+ for the bigger rides). Fold them into compact switchbacks
 - [ ] 5. A proper station for every flat ride: platform, entry and exit, gates, canopy, sign
 - [ ] 6. Guests arrive by car: drive in off the road, park in a free bay, get out, queue at the
       ticket window, walk in; and go home the same way. More guests in the park
