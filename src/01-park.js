@@ -184,12 +184,13 @@
     box(22, 0.02, 0.4, MAT.whiteLine, 0, 0.03, PK_GATE_Z + 5);
     // the fence either side of the gate: the only way in is a turnstile. A palisade of iron spears on a stone kerb.
     pkPalisade(-32.5, PK_GATE_Z, -12, PK_GATE_Z);
-    pkPalisade(12, PK_GATE_Z, PK_PARK.x1, PK_GATE_Z);
+    pkPalisade(12, PK_GATE_Z, 32.5, PK_GATE_Z);
+    pkPalisade(32.5, 71, PK_PARK.x1, 71);                  // east of the car park the park reaches south for The Mountain King (part 22)
     // and round the park. West of the forecourt the fence steps south round the kids' garden, so the little rides and the
     // playhouse are inside the park and reached from the Fairground, not stranded beyond the palisade.
     pkPalisade(PK_PARK.x0, PK_KIDS_Z, PK_PARK.x0, PK_PARK.z0);
     pkPalisade(PK_PARK.x0, PK_KIDS_Z, -32.5, PK_KIDS_Z);
-    pkPalisade(PK_PARK.x1, PK_GATE_Z, PK_PARK.x1, PK_PARK.z0);
+    pkPalisade(PK_PARK.x1, 71, PK_PARK.x1, PK_PARK.z0);
     pkPalisade(PK_PARK.x0, PK_PARK.z0, PK_PARK.x1, PK_PARK.z0);
     // the boundary round the forecourt and the car park, with the drive in at the south
     pkPalisade(-32.5, PK_GATE_Z, -32.5, 72);
