@@ -702,12 +702,23 @@
     solid(xn - 0.08, xn + 0.08, K.z0, d0, 0, H);
     solid(xn - 0.08, xn + 0.08, d1, K.z1, 0, H);
     // the desk under the long window, the operator facing the track with the platform on the side
-    var con = new THREE.Group(); con.position.set(cx, 0, K.z0 + 0.5); g.add(con);
+    var con = new THREE.Group(); con.position.set(cx, 0.12, K.z0 + 0.5); g.add(con);
+    pkBkDesk(con, 2.1);
     pkBoothPanel(a, con);
-    solid(cx - 1.0, cx + 1.0, K.z0 + 0.1, K.z0 + 0.82, 0, 0.95);
-    // a ceiling light
-    box(0.6, 0.04, 0.3, MAT.trim, cx, H - 0.02, cz + 0.3, g);
-    sphere(0.09, glowMat(0xffe9b0, 0.9), cx, H - 0.08, cz + 0.3, g);
+    solid(cx - 1.05, cx + 1.05, K.z0 + 0.1, K.z0 + 0.82, 0, 0.95);
+    // the kit, in a frame at the room's middle: local -z is the long window, +z the back
+    var k = new THREE.Group(); k.position.set(cx, 0.12, cz); g.add(k);
+    var fxl = (xf - cx) - s * 0.17;
+    pkBkCabinet(a, k, fxl, 1.42, 0.2, -s * Math.PI / 2);
+    solid(Math.min(xf, xf - s * 0.36), Math.max(xf, xf - s * 0.36), cz - 0.3, cz + 0.7, 0, 2.0);
+    pkBkMonitors(a, k, 0, 1.95, K.z0 + 0.36 - cz, 0, 0.32);
+    pkBkClock(k, -s * 1.15, 2.2, K.z1 - 0.09 - cz, Math.PI, 0.14);
+    pkBkIntercom(k, -s * 1.2, 1.5, K.z1 - 0.08 - cz, Math.PI);
+    pkBkKeyBox(k, s * 1.2, 2.05, K.z1 - 0.08 - cz, Math.PI);
+    pkBkChair(k, 0.1, -0.35, 0, 0);
+    pkBkBatten(k, 0, H - 0.17, 0.2, 0, 1.4);
+    pkBkStack(a, k, s * 1.3, H + 0.02, 0.9);
+    pkBkCamera(k, -s * (W / 2 + 0.02), H - 0.3, K.z0 - cz + 0.3, s * Math.PI / 2 + Math.PI, 0.5);
     // the status board on the back wall, facing the operator
     var screen = touchScreen({
       w: 380, h: 320, pw: 0.94, ph: 0.80, x: cx, y: 1.62, z: K.z1 - 0.1, ry: Math.PI, parent: g, title: a.name,
@@ -723,7 +734,8 @@
         scText(ctx, 16, 152, 'RESTRAINTS  ' + (C.barsWant > 0.5 ? 'DOWN' : 'UP'), C.barsWant > 0.5 ? '#5fd38d' : '#a0acb8');
         scText(ctx, 16, 182, 'AUTO  ' + (C.auto ? 'ON' : 'OFF'), C.auto ? '#5fd38d' : '#a0acb8');
         scText(ctx, 16, 212, 'CYCLE  ' + a.run.toFixed(1) + 's', '#eef1f5');
-        scText(ctx, 16, 242, 'CONTROL ROOM  ' + (C.fault ? 'RESET' : 'READY'), C.fault ? '#ff6b5e' : '#8f98a4');
+        scText(ctx, 16, 242, 'CONTROL ROOM  ' + (C.fault ? 'RESET' : (C.maint ? 'MAINT' : 'READY')), C.fault || C.maint ? '#ff6b5e' : '#8f98a4');
+        scText(ctx, 16, 272, 'WAIT  ' + pkBkWait(a) + ' MIN', '#eef1f5');
       }
     });
     var anchor = new THREE.Group(); anchor.position.set(cx, 0, cz); g.add(anchor);
