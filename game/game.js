@@ -5226,16 +5226,20 @@
     // west, onto the platform: the long window over the station desk
     wallZ(X0, Z0, Z1, -3.6, 1.9, -1);
     // south, onto the square: a window, the door, a long window, then the staff corner's solid end
-    box(DX0 - X0, H, T, cream, (X0 + DX0) / 2, H / 2, Z1);  // (the pier west of the door is glazed below)
-    box(DX0 - X0 - 0.5, HEAD - SILL, 0.04, glass, (X0 + DX0) / 2, (SILL + HEAD) / 2, Z1 + 0.11);
-    box(DX1 - DX0, H - 2.1, T, cream, (DX0 + DX1) / 2, 2.1 + (H - 2.1) / 2, Z1);
+    wallX(Z1, X0, DX0, X0 + 0.3, DX0 - 0.3, 1);                    // a window in the wall west of the door
+    box(DX1 - DX0, H - 2.1, T, cream, (DX0 + DX1) / 2, 2.1 + (H - 2.1) / 2, Z1);   // the wall over the door
     wallX(Z1, DX1, X1, 14.6, 17.3, 1);
     // east: solid, the equipment wall
     box(T, H, D, cream, X1, H / 2, CZ);
     // the brick base course round the outside, a stone cap on it and the coaster-red band at the sill, corner pilasters
-    box(W + 0.12, SILL, 0.06, brick, CX, SILL / 2, Z0 - 0.13); box(W + 0.12, SILL, 0.06, brick, CX, SILL / 2, Z1 + 0.13);
+    // the south course stops either side of the doorway
+    box(W + 0.12, SILL, 0.06, brick, CX, SILL / 2, Z0 - 0.13);
+    box(DX0 - 0.12 - (X0 - 0.06), SILL, 0.06, brick, (X0 - 0.06 + DX0 - 0.12) / 2, SILL / 2, Z1 + 0.13);
+    box(X1 + 0.06 - (DX1 + 0.12), SILL, 0.06, brick, (DX1 + 0.12 + X1 + 0.06) / 2, SILL / 2, Z1 + 0.13);
     box(0.06, SILL, D + 0.12, brick, X0 - 0.13, SILL / 2, CZ); box(0.06, SILL, D + 0.12, brick, X1 + 0.13, SILL / 2, CZ);
-    box(W + 0.3, 0.06, 0.14, M.stone, CX, SILL + 0.02, Z0 - 0.13); box(W + 0.3, 0.06, 0.14, M.stone, CX, SILL + 0.02, Z1 + 0.13);
+    box(W + 0.3, 0.06, 0.14, M.stone, CX, SILL + 0.02, Z0 - 0.13);
+    box(DX0 - 0.12 - (X0 - 0.15), 0.06, 0.14, M.stone, (X0 - 0.15 + DX0 - 0.12) / 2, SILL + 0.02, Z1 + 0.13);
+    box(X1 + 0.15 - (DX1 + 0.12), 0.06, 0.14, M.stone, (DX1 + 0.12 + X1 + 0.15) / 2, SILL + 0.02, Z1 + 0.13);
     box(0.14, 0.06, D + 0.3, M.stone, X0 - 0.13, SILL + 0.02, CZ); box(0.14, 0.06, D + 0.3, M.stone, X1 + 0.13, SILL + 0.02, CZ);
     box(W + 0.2, 0.14, 0.08, red, CX, HEAD + 0.18, Z1 + 0.14); box(0.08, 0.14, D + 0.2, red, X0 - 0.14, HEAD + 0.18, CZ);
     box(W + 0.2, 0.14, 0.08, red, CX, HEAD + 0.18, Z0 - 0.14); box(0.08, 0.14, D + 0.2, red, X1 + 0.14, HEAD + 0.18, CZ);
@@ -5857,7 +5861,11 @@
         var walking = pkStillBoarding();
         if (R.state === 'idle' || R.state === 'unload') { if (!PK.closed) { pkOpenGates(); R.loadT = 0; } }
         else if (R.state === 'loading') { R.loadT += 1.4; if (R.riders > 0 && !walking && (pkSeatsFull() || R.loadT > 8)) pkBarsDown(); }
-        else if (R.state === 'ready') { if (R.riders === 0) { pkBarsUp(); R.loadT = 0; } else if (!walking && (S.wear || 0) < 90) pkDispatch(); }
+        else if (R.state === 'ready') {
+          if (R.riders === 0) { pkBarsUp(); R.loadT = 0; }
+          else if ((S.wear || 0) >= 90) { R.wearT = (R.wearT || 0) - 1.4; if (R.wearT <= 0) { R.wearT = 20; sfx('bad'); toast('The coaster needs a service - press MAINT on the desk', 'bad'); } }
+          else if (!walking) pkDispatch();
+        }
       }
     }
     if (R.state === 'loading') pkRideLoad();
