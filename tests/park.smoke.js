@@ -80,6 +80,12 @@ module.exports = `
     }
     ok(inside && Math.abs(P.y - 7.2) < 0.05, 'Park Co HQ: in at the door and up the stair to the top floor (y ' + trail.join(' > ') + ')');
     ok(!!T.PK.office && !!T.PK.office.hq, 'the office of the owner is built at the top of HQ'); }
+  // the time clock and the light switch in a booth
+  { const a = T.PK.attrById.ferris;
+    T.pkClockIn(a.id, a.name); T.updateHud(1); const on = !!T.PK.duty && /On duty at/.test(document.getElementById('h-ride').textContent);
+    T.pkClockOut(); const off = !T.PK.duty;
+    const L = a.boothLights, l0 = L.on; L.set(true); const lit = L.on && L.pl.intensity > 0; L.set(false); const dark = !L.on && L.pl.intensity === 0;
+    ok(on && off && lit && dark && l0 === false && !!a.boothClock, 'the time clock clocks you in and out (the HUD says so), and the light switch lights the booth'); }
   // the key switch in MAINT locks a ride out: nobody boards, the desk refuses, and back to RUN it works again
   { const a = T.PK.attrById.teacups, C = T.pkCtl(a); a.state = 'idle'; a.t = 0; a.riders = 0; a.queue.length = 0; C.fault = ''; C.auto = true; T.pkAttrUnseatAll(a);
     const g = T.pkSpawnGuest(); const s0 = T.pkAttrSlot(a, 0); g.rec.x = s0.x; g.rec.z = s0.z; g.state = 'qwait'; g.slot = 0; g.attr = a.id; a.queue.push(g);
