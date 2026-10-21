@@ -4290,11 +4290,6 @@
     { id: "wc-mvdhxlgm-b", of: "group@-8,20", x: -9.85, y: 0, z: 15.35, ry: -720, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvdhxvhh-d", of: "group@-8,20", x: -8.65, y: 0, z: 12.1, ry: -450, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvdhy2sl-e", of: "group@-6,6", x: -8.45, y: 0, z: 14.25, ry: -90, sx: 1, sy: 1, sz: 1 },
-    { id: "wc-mvdhyd39-f", of: "fence@7.8,4.1", x: -16.25, y: 0, z: -3.95, ry: -180, sx: 1, sy: 1, sz: 1 },
-    { id: "wc-mvdhyrz7-g", of: "fence@7.8,4.1", x: -11.3, y: 0, z: -12.65, ry: -270, sx: 1, sy: 1, sz: 1 },
-    { id: "wc-mvdhz5zc-h", of: "fence@7.8,4.1", x: -2.1, y: 0, z: -12.7, ry: -270, sx: 1, sy: 1, sz: 1 },
-    { id: "wc-mvdhz92g-i", of: "fence@7.8,4.1", x: 7.15, y: 0, z: -12.65, ry: -270, sx: 1, sy: 1, sz: 1 },
-    { id: "wc-mvdhzd1j-j", of: "fence@7.8,4.1", x: 16.35, y: 0, z: -12.7, ry: -270, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvgupfz8-2", of: "fence@7.8,4.1", x: -20.7, y: 0, z: 0.35, ry: -270, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvgupuup-3", of: "fence@7.8,4.1", x: -21.95, y: 0, z: 5.45, ry: -270, sx: 0.97, sy: 0.97, sz: 0.84 },
     { id: "wc-mvgurziu-6", of: "group@-25.43,-17.3", x: -27.95, y: 0, z: -15.75, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
@@ -4344,7 +4339,7 @@
   // A small park: a gate at the south, two ticket windows outside it, a midway running north to the coaster station, and the
   // operator's room beside the platform. Guests arrive from the car park, buy a ticket at a window, pass a turnstile, queue
   // for the coaster and ride it. The player works the window and the ride.
-  var PK_GATE_Z = 30, PK_PLATFORM_Y = 0.6, PK_STATION_Z = -4.6;
+  var PK_GATE_Z = 30, PK_PLATFORM_Y = 0.6, PK_STATION_Z = -4.6, PK_KIDS_Z = 56;   // PK_KIDS_Z: the south fence of the kids' garden
   // the park is a long rectangle: the gate at the south, the coaster across the north, and rides either side of the midway
   var PK_PARK = { x0: -72, x1: 72, z0: -95, z1: 70 };
   var PK_BOOTHS = [{ x: -9, z: 36, turnstile: -6 }, { x: 9, z: 36, turnstile: 6 }];
@@ -4357,12 +4352,12 @@
   // the plots: every ride the park can open. level is the level that opens it, q the point the queue stands at
   var PK_PLOTS = [
     { id: 'carousel',  name: 'Carousel',     x: -34, z: 20, r: 8.5,  q: [-22, 20],  level: 2 },
-    { id: 'teacups',   name: 'Teacups',      x: -56, z: 3,  r: 7.2,  q: [-44, 3],   level: 4 },
+    { id: 'teacups',   name: 'Teacups',      x: -56, z: 3,  r: 7.2,  q: [-44, 3],   level: 4, boothSide: -1 },   // the south side is the kids' lane
     { id: 'ferris',    name: 'Ferris wheel', x: 34,  z: 20, r: 9.5,  q: [22, 20],   level: 6 },
-    { id: 'dodgems',   name: 'Dodgems',      x: 56,  z: 3,  r: 8.2,  q: [44, 3],    level: 8, bo: [0, -6.5] },
-    { id: 'droptower', name: 'Drop tower',   x: -54, z: -52, r: 6.5, q: [-44, -52], level: 9, bo: [0, 6.5] },
+    { id: 'dodgems',   name: 'Dodgems',      x: 56,  z: 3,  r: 8.2,  q: [44, 3],    level: 8 },
+    { id: 'droptower', name: 'Drop tower',   x: -54, z: -52, r: 6.5, q: [-44, -52], level: 9 },
     { id: 'flume',     name: 'Log flume',    x: 54,  z: -32, r: 9.0, q: [46.4, -24], level: 10 },
-    { id: 'haunted',   name: 'Haunted house',x: -58, z: -24, r: 9.5, q: [-44, -24],  level: 11, bo: [0, 6.5] }
+    { id: 'haunted',   name: 'Haunted house',x: -58, z: -24, r: 9.5, q: [-44, -24],  level: 11 }
   ];
   // the ladder: what the park earns its way to. Every ride is open from the first day; the levels open the services.
   var PK_LEVELS = [
@@ -4461,7 +4456,7 @@
     pkSlab(18, 6, -14, 3, 0.017);    // the start of the street out to the teacups (part 12 carries it on)
     pkSlab(18, 6, 14, 20, 0.017);    // out to the ferris wheel
     pkSlab(18, 6, 14, 3, 0.017);     // the start of the street out to the dodgems
-    // the routes out to the far rides, the hub, the lake and the planting are laid in part 12
+    // the routes out to the lands, the hub, the Garden Walk and the planting are laid in part 12
     // the car park markings: 22 bays a side, two removed for the walk through to the gate
     var bayW = 2.75, bayN = 22, bayX0 = -bayW * bayN / 2 + bayW / 2;
     for (var i = 0; i < bayN; i++) {
@@ -4523,10 +4518,12 @@
     // a welcome line across the forecourt
     box(22, 0.02, 0.4, MAT.whiteLine, 0, 0.03, PK_GATE_Z + 5);
     // the fence either side of the gate: the only way in is a turnstile. A palisade of iron spears on a stone kerb.
-    pkPalisade(PK_PARK.x0, PK_GATE_Z, -12, PK_GATE_Z);
+    pkPalisade(-32.5, PK_GATE_Z, -12, PK_GATE_Z);
     pkPalisade(12, PK_GATE_Z, PK_PARK.x1, PK_GATE_Z);
-    // and round the park
-    pkPalisade(PK_PARK.x0, PK_GATE_Z, PK_PARK.x0, PK_PARK.z0);
+    // and round the park. West of the forecourt the fence steps south round the kids' garden, so the little rides and the
+    // playhouse are inside the park and reached from the Fairground, not stranded beyond the palisade.
+    pkPalisade(PK_PARK.x0, PK_KIDS_Z, PK_PARK.x0, PK_PARK.z0);
+    pkPalisade(PK_PARK.x0, PK_KIDS_Z, -32.5, PK_KIDS_Z);
     pkPalisade(PK_PARK.x1, PK_GATE_Z, PK_PARK.x1, PK_PARK.z0);
     pkPalisade(PK_PARK.x0, PK_PARK.z0, PK_PARK.x1, PK_PARK.z0);
     // the boundary round the forecourt and the car park, with the drive in at the south
@@ -4551,7 +4548,7 @@
     toast('Adults ' + money(S.ticketPrice), '');
     return S.ticketPrice;
   }
-  // is this spot free for a tree? Keeps the rides, the routes, the lake, the midway, the gate and the coaster's footprint clear.
+  // is this spot free for a tree? Keeps the rides, the routes, the midway, the gate and the coaster's footprint clear.
   function pkTreeOK(x, z) {
     for (var i = 0; i < PK_PLOTS.length; i++) { var p = PK_PLOTS[i]; if (dist2(x, z, p.x, p.z) < (p.r + 3.5) * (p.r + 3.5)) return false; }
     if (x > -12 && x < 12 && z > -14 && z < 30) return false;
@@ -4732,7 +4729,7 @@
       pkGround(); pkGate(); pkBooths(); pkOffice(); pkMidway(); pkBuildCoaster(); pkBuildOperatorRoom(); pkBuildSnack();
       pkBuildAttractions();
       pkDressAll();
-      if (typeof pkThemeBuild === 'function') pkThemeBuild();   // part 12: the routes, the hub, the lake, the planting
+      if (typeof pkThemeBuild === 'function') pkThemeBuild();   // part 12: the lands, the routes, the hub, the planting
       pkBuildNpcs();
       pkDefProps(); buildProps();
       buildSky({ clouds: 6, rainN: 2500, snowN: 1200 });
@@ -5045,19 +5042,21 @@
     screenDirtyAll(); hudDirty = true;
   }
   // ── The coaster ───────────────────────────────────────────────────
-  // One closed circuit: a station straight at the south, a lift hill in the north-east, a drop, a hill, a turn and a run home.
+  // One closed circuit behind the station: a lift hill in the north-east, a drop, a hill, a turn and a run home.
   // The train is three cars of four seats. The operator's room stands east of the platform, with the desk that runs the ride.
   var PK_CAR_N = 3;
   // the four seats of a car, in the order they fill: the platform side first, then the far side, front row before back
   var PK_SEAT_LOCAL = [[-0.35, 0.62], [-0.35, -0.62], [0.35, 0.62], [0.35, -0.62]];
   var PK_CAR_COLS = [0xd94f4f, 0xf0c04a, 0x4f8fd9];
   // the control points of the circuit. The station straight runs x -9..9 at z -4.6; the track then swings east and north,
-  // climbs to 14 m, comes back west over the park and drops home. It stays clear of the operator's room (x 11..17, z -4..2).
+  // climbs to 14 m, comes back west and drops home. It stays clear of the operator's room (x 11..17, z -4..2), and the whole
+  // circuit keeps to the band behind the station (z -4..-36, between the two streets), so the middle of the park beyond it is
+  // gardens and paths rather than the inside of a loop nobody can walk into. Points 3..5 are the lift (PK.liftU).
   var PK_TRACK_PTS = [
     [-9, 0.6, -4.6], [9, 0.6, -4.6],
-    [21, 0.8, -6], [26, 3, -14], [27, 9, -24], [24, 14, -34],
-    [14, 5, -43], [2, 2.2, -48], [-10, 10, -46], [-20, 3, -40],
-    [-26, 5, -30], [-24, 9, -20], [-18, 3, -12], [-13, 0.6, -6]
+    [20.5, 0.8, -6.2], [25.5, 3, -12], [27, 8.5, -19.5], [25.5, 14, -27.5],
+    [18, 9.5, -33], [8, 2.4, -33.5], [-2, 7.5, -32], [-11, 3.2, -30],
+    [-19.5, 5, -24], [-20.5, 7.5, -16.5], [-17, 3, -10], [-13, 0.6, -6]
   ];
   // the u of the point on the curve nearest a world point: the station is found this way, never guessed
   function pkNearestU(x, y, z) {
@@ -6848,8 +6847,10 @@
     pkBevelBox(Math.abs(x1 - x0), 0.05, 0.05, MAT.steelDark, (x0 + x1) / 2, 0.99, z, parent, 0.008);
     pkBevelBox(Math.abs(x1 - x0), 0.045, 0.045, MAT.steelDark, (x0 + x1) / 2, 0.52, z, parent, 0.008);
   }
+  // the beds by a ride's gateway stand in the world on their own, not inside the ride's dressing group, so the editor can
+  // pick each one up: move it, turn it, copy it or take it away (the parent is kept in the call only for the old signature)
   function pkBedIn(x, z, parent) {
-    pkFlowerBed(x, z, 1.8, 1.1, parent, true);
+    pkFlowerBed(x, z, 1.8, 1.1, null, true);
   }
   // the one thing each ride is known for
   function pkSignature(a, p, th, parent) {
@@ -6859,12 +6860,12 @@
       band.rotation.x = Math.PI / 2; band.position.set(p.x, 4.0, p.z); parent.add(band);
       box(1.7, 1.9, 1.0, std({ color: 0x8a5a3a, roughness: 0.9 }), p.x - p.r - 2.6, 0.95, p.z + 2.4, g);
       for (var i = 0; i < 5; i++) cyl(0.07, 1.0 - i * 0.13, std({ color: 0xf0c04a, roughness: 0.4 }), p.x - p.r - 3.1 + i * 0.25, 2.2, p.z + 2.4, g, 8);
-      // the fairground quarter: brass lamps on the rim, a souvenir kiosk by the organ
-      // box, flower beds flanking the west lamp and a bench on the north rim
+      // the fairground quarter: brass lamps on the rim, a souvenir kiosk facing the avenue,
+      // flower beds flanking the west lamp (inside the kids' lane) and a bench on the north rim
       [[-41.6, 12.5], [-41.6, 27.5], [-43.0, 20]].forEach(function (q) { pkLandLamp(q[0], q[1], g, th); });
-      parent.add(pkStall(-46.8, 14.6, Math.PI / 2, th.a, th.b, 'SOUVENIRS'));
-      pkFlowerBed(-44.7, 17.3, 1.8, 1.1, g, true);
-      pkFlowerBed(-44.7, 25.2, 1.8, 1.1, g, true);
+      parent.add(pkStall(-36.5, 8.2, Math.PI, th.a, th.b, 'SOUVENIRS'));
+      pkFlowerBed(-43.4, 17.3, 1.8, 1.1, null, true);   // in the world, so the editor can move them
+      pkFlowerBed(-43.4, 25.2, 1.8, 1.1, null, true);
       pkBench(-37.5, 30.4, Math.PI, g);
     } else if (a.id === 'teacups') {
       var pot = new THREE.Mesh(new THREE.SphereGeometry(1.55, 16, 12), std({ color: 0xf0a6c0, roughness: 0.5 }));
@@ -6879,8 +6880,8 @@
       pkHedgeRun(-65.6, -3.4, -65.6, 9.4, g, 1.05);
       pkHedgeRun(-63.6, 12.6, -49.2, 12.6, g, 1.05);
       [[-63.4, -4.4], [-63.4, 10.4], [-49.4, 10.4]].forEach(function (q) { pkTopiary(q[0], q[1], g, 1); });
-      pkTeaTable(-49.8, -4.8, g);
-      [[-47.6, 5.6], [-47.6, 0.4]].forEach(function (q) { pkCupLamp(q[0], q[1], g); });
+      pkTeaTable(-58.5, -5.2, g);   // on the pad's north-west, clear of the booth
+      [[-49.4, 6.0], [-47.6, 0.4]].forEach(function (q) { pkCupLamp(q[0], q[1], g); });   // the south one stands clear of the kids' lane
       pkTrellis(-40.8, 3, g);
     } else if (a.id === 'ferris') {
       for (var b = 0; b < 24; b++) {
@@ -8580,6 +8581,8 @@ function pkRideBoothBetter(a, plot, th) {
   var c1x = ax, c1z = q[1] + OFF, c2x = ax, c2z = q[1] - OFF;
   var bx = c1x, bz = c1z;
   if (dist2(c2x, c2z, plot.x, plot.z) > dist2(c1x, c1z, plot.x, plot.z)) { bx = c2x; bz = c2z; }
+  // a plot can name its side outright (boothSide: 1 south of the lane, -1 north) where the far side is taken by a street
+  if (plot.boothSide === 1) { bx = c1x; bz = c1z; } else if (plot.boothSide === -1) { bx = c2x; bz = c2z; }
   var ry = Math.atan2(plot.x - bx, plot.z - bz);
   var toQ = Math.atan2(q[0] - bx, q[1] - bz);
   var doorSide = Math.cos(toQ - (ry + Math.PI / 2)) >= 0 ? 1 : -1;
@@ -8849,20 +8852,33 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
   }
 }
   // ── What this part is for ────────────────────────────────────────
-  // The park had a good gate and a good midway, then rides dropped on bare grass with nothing joining them. This part gives it a
-  // spine and a skin: paved routes with lamps, benches and flower beds out to the haunted manor, the drop tower and the log flume;
-  // a fountain where the midway crosses its two ride spurs; a lake in the middle of the coaster's loop; tree avenues; signposts.
+  // The park is a hub and four lands. The midway runs from the gate to Station Square, where the coaster stands like the castle
+  // at the end of the street. Four lands sit round it: the Fairground (south-west), the Thrills (south-east), the Dark Woods
+  // (north-west) and Coaster Country (north-east). A ring of streets joins them - west and east streets, the North Promenade -
+  // and the Garden Walk cuts across the middle, so nobody walks a long street with nothing on it and nothing is a dead end.
   // It only adds. Where it needs to keep other things off its ground it answers pkThemeKeepClear (part 01's tree scatter asks).
   var PK_HUB = { x: 0, z: 10.5 };
-  var PK_LAKE = { x: 1, z: -29, a: 13, b: 10.5 };
-  // the routes, as [x0, z0, x1, z1, width]. Two long streets carry the teacup and dodgem spurs out to the park's flanks; a spine runs
-  // north from each, with a side street to each far ride's queue, and the North Promenade joins the two spines - so the park is a loop.
+  // the lands: a name, two colours for the arch, and the pavers every street in the land is laid in (0: the park's warm pavers)
+  var PK_LANDS = {
+    fair:    { name: 'THE FAIRGROUND',  a: 0xc94f4f, b: 0xf0c04a, pave: 0xd9b48a, sign: '#f5b53d' },
+    thrill:  { name: 'THRILLS',         a: 0x2f6fb3, b: 0xf0c04a, pave: 0xa9b8c8, sign: '#9fd0ff' },
+    dark:    { name: 'THE DARK WOODS',  a: 0x4a4a55, b: 0xff8a3d, pave: 0x8f8778, sign: '#ff9a52' },
+    coaster: { name: 'COASTER COUNTRY', a: 0x2f8f6f, b: 0xf0c04a, pave: 0xc2ad86, sign: '#8fe0b0' },
+    garden:  { name: 'THE GARDENS',     a: 0x4d7a3a, b: 0xf4f1e6, pave: 0, sign: '#f5e9c2' }
+  };
+  // the routes, as [x0, z0, x1, z1, width, land]. The avenues carry the spurs out to the flanks; a street runs north from each
+  // crossroads, with a side street to each far ride's queue; the North Promenade closes the ring and the Garden Walk crosses it.
   var PK_ROUTES = [
-    [-22, 3, -46, 3, 4], [-31, 3, -31, -60, 3.6], [-31, -24, -45.5, -24, 3.8], [-31, -52, -45.5, -52, 3.8],       // west: teacups, haunted manor, drop tower
-    [22, 3, 46, 3, 4], [35, 3, 35, -60, 3.6], [35, -24, 47.5, -24, 3.8],                                         // east: dodgems, log flume
-    [-31, -60, 35, -60, 5],                                                                                       // the North Promenade
-    [2, -60, 2, -66, 3.6], [9.5, -60, 9.5, -79, 3.4], [14, -60, 14, -66.6, 3]                                         // to the bandstand, the maze and the windmill
+    [-22, 3, -46, 3, 4, 'fair'],                                                                                   // the Fairground avenue: teacups, the kids' lane
+    [-31, 3, -31, -60, 3.6, 'dark'], [-31, -24, -45.5, -24, 3.8, 'dark'], [-31, -52, -45.5, -52, 3.8, 'dark'],      // the Dark Woods: haunted manor, drop tower
+    [22, 3, 46, 3, 4, 'thrill'],                                                                                   // the Thrills avenue: dodgems
+    [35, 3, 35, -60, 3.6, 'coaster'], [35, -24, 47.5, -24, 3.8, 'coaster'],                                         // Coaster Country: log flume
+    [-31, -60, 35, -60, 5, 'garden'],                                                                               // the North Promenade
+    [-31, -44, 35, -44, 4.4, 'garden'], [2, -44, 2, -60, 4, 'garden'],                                              // the Garden Walk and its spine to the clock
+    [2, -60, 2, -66, 3.6, 'garden'], [9.5, -60, 9.5, -79, 3.4, 'garden'], [14, -60, 14, -66.6, 3, 'garden']          // to the bandstand, the maze and the windmill
   ];
+  // the arches over the streets where each land begins: [x, z, the way the street runs ('x' or 'z'), land]
+  var PK_ARCHES = [[-17.5, 3, 'x', 'fair'], [19.5, 3, 'x', 'thrill'], [-31, -6.5, 'z', 'dark'], [35, -6.5, 'z', 'coaster']];
   var PK_KEEP = [];   // [x, z, r] circles other parts ask the planting to leave alone (part 13 adds its own)
   var PK_THEME_T = 0, PK_FOUNTAIN = { jet: null };
 
@@ -8871,17 +8887,19 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
     var cx = ax + dx * t, cz = az + dz * t;
     return Math.sqrt((px - cx) * (px - cx) + (pz - cz) * (pz - cz));
   }
-  // true where something else (a tree) must not stand: the lake and its shore, the routes, the hub, the coaster's footprint
+  // true where something else (a tree) must not stand: the routes, the hub, the coaster's footprint
   function pkThemeKeepClear(x, z) {
-    var L = PK_LAKE, ex = (x - L.x) / (L.a + 5), ez = (z - L.z) / (L.b + 5);
-    if (ex * ex + ez * ez < 1) return true;
     for (var i = 0; i < PK_ROUTES.length; i++) {
       var r = PK_ROUTES[i], hw = r[4] / 2 + 2.5;
       if (x > Math.min(r[0], r[2]) - hw && x < Math.max(r[0], r[2]) + hw && z > Math.min(r[1], r[3]) - hw && z < Math.max(r[1], r[3]) + hw) return true;
     }
     for (var q = 0; q < PK_KEEP.length; q++) if (dist2(x, z, PK_KEEP[q][0], PK_KEEP[q][1]) < PK_KEEP[q][2] * PK_KEEP[q][2]) return true;
+    return pkNearTrack(x, z, 4.5);
+  }
+  // close to the coaster's track, in plan: no tree grows up through the rails
+  function pkNearTrack(x, z, d) {
     var P = PK_TRACK_PTS;
-    for (var k = 0; k < P.length; k++) { var A = P[k], B = P[(k + 1) % P.length]; if (pkSegDist(x, z, A[0], A[2], B[0], B[2]) < 4.5) return true; }
+    for (var k = 0; k < P.length; k++) { var A = P[k], B = P[(k + 1) % P.length]; if (pkSegDist(x, z, A[0], A[2], B[0], B[2]) < d) return true; }
     return false;
   }
   function pkNearRoute(x, z, skip, d) {
@@ -8902,21 +8920,23 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
   function pkThemeBuild() {
     pkBuildRoutes();
     pkBuildHub();
-    pkBuildLake();
     pkBuildRouteFurniture();
+    PK_ARCHES.forEach(function (ar) { pkLandArch(ar[0], ar[1], ar[2], PK_LANDS[ar[3]]); });
+    pkCoasterYard();
     pkBuildSignposts();
     if (typeof pkGardensBuild === 'function') pkGardensBuild();   // part 13: the plazas, the stalls and the North Promenade's attractions
   }
 
   // ── The routes ───────────────────────────────────────────────────
-  // warm pavers on a stone edge. Every segment sits a hair above the last, so where two meet there is no flicker.
+  // pavers on a stone edge, tinted to the land the street belongs to, so the ground tells you where you are. Every segment
+  // sits a hair above the last, so where two meet there is no flicker.
   function pkBuildRoutes() {
     var M = pkMats();
     PK_ROUTES.forEach(function (r, i) {
       var dx = r[2] - r[0], dz = r[3] - r[1], len = Math.sqrt(dx * dx + dz * dz), w = r[4], ry = Math.atan2(dx, dz);
-      var cx = (r[0] + r[2]) / 2, cz = (r[1] + r[3]) / 2, y = 0.022 + i * 0.002;
+      var cx = (r[0] + r[2]) / 2, cz = (r[1] + r[3]) / 2, y = 0.022 + i * 0.002, land = PK_LANDS[r[5]];
       pkPaved(w + 0.7, len + w + 0.7, M.kerb, cx, y - 0.001, cz, 2.4, null, ry);
-      pkPaved(w, len + w, M.paversWarm, cx, y, cz, 2.4, null, ry);
+      pkPaved(w, len + w, land && land.pave ? pkPadMat(land.pave) : M.paversWarm, cx, y, cz, 2.4, null, ry);
     });
   }
   // lamps, benches, flower beds and an avenue of trees along every route
@@ -8948,16 +8968,12 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
         [-1, 1].forEach(function (sd) {
           var pa = at(ta + (rng() - 0.5) * 2, sd * (w / 2 + 3.3 + rng() * 1.2));
           if (pkNearRide(pa[0], pa[1], 3) || pkNearRoute(pa[0], pa[1], i, 3.2)) return;
-          if (pkInsideLake(pa[0], pa[1], 4)) return;
+          if (pkNearTrack(pa[0], pa[1], 4.5)) return;
           var seed = Math.abs(Math.round(pa[0] * 13 + pa[1] * 7)), sc = 0.9 + rng() * 0.5;
           if (seed % 6 === 0) pkConifer(pa[0], pa[1], sc, null, seed); else pkTree(pa[0], pa[1], sc, null, seed);
         });
       }
     });
-  }
-  function pkInsideLake(x, z, margin) {
-    var L = PK_LAKE, ex = (x - L.x) / (L.a + margin), ez = (z - L.z) / (L.b + margin);
-    return ex * ex + ez * ez < 1;
   }
 
   // ── The hub ──────────────────────────────────────────────────────
@@ -9010,58 +9026,47 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
     solid(x - 3.0, x + 3.0, z - 3.0, z + 3.0, 0, 2.0);
   }
 
-  // ── The lake ─────────────────────────────────────────────────────
-  // in the heart of the coaster's loop: seen from the platform, from the train and over the apron fence.
-  function pkBuildLake() {
-    var L = PK_LAKE, M = pkMats(), C = pkCrownGeos(), rng = pkRng(4242);
-    function ellipse(sx, sz, mat, y) {
-      var geo = new THREE.CircleGeometry(1, 64);
-      if (mat === M.water) { var uv = geo.attributes.uv; for (var i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * sx / 2.2, uv.getY(i) * sz / 2.2); }
-      var m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.scale.set(sx, sz, 1); m.position.set(L.x, y, L.z); m.receiveShadow = true; scene.add(m); return m;
+  // ── The land arches ──────────────────────────────────────────────
+  // where a street enters a land: two stone-footed pillars in the land's colours either side of the street, a beam across with
+  // the land's name on both faces, lanterns on the pillars and a pennant row under the beam. Nothing stands in the walkway.
+  function pkLandArch(x, z, along, L) {
+    var M = pkMats(), g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = along === 'x' ? Math.PI / 2 : 0; scene.add(g);
+    var colA = std({ color: L.a, roughness: 0.6, metalness: 0.1 }), colB = std({ color: L.b, roughness: 0.55, metalness: 0.2 });
+    var HW = 3.15, H = 4.6, i;
+    [-1, 1].forEach(function (s) {
+      pkBevelBox(0.95, 0.5, 0.95, M.stoneDark, s * HW, 0.25, 0, g, 0.05);
+      pkBevelBox(0.7, H - 0.5, 0.7, colA, s * HW, 0.5 + (H - 0.5) / 2, 0, g, 0.05);
+      pkBevelBox(0.84, 0.2, 0.84, colB, s * HW, H + 0.1, 0, g, 0.04);
+      sphere(0.22, colB, s * HW, H + 0.42, 0, g);
+      [-1, 1].forEach(function (f) { pkRoundCyl(0.13, 0.3, glowMat(0xfff2c0, 1.0), s * HW, 3.05, f * 0.42, g, 10); });
+    });
+    pkBevelBox(HW * 2 + 0.6, 0.62, 0.5, colA, 0, H - 0.25, 0, g, 0.05);
+    pkBevelBox(HW * 2 + 0.8, 0.12, 0.6, colB, 0, H + 0.1, 0, g, 0.03);
+    var w = Math.min(5.4, L.name.length * 0.36 + 0.8);
+    pkSign3D([L.name], w, 0.5, 0, H - 0.25, 0.27, 0, { bg: '#151a20', fg: L.sign }, g);
+    pkSign3D([L.name], w, 0.5, 0, H - 0.25, -0.27, Math.PI, { bg: '#151a20', fg: L.sign }, g);
+    for (i = 0; i < 9; i++) {
+      var flag = new THREE.Mesh(pkPennantGeo(), pkBuntMat(i % 2 ? L.a : L.b));
+      flag.position.set(-HW + 0.6 + i * (HW * 2 - 1.2) / 8, H - 0.6, 0); flag.castShadow = true; g.add(flag);
     }
-    ellipse(L.a + 1.6, L.b + 1.6, M.soil, 0.03);
-    ellipse(L.a + 0.5, L.b + 0.5, M.stoneDark, 0.045);
-    ellipse(L.a, L.b, M.water, 0.07);
-    // rocks round the rim
-    var n = 44;
-    for (var i = 0; i < n; i++) {
-      var t = i / n * Math.PI * 2 + rng() * 0.12, rs = 0.45 + rng() * 0.75;
-      var rock = new THREE.Mesh(C[i % 4], M.stoneDark); rock.scale.set(rs * (1.2 + rng() * 0.6), rs * 0.7, rs);
-      rock.position.set(L.x + (L.a + 0.9) * Math.cos(t), 0.18, L.z + (L.b + 0.9) * Math.sin(t)); rock.rotation.y = rng() * 6; rock.castShadow = true; rock.receiveShadow = true; scene.add(rock);
-    }
-    // reeds in clumps at the edge
-    var reed = std({ color: 0x5f7f3a, roughness: 0.95 }), reedGeo = new THREE.ConeGeometry(0.035, 1.2, 4);
-    for (var c = 0; c < 22; c++) {
-      var rt = rng() * Math.PI * 2, rx = L.x + (L.a - 0.4) * Math.cos(rt), rz = L.z + (L.b - 0.4) * Math.sin(rt);
-      for (var q = 0; q < 5; q++) {
-        var rm = new THREE.Mesh(reedGeo, reed), hh = 0.7 + rng() * 0.9; rm.scale.set(1, hh, 1);
-        rm.position.set(rx + (rng() - 0.5) * 0.7, 0.07 + hh * 0.6, rz + (rng() - 0.5) * 0.7); rm.rotation.z = (rng() - 0.5) * 0.25; scene.add(rm);
-      }
-    }
-    // lily pads on the water
-    var pad = std({ color: 0x3f7a3a, roughness: 0.85, side: THREE.DoubleSide }), padGeo = new THREE.CircleGeometry(0.34, 10), bloom = std({ color: 0xf2b6d2, roughness: 0.6 });
-    for (var lp = 0; lp < 20; lp++) {
-      var la = rng() * Math.PI * 2, lr = Math.sqrt(rng()) * 0.82, lx = L.x + L.a * lr * Math.cos(la), lz = L.z + L.b * lr * Math.sin(la);
-      var pm = new THREE.Mesh(padGeo, pad); pm.rotation.x = -Math.PI / 2; pm.position.set(lx, 0.085, lz); pm.scale.setScalar(0.7 + rng() * 0.8); scene.add(pm);
-      if (lp % 4 === 0) { var bm = new THREE.Mesh(C[lp % 4], bloom); bm.scale.set(0.16, 0.1, 0.16); bm.position.set(lx, 0.14, lz); scene.add(bm); }
-    }
-    // an island with a willow-ish tree and a few stones
-    var ix = L.x + 3.5, iz = L.z - 1.5;
-    var mound = new THREE.Mesh(C[1], M.hedge); mound.scale.set(6.2, 1.4, 5.4); mound.position.set(ix, 0.2, iz); mound.receiveShadow = true; scene.add(mound);
-    pkTree(ix, iz, 1.15, null, 17);
-    for (var s = 0; s < 5; s++) { var sr = new THREE.Mesh(C[s % 4], M.stoneDark), ss = 0.35 + rng() * 0.3; sr.scale.set(ss * 1.4, ss * 0.8, ss); sr.position.set(ix + 2.6 * Math.cos(s * 1.3), 0.3, iz + 2.2 * Math.sin(s * 1.3)); scene.add(sr); }
-    // the shore planting: a loose ring of trees outside the rocks, clear of the rails
-    var m = 30;
-    for (var j = 0; j < m; j++) {
-      var ja = j / m * Math.PI * 2 + rng() * 0.15, d = 4.5 + rng() * 3.5;
-      var tx = L.x + (L.a + d) * Math.cos(ja), tz = L.z + (L.b + d) * Math.sin(ja);
-      var P = PK_TRACK_PTS, bad = tz > -14.5;
-      for (var k = 0; k < P.length && !bad; k++) { var A = P[k], B = P[(k + 1) % P.length]; if (pkSegDist(tx, tz, A[0], A[2], B[0], B[2]) < 4.5) bad = true; }
-      if (bad) continue;
-      var seed = Math.abs(Math.round(tx * 13 + tz * 7)), sc = 0.9 + rng() * 0.7;
-      if (seed % 4 === 0) pkConifer(tx, tz, sc, null, seed); else pkTree(tx, tz, sc, null, seed);
-    }
-    solid(L.x - L.a, L.x + L.a, L.z - L.b, L.z + L.b, 0, 0.8);
+    // the pillars are solid; the walkway between them is not
+    var c = Math.cos(g.rotation.y), sn = Math.sin(g.rotation.y);
+    [-1, 1].forEach(function (s) { var px = x + s * HW * c, pz = z - s * HW * sn; solid(px - 0.5, px + 0.5, pz - 0.5, pz + 0.5, 0, H); });
+    return g;
+  }
+
+  // ── The coaster's yard ───────────────────────────────────────────
+  // the ground the circuit stands on is fenced, west, north and east, and closed against the station at the south, so the
+  // guests walk the streets round it instead of cutting across the rails, and the Garden Walk looks over the fence at the drop.
+  // Each run is the park's own fence, a world item the editor can move.
+  var PK_YARD = { x0: -24, x1: 30.5, z0: -37, z1: -1.5 };
+  function pkCoasterYard() {
+    var Y = PK_YARD;
+    pkParkFence(Y.x0, Y.z1, Y.x0, Y.z0);       // west, along the Dark Woods street
+    pkParkFence(Y.x0, Y.z0, Y.x1, Y.z0);       // north, along the Garden Walk
+    pkParkFence(Y.x1, Y.z0, Y.x1, Y.z1);       // east, along Coaster Country's street
+    pkParkFence(Y.x0, Y.z1, -10.3, Y.z1);      // south-west, to the platform's west end
+    pkParkFence(17.2, Y.z1, Y.x1, Y.z1);       // south-east, to the operator's room
   }
 
   // ── Signposts ────────────────────────────────────────────────────
@@ -9083,16 +9088,19 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
     return g;
   }
   function pkBuildSignposts() {
-    // at the hub: the way to every corner of the park, split over two posts so the boards do not
+    // at the hub: the four lands and the coaster, split over two posts so the boards do not
     // stack into a knot from the middle of the plaza
-    pkSignpost(-4.7, 7.0, [['CAROUSEL <', Math.PI], ['FERRIS WHEEL >', 0], ['COASTER ^', Math.PI / 2]]);
-    pkSignpost(-4.7, 4.2, [['TEACUPS & THE WEST <', Math.PI], ['DODGEMS & THE EAST >', 0]]);
+    pkSignpost(-4.7, 7.0, [['FAIRGROUND <', Math.PI], ['THRILLS >', 0], ['COASTER ^', Math.PI / 2]]);
+    pkSignpost(-4.7, 4.2, [['DARK WOODS <', Math.PI], ['COASTER COUNTRY >', 0]]);
     // at each crossroads plaza, tucked into the corner of the junction
-    pkSignpost(-28.4, 0.4, [['TEACUPS <', Math.PI], ['HAUNTED MANOR ^', Math.PI / 2], ['MIDWAY >', 0]]);
-    pkSignpost(37.4, 0.4, [['DODGEMS >', 0], ['LOG FLUME ^', Math.PI / 2], ['<- MIDWAY', Math.PI]]);
-    // and where the spines meet the North Promenade
-    pkSignpost(-28.4, -57.4, [['DROP TOWER <', Math.PI], ['NORTH GARDENS >', 0], ['MIDWAY & RIDES v', -Math.PI / 2]]);
-    pkSignpost(37.4, -57.4, [['NORTH GARDENS <', Math.PI], ['LOG FLUME v', -Math.PI / 2]]);
+    pkSignpost(-28.4, 0.4, [['TEACUPS & KIDS <', Math.PI], ['DARK WOODS ^', Math.PI / 2], ['STATION SQUARE >', 0]]);
+    pkSignpost(37.4, 0.4, [['DODGEMS & BARON >', 0], ['COASTER COUNTRY ^', Math.PI / 2], ['< STATION SQUARE', Math.PI]]);
+    // where the streets cross the Garden Walk
+    pkSignpost(-28.4, -41.4, [['GARDEN WALK >', 0], ['DROP TOWER ^', Math.PI / 2], ['HAUNTED MANOR v', -Math.PI / 2]]);
+    pkSignpost(37.4, -41.4, [['< GARDEN WALK', Math.PI], ['SERPENT & MOONWOOD ^', Math.PI / 2], ['LOG FLUME v', -Math.PI / 2]]);
+    // and where the streets meet the North Promenade
+    pkSignpost(-28.4, -57.4, [['DROP TOWER <', Math.PI], ['NORTH GARDENS >', 0], ['STATION SQUARE v', -Math.PI / 2]]);
+    pkSignpost(37.4, -57.4, [['NORTH GARDENS <', Math.PI], ['STATION SQUARE v', -Math.PI / 2]]);
   }
 
   // ── Life: the fountain breathes and the water moves ──────────────
@@ -9106,7 +9114,7 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
   // ── Why ──────────────────────────────────────────────────────────
   // A park is more than its rides. These are the places to stop: somewhere to eat where the streets cross, and a garden quarter at the
   // north end where the west and east spines meet. They are scenery - nothing here is staffed or sold - but they are solid, lit and lived in.
-  var PK_PLAZAS = [{ x: -31, z: 3, r: 5.6 }, { x: 35, z: 3, r: 5.6 }];
+  var PK_PLAZAS = [{ x: -31, z: 3, r: 5.6 }, { x: 35, z: 3, r: 5.6 }, { x: 2, z: -44, r: 5.6 }];   // the two crossroads, and the Garden Walk's middle
   var PK_GARDEN = { clock: { x: 2, z: -60, r: 6.6 }, band: { x: 2, z: -73.5 }, maze: { x: 5, z: -86 }, mill: { x: 14, z: -70 } };
   var PK_SAILS = null, PK_CLOCK = null;
   PK_PLAZAS.forEach(function (p) { PK_KEEP.push([p.x, p.z, p.r + 1.5]); });
@@ -10763,14 +10771,15 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   PK_THEME.nocturne = { a: 0x8f7bd6, b: 0xd8dcff, ground: 0x767b93, name: 'Nocturne', noBunting: true, noDecor: true };
   PK_THEME.wreck = { a: 0xd8a24a, b: 0x6a4f33, ground: 0x8a7c66, name: 'The Wreck', noBunting: true, noDecor: true };
   PK_THEME.moonwood = { a: 0x8fd3c7, b: 0xc9a06a, ground: 0x7c7058, name: 'Moonwood', noBunting: true, noDecor: true };
-  // the spurs from the North Promenade up to the queues
+  // the spurs from the North Promenade up to the queues, and the kids' lane from the Fairground avenue down into the kids'
+  // garden, west of the carousel, past the three little rides' gateways
   PK_ROUTES.push(
-    [35, -60, 35, -65, 4.2], [35, -65, 41, -65, 4.2],
-    [-46.5, -60, -31, -60, 5],
-    [-46.5, -60, -46.5, -76.4, 3.4], [-16.5, -60, -16.5, -76.4, 3.4], [26.5, -60, 26.5, -76.4, 3.4],
-    [-35.5, 3, -35.5, 44, 3.4]
+    [35, -60, 35, -65, 4.2, 'coaster'], [35, -65, 41, -65, 4.2, 'coaster'],
+    [-46.5, -60, -31, -60, 5, 'dark'],
+    [-46.5, -60, -46.5, -76.4, 3.4, 'dark'], [-16.5, -60, -16.5, -76.4, 3.4, 'dark'], [26.5, -60, 26.5, -76.4, 3.4, 'coaster'],
+    [-46.8, 5.4, -46.8, 50, 3.4, 'fair']
   );
-  PK_KEEP.push([35.5, -62.5, 5.5], [42.5, -65.5, 5], [-45, 40, 6.5]);
+  PK_KEEP.push([35.5, -62.5, 5.5], [42.5, -65.5, 5], [-38.5, 42, 6.5]);
 
   function pkCoastersBuild() {
     var makers = {
@@ -11144,7 +11153,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   }
   // the acorn playhouse: a sandpit, a little tower and a slide, for the ones too small to queue
   function pkBuildPlayhouse() {
-    var g = new THREE.Group(); g.position.set(-45, 0, 40); scene.add(g);
+    var g = new THREE.Group(); g.position.set(-38.5, 0, 42); scene.add(g);
     var wood = std({ color: 0x8a6a4a, roughness: 0.85 }), leaf = std({ color: 0x4d7a3a, roughness: 0.9 });
     pkRoundCyl(4.6, 0.12, std({ color: 0xd8c49a, roughness: 0.98 }), 0, 0.06, 0, g, 32);
     pkRing(4.7, 0.15, wood, 0, 0.12, 0, g, 32);

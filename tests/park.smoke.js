@@ -187,6 +187,17 @@ module.exports = `
   // the real queue lanes and the player's own turn on the rides
   ok(T.pkLanes().length === 15 && T.pkLanes().every((L) => L.a && !!L.leafL && !!L.leafR), 'every ride has a fenced queue lane and a boarding gate');
   ok(T.pkLanes().every((L) => L.x1 > L.x0 && L.zB > L.zA), 'the lanes run from the gateway to an open entry with room for a line');
+  // every ride can be walked to from Station Square. When the pathfinder finds no way it falls back to one straight leg to
+  // the slot - through whatever fence is in the way - so a long walk that comes back as a single leg is a ride nobody can reach
+  { const blocked = [];
+    T.PK.attractions.forEach((a) => {
+      const g = T.pkSpawnGuest(), q0 = a.queue.slice(); g.rec.x = 0; g.rec.z = 4; g.rec.path = []; a.queue.length = 0;
+      T.pkAttrQueueJoin(g, a);
+      const P = g.rec.path, far = P.length ? Math.hypot(P[P.length - 1].x, P[P.length - 1].z - 4) : 0;
+      if (!P.length || (P.length === 1 && far > 12)) blocked.push(a.id + ' (' + P.length + ' leg, ' + far.toFixed(0) + ' m)');
+      T.pkAttrQueueLeave(g, a); g.state = 'leave'; g.attr = null; a.queue.length = 0; q0.forEach((q) => a.queue.push(q));
+    });
+    ok(blocked.length === 0, 'every ride is reached on foot from Station Square' + (blocked.length ? ': blocked ' + blocked.join(', ') : '')); }
   { const a = T.PK.attrById.carousel; a.state = 'idle'; a.t = 0; a.riders = 0; a.queue.length = 0; a.ctl.auto = true; a.ctl.fault = ''; T.pkAttrUnseatAll(a);
     T.player.x = a.qx + 2; T.player.z = a.qz; T.player.y = 0;
     ok(T.pkPlayerRideJoin(a) === true && !!T.PK.playerRide && T.PK.playerRide.kind === 'attr', 'the player can walk up to a ride and get on');
