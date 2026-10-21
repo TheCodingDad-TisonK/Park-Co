@@ -133,8 +133,10 @@ lamps, rich colour, planting and ornament, a themed entrance for every ride. Eac
       deleted in the editor, an invisible wall; they now take it with them. The route lamps and benches no longer land on
       each other (three did). The stray paving was 10b. The kids' rides' pads overlap on purpose (one patch)
 - [x] 12. Ferris wheel / Baron's Drop: the ferris pad is smaller (1.15 of its radius, was 1.25), clear grass between them
-- [ ] 13. Cleanup: delete old installers in `dist/` and the Desktop zip (the zip is an 18 Oct backup that
-      git does not have — your call), move the old TODO-*.md files and one-off probes out of the root
+- [x] 13. Cleanup: the old installers (0.1.0, 0.1.1) and the unpacked build gone from `dist/`; the Desktop zip (the 18 Oct
+      backup) deleted (your OK, 21 Oct); the old TODO files moved to `docs/archive/`, the scratch probes (oneshot, probe,
+      diag, station) to `tools/scratch/`; the co-author lines stripped from every earlier commit (your OK; backup tags
+      `backup/before-coauthor-strip-*` keep the old history)
 - [ ] 14. New installer (0.2.0) so the Desktop shortcut runs the new park
 
 ## Waiting on you
