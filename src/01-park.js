@@ -285,27 +285,14 @@
     traffic.x0 = -90; traffic.x1 = 90;
     for (var i = 0; i < 5; i++) trafficAdd(74.5, 1, randf(7, 11));
     for (var j = 0; j < 4; j++) trafficAdd(77.5, -1, randf(7, 11));
-    // cars in the bays, nose in, a proper rank either side of the aisle
-    var CAR_COLS_PK = [0xb23a2e, 0x2f5d8a, 0xe0dccf, 0x2f6f4f, 0x8a8f96, 0x1f2328, 0xc9a227, 0x6b4f8a, 0xd06a2a, 0x4b6b7a];
-    var BAY_X0 = -28.875, BAY_W = 2.75;
-    var RANK_A = [0, 1, 3, 4, 7, 8, 12, 13, 15, 17, 19, 21];
-    var RANK_B = [2, 5, 6, 9, 12, 14, 16, 18, 20];
-    function pkParkCar(bay, row, colour) {
-      var c = carMesh({ col: colour });
-      c.position.set(BAY_X0 + bay * BAY_W, 0, row === 0 ? 55.5 : 68.5);
-      c.rotation.y = row === 0 ? Math.PI / 2 : -Math.PI / 2;
-      scene.add(c);
-    }
-    RANK_A.forEach(function (b, n) { pkParkCar(b, 0, CAR_COLS_PK[n % CAR_COLS_PK.length]); });
-    RANK_B.forEach(function (b, n) { pkParkCar(b, 1, CAR_COLS_PK[(n + 4) % CAR_COLS_PK.length]); });
-    // wheel stops at the head of the occupied bays
-    RANK_A.forEach(function (b) { box(1.7, 0.12, 0.22, MAT.steelDark, BAY_X0 + b * BAY_W, 0.06, 53.5); });
-    RANK_B.forEach(function (b) { box(1.7, 0.12, 0.22, MAT.steelDark, BAY_X0 + b * BAY_W, 0.06, 70.5); });
+    // the cars are the guests' own now (part 19): the lot fills through the day and empties at closing. A wheel stop heads
+    // every bay
+    pkLotBays().forEach(function (b) { box(1.7, 0.12, 0.22, MAT.steelDark, b.x, 0.06, b.front + (b.front < 62 ? 0.5 : -0.5)); });
     // lamp posts down the edges of the lot
     [[-31.6, 55.5], [31.6, 55.5], [-31.6, 68.5], [31.6, 68.5]].forEach(function (p) { pkLamp(p[0], p[1], 5.2); });
     // and a barrier at the entrance drive, with a little booth
     [[-5.5, 72.6], [5.5, 72.6]].forEach(function (p) { cyl(0.14, 1.1, MAT.steelDark, p[0], 0.55, p[1], null, 10); });
-    var boom = box(11, 0.12, 0.12, MAT.whiteLine, 0, 1.05, 72.6); boom.rotation.y = 0.05;
+    pkLotBarrier();                                    // the boom lifts for the guests' cars (part 19)
     box(0.5, 1.0, 0.5, MAT.steelDark, -5.9, 0.5, 72.6);
     box(0.34, 0.24, 0.02, glowMat(0x5fd38d, 1.1), -5.9, 1.12, 72.6);
   }
@@ -454,7 +441,7 @@
         pkSpawnGuest: pkSpawnGuest, pkServe: pkServe, pkDispatch: pkDispatch, pkTestRun: pkTestRun, pkSetAuto: pkSetAuto, pkPrice: pkPrice,
         pkRideWord: pkRideWord, pkLevel: pkLevel, pkXp: pkXp, pkFloor: pkFloor, pkOnPlatform: pkOnPlatform,
         pkBoothSlot: pkBoothSlot, pkGuestAt: pkGuestAt, pkSeatWorld: pkSeatWorld, pkRideTick: pkRideTick, pkGuestTick: pkGuestTick,
-        pkQueueJoin: pkQueueJoin, pkQueueReslot: pkQueueReslot, pkPool: function () { return PK_POOL; },
+        pkQueueJoin: pkQueueJoin, pkQueueReslot: pkQueueReslot, pkPool: function () { return PK_POOL; }, pkLot: function () { return PK_LOT; }, pkLotArrive: pkLotArrive,
         pkOpenGates: pkOpenGates, pkCloseGates: pkCloseGates, pkGatesToggle: pkGatesToggle, pkBarsDown: pkBarsDown, pkBarsUp: pkBarsUp, pkStop: pkStop, pkReset: pkReset,
         pkTick: pkTick, pkPanel: pkPanel, pkPanelAct: pkPanelAct, pkGuide: pkGuide, pkTrack: function () { return PK.curve; }, pkTrain: function () { return PK.cars; },
         pkCoasterAuto: pkCoasterAuto,
