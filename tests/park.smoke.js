@@ -46,7 +46,7 @@ module.exports = `
     ok(out.length === 0, 'every booth: the shut door keeps you out, the open door lets you up the steps and in' + (out.length ? ': ' + out.join(', ') : '')); }
   // a booth chair seats the player at the desk, and a step stands them up
   { let chair = null; T.scene.traverse((o) => { if (!chair && o.userData && o.userData.it && /Sit down/.test((o.userData.it.prompt && o.userData.it.prompt()) || '')) chair = o.parent; });
-    if (chair) { T.pkBkSit(chair); T.updatePlayer(0.05); const sat = !!T.pkBkSitting() && T.camera.position.y < T.pkBkSitting().y + 1.3;
+    if (chair) { T.pkBkSit(chair); T.updatePlayer(0.05); const sat = !!T.pkBkSitting() && T.camera.position.y < T.pkBkSitting().y + 1.5 && T.camera.position.y > T.pkBkSitting().y + 1.3;
       T.player.keys.KeyW = true; T.updatePlayer(0.05); T.player.keys.KeyW = false;
       ok(sat && !T.pkBkSitting(), 'a chair seats the player at desk height and a step stands them up'); }
     else ok(false, 'no chair to sit in'); }
