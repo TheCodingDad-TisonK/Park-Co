@@ -6749,7 +6749,7 @@
   function pkBuntMat(c) {
     return PK_BUNT_MATS[c] || (PK_BUNT_MATS[c] = std({ color: c, roughness: 0.9, side: THREE.DoubleSide }));
   }
-  function pkBunting(x0, z0, x1, z1, th, parent) {
+  function pkBuntingBuild(x0, z0, x1, z1, th, parent) {
     var n = 10;
     var dx = x1 - x0, dz = z1 - z0, len = Math.sqrt(dx * dx + dz * dz);
     var rot = Math.atan2(-dz, dx);
@@ -6922,12 +6922,22 @@
       for (var f = 0; f < 6; f++) sphere(randf(0.7, 1.4), glowMat(0x8fb0d4, 0.3), p.x + randf(-7, 7), randf(0.5, 1.8), p.z + randf(6, 11), g);
     }
   }
+  // ── Free pieces ──────────────────────────────────────────────────
+  // the bunting, the lamps, the festoons and the flag poles round a ride stand in the world on their own, each one a world item,
+  // rather than inside the ride's dressing group: the editor can pick any of them up and move, turn, copy or remove it. The
+  // parent a caller passes is ignored for these; they are built where they are asked for.
+  function pkBunting(x0, z0, x1, z1, th, parent) { return worldItem('bunting', function () { pkBuntingBuild(x0, z0, x1, z1, th, parentOf(null)); }); }
+  function pkLandLamp(x, z, parent, th, style) { return worldItem('lamp', function () { pkLandLampBuild(x, z, parentOf(null), th, style); }); }
+  function pkFestoon(x0, z0, x1, z1, parent, th, yA, yB) { return worldItem('festoon', function () { pkFestoonBuild(x0, z0, x1, z1, parentOf(null), th, yA, yB); }); }
+  function pkCupLamp(x, z, parent) { return worldItem('cup lamp', function () { pkCupLampBuild(x, z, parentOf(null)); }); }
+  function pkFlagPole(x, z, parent, th, h) { return worldItem('flag pole', function () { pkFlagPoleBuild(x, z, parentOf(null), th, h); }); }
+
   // ── The land kit ─────────────────────────────────────────────────
   // Small themed pieces shared by the per-ride lands: a lamp with an emissive lens, a
   // string of festoon bulbs, a topiary, a clipped hedge, a tea table, a cup lamp, a
   // trellis arch, a flag pole, a viewing deck. None of these adds a real point light —
   // the engine keeps only the nearest dozen, and glow materials carry a land at night.
-  function pkLandLamp(x, z, parent, th, style) {
+  function pkLandLampBuild(x, z, parent, th, style) {
     var h = style === 'low' ? 2.3 : 3.6;
     pkRoundCyl(0.055, h, MAT.steelDark, x, h / 2, z, parent, 8);
     box(0.18, 0.06, 0.18, pkMats().gold, x, 0.05, z, parent);
@@ -6941,7 +6951,7 @@
       sphere(0.05, pkMats().gold, x, h + 0.53, z, parent);
     }
   }
-  function pkFestoon(x0, z0, x1, z1, parent, th, yA, yB) {
+  function pkFestoonBuild(x0, z0, x1, z1, parent, th, yA, yB) {
     var dx = x1 - x0, dz = z1 - z0, len = Math.sqrt(dx * dx + dz * dz), n = Math.max(6, Math.round(len / 0.8));
     yA = yA === undefined ? 3.2 : yA; yB = yB === undefined ? 3.2 : yB;
     var dip = Math.min(0.55, len * 0.045), pts = [];
@@ -6977,7 +6987,7 @@
       pkRoundCyl(0.28, 0.08, std({ color: 0xf0a6c0, roughness: 0.5 }), x + q[0], 0.46, z + q[1], parent, 14);
     });
   }
-  function pkCupLamp(x, z, parent) {
+  function pkCupLampBuild(x, z, parent) {
     pkRoundCyl(0.05, 1.9, MAT.steelDark, x, 0.95, z, parent, 8);
     pkLathe([[0, 0], [0.26, 0], [0.3, 0.05], [0.27, 0.3], [0.24, 0.32], [0, 0.32]], std({ color: 0xf6eef2, roughness: 0.4 }), x, 1.9, z, parent, 16);
     var glow = new THREE.Mesh(new THREE.CircleGeometry(0.2, 12), glowMat(0xfff0d0, 0.9));
@@ -6990,7 +7000,7 @@
     arc.position.set(x, 2.4, z); arc.rotation.y = Math.PI / 2; parent.add(arc);
     for (var v = 0; v < 7; v++) sphere(randf(0.14, 0.26), std({ color: v % 2 ? 0x5f8f4a : 0x7fae5a, roughness: 1 }), x + randf(-0.15, 0.15), 2.35 + Math.sin(v / 6 * Math.PI) * 1.45 + randf(-0.1, 0.2), z - 1.5 + v * 0.5, parent);
   }
-  function pkFlagPole(x, z, parent, th, h) {
+  function pkFlagPoleBuild(x, z, parent, th, h) {
     h = h || 5.6;
     pkRoundCyl(0.07, h, MAT.steelDark, x, h / 2, z, parent, 8);
     pkRoundCyl(0.16, 0.14, pkMats().stone, x, 0.07, z, parent, 10);
