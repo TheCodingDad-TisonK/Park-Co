@@ -238,6 +238,6 @@ pkBuildAttractions = function () {
 var _pkTestApi = GAME.T;
 GAME.T = function () {
   var o = _pkTestApi();
-  o.pkBoothTest = pkBoothTest; o.pkBoothGates = pkBoothGates; o.pkBoothDispatch = pkBoothDispatch; o.pkBoothStop = pkBoothStop; o.pkBoothAuto = pkBoothAuto; o.pkBoothStatus = pkBoothStatus; o.pkCtl = pkCtl; o.pkSetRideKey = pkSetRideKey; o.pkSetCoasterKey = pkSetCoasterKey; o.pkClockIn = pkClockIn; o.pkClockOut = pkClockOut; o.pkBkFloorAt = pkBkFloorAt; o.pkBkWait = pkBkWait; o.pkBkDoors = PK_BK_DOORS; o.pkBkDoorBlocks = pkBkDoorBlocks; o.pkBkSit = pkBkSit; o.pkBkStand = pkBkStand; o.pkBkSitting = function () { return PK_SIT; }; o.pkCoProfile = pkCoProfile; o.pkSpeedAt = pkSpeedAt;
+  o.pkBoothTest = pkBoothTest; o.pkBoothGates = pkBoothGates; o.pkBoothDispatch = pkBoothDispatch; o.pkBoothStop = pkBoothStop; o.pkBoothAuto = pkBoothAuto; o.pkBoothStatus = pkBoothStatus; o.pkCtl = pkCtl; o.pkSetRideKey = pkSetRideKey; o.pkSetCoasterKey = pkSetCoasterKey; o.pkClockIn = pkClockIn; o.pkClockOut = pkClockOut; o.pkBkFloorAt = pkBkFloorAt; o.pkBkWait = pkBkWait; o.pkBkDoors = PK_BK_DOORS; o.pkBkDoorBlocks = pkBkDoorBlocks; o.pkBkSit = pkBkSit; o.pkBkStand = pkBkStand; o.pkBkSitting = function () { return PK_SIT; }; o.pkCoProfile = pkCoProfile; o.pkSpeedAt = pkSpeedAt; o.pkCoUAt = pkCoUAt;
   return o;
 };

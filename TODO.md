@@ -68,8 +68,10 @@ lamps, rich colour, planting and ornament, a themed entrance for every ride. Eac
       up to 45-47 km/h, laps 27-30 s, all under 4.5 g: Nocturne's turn-and-a-half helix round a bigger moon, The Wreck's
       figure-eight round a bigger ship, Moonwood's camelback and three-quarter ring under the crown. Fairy-tale fronts after
       Efteling (stepped gable, towers, emblem, marquee); a starfield, a sea floor and lanterns, fireflies inside
-- [ ] 4c. The main coaster made far better: it has the whole middle of the park to use; a longer, bigger layout built with
-      the same track kit and checks as the halls (your call, 21 Oct: keep it in the middle rather than move it north-east)
+- [x] 4c. The main coaster made far better (your call, 21 Oct: keep it in the middle): a 303 m looper filling its yard (was
+      a 141 m oval). 20 m lift, a steep drop into a 14 m vertical loop, a high banked turnaround, camelbacks under the lift, a
+      corkscrew, a trim brake; 67 km/h, 48 s lap, at most 4.6 g. The train now banks and inverts (it had no roll at all). The
+      track kit gained loops, corkscrews and trim brakes, and no coaster stands a leg up through its own loop or a lower pass
 - [x] 4b. Queue lanes fold into switchbacks: rows of up to six slots, an odd number of rows (the entry stays at the outer
       end), centred on where the straight lane stood. The longest lane is 6.6 m (the ferris wheel's was 18.6 m, the teacups'
       and dodgems' 14.4); guests walk the rows slot by slot, never through a fence
@@ -91,4 +93,7 @@ lamps, rich colour, planting and ornament, a themed entrance for every ride. Eac
 
 - [ ] "The controls of the coaster seem messed up": in my tests the console works end to end (gates,
       load, bars, dispatch, home, AUTO). What exactly looks wrong?
+- [ ] The coaster yard is paved wall to wall by three copies of the station apron you (or an earlier session) placed in the
+      editor (`00-world.js`: wc-mvhzvjn6-14, wc-mvhzv6j3-13, wc-mvgv2tw3-6). Keep the paving, or turn the yard into a garden
+      under the coaster (lawn, beds, a pond under the loop) in the Efteling way? I left it alone
 - [ ] Play it hands-on: everything here is checked by the smoke suite and screenshots, not by playing

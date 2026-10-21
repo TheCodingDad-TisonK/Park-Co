@@ -5174,22 +5174,70 @@
     screenDirtyAll(); hudDirty = true;
   }
   // ── The coaster ───────────────────────────────────────────────────
-  // One closed circuit behind the station: a lift hill in the north-east, a drop, a hill, a turn and a run home.
-  // The train is three cars of four seats. The operator's room stands east of the platform, with the desk that runs the ride.
+  // A looping coaster that fills its yard behind the station (x -24..30.5, z -37..-1.5). Out of the station east, round the
+  // control room and up a 20 m chain lift along the east side; over the top turning west, a steep drop along the north fence
+  // into a 14 m vertical loop; a high banked turnaround at the west end; camelbacks east across the middle, under the lift; a
+  // turn at the east fence; back west under the lift, a dip into a corkscrew; a trim brake, a turn inside the turnaround, south
+  // under it and the brakes home. The train is three cars of four seats. The operator's room stands east of the platform.
   var PK_CAR_N = 3;
   // the four seats of a car, in the order they fill: the platform side first, then the far side, front row before back
   var PK_SEAT_LOCAL = [[-0.35, 0.62], [-0.35, -0.62], [0.35, 0.62], [0.35, -0.62]];
   var PK_CAR_COLS = [0xd94f4f, 0xf0c04a, 0x4f8fd9];
-  // the control points of the circuit. The station straight runs x -9..9 at z -4.6; the track then swings east and north,
-  // climbs to 14 m, comes back west and drops home. It stays clear of the operator's room (x 11..17, z -4..2), and the whole
-  // circuit keeps to the band behind the station (z -4..-36, between the two streets), so the middle of the park beyond it is
-  // gardens and paths rather than the inside of a loop nobody can walk into. Points 3..5 are the lift (PK.liftU).
+  // the circuit, laid offline from straights, arcs, the loop and the corkscrew with a height profile of vertical arcs and
+  // sampled every 1.2 m along the track (the same kit as the indoor halls). The station straight runs x -11..9.5 at z -4.6,
+  // dead level; the train runs +x along it. Checked clear of itself (2.5 m stacked, 1.9 m side by side; 1.3 at the closest),
+  // of the platform and the control room, inside the yard, and at most 4.6 g (the bottom of the loop) at the speeds
+  // pkCoProfile gives it, with the trim brake after the corkscrew (PK_MAIN_TRIM).
   var PK_TRACK_PTS = [
-    [-9, 0.6, -4.6], [9, 0.6, -4.6],
-    [20.5, 0.8, -6.2], [25.5, 3, -12], [27, 8.5, -19.5], [25.5, 14, -27.5],
-    [18, 9.5, -33], [8, 2.4, -33.5], [-2, 7.5, -32], [-11, 3.2, -30],
-    [-19.5, 5, -24], [-20.5, 7.5, -16.5], [-17, 3, -10], [-13, 0.6, -6]
+    [-11, 0.6, -4.6], [-9.8, 0.6, -4.6], [-8.6, 0.6, -4.6], [-7.4, 0.6, -4.6], [-6.21, 0.6, -4.6], [-5.01, 0.6, -4.6],
+    [-3.81, 0.6, -4.6], [-2.61, 0.6, -4.6], [-1.41, 0.6, -4.6], [-0.21, 0.6, -4.6], [0.99, 0.6, -4.6], [2.19, 0.6, -4.6],
+    [3.38, 0.6, -4.6], [4.58, 0.6, -4.6], [5.78, 0.6, -4.6], [6.98, 0.6, -4.6], [8.18, 0.6, -4.6], [9.38, 0.6, -4.6],
+    [10.57, 0.6, -4.68], [11.73, 0.6, -4.97], [12.83, 0.6, -5.45], [13.83, 0.67, -6.11], [14.69, 0.88, -6.91], [15.39, 1.23, -7.82],
+    [15.9, 1.72, -8.78], [16.25, 2.33, -9.75], [16.44, 3.06, -10.68], [16.5, 3.89, -11.54], [16.5, 4.73, -12.4], [16.5, 5.57, -13.26],
+    [16.5, 6.41, -14.11], [16.5, 7.25, -14.97], [16.5, 8.09, -15.82], [16.5, 8.93, -16.68], [16.5, 9.76, -17.53], [16.5, 10.6, -18.39],
+    [16.5, 11.44, -19.25], [16.5, 12.28, -20.1], [16.5, 13.12, -20.96], [16.5, 13.96, -21.81], [16.5, 14.8, -22.67], [16.5, 15.64, -23.52],
+    [16.5, 16.48, -24.38], [16.5, 17.32, -25.24], [16.5, 18.16, -26.09], [16.5, 18.99, -26.95], [16.5, 19.64, -27.96], [16.5, 19.96, -29.11],
+    [16.5, 19.93, -30.3], [16.48, 19.55, -31.43], [16.3, 18.85, -32.38], [16.06, 17.89, -33.03], [15.86, 16.79, -33.45], [15.66, 15.65, -33.77],
+    [15.44, 14.51, -34.07], [15.2, 13.37, -34.35], [14.94, 12.23, -34.62], [14.66, 11.09, -34.87], [14.36, 9.95, -35.09], [14.05, 8.81, -35.3],
+    [13.69, 7.69, -35.49], [13.22, 6.6, -35.69], [12.62, 5.59, -35.87], [11.88, 4.65, -35.98], [11.02, 3.82, -36], [10.06, 3.09, -36],
+    [9.03, 2.49, -36], [7.93, 2.01, -36], [6.78, 1.67, -36], [5.6, 1.46, -36], [4.41, 1.4, -36], [3.21, 1.49, -36],
+    [2.04, 1.71, -35.99], [0.9, 2.08, -35.98], [-0.19, 2.58, -35.96], [-1.21, 3.21, -35.94], [-2.13, 3.97, -35.91], [-2.95, 4.84, -35.88],
+    [-3.65, 5.82, -35.83], [-4.2, 6.88, -35.78], [-4.58, 8.02, -35.73], [-4.78, 9.2, -35.66], [-4.77, 10.39, -35.58], [-4.55, 11.56, -35.48],
+    [-4.09, 12.66, -35.36], [-3.4, 13.62, -35.22], [-2.48, 14.37, -35.05], [-1.39, 14.81, -34.85], [-0.22, 14.88, -34.63], [0.91, 14.56, -34.42],
+    [1.9, 13.91, -34.24], [2.67, 13.01, -34.09], [3.21, 11.95, -33.96], [3.51, 10.8, -33.86], [3.59, 9.61, -33.77], [3.46, 8.42, -33.7],
+    [3.14, 7.27, -33.63], [2.64, 6.18, -33.58], [2, 5.17, -33.54], [1.22, 4.26, -33.5], [0.33, 3.46, -33.47], [-0.66, 2.78, -33.45],
+    [-1.73, 2.23, -33.43], [-2.85, 1.82, -33.41], [-4.02, 1.55, -33.41], [-5.21, 1.41, -33.4], [-6.4, 1.43, -33.4], [-7.59, 1.58, -33.4],
+    [-8.75, 1.88, -33.4], [-9.87, 2.31, -33.4], [-10.93, 2.87, -33.4], [-11.91, 3.56, -33.4], [-12.84, 4.31, -33.4], [-13.77, 5.07, -33.4],
+    [-14.7, 5.82, -33.4], [-15.63, 6.58, -33.4], [-16.56, 7.34, -33.4], [-17.49, 8.09, -33.32], [-18.39, 8.85, -33.1], [-19.24, 9.61, -32.74],
+    [-20.04, 10.36, -32.25], [-20.78, 11.04, -31.61], [-21.45, 11.6, -30.79], [-22, 12.03, -29.82], [-22.36, 12.32, -28.71], [-22.5, 12.47, -27.54],
+    [-22.51, 12.48, -26.34], [-22.51, 12.35, -25.15], [-22.5, 12.07, -23.99], [-22.34, 11.66, -22.88], [-21.99, 11.11, -21.87], [-21.52, 10.44, -21],
+    [-20.96, 9.66, -20.28], [-20.34, 8.83, -19.68], [-19.63, 8, -19.18], [-18.87, 7.17, -18.78], [-18.05, 6.34, -18.5], [-17.2, 5.51, -18.34],
+    [-16.32, 4.7, -18.3], [-15.38, 3.96, -18.3], [-14.36, 3.33, -18.3], [-13.29, 2.79, -18.3], [-12.16, 2.37, -18.3], [-11.01, 2.06, -18.3],
+    [-9.82, 1.88, -18.3], [-8.63, 1.8, -18.3], [-7.43, 1.86, -18.3], [-6.25, 2.08, -18.3], [-5.12, 2.45, -18.3], [-4.03, 2.97, -18.3],
+    [-3.03, 3.62, -18.3], [-2.12, 4.4, -18.3], [-1.22, 5.2, -18.3], [-0.24, 5.88, -18.3], [0.82, 6.43, -18.3], [1.95, 6.84, -18.3],
+    [3.12, 7.09, -18.3], [4.31, 7.2, -18.3], [5.51, 7.16, -18.3], [6.7, 6.99, -18.3], [7.86, 6.71, -18.3], [8.99, 6.32, -18.3],
+    [10.1, 5.86, -18.3], [11.2, 5.38, -18.3], [12.3, 4.92, -18.3], [13.42, 4.49, -18.3], [14.58, 4.19, -18.3], [15.77, 4.03, -18.3],
+    [16.97, 4.01, -18.3], [18.16, 4.14, -18.3], [19.32, 4.41, -18.3], [20.45, 4.82, -18.3], [21.53, 5.35, -18.3], [22.59, 5.9, -18.3],
+    [23.65, 6.46, -18.31], [24.7, 7.01, -18.45], [25.7, 7.57, -18.82], [26.59, 8.12, -19.39], [27.35, 8.67, -20.13], [27.93, 9.23, -21.02],
+    [28.31, 9.78, -22], [28.48, 10.34, -23.05], [28.42, 10.89, -24.11], [28.13, 11.39, -25.16], [27.59, 11.75, -26.16], [26.8, 11.95, -27.04],
+    [25.82, 11.99, -27.72], [24.72, 11.83, -28.14], [23.59, 11.47, -28.3], [22.54, 10.9, -28.3], [21.6, 10.16, -28.3], [20.82, 9.25, -28.3],
+    [20.2, 8.23, -28.3], [19.58, 7.2, -28.3], [18.83, 6.27, -28.3], [17.93, 5.48, -28.3], [16.92, 4.84, -28.3], [15.82, 4.38, -28.3],
+    [14.65, 4.09, -28.3], [13.46, 4, -28.3], [12.28, 4.03, -28.46], [11.16, 4.21, -28.85], [10.12, 4.59, -29.31], [9.14, 5.15, -29.72],
+    [8.21, 5.85, -29.99], [7.29, 6.61, -30.07], [6.36, 7.35, -29.92], [5.42, 8, -29.55], [4.47, 8.44, -28.99], [3.5, 8.6, -28.31],
+    [2.53, 8.44, -27.62], [1.57, 8.01, -27.06], [0.64, 7.37, -26.68], [-0.29, 6.62, -26.53], [-1.21, 5.86, -26.61], [-2.15, 5.17, -26.87],
+    [-3.12, 4.6, -27.28], [-4.16, 4.22, -27.74], [-5.28, 4.03, -28.13], [-6.46, 4, -28.3], [-7.65, 3.93, -28.3], [-8.83, 3.72, -28.3],
+    [-10, 3.46, -28.3], [-11.17, 3.19, -28.3], [-12.34, 2.92, -28.3], [-13.51, 2.65, -28.3], [-14.68, 2.38, -28.3], [-15.84, 2.12, -28.21],
+    [-16.93, 1.85, -27.81], [-17.86, 1.58, -27.1], [-18.55, 1.31, -26.17], [-18.93, 1.04, -25.07], [-19.01, 0.79, -23.9], [-19.01, 0.64, -22.71],
+    [-19.01, 0.6, -21.52], [-19.01, 0.6, -20.32], [-19.01, 0.6, -19.12], [-19.01, 0.6, -17.92], [-19.01, 0.6, -16.72], [-19.01, 0.6, -15.52],
+    [-19.01, 0.6, -14.32], [-19.01, 0.6, -13.12], [-19.01, 0.6, -11.93], [-19.01, 0.6, -10.73], [-19.01, 0.6, -9.53], [-18.84, 0.6, -8.34],
+    [-18.41, 0.6, -7.23], [-17.72, 0.6, -6.25], [-16.82, 0.6, -5.47], [-15.76, 0.6, -4.92], [-14.6, 0.6, -4.64], [-13.4, 0.6, -4.6],
+    [-12.2, 0.6, -4.6]
   ];
+  var PK_MAIN_TRIM = [[-9, -28.3], [-14.5, -28.3], 6];     // the trim brake: from, to (x, z), and the speed it trims to (m/s)
+  function pkMainOpt() {
+    var t = PK_MAIN_TRIM;
+    return { lift: PK.liftU, trim: [[pkCoUAt(PK.curve, t[0][0], t[0][1]), pkCoUAt(PK.curve, t[1][0], t[1][1]), t[2]]] };
+  }
   // the u of the point on the curve nearest a world point: the station is found this way, never guessed
   function pkNearestU(x, y, z) {
     var N = 1200, best = 0, bd = Infinity;
@@ -5200,58 +5248,30 @@
     return best / N;
   }
   function pkBuildCoaster() {
-    var pts = PK_TRACK_PTS.map(function (p) { return new THREE.Vector3(p[0], p[1], p[2]); });
-    PK.curve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.5);
+    PK.curve = pkCoCurve(PK_TRACK_PTS);
     PK.len = PK.curve.getLength();
-    var N = 1200, samples = [];
-    for (var i = 0; i < N; i++) samples.push(PK.curve.getPointAt(i / N));
-    PK.cpU = pts.map(function (p) {
-      var best = 0, bd = Infinity;
-      for (var k = 0; k < N; k++) { var d = samples[k].distanceToSquared(p); if (d < bd) { bd = d; best = k; } }
-      return best / N;
-    });
-    PK.liftU = [PK.cpU[3], PK.cpU[5]];
     // the train travels +x along the station, so the front car sits at the highest x: aim the front car at x 4
     PK.stationU = pkNearestU(4, PK_PLATFORM_Y, PK_STATION_Z);
     PK.stationX0 = PK.curve.getPointAt(PK.stationU).x;
     PK.ride.u = PK.stationU;
+    // the lift is the sustained climb to the lap's highest point, found from the track as for the kit coasters
+    var P0 = pkCoProfile(PK.curve, PK.len, PK.stationU);
+    PK.liftU = [(PK.stationU + P0.lift[0] / P0.K) % 1, (PK.stationU + P0.lift[1] / P0.K) % 1];
+    PK.prof = pkCoProfile(PK.curve, PK.len, PK.stationU, pkMainOpt());
+    // the frames bank the turns by speed and carry the train through the loop and the corkscrew; the station stays level
+    PK.F = pkCoFrames(PK.curve, 1000, PK.prof, PK.stationU, { roll: [[pkCoUAt(PK.curve, 14, -28.3), pkCoUAt(PK.curve, -7.5, -28.3)]] });   // the corkscrew
+    pkCoLevel(PK.F, PK.curve, PK.stationU, PK.carGap * (PK_CAR_N - 1) + 1.6, 1.6);
     pkTrack(); pkStation(); pkTrain(); pkQueueLine();
     pkPlaceTrain();
   }
   function pkTrack() {
-    var M = pkMats();
-    // the spine: deep blue steel, so the circuit reads against the sky
-    var spine = new THREE.Mesh(new THREE.TubeGeometry(PK.curve, 500, 0.24, 8, true), M.steelBlue);
-    spine.castShadow = true; spine.receiveShadow = true; scene.add(spine);
-    // the two running rails, pale steel
-    var railPts = [[], []];
-    for (var i = 0; i < 500; i++) {
-      var u = i / 500, p = PK.curve.getPointAt(u), t = PK.curve.getTangentAt(u);
-      var lat = new THREE.Vector3(-t.z, 0, t.x).normalize();
-      railPts[0].push(p.clone().addScaledVector(lat, 0.55));
-      railPts[1].push(p.clone().addScaledVector(lat, -0.55));
-    }
-    railPts.forEach(function (rp) {
-      var c = new THREE.CatmullRomCurve3(rp, true, 'catmullrom', 0.5);
-      var m = new THREE.Mesh(new THREE.TubeGeometry(c, 500, 0.09, 6, true), MAT.chrome);
-      m.castShadow = true; scene.add(m);
+    var M = pkMats(), g = new THREE.Group(); scene.add(g);
+    // the kit's track on the coaster's own frames: deep blue spine and lattice, pale running rails, legs in steel grey,
+    // none in the station, round the platform or the control room
+    pkCoTrackBuild(g, { curve: PK.curve, len: PK.len, F: PK.F }, {
+      gauge: 1.1, spineMat: M.steelBlue, railMat: MAT.chrome, tieMat: MAT.steelDark, supMat: MAT.steelDark,
+      skip: function (x, z) { return z > -6.5 && x > -12.5 && x < 18.5; }
     });
-    // the ties, every couple of metres
-    var tieN = Math.max(8, Math.round(PK.len / 2));
-    for (var j = 0; j < tieN; j++) {
-      var u2 = j / tieN, p2 = PK.curve.getPointAt(u2), t2 = PK.curve.getTangentAt(u2);
-      var tie = box(1.5, 0.1, 0.24, MAT.steelDark, p2.x, p2.y - 0.16, p2.z);
-      tie.rotation.order = 'YXZ'; tie.rotation.y = Math.atan2(t2.x, t2.z); tie.rotation.x = -Math.asin(clamp(t2.y, -1, 1));
-    }
-    // the legs, wherever the track is off the ground
-    var supN = Math.max(4, Math.round(PK.len / 6));
-    for (var k = 0; k < supN; k++) {
-      var u3 = k / supN, p3 = PK.curve.getPointAt(u3);
-      if (p3.y < 1.6) continue;
-      var h = p3.y - 0.2;
-      cyl(0.16, h, MAT.steelDark, p3.x, h / 2, p3.z, null, 8);
-      box(0.7, 0.3, 0.7, MAT.grey, p3.x, 0.15, p3.z);
-    }
   }
   function pkStation() {
     // the platform, south of the track, with a ramp down to the apron at its south edge
@@ -5735,13 +5755,14 @@
     screenDirtyAll(); hudDirty = true; return true;
   }
   // ── Placing the train ─────────────────────────────────────────────
+  // on the track's own frame: banked in the turns, over on its back through the loop and the corkscrew
   function pkPlaceCar(car, u) {
-    var p = PK.curve.getPointAt(u), t = PK.curve.getTangentAt(u);
+    var p = PK.curve.getPointAt(u), t = PK.curve.getTangentAt(u).normalize();
+    pkCoUpAt(PK.F, u);
+    PK_CO_RIGHT.crossVectors(PK_CO_UP, t).normalize();
+    PK_CO_M4.makeBasis(PK_CO_RIGHT, PK_CO_UP, t);
     car.position.set(p.x, p.y, p.z);
-    car.rotation.order = 'YXZ';
-    car.rotation.y = Math.atan2(t.x, t.z);
-    car.rotation.x = -Math.asin(clamp(t.y, -1, 1));
-    car.rotation.z = 0;
+    car.quaternion.setFromRotationMatrix(PK_CO_M4);
     car.updateMatrixWorld(true);
   }
   function pkPlaceTrain() {
@@ -5752,7 +5773,7 @@
   // 2.4 m/s, the drop with friction after the crest, the brake run home), worked out once from the station
   function pkSpeedAt(u) {
     var P = PK.prof;
-    if (!P) P = PK.prof = pkCoProfile(PK.curve, PK.len, PK.stationU, { lift: PK.liftU });
+    if (!P) P = PK.prof = pkCoProfile(PK.curve, PK.len, PK.stationU, pkMainOpt());
     var f = ((u - PK.stationU + 1) % 1) * P.K, k = Math.min(P.K - 1, Math.floor(f)), r = f - k;
     return Math.max(0.4, P.V[k] + (P.V[k + 1] - P.V[k]) * r);         // never quite 0, or the train could not pull away
   }
@@ -8351,7 +8372,7 @@ pkBuildAttractions = function () {
 var _pkTestApi = GAME.T;
 GAME.T = function () {
   var o = _pkTestApi();
-  o.pkBoothTest = pkBoothTest; o.pkBoothGates = pkBoothGates; o.pkBoothDispatch = pkBoothDispatch; o.pkBoothStop = pkBoothStop; o.pkBoothAuto = pkBoothAuto; o.pkBoothStatus = pkBoothStatus; o.pkCtl = pkCtl; o.pkSetRideKey = pkSetRideKey; o.pkSetCoasterKey = pkSetCoasterKey; o.pkClockIn = pkClockIn; o.pkClockOut = pkClockOut; o.pkBkFloorAt = pkBkFloorAt; o.pkBkWait = pkBkWait; o.pkBkDoors = PK_BK_DOORS; o.pkBkDoorBlocks = pkBkDoorBlocks; o.pkBkSit = pkBkSit; o.pkBkStand = pkBkStand; o.pkBkSitting = function () { return PK_SIT; }; o.pkCoProfile = pkCoProfile; o.pkSpeedAt = pkSpeedAt;
+  o.pkBoothTest = pkBoothTest; o.pkBoothGates = pkBoothGates; o.pkBoothDispatch = pkBoothDispatch; o.pkBoothStop = pkBoothStop; o.pkBoothAuto = pkBoothAuto; o.pkBoothStatus = pkBoothStatus; o.pkCtl = pkCtl; o.pkSetRideKey = pkSetRideKey; o.pkSetCoasterKey = pkSetCoasterKey; o.pkClockIn = pkClockIn; o.pkClockOut = pkClockOut; o.pkBkFloorAt = pkBkFloorAt; o.pkBkWait = pkBkWait; o.pkBkDoors = PK_BK_DOORS; o.pkBkDoorBlocks = pkBkDoorBlocks; o.pkBkSit = pkBkSit; o.pkBkStand = pkBkStand; o.pkBkSitting = function () { return PK_SIT; }; o.pkCoProfile = pkCoProfile; o.pkSpeedAt = pkSpeedAt; o.pkCoUAt = pkCoUAt;
   return o;
 };
 // String lights across the midway on their own masts, a popcorn cart and a balloon seller by the hub fountain.
@@ -10389,7 +10410,10 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // held to the world's up as it goes, so turns on a slope and helices do not wind roll into it: wherever the track is not
   // near vertical, any roll it has gathered is eased back to upright, or to cleanly inverted over the top of a loop.
   // P (the speed profile from pkCoProfile, laid from u0) banks the turns by physics: tan(bank) = v^2 x curvature / g.
-  function pkCoFrames(curve, N, P, u0) {
+  // o.roll lists stretches [ua, ub] (a corkscrew) where the felt force rolls the train on round over the top instead of being
+  // held upright as it would be floating over a hill: there it is the track's shape, not airtime, that turns it over.
+  function pkCoFrames(curve, N, P, u0, o) {
+    var rolls = (o && o.roll) || [], inRoll = function (u) { for (var r = 0; r < rolls.length; r++) { var a = rolls[r][0], b = rolls[r][1]; if (a <= b ? (u >= a && u <= b) : (u >= a || u <= b)) return true; } return false; };
     var pts = [], tans = [], ups = [], i;
     for (i = 0; i < N; i++) { pts.push(curve.getPointAt(i / N)); tans.push(curve.getTangentAt(i / N).normalize()); }
     var up = new THREE.Vector3(0, 1, 0);
@@ -10439,7 +10463,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       var ra = Math.atan2(cr2.crossVectors(ups[i], f).dot(tans[i]), ups[i].dot(f));
       // floating over a hump on an upright stretch pulls the rider up out of the seat: that keeps the track upright (banked
       // by the sideways part only), it never rolls the train over. Only the track's own shape turns it upside down.
-      if (Math.abs(ra) > Math.PI / 2 && Math.abs(tans[i].y) < 0.88 && ups[i].y > 0) ra -= (ra > 0 ? Math.PI : -Math.PI);
+      if (Math.abs(ra) > Math.PI / 2 && Math.abs(tans[i].y) < 0.88 && ups[i].y > 0 && !inRoll(i / N)) ra -= (ra > 0 ? Math.PI : -Math.PI);
       raw.push(ra);
     }
     // unwrap where the force is clear; where it is not, hold the last clear roll, then ease across the gap
@@ -10543,7 +10567,8 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // Booster tyres keep it from ever stalling, and a brake run brings it home to a slow roll and a stop at the platform.
   // The lift is the sustained climb up to the lap's highest point, found from the track (o.lift overrides it, as
   // [u0, u1]); o.pedal gives a kiddie train its steady pace instead. o.rollIn stretches the final slow roll to that many metres
-  // before the stop (2.5 by default), for a station entered round a tight turn. Returns the speed and the time at K+1 even steps.
+  // before the stop (2.5 by default), for a station entered round a tight turn. o.trim lists trim brakes as [u0, u1, v]: through
+  // that stretch the train is held to v m/s, and runs on from there. Returns the speed and the time at K+1 even steps.
   function pkCoProfile(curve, len, u0, o) {
     o = o || {};
     var K = Math.max(240, Math.ceil(len / 0.3)), S = len / K, ys = [], i, g = 9.81;
@@ -10558,6 +10583,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       while (l0 > 1 && ys[l0 - 1] < ys[l0] - 1e-4) l0--;                // back down the climb to where it starts
       if (c - l0 > 4) lift = [l0, c];
     }
+    var trims = (o.trim || []).map(function (t) { return [Math.round(((t[0] - u0 + 1) % 1) * K), Math.round(((t[1] - u0 + 1) % 1) * K), t[2]]; });
     var vSt = o.vStation || 2.5, vChain = o.vChain || 2.4, mu = 0.022, drag = 0.0009, V = [0], dIn = o.rollIn || 2.5;
     for (i = 1; i <= K; i++) {
       var v, s = i * S, d = len - s;
@@ -10568,6 +10594,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
         var v2 = w * w + 2 * g * (ys[i - 1] - ys[i]) - 2 * g * mu * S - 2 * drag * w * w * S;
         v = Math.sqrt(Math.max(0, v2));
         v = Math.max(v, i < lift[0] ? vSt : 2.0);                          // station tyres before the lift, boosters after
+        for (var tb = 0; tb < trims.length; tb++) if (i >= trims[tb][0] && i <= trims[tb][1]) v = Math.min(v, trims[tb][2]);
       }
       if (s < 4) v = Math.min(v, Math.max(0.5, Math.sqrt(2 * 0.9 * s)));  // pulling away from the platform
       v = Math.min(v, Math.sqrt(4 + 2 * 4 * d));                          // the brake run
@@ -10645,7 +10672,10 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var step = Math.max(1, Math.round(N * 5.4 / E.len)), last = null;
     for (i = 0; i < N; i += step) {
       var p2 = E.F.p[i], t2 = E.F.t[i];
-      if (Math.abs(t2.y) > 0.72 || p2.y < 1.5) continue;
+      if (Math.abs(t2.y) > 0.72 || p2.y < 1.5 || E.F.up[i].y < 0.3) continue;      // not on the steep, not under an inversion
+      var under = false;                                                     // nor down through a lower pass of the track
+      for (var jj = 0; jj < N && !under; jj += 2) { var pj = E.F.p[jj]; if (pj.y < p2.y - 0.8 && Math.abs(pj.x - p2.x) < 1.0 && Math.abs(pj.z - p2.z) < 1.0) under = true; }
+      if (under) continue;
       if (last && dist2(p2.x, p2.z, last.x, last.z) < 10) continue;
       if (o.skip && o.skip(p2.x, p2.z, p2.y)) continue;
       var h = p2.y - 0.6;
