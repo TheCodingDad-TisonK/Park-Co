@@ -201,8 +201,9 @@
         var ang = b / 24 * Math.PI * 2;
         sphere(0.17, glowMat(0xfff2c0, 0.9), p.x + Math.cos(ang) * 9.1, 10.6 + Math.sin(ang) * 9.1, p.z, g);
       }
-      box(2.4, 2.2, 2.0, std({ color: th.a, roughness: 0.8 }), p.x + p.r + 2.6, 1.1, p.z - 4.2, g);
-      sign(['TICKETS'], 1.8, 0.4, p.x + p.r + 2.6, 2.4, p.z - 5.22, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
+      // the ticket hut on the wheel's south side, clear of Baron's Drop coming home up its west side
+      box(2.4, 2.2, 2.0, std({ color: th.a, roughness: 0.8 }), 39.0, 1.1, 27.4, g);
+      sign(['TICKETS'], 1.8, 0.4, 39.0, 2.4, 26.38, Math.PI, { bg: '#1b232c', fg: '#f5b53d' }, g);
       // the sky quarter: three flag poles with festoon strung between them on the north
       // rim, a viewing deck with a brass telescope on the south rim, globe lamps and benches
       pkFlagPole(27, 30.1, g, th, 5.6); pkFlagPole(34, 29.9, g, th, 6.5); pkFlagPole(41, 30.1, g, th, 5.6);

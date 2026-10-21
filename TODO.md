@@ -44,9 +44,9 @@ To see it: open this folder in the Co Engine editor, or `npm run dev`.
       OFF (your call) - you go round and turn them on
 - [x] 1g. Clock in at a ride's booth (a time clock by the door; the HUD shows where you are on duty; your own
       dispatches there earn a little more) and a light switch for the booth's lights (they start off)
-- [ ] 2. Every coaster's station dead level, straight and unbanked where the train stands
-      (measured: Serpent 60° bank / 27° slope, Baron 17°, indoor 37–44°, Puffin 42°; main coaster OK)
-- [ ] 3. New outdoor tracks: The Serpent (18 m lift, big drop, turnaround, camelback, both loops),
+- [x] 2. Every coaster's station dead level, straight and unbanked where the train stands
+      (was: Serpent 60° bank / 27° slope, Baron 17°, indoor 37–44°, Puffin 42°; now all ≤ 0.5°)
+- [x] 3. New outdoor tracks: The Serpent (18 m lift, big drop, turnaround, camelback, both loops),
       Baron's Drop (keep lift, dive and tunnel; new south-east run; fix its hairpin approach),
       Puffin Line (bigger loop, straight station)
 - [ ] 3b. Speed test on every ride: top speed and lap time on the coasters, spin rate on the flat rides,

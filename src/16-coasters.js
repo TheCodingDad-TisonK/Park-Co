@@ -70,6 +70,20 @@
     }
     return { p: pts, t: tans, up: ups, n: N };
   }
+  // the station: where the train stands the track is dead level and unbanked. Over the train's length (plus a car either end)
+  // every frame's 'up' is the world's up, faded back into the lap's own banking over the 6 m beyond. The curve itself is laid
+  // straight and level there by its control points; this takes out the bank the smoothing spreads in from the turns.
+  function pkCoLevel(F, curve, uPark, back, ahead) {
+    var L = curve.getLength(), N = F.n, fade = 6, up = new THREE.Vector3(), t = new THREE.Vector3();
+    for (var i = 0; i < N; i++) {
+      var du = ((i / N - uPark + 1.5) % 1 - 0.5) * L;                  // metres from the park point, + ahead, - behind
+      var out = du > ahead ? du - ahead : (du < -back ? -back - du : 0);
+      var w = out <= 0 ? 1 : out >= fade ? 0 : 1 - out / fade; w = w * w * (3 - 2 * w);
+      if (w <= 0) continue;
+      t.copy(F.t[i]); up.set(0, 1, 0).addScaledVector(t, -t.y).normalize();
+      F.up[i].lerp(up, w).addScaledVector(t, -F.up[i].dot(t)).normalize();
+    }
+  }
   function pkCoUpAt(F, u) {
     var x = u * F.n, i0 = Math.floor(x) % F.n, i1 = (i0 + 1) % F.n, f = x - Math.floor(x);
     PK_CO_UP.copy(F.up[i0]).lerp(F.up[i1], f).normalize();
@@ -271,27 +285,30 @@
     pkRod(x, h - 0.12, z, tx, ty, tz, 0.07, mat, g, 6);
   }
   // ── The Serpent ───────────────────────────────────────────────────
-  // A double looper in the north-east corner: out of the station, up the lift, down the first drop
-  // and straight into two vertical loops, then home along the trees.
+  // A double looper in the north-east corner: a long straight station, an 18 m lift up the east fence, the big drop along the
+  // back, a turnaround and a camelback run, then two vertical loops (each shifted sideways, so it crosses over itself) and
+  // home down the west side into the station.
   var PK_SERPENT_PTS = [
-    [47.5, 1.05, -70], [53.5, 1.05, -70], [59.5, 1.05, -70],
-    [63.5, 2.2, -70.6], [65.1, 6, -72], [65.5, 11, -74.5], [64, 14.8, -77.5],
-    [61.5, 12, -80.2], [58.5, 5.5, -81.2],
-    [56.9, 2.5, -81.6], [54.2, 3.12, -81.6], [52.22, 5.1, -81.6], [51.5, 7.8, -81.6],
-    [52.22, 10.5, -81.6], [54.2, 12.48, -81.6], [56.9, 13.2, -81.6], [59.6, 12.48, -81.6],
-    [61.58, 10.5, -81.6], [62.3, 7.8, -81.6], [61.58, 5.1, -81.6], [59.6, 3.12, -81.6],
-    [56.5, 2.45, -81.7], [54.1, 2.6, -82.6], [52.1, 2.85, -83.9],
-    [50.1, 3.3, -84.1], [48.05, 3.85, -84.1], [46.55, 5.35, -84.1], [46.0, 7.4, -84.1],
-    [46.55, 9.45, -84.1], [48.05, 10.95, -84.1], [50.1, 11.5, -84.1], [52.15, 10.95, -84.1],
-    [53.65, 9.45, -84.1], [54.2, 7.4, -84.1], [53.65, 5.35, -84.1], [52.15, 3.85, -84.1],
-    [49.7, 3.35, -84.0], [47.4, 3.5, -83.6], [45.7, 4.6, -82.4], [44.8, 6.0, -80.3],
-    [45.0, 5.6, -77.7], [46.0, 4.4, -75.3], [46.9, 2.6, -72.7]
+    [47, 1.05, -70], [49.4, 1.05, -70], [51.8, 1.05, -70], [54.2, 1.05, -70], [56.6, 1.05, -70], [59, 1.05, -70],
+    [61.4, 1.05, -70], [64, 1.3, -70.9], [66.4, 2.2, -72.8], [67.4, 3.8, -75.4], [67.6, 6.5, -78.4], [67.6, 10, -81.8],
+    [67.5, 13.5, -85.2], [67, 16.5, -88.4], [65.6, 18.2, -90.9], [63.2, 18.4, -91.9], [60.4, 17.8, -92.1], [57.6, 13, -91.9],
+    [55.2, 6.2, -91.4], [53, 2.2, -90.6], [50.2, 3.4, -91.6], [47.4, 5.4, -91.1], [45.9, 6.8, -89.6], [46.6, 7, -88.2],
+    [48.8, 6.4, -88], [51.2, 4.4, -88], [53.4, 6.2, -88.1], [55.4, 6, -88.1], [57.6, 3.6, -88], [60.4, 2.6, -87.7],
+    [63, 3, -86.6], [64.4, 3.4, -84.6], [64, 3, -82], [62.2, 2.7, -80.6], [59.6, 2.5, -80.3], [56.9, 2.5, -80.3],
+    [54.85, 2.91, -80.44], [53.12, 4.07, -80.59], [51.96, 5.8, -80.73], [51.55, 7.85, -80.88], [51.96, 9.9, -81.02], [53.12, 11.63, -81.16],
+    [54.85, 12.79, -81.31], [56.9, 13.2, -81.45], [58.95, 12.79, -81.59], [60.68, 11.63, -81.74], [61.84, 9.9, -81.88], [62.25, 7.85, -82.02],
+    [61.84, 5.8, -82.17], [60.68, 4.07, -82.31], [58.95, 2.91, -82.46], [56.9, 2.5, -82.6], [53.6, 2.7, -83], [49.8, 3.3, -83.4],
+    [48.02, 3.71, -83.57], [46.59, 4.84, -83.74], [45.8, 6.49, -83.91], [45.8, 8.31, -84.09], [46.59, 9.96, -84.26], [48.02, 11.09, -84.43],
+    [49.8, 11.5, -84.6], [51.58, 11.09, -84.77], [53.01, 9.96, -84.94], [53.8, 8.31, -85.11], [53.8, 6.49, -85.29], [53.01, 4.84, -85.46],
+    [51.58, 3.71, -85.63], [49.8, 3.3, -85.8], [47.6, 3.4, -86], [45.4, 3.5, -86.1], [43.7, 3.6, -84.7], [43.6, 3.3, -82.2],
+    [44.2, 2.6, -79.6], [44.4, 1.6, -76.6], [44.45, 1.1, -73.8], [44.9, 1.05, -71.8], [45.8, 1.05, -70.5]
   ];
   function pkBuildSerpent(p) {
     var th = PK_THEME.serpent, M = pkMats(), i;
     var g = new THREE.Group(); scene.add(g);
     var curve = pkCoCurve(PK_SERPENT_PTS), len = curve.getLength(), F = pkCoFrames(curve, 520);
     var E = { curve: curve, len: len, F: F, gap: 2.35, cars: [], uPark: pkCoUAt(curve, 57.4, -70), uOfF: [], run: 30 };
+    pkCoLevel(F, curve, E.uPark, 4 * 2.35 + 1.4, 1.4);
     var seats = [], cols = [0x2f8f6f, 0xf0c04a, 0x1f6f55, 0xf0c04a, 0x2f8f6f];
     for (i = 0; i < 5; i++) {
       var car = pkCoCar(cols[i]);
@@ -305,9 +322,10 @@
     var supMat = std({ color: 0x2c7a63, roughness: 0.55, metalness: 0.25 });
     pkCoTrackBuild(g, E, {
       spineMat: spineMat, supMat: supMat, tieMat: std({ color: 0x35514b, roughness: 0.7 }),
-      skip: function (x, z) { return z > -71.6 && x > 46 && x < 60; }
+      skip: function (x, z) { return z > -71.6 && x > 45.5 && x < 62.5; }
     });
-    pkCoBrace(g, 66.2, -73.2, 9.6, 65.2, 9.4, -73.8, supMat);
+    pkCoBrace(g, 69.2, -80.2, 8.6, 67.7, 8.2, -80.2, supMat);
+    pkCoBrace(g, 69.2, -86.6, 15.6, 67.3, 15.2, -86.7, supMat);
     pkCoPlan(E, { vMin: 4.5, vMax: 22 });
     // the station: platform, boom gates, canopy
     pkCoPlatform(g, 47.0, 58.6, -69.35, -66.85, th);
@@ -328,24 +346,26 @@
     return a;
   }
   // ── Baron's Drop ─────────────────────────────────────────────────
-  // A dive coaster in the south-east: a long lift, a slow turn at the top, a straight vertical drop
-  // into a tunnel mouth in the rockery, then a loop and a sweeping run home.
+  // A dive coaster in the south-east: a long straight station, the near-vertical lift, a slow turn at the top, a straight
+  // vertical drop into a tunnel mouth in the rockery, a loop along the east fence (clear of the lift), then round the corner,
+  // back along the fence over a camelback and up the west side into the station.
   var PK_BARON_PTS = [
-    [48, 0.95, 15.5], [53, 0.95, 15.5], [58, 0.95, 15.5],
-    [60.8, 1.6, 15.7], [62.4, 4.5, 16.4], [63.4, 10, 17.3], [63.6, 16.5, 18.3], [62.6, 20.6, 19.6],
-    [60.2, 21.2, 20.9], [57.9, 21.1, 21.9], [56.2, 20.7, 22.5],
-    [56.0, 19.0, 22.55], [55.95, 12.0, 22.55], [55.9, 4.0, 22.55], [55.9, 1.6, 22.5],
-    [56.4, 1.15, 22.1], [57.6, 1.6, 20.8], [59.2, 3.0, 19.6], [60.4, 5.4, 18.6], [61.0, 6.2, 18.0],
-    [63.25, 6.8, 18.0], [64.9, 8.45, 18.0], [65.5, 10.7, 18.0], [64.9, 12.95, 18.0], [63.25, 14.6, 18.0],
-    [61.0, 15.2, 18.0], [58.75, 14.6, 18.0], [57.1, 12.95, 18.0], [56.5, 10.7, 18.0], [57.1, 8.45, 18.0],
-    [58.75, 6.8, 18.0], [60.7, 6.15, 18.0], [63.0, 5.6, 17.2], [64.0, 4.6, 16.2], [63.6, 3.4, 14.8],
-    [62.0, 2.6, 14.2], [59.5, 2.2, 14.4], [56.8, 2.0, 14.8], [54.0, 1.8, 15.2], [50.6, 1.3, 15.5]
+    [48.4, 0.95, 15.5], [50.8, 0.95, 15.5], [53.2, 0.95, 15.5], [55.6, 0.95, 15.5], [58, 0.95, 15.5], [60.4, 0.95, 15.5],
+    [62.8, 0.95, 15.5], [64.6, 2, 16], [65.4, 6, 16.6], [65.8, 11.5, 17.3], [65.6, 16.5, 18.3], [64.4, 20.6, 19.6],
+    [61.6, 21.2, 20.8], [60.2, 21.2, 21.1], [57.9, 21.1, 21.9], [56.2, 20.7, 22.5], [56, 19, 22.55], [55.95, 12, 22.55],
+    [55.9, 4, 22.55], [55.9, 1.6, 22.5], [56.4, 1.15, 22.1], [57.6, 1.6, 20.8], [59.4, 2.2, 20.2], [61.8, 2.6, 20.6],
+    [64.2, 3.4, 21.4], [65.6, 4.4, 22.6], [65.8, 5, 23.6], [65.97, 5.4, 25.34], [66.14, 6.51, 26.73], [66.31, 8.11, 27.5],
+    [66.49, 9.89, 27.5], [66.66, 11.49, 26.73], [66.83, 12.6, 25.34], [67, 13, 23.6], [67.17, 12.6, 21.86], [67.34, 11.49, 20.47],
+    [67.51, 9.89, 19.7], [67.69, 8.11, 19.7], [67.86, 6.51, 20.47], [68.03, 5.4, 21.86], [68.2, 5, 23.6], [68.6, 4.6, 25.8],
+    [67.4, 4.2, 28.1], [64.4, 3.6, 28.7], [61.2, 4.6, 28.7], [58.2, 6, 28.7], [55.2, 3, 28.7], [51.6, 2, 28.5],
+    [48.2, 1.8, 27.6], [46.6, 1.4, 25.4], [46.4, 1.05, 22.6], [46.4, 0.95, 19.8], [46.7, 0.95, 17.4], [47.4, 0.95, 16]
   ];
   function pkBuildBaron(p) {
     var th = PK_THEME.baron, i;
     var g = new THREE.Group(); scene.add(g);
     var curve = pkCoCurve(PK_BARON_PTS), len = curve.getLength(), F = pkCoFrames(curve, 500);
     var E = { curve: curve, len: len, F: F, gap: 2.42, cars: [], uPark: pkCoUAt(curve, 56.8, 15.5), uOfF: [], run: 30 };
+    pkCoLevel(F, curve, E.uPark, 3 * 2.42 + 1.4, 1.4);
     var seats = [], cols = [0x3a3f48, 0xd8c9a8, 0x3a3f48, 0xd8c9a8];
     for (i = 0; i < 4; i++) {
       var car = pkCoCar(cols[i], { w: 1.5, d: 2.1 });
@@ -359,10 +379,10 @@
     var supMat = std({ color: 0xd0c2a4, roughness: 0.6, metalness: 0.15 });
     pkCoTrackBuild(g, E, {
       spineMat: spineMat, supMat: supMat, tieMat: std({ color: 0x352a24, roughness: 0.75 }),
-      skip: function (x, z) { return (x > 48 && x < 58.8 && z > 15.4 && z < 19.4); }
+      skip: function (x, z) { return (x > 47.5 && x < 63.2 && z > 14.8 && z < 19.4); }
     });
     // the lift tower and the drop tower: two columns with rods out to the spine
-    pkCoBrace(g, 64.9, 17.3, 9.6, 63.5, 9.8, 17.4, supMat);
+    pkCoBrace(g, 67.0, 17.3, 9.6, 65.6, 9.8, 17.4, supMat);
     pkCoBrace(g, 54.6, 22.55, 18.4, 55.7, 18.2, 22.55, supMat);
     pkCoBrace(g, 57.3, 22.55, 18.4, 56.1, 18.2, 22.55, supMat);
     pkCoPlan(E, { vMin: 4, vMax: 24 });
@@ -440,7 +460,7 @@
   // keeps clear, the dressing dresses them, and the booth pass gives them the standard cabins.
   PK_PLOTS.push(
     { id: 'serpent', name: 'The Serpent', x: 55, z: -77.5, r: 12.5, q: [44.5, -65], level: 12, pad: 0.93 },
-    { id: 'baron', name: "Baron's Drop", x: 57, z: 19, r: 12, q: [48, 19], level: 13, pad: 0.82 },
+    { id: 'baron', name: "Baron's Drop", x: 57, z: 19, r: 12, q: [58.6, 19], qdx: 1, level: 13, pad: 0.82, boothAt: [67.4, 9.8] },   // the line runs east from the gate: the train comes home up the west side
     { id: 'nocturne', name: 'Nocturne', x: -50, z: -86.75, r: 13.5, q: [-59.1, -76.4], qdx: 1, level: 14, pad: 0.02 },
     { id: 'wreck', name: 'The Wreck', x: -20, z: -86.75, r: 13.5, q: [-29.1, -76.4], qdx: 1, level: 15, pad: 0.02 },
     { id: 'moonwood', name: 'Moonwood', x: 30, z: -86.75, r: 13.5, q: [39.1, -76.4], qdx: -1, level: 16, pad: 0.02 }
@@ -755,6 +775,7 @@
     pkIndoorCentre(g, cfg, AX + s * cfg.at[0], cfg.at[1]);
     var curve = pkCoCurve(pkIndoorPts(cfg)), len = curve.getLength(), F = pkCoFrames(curve, 460);
     var E = { curve: curve, len: len, F: F, gap: 2.4, cars: [], uPark: pkCoUAt(curve, AX + s * 12.0, zS), uOfF: [], run: 30 };
+    pkCoLevel(F, curve, E.uPark, 3 * 2.4 + 1.4, 1.4);
     var seats = [], cols = [cfg.band, 0xece6d8, cfg.band, 0xece6d8];
     for (i = 0; i < 4; i++) {
       var car = pkCoCar(cols[i], { w: 1.46, d: 2.05 });
@@ -863,10 +884,16 @@
   function pkBuildPuffin(p) {
     var th = PK_THEME[p.id], i, s;
     var g = new THREE.Group(); scene.add(g);
-    var pts = [[-65.5, 0.4, 40.0], [-64.0, 0.4, 36.6], [-60.0, 0.4, 36.2], [-56.0, 0.4, 36.6], [-54.5, 0.4, 40.0],
-      [-56.0, 0.4, 43.4], [-60.0, 0.4, 43.7], [-64.0, 0.4, 43.4], [-65.5, 0.4, 40.0]];
+    // a straight station along the platform, round the west end, a wiggle and a little hill along the north side, round the
+    // east end home: longer than the old oval, and clear of Wobbly Pots' booth and its own
+    var pts = [
+      [-54.8, 0.4, 43.6], [-57, 0.4, 43.6], [-59.2, 0.4, 43.6], [-61.4, 0.4, 43.6], [-63.6, 0.4, 43.6], [-65.8, 0.4, 43.6],
+      [-67.9, 0.4, 43], [-69.3, 0.42, 41.4], [-69.2, 0.5, 39.8], [-67.6, 0.62, 38.9], [-65, 0.85, 38.6], [-62.4, 1, 39.3],
+      [-59.8, 0.85, 39], [-57.4, 0.6, 38.9], [-55.2, 0.45, 39.1], [-53.5, 0.4, 40.4], [-53.2, 0.4, 42.2]
+    ];
     var curve = pkCoCurve(pts), len = curve.getLength(), F = pkCoFrames(curve, 300);
     var E = { curve: curve, len: len, F: F, gap: 2.2, cars: [], uPark: pkCoUAt(curve, -61.2, 43.6), uOfF: [], run: 34 };
+    pkCoLevel(F, curve, E.uPark, 2.2 + 1.2, 1.2);
     var seats = [], cols = [0xf0c04a, 0xd2622f];
     for (i = 0; i < 2; i++) {
       var car = pkCoCar(cols[i], { w: 1.2, d: 1.7 });
@@ -888,11 +915,11 @@
       pkRoundCyl(0.055, q.y, std({ color: 0x4a443c, roughness: 0.8 }), q.x, q.y / 2, q.z, g, 6);
     }
     pkCoPlatform(g, -63.5, -56.5, 43.9, 45.3, th);
-    for (i = 0; i < 6; i++) {
-      var qa = i / 6 * Math.PI * 2;
-      pkRoundCyl(0.34, 0.42, std({ color: 0x7a6a52, roughness: 0.85 }), -60 + Math.sin(qa) * 6.6, 0.21, 40 + Math.cos(qa) * 4.6, g, 12);
-      sphere(0.3, std({ color: 0x4d7a3a, roughness: 0.95 }), -60 + Math.sin(qa) * 6.6, 0.5, 40 + Math.cos(qa) * 4.6, g);
-    }
+    // a row of planted rocks down the middle of the loop, clear of the track all round
+    [-66.0, -63.5, -61.0, -58.5, -56.2].forEach(function (rx) {
+      pkRoundCyl(0.34, 0.42, std({ color: 0x7a6a52, roughness: 0.85 }), rx, 0.21, 41.2, g, 12);
+      sphere(0.3, std({ color: 0x4d7a3a, roughness: 0.95 }), rx, 0.5, 41.2, g);
+    });
     var a = pkAttr({
       id: p.id, name: p.name, x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats,
       board: 4, run: E.run, unload: 5, extra: E, tickRun: function (at) { pkCoRun(at); }

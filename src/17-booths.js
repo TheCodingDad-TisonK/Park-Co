@@ -566,6 +566,7 @@
     var c1x = ax, c1z = q[1] + OFF, c2x = ax, c2z = q[1] - OFF, bx = c1x, bz = c1z;
     if (dist2(c2x, c2z, plot.x, plot.z) > dist2(c1x, c1z, plot.x, plot.z)) { bx = c2x; bz = c2z; }
     if (plot.boothSide === 1) { bx = c1x; bz = c1z; } else if (plot.boothSide === -1) { bx = c2x; bz = c2z; }
+    if (plot.boothAt) { bx = plot.boothAt[0]; bz = plot.boothAt[1]; }   // or put outright, where the ride's track leaves no side free
     var ry = Math.atan2(plot.x - bx, plot.z - bz);
     var toQ = Math.atan2(q[0] - bx, q[1] - bz);
     var ds = Math.cos(toQ - (ry + Math.PI / 2)) >= 0 ? 1 : -1;          // the door side, in local x
