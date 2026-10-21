@@ -93,7 +93,11 @@ lamps, rich colour, planting and ornament, a themed entrance for every ride. Eac
       arches and the ticket windows have spires; the coaster station has a slate roof, a scalloped valance and a clock
       turret. With items 4 and 5 (the halls' fronts, the flat rides' porches) the park reads as one tale. Not touched: the
       ride booths' striped tent roofs (fairground style already), the coaster control room and the parked HQ
-- [ ] 9. More full coasters like the main one, each with its own big control room
+- [x] 9. Two more full coasters, each with its own control house: the park grows east (fence x 72 to 123) with the East Walk
+      off the North Promenade. The Dragon (double looper: 21 m lift, a 14 m loop and a tighter second one, 326 m, 69 km/h,
+      52 s) and The Firebird (20 m lift, a falling helix, a corkscrew, 299 m, 58 km/h, 47 s), both under 4.8 g. Each has a
+      slate-roofed platform canopy and a control house with the full cabin kit (desk and status bank, monitors, cabinet,
+      status board, time clock, lights), brick plinth, slate roof and turret
 - [ ] 10. One big coaster that runs partly indoors and partly outdoors
 - [ ] 11. Odd-angle audit of the whole park: overlaps, floating things, odd placement — and fix them
 - [ ] 12. Ferris wheel / Baron's Drop pads overlap by ~1 m

@@ -904,10 +904,17 @@
   // the back wall. Laid out in the hall's own u, so it mirrors with the hall and its screen still reads the right way round.
   var PK_CABIN = { u0: 15.2, u1: 18.8, z0: -82.45, z1: -79.35, door: [-81.4, -80.45] };
   function pkIndoorCabin(g, cfg, a) {
-    var s = cfg.portal === 'w' ? 1 : -1, AX = s > 0 ? cfg.box[0] : cfg.box[1], K = PK_CABIN, T = 0.12, H = 2.9;
+    var s = cfg.portal === 'w' ? 1 : -1;
+    return pkCabinBuild(g, a, { s: s, AX: s > 0 ? cfg.box[0] : cfg.box[1], K: PK_CABIN, trim: cfg.trim, band: cfg.band, name: cfg.name, sign: cfg.sign });
+  }
+  // the cabin itself, for a hall or a free-standing control house: o.K is the room in a frame where X(u) = AX + s*u is world
+  // x and z is world z ({ u0, u1, z0, z1, door: [z, z] }); the long window is on the z0 side, the door in the u0 wall
+  function pkCabinBuild(g, a, o) {
+    var s = o.s, AX = o.AX, K = o.K, T = 0.12, H = o.H || 2.9;
+    var cfg = { name: o.name, sign: o.sign };
     function X(u) { return AX + s * u; }
-    var trim = std({ color: cfg.trim, roughness: 0.7, metalness: 0.15 });
-    var band = std({ color: cfg.band, roughness: 0.5, metalness: 0.3 });
+    var trim = std({ color: o.trim, roughness: 0.7, metalness: 0.15 });
+    var band = std({ color: o.band, roughness: 0.5, metalness: 0.3 });
     var glass = std({ color: 0x9fc6cc, roughness: 0.1, metalness: 0.2, transparent: true, opacity: 0.34 });
     var xa = Math.min(X(K.u0), X(K.u1)), xb = Math.max(X(K.u0), X(K.u1)), cx = (xa + xb) / 2, cz = (K.z0 + K.z1) / 2, W = xb - xa, D = K.z1 - K.z0;
     var xn = X(K.u0 + T / 2), xf = X(K.u1 - T / 2);          // the platform-side wall and the far wall
