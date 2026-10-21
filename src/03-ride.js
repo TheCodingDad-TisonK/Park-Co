@@ -277,20 +277,21 @@
     box(W - 0.4, 0.9, 0.04, wains, CX, 0.45, Z0 + 0.12); box(W - 0.38, 0.06, 0.08, oak, CX, 0.92, Z0 + 0.13);
     box(0.04, 0.9, D - 0.4, wains, X1 - 0.12, 0.45, CZ); box(0.08, 0.06, D - 0.38, oak, X1 - 0.13, 0.92, CZ);
     [0.6, 2.1, 3.6].forEach(function (k) { pkBkBatten(scene, X0 + 1.4 + (k / 3.6) * (W - 2.8), H - 0.06, CZ - 0.6, 0, 1.3); });
-    // the coaster desk on the north wall, and the status board above it
-    pkBuildCoasterConsole();
-    box(1.08, 0.96, 0.06, MAT.steelDark, 14, 2.02, Z0 + 0.07);
-    // the station desk under the long window: oak on a steel frame, the CCTV monitors on their stands, the radio and the log
-    var sdx = X0 + 0.55;
-    pkBevelBox(0.72, 0.05, 3.2, oak, sdx, 0.78, -1.9, null, 0.012);
-    pkBevelBox(0.7, 0.72, 0.04, dark, sdx + 0.28, 0.38, -1.9, null, 0.008);
-    [-3.4, -0.4].forEach(function (z) { pkBevelBox(0.66, 0.74, 0.06, steel, sdx, 0.38, z, null, 0.01); });
-    pkOpMonitors(sdx - 0.08, -2.35);
-    pkBkRadio(scene, sdx - 0.05, 0.805, -0.75, Math.PI / 2);
-    pkBevelBox(0.3, 0.03, 0.22, S2({ color: 0x2f4f7a, roughness: 0.7 }), sdx + 0.05, 0.82, -1.15, null, 0.008);
-    pkRoundCyl(0.045, 0.1, S2({ color: 0xf2efe6, roughness: 0.5 }), sdx + 0.12, 0.85, -0.5, null, 12);
-    pkBkChair(scene, sdx + 0.95, -1.8, -Math.PI / 2, 0);
-    pkBkChair(scene, 14.3, -2.5, 0, 0);
+    // the coaster desk under the long window, facing it: the operator works the ride with the platform and the train in
+    // front of them; the status board hangs on the north wall at their right hand
+    pkBuildCoasterConsole({ x: X0 + 0.6, z: -0.85, ry: Math.PI / 2 });
+    pkBkChair(scene, X0 + 1.55, -0.85, -Math.PI / 2, 0);
+    box(1.08, 0.96, 0.06, MAT.steelDark, 14.8, 2.02, Z0 + 0.07);
+    // the station desk on the north wall: oak on a steel frame, the CCTV monitors on their stands, the radio and the log
+    var sdz = Z0 + 0.5;
+    pkBevelBox(3.0, 0.05, 0.72, oak, 14.8, 0.78, sdz, null, 0.012);
+    pkBevelBox(3.0, 0.72, 0.04, dark, 14.8, 0.38, sdz - 0.28, null, 0.008);
+    [13.4, 16.2].forEach(function (x) { pkBevelBox(0.06, 0.74, 0.66, steel, x, 0.38, sdz, null, 0.01); });
+    pkOpMonitors(14.5, sdz - 0.08, 0);
+    pkBkRadio(scene, 15.9, 0.805, sdz - 0.05, 0);
+    pkBevelBox(0.22, 0.03, 0.3, S2({ color: 0x2f4f7a, roughness: 0.7 }), 15.45, 0.82, sdz + 0.05, null, 0.008);
+    pkRoundCyl(0.045, 0.1, S2({ color: 0xf2efe6, roughness: 0.5 }), 13.7, 0.85, sdz + 0.12, null, 12);
+    pkBkChair(scene, 14.6, sdz + 0.95, Math.PI, 0);
     // the equipment bay: the lift drive and the PLC rack under the clerestory, the track mimic on the east wall
     pkOpLiftDrive(16.95, Z0 + 0.42);
     pkOpPlcRack(18.75, Z0 + 0.42);
@@ -309,10 +310,10 @@
     pkBkIntercom(scene, 11.7, 1.5, Z0 + 0.1, 0);
     pkBkVest(scene, X1 - 0.13, 1.85, 1.2, -Math.PI / 2);
     pkBkFirstAid(scene, X1 - 0.13, 2.2, -2.6, -Math.PI / 2);
-    pkBkClipboard(scene, 15.55, 1.6, Z0 + 0.11, 0);
+    pkBkClipboard(scene, 16.25, 1.6, Z0 + 0.11, 0);
     // the screen on the north wall: a status board that reports, while the desk does the work
     PK.screen = touchScreen({
-      w: 420, h: 380, pw: 0.9, ph: 0.78, x: 14, y: 2.02, z: Z0 + 0.12, parent: null, title: 'Ride control',
+      w: 420, h: 380, pw: 0.9, ph: 0.78, x: 14.8, y: 2.02, z: Z0 + 0.12, parent: null, title: 'Ride control',
       draw: function (ctx, s) {
         var R = PK.ride;
         scBg(ctx, s.w, s.h); scHead(ctx, s.w, 'RIDE CONTROL', pkRideWord());
@@ -353,7 +354,7 @@
     solid(X0, X1, Z0 - 0.15, Z0 + 0.15, 0, H);                       // north
     solid(X0, DX0 - 0.04, Z1 - 0.15, Z1 + 0.15, 0, H);               // south, west of the door
     solid(DX1 + 0.04, X1, Z1 - 0.15, Z1 + 0.15, 0, H);               // south, east of the door
-    solid(X0 + 0.15, X0 + 0.95, -3.55, -0.25, 0, 1.0);               // the station desk
+    solid(13.3, 16.3, Z0 + 0.15, Z0 + 0.86, 0, 1.0);                 // the station desk (the coaster desk makes its own)
     solid(16.4, 19.6, Z0 + 0.15, Z0 + 0.75, 0, 2.0);                 // the lift drive and the rack
     solid(17.45, X1 - 0.1, Z1 - 0.65, Z1 - 0.1, 0, 1.9);             // the lockers
   }
@@ -459,8 +460,8 @@
     PK_MIMIC = sc;
   }
   // two CCTV monitors on their stands on the station desk, turned to the operator: the queue lane and the platform
-  function pkOpMonitors(x, z) {
-    var g = new THREE.Group(); g.position.set(x, 1.12, z); g.rotation.y = Math.PI / 2; scene.add(g);
+  function pkOpMonitors(x, z, ry) {
+    var g = new THREE.Group(); g.position.set(x, 1.12, z); g.rotation.y = ry === undefined ? Math.PI / 2 : ry; scene.add(g);
     [-0.27, 0.27].forEach(function (dx) { pkRoundCyl(0.025, 0.2, pkMats().iron, dx, -0.22, -0.08, g, 6); pkBevelBox(0.22, 0.02, 0.16, pkMats().iron, dx, -0.32, -0.06, g, 0.006); });
     pkBkMonitor(g, -0.27, 0, 0, 0.15, -0.05, 'CAM 1 · the coaster queue', function (c, s) {
       c.fillStyle = '#071108'; c.fillRect(0, 0, s.w, s.h);
