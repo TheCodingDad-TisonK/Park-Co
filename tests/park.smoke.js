@@ -449,6 +449,14 @@ module.exports = `
     let n = 0; while (gu.state === 'boothQueue' && n < 300) { T.pkGuestTick(0.05); n++; }
     ok(!!b.machine && gu.ticket === true && gu.state === 'toTurn' && n > 100, 'an unstaffed window: the guest buys at the machine after ' + (n * 0.05).toFixed(1) + ' s');
     S.clerk = S0; T.PK.closed = C0; gu.state = 'gone'; T.pkGuestTick(0.01); }
+  // the ticket offices are buildings: open the door, walk in off the gate path and stand at the counter
+  { const b = T.PK.booths[0], side = b.x < 0 ? 1 : -1, px0 = T.player.x, pz0 = T.player.z, py0 = T.player.y; b.door.setNow(1);
+    T.player.y = 0; T.player.x = b.x + side * 3.4; T.player.z = b.z - 0.65; T.player.yaw = side > 0 ? Math.PI / 2 : -Math.PI / 2;
+    T.player.keys.KeyW = true; for (let k = 0; k < 20; k++) T.updatePlayer(0.05); T.player.keys.KeyW = false;
+    const inside = Math.abs(T.player.x - b.x) < 1.6 && Math.abs(T.player.z - b.z) < 1.5;
+    b.door.setNow(0); const shut = T.collides(b.x + side * 2.2, b.z - 0.65);
+    ok(inside && shut, 'a ticket office is walked into through its door (at ' + (T.player.x - b.x).toFixed(1) + ', ' + (T.player.z - b.z).toFixed(1) + '), and the shut door blocks');
+    T.player.x = px0; T.player.z = pz0; T.player.y = py0; }
   // the save round trip
   T.save(); { const raw = JSON.parse(localStorage.getItem('park-co-slot1')); ok(!!raw && raw.bank === S.bank && raw.ticketPrice === S.ticketPrice && raw.auto === S.auto && raw.xp === T.PK.xp, 'save wrote the slot: ' + JSON.stringify({ bank: raw && raw.bank, s: S.bank, failed: !!T.save.failed })); }
   // the pure layer

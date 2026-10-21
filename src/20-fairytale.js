@@ -129,7 +129,7 @@
     pkFtSpire(g, 0, 7.02, -2.1, 1.25, 2.4, M.slate, 4);
   }
   function pkFtTicketRoofs() {
-    PK_BOOTHS.forEach(function (b) { pkFtSpire(null, b.x, 3.1, b.z, 2.5, 2.1, pkFtM().slate, 4); });
+    PK_BOOTHS.forEach(function (b) { pkFtSpire(null, b.x, 3.3, b.z, 3.4, 2.4, pkFtM().slate, 4); });
   }
 
   // ── The signs ────────────────────────────────────────────────────

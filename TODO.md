@@ -105,7 +105,10 @@ lamps, rich colour, planting and ornament, a themed entrance for every ride. Eac
       while you ran a booth). A self-service machine beside each window now sells to the front of the line after 6 s when
       the window is not staffed and you are not at it. In your current game: flip TICKET WINDOW to staffed on the park
       services board, or hire the clerk
-- [ ] 9d. The two ticket windows as proper buildings with an inside you can walk into (your ask, 21 Oct)
+- [x] 9d. The two ticket windows are proper buildings now (your ask, 21 Oct): timber-framed ticket offices on a brick
+      plinth under the slate spires, side windows with flower boxes, a real door with a lantern over it. Inside: the counter
+      under the front window (till, ticket printer, bell, the window's screen), a chair, a safe, shelves of ticket rolls, a
+      noticeboard, a wall clock, a pendant lamp. The machine is on the outer wall
 - [~] 10. One big coaster that runs partly indoors and partly outdoors
 - [ ] 11. Odd-angle audit of the whole park: overlaps, floating things, odd placement — and fix them
 - [ ] 12. Ferris wheel / Baron's Drop pads overlap by ~1 m
