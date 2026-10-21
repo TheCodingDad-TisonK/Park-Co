@@ -44,6 +44,11 @@ module.exports = `
       if (shut || !open) out.push(a.id + (shut ? ' (walked through the shut door)' : ' (could not get in)'));
     });
     ok(out.length === 0, 'every booth: the shut door keeps you out, the open door lets you up the steps and in' + (out.length ? ': ' + out.join(', ') : '')); }
+  // standing behind a booth's chair and aiming over it at the desk, the desk's control has the aim, not the chair
+  { const f = T.PK.attrById.carousel.boothFrame, c = Math.cos(f.ry), s = Math.sin(f.ry), W = (lx, ly, lz) => [f.x + lx * c + lz * s, ly, f.z - lx * s + lz * c];
+    const e = W(0.15, 0, -0.55), t = W(0.18, 1.48, 0.82);
+    T.player.x = e[0]; T.player.z = e[2]; T.player.y = 0.45; T.lookAt(t[0], t[1], t[2]);
+    ok(!/Sit down/.test(T.focusText() || '') && !!T.focusText(), 'aiming over a chair at the desk focuses the desk, not the chair: ' + (T.focusText() || 'nothing')); }
   // a booth chair seats the player at the desk, and a step stands them up
   { let chair = null; T.scene.traverse((o) => { if (!chair && o.userData && o.userData.it && /Sit down/.test((o.userData.it.prompt && o.userData.it.prompt()) || '')) chair = o.parent; });
     if (chair) { T.pkBkSit(chair); T.updatePlayer(0.05); const sat = !!T.pkBkSitting() && T.camera.position.y < T.pkBkSitting().y + 1.5 && T.camera.position.y > T.pkBkSitting().y + 1.3;
