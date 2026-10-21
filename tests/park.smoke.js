@@ -222,7 +222,7 @@ module.exports = `
     a.state = 'idle'; a.t = 0; a.riders = 0; T.pkAttrTick(a, 0.016);
     ok(maxY > 9 && tilt > 0.2, a.name + ' flies its loops: peak y ' + maxY.toFixed(1) + ', tilt ' + tilt.toFixed(2));
     ok(E.cars[0].g.position.y < 2.5 && Math.abs(E.cars[0].g.position.z - a.extra.curve.getPointAt(a.extra.uPark).z) < 0.6, a.name + ' parks back at the station'); });
-  // the three indoor coasters wind down their helix in the dark and park back at the platform
+  // the three indoor coasters fly their own circuits in the dark and park back at the platform
   ['nocturne', 'wreck', 'moonwood'].forEach((id) => {
     const a = T.PK.attrById[id], E = a.extra;
     a.ctl.auto = true; a.ctl.fault = ''; a.queue.length = 0; a.riders = 1;
@@ -235,16 +235,16 @@ module.exports = `
       tilt = Math.max(tilt, Math.abs(car.quaternion.x) + Math.abs(car.quaternion.z));
     }
     a.state = 'idle'; a.t = 0; a.riders = 0; T.pkAttrTick(a, 0.016);
-    ok(maxY > 5.5 && tilt > 0.05, a.name + ' winds down its helix: peak y ' + maxY.toFixed(1) + ', tilt ' + tilt.toFixed(2));
+    ok(maxY > 5.5 && tilt > 0.05, a.name + ' flies its circuit: peak y ' + maxY.toFixed(1) + ', tilt ' + tilt.toFixed(2));
     ok(E.cars[0].g.position.y < 2.5, a.name + ' parks back at the station');
     ok(a.booth && a.boothScreen && a.seats.length === 8 && a.riders === 0, a.name + ' has its own control cabin');
   });
-  // the cabin doors open onto the platform: walk the player in
-  [[-54.8, 'nocturne'], [34.8, 'moonwood']].forEach(function (c) {
-    var s = []; for (var zz = -88.0; zz > -90.4; zz -= 0.3) s.push(zz.toFixed(1) + ':' + (T.collides(c[0], zz) ? 1 : 0));
-    T.player.x = c[0]; T.player.z = -88.1; T.player.y = 0; T.player.yaw = 0;
+  // the cabin doors open off the end of the platform: walk the player in from the platform (a west hall and an east one)
+  [[-62, 1, 'nocturne'], [42, -1, 'moonwood']].forEach(function (c) {
+    var x0 = c[0] + c[1] * 14.3, s = []; for (var uu = 14.3; uu < 16.6; uu += 0.3) s.push(uu.toFixed(1) + ':' + (T.collides(c[0] + c[1] * uu, -80.9) ? 1 : 0));
+    T.player.x = x0; T.player.z = -80.9; T.player.y = 0; T.player.yaw = -c[1] * Math.PI / 2;
     T.player.keys.KeyW = true; for (let i = 0; i < 30; i++) T.updatePlayer(0.05); T.player.keys.KeyW = false;
-    ok(T.player.z < -89.0, 'the ' + c[1] + ' cabin door walks (' + s.join(' ') + ') z ' + T.player.z.toFixed(2));
+    ok((T.player.x - c[0]) * c[1] > 15.6, 'the ' + c[2] + ' cabin door walks (' + s.join(' ') + ') u ' + ((T.player.x - c[0]) * c[1]).toFixed(2));
   });
   // the kids' area turns, and the pedal line crawls its oval
   ['kround', 'kpots'].forEach((id) => {
