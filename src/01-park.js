@@ -5,7 +5,7 @@
   // for the coaster and ride it. The player works the window and the ride.
   var PK_GATE_Z = 30, PK_PLATFORM_Y = 0.6, PK_STATION_Z = -4.6, PK_KIDS_Z = 56;   // PK_KIDS_Z: the south fence of the kids' garden
   // the park is a long rectangle: the gate at the south, the coaster across the north, and rides either side of the midway
-  var PK_PARK = { x0: -72, x1: 72, z0: -118, z1: 70 };   // z0 was -95: the north fence moved back for the bigger indoor halls
+  var PK_PARK = { x0: -72, x1: 123, z0: -118, z1: 70 };   // z0 was -95: the north fence moved back for the bigger indoor halls; x1 was 72, out east for The Dragon and The Firebird
   var PK_BOOTHS = [{ x: -9, z: 36, turnstile: -6 }, { x: 9, z: 36, turnstile: 6 }];
   var PK_TURNSTILES = [-6, -2, 2, 6];
   // the coaster queue: a single lane beside the platform, fenced on both sides. Guests join at the back (PK_QUEUE_ENTRY,
@@ -251,6 +251,16 @@
         if (seed % 5 === 0) pkConifer(px, pz, ps, null, seed); else pkTree(px, pz, ps, null, seed);
       }
     }
+    // the east strip, between the walk and the yards
+    var rng4 = pkRng(20261022);
+    for (tx = 76; tx <= 120; tx += 8) {
+      for (tz = -114; tz <= 26; tz += 8) {
+        px = tx + (rng4() - 0.5) * 5; pz = tz + (rng4() - 0.5) * 5; keep = rng4(); ps = 0.85 + rng4() * 0.8;
+        if (keep < 0.35 || !pkTreeOK(px, pz)) continue;
+        seed = Math.abs(Math.round(px * 13 + pz * 7));
+        if (seed % 5 === 0) pkConifer(px, pz, ps, null, seed); else pkTree(px, pz, ps, null, seed);
+      }
+    }
     // the strip the north fence gave up behind the indoor halls, on its own seed so the trees above keep their places
     var rng3 = pkRng(20261021);
     for (tx = -68; tx <= 68; tx += 9) {
@@ -263,9 +273,9 @@
     }
     // a forest wraps the park, so the palisade is the edge of the trees rather than of a bare green field
     var rng2 = pkRng(77123);
-    for (var fx = -88; fx <= 88; fx += 7) {
+    for (var fx = -88; fx <= PK_PARK.x1 + 16; fx += 7) {
       for (var fz = -127; fz <= 88; fz += 7) {
-        if (fx > -75 && fx < 75 && fz > -121 && fz < 71) continue;   // the park and a breathing margin
+        if (fx > PK_PARK.x0 - 3 && fx < PK_PARK.x1 + 3 && fz > PK_PARK.z0 - 3 && fz < 71) continue;   // the park and a breathing margin
         if (fz >= 72 && fz <= 80) continue;                         // the road runs along z 76
         var jx = (rng2() - 0.5) * 4, jz = (rng2() - 0.5) * 4, thin = rng2(), sc = 0.95 + rng2() * 1.2;
         if (thin < 0.28) continue;                                  // thin the ring a little
