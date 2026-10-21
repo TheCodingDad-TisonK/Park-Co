@@ -417,7 +417,7 @@
   }
   // the operator's chair: five-star base, gas lift, seat and back
   function pkBkChair(parent, x, z, ry, y0) {
-    var g = new THREE.Group(); g.position.set(x, y0 || 0, z); g.rotation.y = ry || 0; parent.add(g);
+    var g = new THREE.Group(); g.position.set(x, y0 || 0, z); g.rotation.y = ry || 0; g.scale.setScalar(1.25); parent.add(g);   // an operator's chair, sized for a grown-up
     var chairM = pkBkStd({ color: 0x222a31, roughness: 0.85 }), iron = MAT.steelDark;
     pkBevelBox(0.46, 0.08, 0.46, chairM, 0, 0.44, 0, g, 0.03);
     pkBevelBox(0.46, 0.5, 0.08, chairM, 0, 0.72, -0.24, g, 0.03);
@@ -453,7 +453,7 @@
       var k = player.keys;
       if (k.KeyW || k.KeyS || k.KeyA || k.KeyD) { pkBkStand(); return false; }
       player.x = PK_SIT.x; player.z = PK_SIT.z; player.y = PK_SIT.y; player.vy = 0;
-      camera.position.set(PK_SIT.x, PK_SIT.y + 1.18, PK_SIT.z);
+      camera.position.set(PK_SIT.x, PK_SIT.y + 1.42, PK_SIT.z);   // a seated eye on the bigger chair, over the desk
       camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
       return true;
     }
@@ -611,7 +611,7 @@
     var con = new THREE.Group(); con.position.set(0, F, HD - 0.5); con.rotation.y = Math.PI; g.add(con);
     pkBkDesk(con, 2.6);
     pkBoothPanel(a, con);
-    pkBkChair(g, 0.15, HD - 1.35, Math.PI, F);
+    pkBkChair(g, 0.15, HD - 1.35, 0, F);   // facing the desk and the window (a chair faces its local +z)
     // the CCTV monitors hang from the ceiling over the desk, toed in at the chair
     pkBkMonitors(a, g, 0, F + 1.92, HD - 0.36, Math.PI, 0.3);
 
