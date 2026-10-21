@@ -3,7 +3,7 @@
   // A small park: a gate at the south, two ticket windows outside it, a midway running north to the coaster station, and the
   // operator's room beside the platform. Guests arrive from the car park, buy a ticket at a window, pass a turnstile, queue
   // for the coaster and ride it. The player works the window and the ride.
-  var PK_GATE_Z = 30, PK_PLATFORM_Y = 0.6, PK_STATION_Z = -4.6;
+  var PK_GATE_Z = 30, PK_PLATFORM_Y = 0.6, PK_STATION_Z = -4.6, PK_KIDS_Z = 56;   // PK_KIDS_Z: the south fence of the kids' garden
   // the park is a long rectangle: the gate at the south, the coaster across the north, and rides either side of the midway
   var PK_PARK = { x0: -72, x1: 72, z0: -95, z1: 70 };
   var PK_BOOTHS = [{ x: -9, z: 36, turnstile: -6 }, { x: 9, z: 36, turnstile: 6 }];
@@ -16,12 +16,12 @@
   // the plots: every ride the park can open. level is the level that opens it, q the point the queue stands at
   var PK_PLOTS = [
     { id: 'carousel',  name: 'Carousel',     x: -34, z: 20, r: 8.5,  q: [-22, 20],  level: 2 },
-    { id: 'teacups',   name: 'Teacups',      x: -56, z: 3,  r: 7.2,  q: [-44, 3],   level: 4 },
+    { id: 'teacups',   name: 'Teacups',      x: -56, z: 3,  r: 7.2,  q: [-44, 3],   level: 4, boothSide: -1 },   // the south side is the kids' lane
     { id: 'ferris',    name: 'Ferris wheel', x: 34,  z: 20, r: 9.5,  q: [22, 20],   level: 6 },
-    { id: 'dodgems',   name: 'Dodgems',      x: 56,  z: 3,  r: 8.2,  q: [44, 3],    level: 8, bo: [0, -6.5] },
-    { id: 'droptower', name: 'Drop tower',   x: -54, z: -52, r: 6.5, q: [-44, -52], level: 9, bo: [0, 6.5] },
+    { id: 'dodgems',   name: 'Dodgems',      x: 56,  z: 3,  r: 8.2,  q: [44, 3],    level: 8 },
+    { id: 'droptower', name: 'Drop tower',   x: -54, z: -52, r: 6.5, q: [-44, -52], level: 9 },
     { id: 'flume',     name: 'Log flume',    x: 54,  z: -32, r: 9.0, q: [46.4, -24], level: 10 },
-    { id: 'haunted',   name: 'Haunted house',x: -58, z: -24, r: 9.5, q: [-44, -24],  level: 11, bo: [0, 6.5] }
+    { id: 'haunted',   name: 'Haunted house',x: -58, z: -24, r: 9.5, q: [-44, -24],  level: 11 }
   ];
   // the ladder: what the park earns its way to. Every ride is open from the first day; the levels open the services.
   var PK_LEVELS = [
@@ -120,7 +120,7 @@
     pkSlab(18, 6, -14, 3, 0.017);    // the start of the street out to the teacups (part 12 carries it on)
     pkSlab(18, 6, 14, 20, 0.017);    // out to the ferris wheel
     pkSlab(18, 6, 14, 3, 0.017);     // the start of the street out to the dodgems
-    // the routes out to the far rides, the hub, the lake and the planting are laid in part 12
+    // the routes out to the lands, the hub, the Garden Walk and the planting are laid in part 12
     // the car park markings: 22 bays a side, two removed for the walk through to the gate
     var bayW = 2.75, bayN = 22, bayX0 = -bayW * bayN / 2 + bayW / 2;
     for (var i = 0; i < bayN; i++) {
@@ -182,10 +182,12 @@
     // a welcome line across the forecourt
     box(22, 0.02, 0.4, MAT.whiteLine, 0, 0.03, PK_GATE_Z + 5);
     // the fence either side of the gate: the only way in is a turnstile. A palisade of iron spears on a stone kerb.
-    pkPalisade(PK_PARK.x0, PK_GATE_Z, -12, PK_GATE_Z);
+    pkPalisade(-32.5, PK_GATE_Z, -12, PK_GATE_Z);
     pkPalisade(12, PK_GATE_Z, PK_PARK.x1, PK_GATE_Z);
-    // and round the park
-    pkPalisade(PK_PARK.x0, PK_GATE_Z, PK_PARK.x0, PK_PARK.z0);
+    // and round the park. West of the forecourt the fence steps south round the kids' garden, so the little rides and the
+    // playhouse are inside the park and reached from the Fairground, not stranded beyond the palisade.
+    pkPalisade(PK_PARK.x0, PK_KIDS_Z, PK_PARK.x0, PK_PARK.z0);
+    pkPalisade(PK_PARK.x0, PK_KIDS_Z, -32.5, PK_KIDS_Z);
     pkPalisade(PK_PARK.x1, PK_GATE_Z, PK_PARK.x1, PK_PARK.z0);
     pkPalisade(PK_PARK.x0, PK_PARK.z0, PK_PARK.x1, PK_PARK.z0);
     // the boundary round the forecourt and the car park, with the drive in at the south
@@ -210,7 +212,7 @@
     toast('Adults ' + money(S.ticketPrice), '');
     return S.ticketPrice;
   }
-  // is this spot free for a tree? Keeps the rides, the routes, the lake, the midway, the gate and the coaster's footprint clear.
+  // is this spot free for a tree? Keeps the rides, the routes, the midway, the gate and the coaster's footprint clear.
   function pkTreeOK(x, z) {
     for (var i = 0; i < PK_PLOTS.length; i++) { var p = PK_PLOTS[i]; if (dist2(x, z, p.x, p.z) < (p.r + 3.5) * (p.r + 3.5)) return false; }
     if (x > -12 && x < 12 && z > -14 && z < 30) return false;
@@ -391,7 +393,7 @@
       pkGround(); pkGate(); pkBooths(); pkOffice(); pkMidway(); pkBuildCoaster(); pkBuildOperatorRoom(); pkBuildSnack();
       pkBuildAttractions();
       pkDressAll();
-      if (typeof pkThemeBuild === 'function') pkThemeBuild();   // part 12: the routes, the hub, the lake, the planting
+      if (typeof pkThemeBuild === 'function') pkThemeBuild();   // part 12: the lands, the routes, the hub, the planting
       pkBuildNpcs();
       pkDefProps(); buildProps();
       buildSky({ clouds: 6, rainN: 2500, snowN: 1200 });

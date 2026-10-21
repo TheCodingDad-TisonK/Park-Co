@@ -1,18 +1,20 @@
 //@ Park Co, part 03: the coaster - the track, the train, the station, the operator's room and the snack stand
   // ── The coaster ───────────────────────────────────────────────────
-  // One closed circuit: a station straight at the south, a lift hill in the north-east, a drop, a hill, a turn and a run home.
+  // One closed circuit behind the station: a lift hill in the north-east, a drop, a hill, a turn and a run home.
   // The train is three cars of four seats. The operator's room stands east of the platform, with the desk that runs the ride.
   var PK_CAR_N = 3;
   // the four seats of a car, in the order they fill: the platform side first, then the far side, front row before back
   var PK_SEAT_LOCAL = [[-0.35, 0.62], [-0.35, -0.62], [0.35, 0.62], [0.35, -0.62]];
   var PK_CAR_COLS = [0xd94f4f, 0xf0c04a, 0x4f8fd9];
   // the control points of the circuit. The station straight runs x -9..9 at z -4.6; the track then swings east and north,
-  // climbs to 14 m, comes back west over the park and drops home. It stays clear of the operator's room (x 11..17, z -4..2).
+  // climbs to 14 m, comes back west and drops home. It stays clear of the operator's room (x 11..17, z -4..2), and the whole
+  // circuit keeps to the band behind the station (z -4..-36, between the two streets), so the middle of the park beyond it is
+  // gardens and paths rather than the inside of a loop nobody can walk into. Points 3..5 are the lift (PK.liftU).
   var PK_TRACK_PTS = [
     [-9, 0.6, -4.6], [9, 0.6, -4.6],
-    [21, 0.8, -6], [26, 3, -14], [27, 9, -24], [24, 14, -34],
-    [14, 5, -43], [2, 2.2, -48], [-10, 10, -46], [-20, 3, -40],
-    [-26, 5, -30], [-24, 9, -20], [-18, 3, -12], [-13, 0.6, -6]
+    [20.5, 0.8, -6.2], [25.5, 3, -12], [27, 8.5, -19.5], [25.5, 14, -27.5],
+    [18, 9.5, -33], [8, 2.4, -33.5], [-2, 7.5, -32], [-11, 3.2, -30],
+    [-19.5, 5, -24], [-20.5, 7.5, -16.5], [-17, 3, -10], [-13, 0.6, -6]
   ];
   // the u of the point on the curve nearest a world point: the station is found this way, never guessed
   function pkNearestU(x, y, z) {

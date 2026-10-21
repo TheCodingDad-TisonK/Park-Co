@@ -459,14 +459,15 @@
   PK_THEME.nocturne = { a: 0x8f7bd6, b: 0xd8dcff, ground: 0x767b93, name: 'Nocturne', noBunting: true, noDecor: true };
   PK_THEME.wreck = { a: 0xd8a24a, b: 0x6a4f33, ground: 0x8a7c66, name: 'The Wreck', noBunting: true, noDecor: true };
   PK_THEME.moonwood = { a: 0x8fd3c7, b: 0xc9a06a, ground: 0x7c7058, name: 'Moonwood', noBunting: true, noDecor: true };
-  // the spurs from the North Promenade up to the queues
+  // the spurs from the North Promenade up to the queues, and the kids' lane from the Fairground avenue down into the kids'
+  // garden, west of the carousel, past the three little rides' gateways
   PK_ROUTES.push(
-    [35, -60, 35, -65, 4.2], [35, -65, 41, -65, 4.2],
-    [-46.5, -60, -31, -60, 5],
-    [-46.5, -60, -46.5, -76.4, 3.4], [-16.5, -60, -16.5, -76.4, 3.4], [26.5, -60, 26.5, -76.4, 3.4],
-    [-35.5, 3, -35.5, 44, 3.4]
+    [35, -60, 35, -65, 4.2, 'coaster'], [35, -65, 41, -65, 4.2, 'coaster'],
+    [-46.5, -60, -31, -60, 5, 'dark'],
+    [-46.5, -60, -46.5, -76.4, 3.4, 'dark'], [-16.5, -60, -16.5, -76.4, 3.4, 'dark'], [26.5, -60, 26.5, -76.4, 3.4, 'coaster'],
+    [-46.8, 5.4, -46.8, 50, 3.4, 'fair']
   );
-  PK_KEEP.push([35.5, -62.5, 5.5], [42.5, -65.5, 5], [-45, 40, 6.5]);
+  PK_KEEP.push([35.5, -62.5, 5.5], [42.5, -65.5, 5], [-38.5, 42, 6.5]);
 
   function pkCoastersBuild() {
     var makers = {
@@ -840,7 +841,7 @@
   }
   // the acorn playhouse: a sandpit, a little tower and a slide, for the ones too small to queue
   function pkBuildPlayhouse() {
-    var g = new THREE.Group(); g.position.set(-45, 0, 40); scene.add(g);
+    var g = new THREE.Group(); g.position.set(-38.5, 0, 42); scene.add(g);
     var wood = std({ color: 0x8a6a4a, roughness: 0.85 }), leaf = std({ color: 0x4d7a3a, roughness: 0.9 });
     pkRoundCyl(4.6, 0.12, std({ color: 0xd8c49a, roughness: 0.98 }), 0, 0.06, 0, g, 32);
     pkRing(4.7, 0.15, wood, 0, 0.12, 0, g, 32);
