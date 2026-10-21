@@ -440,7 +440,7 @@
         pkSpawnGuest: pkSpawnGuest, pkServe: pkServe, pkDispatch: pkDispatch, pkTestRun: pkTestRun, pkSetAuto: pkSetAuto, pkPrice: pkPrice,
         pkRideWord: pkRideWord, pkLevel: pkLevel, pkXp: pkXp, pkFloor: pkFloor, pkOnPlatform: pkOnPlatform,
         pkBoothSlot: pkBoothSlot, pkGuestAt: pkGuestAt, pkSeatWorld: pkSeatWorld, pkRideTick: pkRideTick, pkGuestTick: pkGuestTick,
-        pkQueueJoin: pkQueueJoin, pkQueueReslot: pkQueueReslot,
+        pkQueueJoin: pkQueueJoin, pkQueueReslot: pkQueueReslot, pkPool: function () { return PK_POOL; },
         pkOpenGates: pkOpenGates, pkCloseGates: pkCloseGates, pkGatesToggle: pkGatesToggle, pkBarsDown: pkBarsDown, pkBarsUp: pkBarsUp, pkStop: pkStop, pkReset: pkReset,
         pkTick: pkTick, pkPanel: pkPanel, pkPanelAct: pkPanelAct, pkGuide: pkGuide, pkTrack: function () { return PK.curve; }, pkTrain: function () { return PK.cars; },
         pkCoasterAuto: pkCoasterAuto,

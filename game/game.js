@@ -4857,7 +4857,7 @@
         pkSpawnGuest: pkSpawnGuest, pkServe: pkServe, pkDispatch: pkDispatch, pkTestRun: pkTestRun, pkSetAuto: pkSetAuto, pkPrice: pkPrice,
         pkRideWord: pkRideWord, pkLevel: pkLevel, pkXp: pkXp, pkFloor: pkFloor, pkOnPlatform: pkOnPlatform,
         pkBoothSlot: pkBoothSlot, pkGuestAt: pkGuestAt, pkSeatWorld: pkSeatWorld, pkRideTick: pkRideTick, pkGuestTick: pkGuestTick,
-        pkQueueJoin: pkQueueJoin, pkQueueReslot: pkQueueReslot,
+        pkQueueJoin: pkQueueJoin, pkQueueReslot: pkQueueReslot, pkPool: function () { return PK_POOL; },
         pkOpenGates: pkOpenGates, pkCloseGates: pkCloseGates, pkGatesToggle: pkGatesToggle, pkBarsDown: pkBarsDown, pkBarsUp: pkBarsUp, pkStop: pkStop, pkReset: pkReset,
         pkTick: pkTick, pkPanel: pkPanel, pkPanelAct: pkPanelAct, pkGuide: pkGuide, pkTrack: function () { return PK.curve; }, pkTrain: function () { return PK.cars; },
         pkCoasterAuto: pkCoasterAuto,
@@ -4895,14 +4895,16 @@
   // ── The guests ────────────────────────────────────────────────────
   // A guest arrives from the car park, joins the shorter ticket line, buys a ticket, passes a turnstile, queues for the
   // coaster, boards when the gates open, rides, and goes home. The whole thing is a small state machine on a walk record.
-  var PK_POOL = [];
+  var PK_POOL = [], PK_GUEST_MAX = 90;
   function pkTakeHuman() {
     if (PK_POOL.length) { var g = PK_POOL.pop(); g.visible = true; scene.add(g); return g; }
-    return makeHuman({});
+    // makeHuman builds the figure but does not put it in the world: without this every new guest walked, queued and rode
+    // unseen, and only the odd one back from the pool showed
+    var h = makeHuman({}); scene.add(h); return h;
   }
   function pkParkHuman(g) {
     scene.remove(g);
-    if (PK_POOL.length < 40) { g.visible = false; PK_POOL.push(g); return; }
+    if (PK_POOL.length < PK_GUEST_MAX) { g.visible = false; PK_POOL.push(g); return; }
     var blob = pkBlobOf(g);
     if (blob) g.remove(blob);
     disposeTree(g);
@@ -4942,13 +4944,15 @@
   }
   // the coaster queue: one lane, one guest to a slot. A guest joins at the back, stands on their slot, and shuffles up as the
   // line drains. PK.queue is the line, front first; gu.qslot is where in it they stand.
+  // A locked coaster (key OFF) still takes a line: the guests stand and wait for it to open, and give up in time (pkGuestBored).
   function pkQueueJoin(gu) {
-    if (!S.coasterKey) return false;     // the coaster is locked: its line is closed
+    if (gu.gaveUp && gu.gaveUp.coaster) return false;
     if (gu.state === 'walkQueue' || gu.state === 'queue' || gu.state === 'board' || gu.state === 'seated') return false;
     if (PK.queue.indexOf(gu) >= 0) return false;
     if (PK.queue.length >= PK_QUEUE_SLOTS.length) return false;
     gu.qslot = PK.queue.length;
     PK.queue.push(gu);
+    gu.lockWait = 0;
     gu.state = 'walkQueue';
     var s = PK_QUEUE_SLOTS[gu.qslot];
     gu.rec.path = route({ x: gu.rec.x, z: gu.rec.z }, PK_QUEUE_ENTRY).concat(route(PK_QUEUE_ENTRY, s));
@@ -4960,6 +4964,7 @@
     if (!a || !a.open || a.queue.indexOf(gu) >= 0) return false;
     if (a.queue.length >= a.seats.length * 2) return false;
     gu.attr = a.id;
+    gu.lockWait = 0;
     gu.slot = a.queue.length;
     a.queue.push(gu);
     var s = pkAttrSlot(a, gu.slot);
@@ -4994,6 +4999,27 @@
       }
     }
   }
+  // Waiting in a line for a ride that is locked (its operator key OFF) wears out: past the guest's patience they leave the
+  // line, say so, and go and find something else. A ride that is open keeps its line; it is the lock nobody waits out.
+  function pkGuestBored(gu, dt) {
+    var coaster = gu.state === 'queue' || gu.state === 'walkQueue', at = coaster ? null : PK.attrById[gu.attr];
+    var locked = coaster ? !S.coasterKey : !!(at && at.ctl && !at.ctl.key);
+    if (!locked) return;
+    gu.lockWait = (gu.lockWait || 0) + dt;
+    if (!gu.patience) gu.patience = randf(70, 160);
+    if (gu.lockWait < gu.patience) return;
+    gu.gaveUp = gu.gaveUp || {};
+    if (coaster) {
+      gu.gaveUp.coaster = true;
+      var qi = PK.queue.indexOf(gu); if (qi >= 0) { PK.queue.splice(qi, 1); pkQueueReslot(); }
+    } else {
+      gu.gaveUp[gu.attr] = true;
+      pkAttrQueueLeave(gu, at);
+    }
+    say(gu.g, pick(['Still shut...', 'Not opening today', 'Something else, then']));
+    gu.lockWait = 0;
+    pkGo(gu, randf(-6, 6), randf(8, 22), 'off');
+  }
   function pkGuestStep(gu, dt) {
     var rec = gu.rec, g = gu.g;
     gu.t += dt;
@@ -5022,6 +5048,7 @@
       if (arrived) gu.state = 'queue';
     } else if (gu.state === 'queue') {
       // standing in line: the front of the line is invited in when the gates open (pkRideLoad)
+      pkGuestBored(gu, dt);
     } else if (gu.state === 'walkAttr') {
       if (arrived) {
         var at = PK.attrById[gu.attr];
@@ -5036,6 +5063,7 @@
       }
     } else if (gu.state === 'qwait') {
       // the ride boards this guest when its boarding starts
+      pkGuestBored(gu, dt);
     } else if (gu.state === 'qmove') {
       if (arrived) gu.state = 'qwait';
     } else if (gu.state === 'walkSeat') {
@@ -5061,7 +5089,7 @@
       if (!rec.path.length) {
         if (PK.closed) pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
         else if (PK.snackOpen && !gu.ate && gu.hunger > 60 && S.bank >= S.snackPrice) pkGo(gu, -13, 10.4, 'toSnack');
-        else if ((gu.rides || 0) < 2 && randf(0, 1) < 0.55 && (pkQueueJoin(gu) || pkAttrPick(gu))) { /* off to another ride */ }
+        else if ((gu.rides || 0) < 4 && randf(0, 1) < 0.8 && (pkQueueJoin(gu) || pkAttrPick(gu))) { /* off to another ride */ }
         else pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
       }
     } else if (gu.state === 'leave') {
@@ -5071,7 +5099,7 @@
       g.position.set(rec.x, pkFloor(rec.x, rec.z), rec.z);
       g.rotation.y = rec.yaw;
       var moving = rec.path.length > 0;
-      var mode = moving ? 'walk' : (gu.state === 'boothQueue' || gu.state === 'queue' || gu.state === 'board' ? 'wait' : 'idle');
+      var mode = moving ? 'walk' : (gu.state === 'boothQueue' || gu.state === 'queue' || gu.state === 'qwait' || gu.state === 'board' ? 'wait' : 'idle');
       animateHuman(g, dt, mode, rec.speed, null, false);
     } else {
       animateHuman(g, dt, gu.pose === 'stand' ? 'idle' : 'sit', 0, null, false);
@@ -6024,8 +6052,8 @@
     if (open) {
       PK.spawnT -= dt;
       if (PK.spawnT <= 0) {
-        PK.spawnT = randf(2.5, 6);
-        if (PK.guests.length < 40) pkSpawnGuest();
+        PK.spawnT = randf(1.2, 2.8);                              // a busier gate: the lines should look like lines
+        if (PK.guests.length < PK_GUEST_MAX) pkSpawnGuest();
       }
     }
     // a clerk works the window on their own
@@ -6317,18 +6345,21 @@
   // ── Who picks which ride ─────────────────────────────────────────
   function pkAttrPick(gu) {
     var open = [];
-    for (var i = 0; i < PK.attractions.length; i++) { var at = PK.attractions[i]; if (at.open && at.ctl && at.ctl.key && !at.ctl.fault && !at.ctl.maint && at.queue.length < at.seats.length * 2) open.push(at); }   // nobody queues for a locked ride
+    // a ride with its operator key OFF still takes a line (the guests wait for it to open), but one that is running is
+    // preferred; a ride in a fault or in MAINT takes nobody, and a guest does not go back to a line they gave up on
+    for (var i = 0; i < PK.attractions.length; i++) { var at = PK.attractions[i]; if (at.open && at.ctl && !at.ctl.fault && !at.ctl.maint && at.queue.length < at.seats.length * 2 && !(gu.gaveUp && gu.gaveUp[at.id])) open.push(at); }
     if (!open.length) return false;
     // the shortest line wins, with a little spread so the crowd is not one queue
-    open.sort(function (a, b) { return a.queue.length - b.queue.length; });
+    var cost = function (a) { return a.queue.length + (a.ctl.key ? 0 : 6); };
+    open.sort(function (a, b) { return cost(a) - cost(b); });
     var pick = open[Math.floor(randf(0, Math.min(3, open.length)))];
     return pkAttrQueueJoin(gu, pick);
   }
   function pkGuestPickRide(gu) {
-    var coasterOk = PK.ride.state !== 'fault' && !!S.coasterKey;
+    var coasterOk = PK.ride.state !== 'fault' && !(gu.gaveUp && gu.gaveUp.coaster);
     var anyOpen = false;
     for (var i = 0; i < PK.attractions.length; i++) if (PK.attractions[i].open) { anyOpen = true; break; }
-    if (coasterOk && (!anyOpen || randf(0, 1) < 0.45)) {
+    if (coasterOk && (!anyOpen || randf(0, 1) < (S.coasterKey ? 0.45 : 0.15))) {
       if (pkQueueJoin(gu)) return;      // the coaster line is never longer than its lane
       // the line is full: fall through to another ride, or wander the midway
     }
