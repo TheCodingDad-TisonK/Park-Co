@@ -109,10 +109,11 @@
     plane(420, 420, lawnMat, 0, -0.03, 0, -Math.PI / 2);
     pkSlab(34, 18, 0, 44, 0.012, M.paversWarm);      // the forecourt, where the guests arrive
     pkSlab(28, 10, 0, 33, 0.014, M.paversWarm);      // the plaza under the gate
+    pkSlab(3.2, 5.0, -18.0, 42.5, 0.013, M.paversWarm);   // out of the HQ's door onto the forecourt
     pkSlab(14, 32, 0, 12, 0.016);      // the midway
-    pkSlab(36, 18, 2, -4, 0.018);      // the station apron
+    pkSlab(36, 12, 2, -0.5, 0.018);    // the station apron: Station Square up to the coaster's yard fence, and the strip along the platform
     pkSlab(9.4, 6.8, 15.5, -0.8, 0.02);   // the coaster control room's floor
-    pkSlab(10, 8, -13, 8, 0.02, M.paversWarm);       // the snack stand apron
+    pkSlab(9, 7, -15.6, 13.2, 0.02, M.paversWarm);   // the snack stand's apron, where the stand stands
     pkSlab(62, 18, 0, 62, 0.01, pkAsphalt());       // the car park: two ranks of bays off a wide aisle
     // the entrance drive up from the road
     pkSlab(11, 5, 0, 73.5, 0.011, pkAsphalt());
