@@ -276,7 +276,9 @@
     var wains = S2({ color: 0x3d5b49, roughness: 0.62 });
     box(W - 0.4, 0.9, 0.04, wains, CX, 0.45, Z0 + 0.12); box(W - 0.38, 0.06, 0.08, oak, CX, 0.92, Z0 + 0.13);
     box(0.04, 0.9, D - 0.4, wains, X1 - 0.12, 0.45, CZ); box(0.08, 0.06, D - 0.38, oak, X1 - 0.13, 0.92, CZ);
-    [0.6, 2.1, 3.6].forEach(function (k) { pkBkBatten(scene, X0 + 1.4 + (k / 3.6) * (W - 2.8), H - 0.06, CZ - 0.6, 0, 1.3); });
+    var opBattens = [0.6, 2.1, 3.6].map(function (k) { return pkBkBatten(scene, X0 + 1.4 + (k / 3.6) * (W - 2.8), H - 0.06, CZ - 0.6, 0, 1.3); });
+    PK.opLights = pkBkLights('coaster', scene, opBattens, CX, H - 0.5, CZ - 0.6);
+    pkBkSwitch(scene, DX0 - 0.35, 1.2, Z1 - 0.11, Math.PI, PK.opLights, 'the control room');
     // the coaster desk under the long window, facing it: the operator works the ride with the platform and the train in
     // front of them; the status board hangs on the north wall at their right hand
     pkBuildCoasterConsole({ x: X0 + 0.6, z: -0.85, ry: Math.PI / 2 });
@@ -307,7 +309,7 @@
     pkRoundCyl(0.14, 0.38, S2({ color: 0x8fc6e8, roughness: 0.1, transparent: true, opacity: 0.6 }), 17.2, 1.2, Z1 - 0.3, null, 14);
     pkBkKeyBox(scene, 12.3, 1.6, Z1 - 0.12, Math.PI);
     pkBkClock(scene, 12.2, 2.55, Z0 + 0.12, 0, 0.17);
-    pkBkIntercom(scene, 11.7, 1.5, Z0 + 0.1, 0);
+    PK.opClock = pkBkTimeClock(scene, 11.7, 1.5, Z0 + 0.1, 0, 'coaster', 'the coaster');
     pkBkVest(scene, X1 - 0.13, 1.85, 1.2, -Math.PI / 2);
     pkBkFirstAid(scene, X1 - 0.13, 2.2, -2.6, -Math.PI / 2);
     pkBkClipboard(scene, 16.25, 1.6, Z0 + 0.11, 0);
@@ -747,7 +749,7 @@
     PK.gates.forEach(function (gt) { gt.open = false; });
     R.state = 'dispatch'; R.beat = 1.2;
     if (empty) { sfx('bell'); logEvent('Test run, empty train', ''); toast('Test run', ''); }
-    else { pkXp(2); sfx('bell'); logEvent('Dispatch with ' + R.riders + ' aboard', 'good'); }
+    else { pkXp(pkOnDutyAt('coaster') ? 3 : 2); sfx('bell'); logEvent('Dispatch with ' + R.riders + ' aboard', 'good'); }
     hudDirty = true; return true;
   }
   function pkTestRun() {
