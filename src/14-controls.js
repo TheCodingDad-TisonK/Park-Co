@@ -611,6 +611,28 @@ function pkBuildCoasterConsole(at) {
     act: function (on) { return pkSetCoasterKey(on); } });
   C.parts = { gauges: gauges, lamps: lamps, buttons: buttons, toggles: toggles, mode: mode, stop: stop, lever: lever, key: key };
 
+  // ── the status bank: where the train is on the track, and the counts ──
+  // the mimic's sections start at points on the track, laid in lap order from the station
+  var HB = pkCtlHood(G, CX, TOP + PH * Math.cos(TILT) + 0.16, CZ + 0.31 - PH * Math.sin(TILT) - 0.06, 2.44, 0.22, 0.2);
+  var at0 = function (x, z) { return ((pkCoUAt(PK.curve, x, z) - PK.stationU) % 1 + 1) % 1; };
+  var SEC = [['STATION', 0], ['LIFT', ((PK.liftU[0] - PK.stationU) % 1 + 1) % 1], ['DROP\nLOOP', ((PK.liftU[1] - PK.stationU) % 1 + 1) % 1],
+    ['TURN\nHILLS', at0(-12.4, -28.9)], ['CORK-\nSCREW', at0(16, -28.3)], ['BRAKES', at0(-9, -28.3)], ['STATION', at0(-19, -14)]];
+  var mimic = [];
+  for (var si = 0; si < 6; si++) mimic.push(pkCtlAnnun(HB, -1.08 + si * 0.2, 0, 0.18, 0.12, SEC[si][0], { col: si === 0 ? '#5fd38d' : si === 5 ? '#ff9a52' : '#8fc3ff' }));
+  var ro = pkCtlReadout(HB, 0.62, 0, 1.0, 0.17), lapT = 0, lastLap = 0;
+  C.parts.mimic = mimic; C.parts.readout = ro;
+  pkCtlLive({
+    tick: function (dt) {
+      var R = PK.ride, live = C.on && !!S.coasterKey, d = ((R.u - PK.stationU) % 1 + 1) % 1, k = 0;
+      for (var i = 1; i < SEC.length; i++) if (d >= SEC[i][1]) k = i;
+      if (k === 6) k = 0;
+      for (var j = 0; j < 6; j++) mimic[j].on = live && j === k;
+      if (R.state === 'running') lapT += dt; else if (lapT > 0) { lastLap = lapT; lapT = 0; }
+      ro.set(['SPEED ' + ('  ' + Math.round((R.v || 0) * 3.6)).slice(-3) + ' KM/H  LAP ' + ('  ' + Math.round(lapT || lastLap)).slice(-3) + 's',
+        'RIDE ' + R.riders + '/' + PK.seats.length + '   QUEUE ' + PK.queue.length]);
+    }
+  });
+
   // ── the desk keeps itself in step with the ride ──
   var airT = 0;
   pkCtlLive({
@@ -647,6 +669,84 @@ function pkBuildCoasterConsole(at) {
   var rc = Math.abs(Math.cos(at.ry || 0)), rs = Math.abs(Math.sin(at.ry || 0)), hx = 1.36 * rc + 0.34 * rs, hz = 1.36 * rs + 0.34 * rc;
   solid(at.x - hx, at.x + hx, at.z - hz, at.z + hz, 0, 0.95);
   return C;
+}
+
+// ── The status bank ──────────────────────────────────────────────────
+// A hooded bank that stands on the back of a desk above its fascia, the way a real ride desk carries its annunciator: a
+// row of backlit legend windows that light (or flash) with the ride's state, and an LED readout of the counts. Built in
+// the parent's frame facing +z, leaning back a little toward the operator's eye.
+var PK_ANN_TEX = {};
+function pkCtlAnnTex(label, col) {
+  var key = label + '|' + col;
+  if (PK_ANN_TEX[key]) return PK_ANN_TEX[key];
+  var t = tex(256, 128, function (c, W, H) {
+    var g = c.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0.0)');
+    c.fillStyle = col; c.fillRect(0, 0, W, H);
+    c.fillStyle = 'rgba(255,255,255,0.10)'; c.fillRect(0, 0, W, H * 0.45);
+    c.strokeStyle = 'rgba(0,0,0,0.55)'; c.lineWidth = 6; c.strokeRect(3, 3, W - 6, H - 6);
+    c.fillStyle = '#111417'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    var lines = label.split('\n'), fs = lines.length > 1 ? 40 : 50;
+    c.font = '800 ' + fs + 'px Bahnschrift, "Segoe UI", Arial, sans-serif';
+    lines.forEach(function (ln, i) { c.fillText(ln, W / 2, H / 2 + (i - (lines.length - 1) / 2) * fs * 1.05); });
+  });
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  return (PK_ANN_TEX[key] = t);
+}
+// one legend window: o.col the glass colour ('#f0c04a'), o.flash to blink while lit
+function pkCtlAnnun(g, x, y, w, h, label, o) {
+  o = o || {};
+  var M = pkCtlM(), map = pkCtlAnnTex(label, o.col || '#f0c04a');
+  pkBevelBox(w + 0.014, h + 0.014, 0.014, M.bezel, x, y, 0.004, g, 0.003);
+  var mat = new THREE.MeshStandardMaterial({ map: map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.05, roughness: 0.3, metalness: 0.05 });
+  var m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat); m.position.set(x, y, 0.0115); g.add(m);
+  var api = { label: label, on: false, mat: mat, level: 0, t: 0 };
+  pkCtlLive({
+    tick: function (dt) {
+      api.t += dt;
+      var want = api.on ? (o.flash && api.on === 'flash' && Math.sin(api.t * 9) < 0 ? 0.25 : 1) : 0;
+      api.level += (want - api.level) * Math.min(1, dt * 14);
+      mat.emissiveIntensity = api.level * 1.0;                  // dark glass when off, lit from behind when on
+      mat.color.setScalar(0.12 + api.level * 0.88);
+    }
+  });
+  return api;
+}
+// an LED readout: a recessed window of green segments behind smoked glass. set(text) redraws only when the text changes
+function pkCtlReadout(g, x, y, w, h, o) {
+  o = o || {};
+  var M = pkCtlM(), cv = document.createElement('canvas'); cv.width = 512; cv.height = Math.round(512 * h / w);
+  var t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  pkBevelBox(w + 0.03, h + 0.03, 0.02, M.bezel, x, y, 0.004, g, 0.004);
+  var m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.9, roughness: 0.25 }));
+  m.position.set(x, y, 0.0145); g.add(m);
+  var last = null, col = o.col || '#6dff9a';
+  var api = {
+    set: function (lines) {
+      var s = lines.join('\n'); if (s === last) return; last = s;
+      var c = cv.getContext('2d'), W = cv.width, H = cv.height;
+      c.fillStyle = '#050a07'; c.fillRect(0, 0, W, H);
+      // the unlit segments behind the lit ones, so it reads as a real display
+      var fs = Math.floor(H / lines.length * 0.62);
+      c.font = '700 ' + fs + 'px "Consolas", "Courier New", monospace'; c.textBaseline = 'middle';
+      lines.forEach(function (ln, i) {
+        var yy = H * (i + 0.5) / lines.length;
+        c.fillStyle = 'rgba(109,255,154,0.07)'; c.textAlign = 'left'; c.fillText(ln.replace(/[^ ]/g, '8'), W * 0.05, yy);
+        c.fillStyle = col; c.shadowColor = col; c.shadowBlur = 10; c.fillText(ln, W * 0.05, yy); c.shadowBlur = 0;
+      });
+      for (var k = 0; k < H; k += 3) { c.fillStyle = 'rgba(0,0,0,0.18)'; c.fillRect(0, k, W, 1); }
+      t.needsUpdate = true;
+    }
+  };
+  return api;
+}
+// the hood itself: a steel box with a sloped cap; returns its front face group (local +z toward the operator)
+function pkCtlHood(parent, x, y, z, w, h, lean) {
+  var M = pkCtlM(), H = new THREE.Group(); H.position.set(x, y, z); H.rotation.order = 'YXZ'; H.rotation.x = -(lean || 0.18); parentOf(parent).add(H);
+  pkBevelBox(w + 0.06, h + 0.06, 0.11, M.case, 0, 0, -0.06, H, 0.012);
+  var cap = pkBevelBox(w + 0.10, 0.025, 0.16, M.face, 0, h / 2 + 0.045, -0.03, H, 0.006); cap.rotation.x = 0.25;
+  pkBevelBox(w + 0.02, h + 0.02, 0.005, M.well, 0, 0, -0.002, H, 0.002);
+  return H;
 }
 
 // ── The compact desk in a ride booth ────────────────────────────────
@@ -743,6 +843,23 @@ function pkBoothPanel(a, con) {
       parts.buttons.gates.setLit(live && (a.state === 'idle' || a.state === 'unloading' || a.state === 'boarding'));
       parts.buttons.dispatch.setLit(live && !PK.closed && (a.state === 'boarding' || a.state === 'ready') && !a.queue.length && !a.boarding && a.riders > 0);
       parts.buttons.test.setLit(live && !PK.closed && a.state === 'idle' && !a.queue.length && !a.riders);
+    }
+  });
+  // the status bank on the back of the desk: six legend windows and the counts
+  var top = TOP + PH * Math.cos(TILT), hz = PZ - (PH / 2) * Math.sin(TILT) - 0.05;
+  var HB = pkCtlHood(con, 0, top + 0.15, hz, 1.56, 0.2, 0.22);
+  var ANN = [['key', 'KEY\nON', '#5fd38d'], ['auto', 'AUTO', '#8fc3ff'], ['gates', 'GATES\nOPEN', '#f0c04a'], ['bars', 'BARS\nLOCKED', '#f0c04a'], ['run', 'RIDE\nRUNNING', '#5fd38d'], ['fault', 'FAULT\nMAINT', '#ff6b5e']];
+  parts.ann = {};
+  ANN.forEach(function (d, i) { parts.ann[d[0]] = pkCtlAnnun(HB, -0.70 + i * 0.15, 0, 0.135, 0.1, d[1], { col: d[2], flash: d[0] === 'fault' }); });
+  parts.readout = pkCtlReadout(HB, 0.46, 0, 0.56, 0.16);
+  pkCtlLive({
+    tick: function () {
+      var A = parts.ann;
+      A.key.on = !!C.key; A.auto.on = !!C.auto && !!C.key; A.gates.on = !!C.gates; A.bars.on = C.barsWant > 0.5;
+      A.run.on = a.state === 'running'; A.fault.on = (C.fault || C.maint) ? 'flash' : false;
+      var left = a.state === 'running' ? Math.max(0, Math.ceil((a.run || 0) - (a.t || 0))) + 's' : '--';
+      parts.readout.set(['QUEUE ' + ('  ' + a.queue.length).slice(-3) + '  RIDE ' + a.riders + '/' + a.seats.length,
+        (C.fault ? 'FAULT   ' : C.maint ? 'MAINT   ' : !C.key ? 'LOCKED  ' : (a.state.toUpperCase() + '        ').slice(0, 8)) + ' END ' + left]);
     }
   });
   a.boothPanel = parts;

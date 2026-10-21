@@ -83,7 +83,10 @@ lamps, rich colour, planting and ornament, a themed entrance for every ride. Eac
       aisle into a free bay (41 bays); the party gets out and walks to the ticket windows. At the end of their day they walk
       back, get in, the car backs out and drives away. The lot fills through the morning and empties at closing; the static
       parked cars are gone. Up to 110 guests (was 90). Cars wait for the one in front and never lock up
-- [ ] 7. The desk panels made even better (booth desks; the coaster console too)
+- [x] 7. The desk panels made better: a hooded status bank on every desk. Booths: six backlit legend windows (KEY ON, AUTO,
+      GATES OPEN, BARS LOCKED, RIDE RUNNING, FAULT/MAINT flashing) and an LED readout (queue, riders, time to the end of the
+      cycle). The coaster console: a train-position mimic (station, lift, drop and loop, turn and hills, corkscrew, brakes)
+      and an LED readout (speed, lap time, riders, queue)
 - [ ] 8. The whole park in the Efteling vibe: a pass over every ride's surroundings and entrance, the gate and the ticket
       windows, the shops and stands, the lamps, the signs, the paths and the planting, so the park reads as one fairy tale
 - [ ] 9. More full coasters like the main one, each with its own big control room
