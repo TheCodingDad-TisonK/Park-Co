@@ -4,7 +4,7 @@ One list for everything asked for. `[x]` is done, merged into `development` and 
 (smoke tests + screenshots); `[~]` is in progress; `[ ]` is not started yet. Updated with
 every piece of work, in the same commit.
 
-Nothing below is in the installed game (the Desktop shortcut runs the old 0.1.1 install).
+Release 0.2.0 (21 Oct) carries everything below that is ticked. Its installer is `dist/Park-Co-Setup-0.2.0.exe`.
 To see it: open this folder in the Co Engine editor, or `npm run dev`.
 
 ## Done
@@ -137,7 +137,8 @@ lamps, rich colour, planting and ornament, a themed entrance for every ride. Eac
       backup) deleted (your OK, 21 Oct); the old TODO files moved to `docs/archive/`, the scratch probes (oneshot, probe,
       diag, station) to `tools/scratch/`; the co-author lines stripped from every earlier commit (your OK; backup tags
       `backup/before-coauthor-strip-*` keep the old history)
-- [ ] 14. New installer (0.2.0) so the Desktop shortcut runs the new park
+- [x] 14. Installer 0.2.0 built (`dist/Park-Co-Setup-0.2.0.exe`); `main` carries the release, tagged v0.2.0. Run it (with the game
+      closed) and the Desktop shortcut opens the new park
 
 ## Waiting on you
 
