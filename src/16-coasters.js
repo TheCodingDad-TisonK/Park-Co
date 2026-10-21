@@ -19,19 +19,32 @@
     return best / 900;
   }
   // frames: position, tangent and 'up' at N points round the lap
-  function pkCoFrames(curve, N) {
+  // The track's frames: a point, a tangent and an 'up' every sample. 'up' is carried along the curve (parallel transport) but
+  // held to the world's up as it goes, so turns on a slope and helices do not wind roll into it: wherever the track is not
+  // near vertical, any roll it has gathered is eased back to upright, or to cleanly inverted over the top of a loop.
+  // P (the speed profile from pkCoProfile, laid from u0) banks the turns by physics: tan(bank) = v^2 x curvature / g.
+  function pkCoFrames(curve, N, P, u0) {
     var pts = [], tans = [], ups = [], i;
     for (i = 0; i < N; i++) { pts.push(curve.getPointAt(i / N)); tans.push(curve.getTangentAt(i / N).normalize()); }
     var up = new THREE.Vector3(0, 1, 0);
     if (Math.abs(up.dot(tans[0])) > 0.92) up.set(1, 0, 0);
     up.addScaledVector(tans[0], -up.dot(tans[0])).normalize();
     ups.push(up.clone());
+    var ref = new THREE.Vector3(), crs = new THREE.Vector3();
     for (i = 1; i < N; i++) {
-      PK_CO_Q.setFromUnitVectors(tans[i - 1], tans[i]);
+      var ti = tans[i];
+      PK_CO_Q.setFromUnitVectors(tans[i - 1], ti);
       up.applyQuaternion(PK_CO_Q);
-      up.addScaledVector(tans[i], -up.dot(tans[i]));
-      if (up.lengthSq() < 1e-5) up.set(0, 1, 0).addScaledVector(tans[i], -tans[i].y);
+      up.addScaledVector(ti, -up.dot(ti));
+      if (up.lengthSq() < 1e-5) up.set(0, 1, 0).addScaledVector(ti, -ti.y);
       up.normalize();
+      if (Math.abs(ti.y) < 0.88) {
+        ref.set(0, 1, 0).addScaledVector(ti, -ti.y).normalize();
+        var roll = Math.atan2(crs.crossVectors(ref, up).dot(ti), ref.dot(up));
+        var want = Math.abs(roll) <= Math.PI / 2 ? 0 : (roll > 0 ? Math.PI : -Math.PI);
+        PK_CO_Q.setFromAxisAngle(ti, -(roll - want) * 0.25);
+        up.applyQuaternion(PK_CO_Q).normalize();
+      }
       ups.push(up.clone());
     }
     // close the frame: spread the twist from the last sample back round to the first
@@ -43,30 +56,45 @@
       PK_CO_Q.setFromAxisAngle(tans[i], -tw * i / N);
       ups[i].applyQuaternion(PK_CO_Q);
     }
-    // bank into the turns; a loop's curvature is 'up', not 'left', so it never rolls there
-    // The bank is driven by the SIDEWAYS part of the bend only (continuous, not just its sign), then smoothed
-    // round the lap, so a loop (all bend is 'up') stays at zero roll and the rails run as clean curves.
-    var ds = curve.getLength() / N, angs = [], lefts = [];
-    for (i = 0; i < N; i++) {
-      var a = tans[(i - 1 + N) % N], b = tans[(i + 1) % N];
-      var kk = new THREE.Vector3().subVectors(b, a);
-      var left = new THREE.Vector3().crossVectors(ups[i], tans[i]).normalize();
-      lefts.push(left);
-      if (kk.lengthSq() < 1e-10) { angs.push(0); continue; }
-      var curv = Math.acos(clamp(a.dot(b), -1, 1)) / (2 * ds);
-      var lat = curv * kk.normalize().dot(left);              // signed sideways curvature
-      angs.push(Math.atan(clamp(lat * 13.5, -0.9, 0.9)));
+    // Roll by the felt force: the seat's 'up' follows where the ride pushes the rider, v^2 x the curvature plus gravity's
+    // pull, taken across the track. In a turn that banks by speed; over a slow crest it stays upright, over a fast loop top
+    // it is inverted, and where the force says nothing (straight up or down, or floating over a hill) the roll is carried
+    // through from either side. The roll is measured off the carried frame, unwrapped from the station round, smoothed.
+    var ds = curve.getLength() / N, raw = [], wt = [], f = new THREE.Vector3(), cr2 = new THREE.Vector3(), i0 = 0;
+    if (P) i0 = Math.round(u0 * N) % N;
+    for (var j = 0; j < N; j++) {
+      i = (i0 + j) % N;
+      var v2 = 11.5 * 11.5;                                    // with no profile, as if at 41 km/h everywhere
+      if (P) { var kq = Math.min(P.K, Math.round(j / N * P.K)); v2 = P.V[kq] * P.V[kq]; }
+      f.subVectors(tans[(i + 1) % N], tans[(i - 1 + N) % N]).multiplyScalar(v2 / (2 * ds));
+      f.y += 9.81;
+      f.addScaledVector(tans[i], -f.dot(tans[i]));
+      wt.push(clamp(f.length() / 9.81 - 0.15, 0, 1));
+      var ra = Math.atan2(cr2.crossVectors(ups[i], f).dot(tans[i]), ups[i].dot(f));
+      // floating over a hump on an upright stretch pulls the rider up out of the seat: that keeps the track upright (banked
+      // by the sideways part only), it never rolls the train over. Only the track's own shape turns it upside down.
+      if (Math.abs(ra) > Math.PI / 2 && Math.abs(tans[i].y) < 0.88 && ups[i].y > 0) ra -= (ra > 0 ? Math.PI : -Math.PI);
+      raw.push(ra);
     }
-    for (var pass = 0; pass < 14; pass++) {
-      var prev = angs.slice();
-      for (i = 0; i < N; i++) angs[i] = prev[(i - 1 + N) % N] * 0.25 + prev[i] * 0.5 + prev[(i + 1) % N] * 0.25;
+    // unwrap where the force is clear; where it is not, hold the last clear roll, then ease across the gap
+    var th = [], last = 0, lastJ = -1;
+    for (j = 0; j < N; j++) {
+      if (wt[j] > 0.05) {
+        var d = raw[j] - last; d -= Math.round(d / (Math.PI * 2)) * Math.PI * 2;
+        var now = last + d;
+        if (lastJ >= 0 && j - lastJ > 1) for (var q = lastJ + 1; q < j; q++) th[q] = last + (now - last) * (q - lastJ) / (j - lastJ);
+        th[j] = now; last = now; lastJ = j;
+      } else th[j] = last;
     }
-    for (i = 0; i < N; i++) {
-      var ang = angs[i], left = lefts[i];
-      if (Math.abs(ang) < 0.004) continue;
-      var nu = ups[i].clone().multiplyScalar(Math.cos(ang)).addScaledVector(left, Math.sin(ang));
-      nu.addScaledVector(tans[i], -nu.dot(tans[i])).normalize();
-      ups[i].copy(nu);
+    for (var pass = 0; pass < 40; pass++) {
+      var prev = th.slice();
+      for (j = 1; j < N - 1; j++) th[j] = prev[j - 1] * 0.25 + prev[j] * 0.5 + prev[j + 1] * 0.25;
+    }
+    for (j = 0; j < N; j++) {
+      i = (i0 + j) % N;
+      if (Math.abs(th[j]) < 0.002) continue;
+      PK_CO_Q.setFromAxisAngle(tans[i], th[j]);
+      ups[i].applyQuaternion(PK_CO_Q).addScaledVector(tans[i], -ups[i].dot(tans[i])).normalize();
     }
     return { p: pts, t: tans, up: ups, n: N };
   }
@@ -143,41 +171,69 @@
       car.updateMatrixWorld(true);
     }
   }
-  // The lap plan: a speed for every point (fast at the bottom, slow over the crest and through the station),
-  // integrated once so progress by time maps exactly back onto the track. The lap closes on the button.
-  function pkCoPlan(E, o) {
-    var K = 240, curve = E.curve, len = E.len, u0 = E.uPark, i;
-    var ys = [], ymin = Infinity, ymax = -Infinity;
-    for (i = 0; i <= K; i++) {
-      var y = curve.getPointAt((u0 + i / K) % 1).y;
-      ys.push(y);
-      if (y < ymin) ymin = y;
-      if (y > ymax) ymax = y;
+  // The speed of a train round a lap, by physics rather than by height. From the park point the train rolls out on the
+  // station's tyres (to 2.5 m/s), climbs the lift at chain speed, and from the crest on runs on what the drop gave it:
+  // v² grows by 2g for every metre it falls and loses a little to wheel friction and air over every metre it covers.
+  // Booster tyres keep it from ever stalling, and a brake run brings it home to a slow roll and a stop at the platform.
+  // The lift is the sustained climb up to the lap's highest point, found from the track (o.lift overrides it, as
+  // [u0, u1]); o.pedal gives a kiddie train its steady pace instead. Returns the speed and the time at K+1 even steps.
+  function pkCoProfile(curve, len, u0, o) {
+    o = o || {};
+    var K = Math.max(240, Math.ceil(len / 0.3)), S = len / K, ys = [], i, g = 9.81;
+    for (i = 0; i <= K; i++) ys.push(curve.getPointAt((u0 + i / K) % 1).y);
+    var lift = [-1, -1];
+    if (o.lift) {
+      lift = o.lift.map(function (u) { return Math.round(((u - u0 + 1) % 1) * K); });
+    } else if (!o.pedal) {
+      var c = 0;
+      for (i = 0; i <= K * 0.7; i++) if (ys[i] > ys[c]) c = i;
+      var l0 = c;
+      while (l0 > 1 && ys[l0 - 1] < ys[l0] - 1e-4) l0--;                // back down the climb to where it starts
+      if (c - l0 > 4) lift = [l0, c];
     }
-    var vMin = o.vMin || 5, vMax = o.vMax || 22, T = [0], S = len / K;
+    var vSt = o.vStation || 2.5, vChain = o.vChain || 2.4, mu = 0.022, drag = 0.0009, V = [0];
     for (i = 1; i <= K; i++) {
-      var v = vMin + (vMax - vMin) * (ymax - ys[i]) / Math.max(0.5, ymax - ymin);
-      v = clamp(v, vMin, vMax);
-      var f0 = (i - 0.5) / K;
-      if (f0 < 0.05 || f0 > 0.95) v *= 0.5;
-      T[i] = T[i - 1] + S / v;
+      var v, s = i * S, d = len - s;
+      if (o.pedal) v = o.pedal;
+      else if (i >= lift[0] && i <= lift[1]) v = vChain;
+      else {
+        var w = V[i - 1];
+        var v2 = w * w + 2 * g * (ys[i - 1] - ys[i]) - 2 * g * mu * S - 2 * drag * w * w * S;
+        v = Math.sqrt(Math.max(0, v2));
+        v = Math.max(v, i < lift[0] ? vSt : 2.0);                          // station tyres before the lift, boosters after
+      }
+      if (s < 4) v = Math.min(v, Math.max(0.5, Math.sqrt(2 * 0.9 * s)));  // pulling away from the platform
+      v = Math.min(v, Math.sqrt(4 + 2 * 4 * d));                          // the brake run
+      if (d < 2.5) v = Math.min(v, Math.max(0.35, Math.sqrt(2 * 0.8 * d)));   // and the roll in to the stop
+      V.push(v);
     }
-    var M = 240, uOfF = [];
+    var T = [0];
+    for (i = 1; i <= K; i++) T.push(T[i - 1] + S / Math.max(0.2, (V[i - 1] + V[i]) / 2));
+    return { K: K, V: V, T: T, lift: lift };
+  }
+  // The lap plan: integrate the profile once, so progress by time maps exactly back onto the track. E.run is the lap's
+  // real length in seconds; E.vTop and E.vLow (after the lift) are kept for the speed test.
+  function pkCoPlan(E, o) {
+    var P = pkCoProfile(E.curve, E.len, E.uPark, o), K = P.K, T = P.T, u0 = E.uPark;
+    var M = 600, uOfF = [], j = 1;
     for (var k = 0; k <= M; k++) {
-      var tt = (k / M) * T[K], j = 1;
+      var tt = (k / M) * T[K];
       while (j < K && T[j] < tt) j++;
       var t0 = T[j - 1], t1 = T[j], f = t1 > t0 ? (tt - t0) / (t1 - t0) : 0;
-      uOfF.push((u0 + (j - 1 + f) / K) % 1);
+      uOfF.push((j - 1 + f) / K);                                         // laps from the park point, 0..1
     }
-    E.uOfF = uOfF;
-    E.run = Math.max(12, Math.round(T[K] * 10) / 10);
+    E.u0 = u0; E.uOfF = uOfF;
+    E.run = Math.round(T[K] * 10) / 10;
+    E.vTop = 0; E.vLow = 99;
+    for (var i = 0; i <= K; i++) { E.vTop = Math.max(E.vTop, P.V[i]); if (P.lift[1] > 0 && i > P.lift[1] && i < K * 0.85) E.vLow = Math.min(E.vLow, P.V[i]); }
   }
+  // the train between two planned steps, eased linearly, so a slow lap does not move in jumps
   function pkCoRun(at) {
     var E = at.extra;
     if (!E || !E.uOfF || !E.uOfF.length) return;
-    var f = at.state === 'running' ? clamp(at.t / at.run, 0, 1) : 0;
-    var k = Math.max(0, Math.min(240, Math.round(f * 240)));
-    pkCoPlace(E, E.uOfF[k]);
+    var M = E.uOfF.length - 1, f = at.state === 'running' ? clamp(at.t / at.run, 0, 1) * M : 0;
+    var k = Math.min(M - 1, Math.floor(f)), r = f - k;
+    pkCoPlace(E, (E.u0 + E.uOfF[k] + (E.uOfF[k + 1] - E.uOfF[k]) * r) % 1);
   }
   // ── The track ─────────────────────────────────────────────────────
   function pkCoTrackBuild(g, E, o) {
@@ -306,8 +362,9 @@
   function pkBuildSerpent(p) {
     var th = PK_THEME.serpent, M = pkMats(), i;
     var g = new THREE.Group(); scene.add(g);
-    var curve = pkCoCurve(PK_SERPENT_PTS), len = curve.getLength(), F = pkCoFrames(curve, 520);
-    var E = { curve: curve, len: len, F: F, gap: 2.35, cars: [], uPark: pkCoUAt(curve, 57.4, -70), uOfF: [], run: 30 };
+    var curve = pkCoCurve(PK_SERPENT_PTS), len = curve.getLength(), uP = pkCoUAt(curve, 57.4, -70);
+    var F = pkCoFrames(curve, 520, pkCoProfile(curve, len, uP), uP);
+    var E = { curve: curve, len: len, F: F, gap: 2.35, cars: [], uPark: uP, uOfF: [], run: 30 };
     pkCoLevel(F, curve, E.uPark, 4 * 2.35 + 1.4, 1.4);
     var seats = [], cols = [0x2f8f6f, 0xf0c04a, 0x1f6f55, 0xf0c04a, 0x2f8f6f];
     for (i = 0; i < 5; i++) {
@@ -326,7 +383,7 @@
     });
     pkCoBrace(g, 69.2, -80.2, 8.6, 67.7, 8.2, -80.2, supMat);
     pkCoBrace(g, 69.2, -86.6, 15.6, 67.3, 15.2, -86.7, supMat);
-    pkCoPlan(E, { vMin: 4.5, vMax: 22 });
+    pkCoPlan(E);
     // the station: platform, boom gates, canopy
     pkCoPlatform(g, 47.0, 58.6, -69.35, -66.85, th);
     var a = pkAttr({
@@ -363,8 +420,9 @@
   function pkBuildBaron(p) {
     var th = PK_THEME.baron, i;
     var g = new THREE.Group(); scene.add(g);
-    var curve = pkCoCurve(PK_BARON_PTS), len = curve.getLength(), F = pkCoFrames(curve, 500);
-    var E = { curve: curve, len: len, F: F, gap: 2.42, cars: [], uPark: pkCoUAt(curve, 56.8, 15.5), uOfF: [], run: 30 };
+    var curve = pkCoCurve(PK_BARON_PTS), len = curve.getLength(), uP = pkCoUAt(curve, 56.8, 15.5);
+    var F = pkCoFrames(curve, 500, pkCoProfile(curve, len, uP), uP);
+    var E = { curve: curve, len: len, F: F, gap: 2.42, cars: [], uPark: uP, uOfF: [], run: 30 };
     pkCoLevel(F, curve, E.uPark, 3 * 2.42 + 1.4, 1.4);
     var seats = [], cols = [0x3a3f48, 0xd8c9a8, 0x3a3f48, 0xd8c9a8];
     for (i = 0; i < 4; i++) {
@@ -385,7 +443,7 @@
     pkCoBrace(g, 67.0, 17.3, 9.6, 65.6, 9.8, 17.4, supMat);
     pkCoBrace(g, 54.6, 22.55, 18.4, 55.7, 18.2, 22.55, supMat);
     pkCoBrace(g, 57.3, 22.55, 18.4, 56.1, 18.2, 22.55, supMat);
-    pkCoPlan(E, { vMin: 4, vMax: 24 });
+    pkCoPlan(E);
     // the tunnel mouth: a stone ring round the track, a dark bore, and the rockery heaped over it
     var uT = pkCoUAt(curve, 56.9, 21.6);
     var pT = curve.getPointAt(uT), tT = curve.getTangentAt(uT).normalize();
@@ -773,8 +831,9 @@
     var g = new THREE.Group(); scene.add(g);
     pkIndoorShell(g, cfg);
     pkIndoorCentre(g, cfg, AX + s * cfg.at[0], cfg.at[1]);
-    var curve = pkCoCurve(pkIndoorPts(cfg)), len = curve.getLength(), F = pkCoFrames(curve, 460);
-    var E = { curve: curve, len: len, F: F, gap: 2.4, cars: [], uPark: pkCoUAt(curve, AX + s * 12.0, zS), uOfF: [], run: 30 };
+    var curve = pkCoCurve(pkIndoorPts(cfg)), len = curve.getLength(), uP = pkCoUAt(curve, AX + s * 12.0, zS);
+    var F = pkCoFrames(curve, 460, pkCoProfile(curve, len, uP), uP);
+    var E = { curve: curve, len: len, F: F, gap: 2.4, cars: [], uPark: uP, uOfF: [], run: 30 };
     pkCoLevel(F, curve, E.uPark, 3 * 2.4 + 1.4, 1.4);
     var seats = [], cols = [cfg.band, 0xece6d8, cfg.band, 0xece6d8];
     for (i = 0; i < 4; i++) {
@@ -791,7 +850,7 @@
       tieMat: std({ color: 0x2a2a30, roughness: 0.8 }),
       skip: function (x, z) { return z > -84.2; }                                     // the station, the platform and the cabin
     });
-    pkCoPlan(E, { vMin: 4.5, vMax: 19 });
+    pkCoPlan(E);
     // the station inside: kerbed platform, the boom gates at the car doors, hanging lamps
     pkCoPlatform(g, Math.min(AX + s * 0.6, AX + s * 14.8), Math.max(AX + s * 0.6, AX + s * 14.8), -82.8, -80.2, th);
     var stationShade = std({ color: 0xfff3d6, emissive: 0xffdda0, emissiveIntensity: 0.5, roughness: 0.55 });
@@ -891,8 +950,9 @@
       [-67.9, 0.4, 43], [-69.3, 0.42, 41.4], [-69.2, 0.5, 39.8], [-67.6, 0.62, 38.9], [-65, 0.85, 38.6], [-62.4, 1, 39.3],
       [-59.8, 0.85, 39], [-57.4, 0.6, 38.9], [-55.2, 0.45, 39.1], [-53.5, 0.4, 40.4], [-53.2, 0.4, 42.2]
     ];
-    var curve = pkCoCurve(pts), len = curve.getLength(), F = pkCoFrames(curve, 300);
-    var E = { curve: curve, len: len, F: F, gap: 2.2, cars: [], uPark: pkCoUAt(curve, -61.2, 43.6), uOfF: [], run: 34 };
+    var curve = pkCoCurve(pts), len = curve.getLength(), uP = pkCoUAt(curve, -61.2, 43.6);
+    var F = pkCoFrames(curve, 300, pkCoProfile(curve, len, uP, { pedal: 1.8 }), uP);
+    var E = { curve: curve, len: len, F: F, gap: 2.2, cars: [], uPark: uP, uOfF: [], run: 34 };
     pkCoLevel(F, curve, E.uPark, 2.2 + 1.2, 1.2);
     var seats = [], cols = [0xf0c04a, 0xd2622f];
     for (i = 0; i < 2; i++) {
@@ -909,7 +969,7 @@
       tieMat: std({ color: 0x59503f, roughness: 0.85 }),
       skip: function () { return true; }
     });
-    pkCoPlan(E, { vMin: 1.6, vMax: 4.4 });
+    pkCoPlan(E, { pedal: 1.8 });                // a kiddie train: a steady 6.5 km/h
     for (s = 0.9; s < len; s += 1.7) {
       var q = curve.getPointAt(s / len);
       pkRoundCyl(0.055, q.y, std({ color: 0x4a443c, roughness: 0.8 }), q.x, q.y / 2, q.z, g, 6);
