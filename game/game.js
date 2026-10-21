@@ -3935,11 +3935,15 @@
     "door@-22.57,3": { x: -21.3, z: -0.7 },
     "door@20.27,20": { x: 22.35, z: 24.8 },
     "group@-10,-72": { hidden: true },
+    "group@-11.44,-17.88": { x: -11.45, z: -17.9, hidden: true },
     "group@-13,33": { x: -13.05, z: 35.35, hidden: true },
     "group@-13,8": { x: -16.3, z: 13.8, ry: -990 },
     "group@-14,40": { x: -13.65, z: 40.05 },
     "group@-14,52": { x: -13.55, z: 50.4 },
+    "group@-15,-56": { hidden: true },
     "group@-15,33.5": { x: -15.05, z: 33.45, hidden: true },
+    "group@-19.2,17.4": { hidden: true },
+    "group@-19.2,22.6": { hidden: true },
     "group@-22.9,19.95": { x: -25.05, z: 26.75 },
     "group@-22.9,20": { z: 19.95 },
     "group@-22.95,-0.7": { x: -22.9 },
@@ -3955,6 +3959,7 @@
     "group@-25.43,-17.3": { x: -27.8, z: -20.35 },
     "group@-25.47,-11.11": { hidden: true },
     "group@-25.89,-39.88": { x: -27.15, z: -43.45 },
+    "group@-27.7,-13": { z: -13.05, hidden: true },
     "group@-27.9,-32": { hidden: true },
     "group@-30.35,38.76": { hidden: true },
     "group@-34,3": { z: 3.1 },
@@ -3968,7 +3973,21 @@
     "group@-37.77,-18.62": { hidden: true },
     "group@-4.11,-67.45": { hidden: true },
     "group@-40.91,-38.36": { hidden: true },
+    "group@-41.2,-21.4": { hidden: true },
+    "group@-41.2,-26.6": { hidden: true },
+    "group@-41.2,-49.4": { hidden: true },
+    "group@-41.2,-54.6": { hidden: true },
+    "group@-41.2,0.4": { hidden: true },
+    "group@-41.2,5.6": { hidden: true },
+    "group@-43.4,17.3": { hidden: true },
+    "group@-43.4,25.2": { hidden: true },
+    "group@-46.2,17.4": { hidden: true },
+    "group@-46.2,22.6": { hidden: true },
+    "group@-46.2,27.4": { hidden: true },
+    "group@-46.2,32.6": { hidden: true },
     "group@-5,-76.5": { hidden: true },
+    "group@-5.38,-20.38": { x: -5.45, z: -20.4, hidden: true },
+    "group@-50,21.4": { x: -49.8, z: 21.65, hidden: true },
     "group@-6,26": { x: -6.6, z: 24.15 },
     "group@-6,38": { x: -7, z: 36 },
     "group@-6,6": { x: -6.6, z: 12.05, hidden: true },
@@ -3983,6 +4002,8 @@
     "group@0,0#2": { x: -0.1, z: 0.1 },
     "group@0,0#3": { x: 0.2, z: 0.05 },
     "group@10.23,-70.99": { x: 10.1, z: -71.15, hidden: true },
+    "group@11.24,-20.98": { x: 11.2, z: -21, hidden: true },
+    "group@11.9,-28.12": { hidden: true },
     "group@11.93,-53.12": { hidden: true },
     "group@12.2,-3.88,2.55": { x: 11.8, z: -3.85 },
     "group@13,33": { x: 0.15, z: 44.9, ry: -90 },
@@ -3993,6 +4014,9 @@
     "group@15,-81": { x: 14.95, hidden: true },
     "group@15,33.5": { x: 0, z: 40.2, ry: -90 },
     "group@16,-76": { hidden: true },
+    "group@18.2,-64.8": { hidden: true },
+    "group@19.2,17.4": { hidden: true },
+    "group@19.2,22.6": { hidden: true },
     "group@19.25,-53.25": { hidden: true },
     "group@19.87,-0.6,1.95": { x: 12.95, z: -3.85, ry: 0 },
     "group@21.32,9.45": { x: 21.3, z: 9.45, hidden: true },
@@ -4008,23 +4032,30 @@
     "group@29.24,-8.98": { hidden: true },
     "group@29.29,-32.52": { hidden: true },
     "group@29.61,-10.94": { hidden: true },
+    "group@38.3,-13": { hidden: true },
     "group@40.49,-3.75": { hidden: true },
     "group@40.68,-17.74": { ry: 20794, hidden: true },
     "group@41,-9.64": { x: 40.95, z: -9.6, hidden: true },
     "group@41.01,-18.27": { x: 41.05, z: -18.2, hidden: true },
+    "group@41.2,0.4": { hidden: true },
+    "group@41.2,5.6": { z: 5.65, hidden: true },
     "group@42.4,-32": { x: 42.45, z: -32.05 },
+    "group@43.6,-21.4": { hidden: true },
+    "group@43.6,-26.6": { hidden: true },
     "group@49.65,-12.73": { hidden: true },
     "group@6,26": { x: 6.5, z: 24.1 },
     "group@6,38": { x: 6.7, z: 35.95 },
     "group@60,-17.05": { x: 60, z: -17, hidden: true },
     "group@69.92,-18.13": { hidden: true },
     "group@7,0": { hidden: true },
-    "group@7,24": { x: 6.65, z: 23.45 },
+    "group@7,24": { x: 6.6, z: 23.35 },
+    "group@7.1,17.6": { x: 8, z: 14.1 },
     "group@7.92,-67.26": { hidden: true },
     "group@8,10": { x: 6.3, z: 9.5, hidden: true },
     "group@8,2": { x: 8.4, z: 15.9, hidden: true },
     "group@8,20": { x: 13.95, z: 22.5, ry: -180, hidden: true },
     "group@8.4,13.7": { hidden: true },
+    "group@9.8,-64.8": { hidden: true },
     "lamp post@-22.7,-0.8": { x: -22.7, hidden: true },
     "mesh box 0.01x0.44x0.66@12.37,-2.86,1.42": { x: 12.35, z: -2.85, hidden: true },
     "mesh box 0.05x0.04x0.34@14.15,-2.5,0.06": { x: 12.45, z: -2.1 },
@@ -4064,11 +4095,11 @@
     "mesh box 0.14x0.5x0.14@8.5,10.44,0.25": { z: 10.45, hidden: true },
     "mesh box 0.14x0.5x0.14@8.5,12.67,0.25": { z: 12.65, hidden: true },
     "mesh box 0.14x0.5x0.14@8.5,14.89,0.25": { hidden: true },
-    "mesh box 0.14x0.5x0.14@8.5,17.11,0.25": { x: 7.4, z: 23.3 },
-    "mesh box 0.14x0.5x0.14@8.5,19.33,0.25": { x: 7.4, z: 24.33 },
-    "mesh box 0.14x0.5x0.14@8.5,21.56,0.25": { x: 7.35, z: 25.31 },
-    "mesh box 0.14x0.5x0.14@8.5,23.78,0.25": { x: 7.35, z: 26.33 },
-    "mesh box 0.14x0.5x0.14@8.5,26,0.25": { x: 7.3, z: 27.35 },
+    "mesh box 0.14x0.5x0.14@8.5,17.11,0.25": { x: 7.4, z: 23.3, hidden: true },
+    "mesh box 0.14x0.5x0.14@8.5,19.33,0.25": { x: 7.4, z: 24.35, hidden: true },
+    "mesh box 0.14x0.5x0.14@8.5,21.56,0.25": { x: 7.35, z: 25.3, hidden: true },
+    "mesh box 0.14x0.5x0.14@8.5,23.78,0.25": { x: 7.35, z: 26.35, hidden: true },
+    "mesh box 0.14x0.5x0.14@8.5,26,0.25": { x: 7.3, z: 27.35, hidden: true },
     "mesh box 0.14x0.5x0.14@8.5,6,0.25": { hidden: true },
     "mesh box 0.14x0.5x0.14@8.5,8.22,0.25": { z: 8.25, hidden: true },
     "mesh box 0.16x0.03x0.44@12.62,-2.2,1.02": { hidden: true },
@@ -4088,11 +4119,11 @@
     "mesh box 0.22x0.06x0.22@8.5,10.44,0.55": { z: 10.45, hidden: true },
     "mesh box 0.22x0.06x0.22@8.5,12.67,0.55": { hidden: true },
     "mesh box 0.22x0.06x0.22@8.5,14.89,0.55": { hidden: true },
-    "mesh box 0.22x0.06x0.22@8.5,17.11,0.55": { x: 7.4, z: 23.31 },
-    "mesh box 0.22x0.06x0.22@8.5,19.33,0.55": { x: 7.4, z: 24.33 },
-    "mesh box 0.22x0.06x0.22@8.5,21.56,0.55": { x: 7.35, z: 25.3 },
-    "mesh box 0.22x0.06x0.22@8.5,23.78,0.55": { x: 7.35, z: 26.33 },
-    "mesh box 0.22x0.06x0.22@8.5,26,0.55": { x: 7.3, z: 27.35 },
+    "mesh box 0.22x0.06x0.22@8.5,17.11,0.55": { x: 7.4, z: 23.3, hidden: true },
+    "mesh box 0.22x0.06x0.22@8.5,19.33,0.55": { x: 7.4, z: 24.3, hidden: true },
+    "mesh box 0.22x0.06x0.22@8.5,21.56,0.55": { x: 7.35, z: 25.3, hidden: true },
+    "mesh box 0.22x0.06x0.22@8.5,23.78,0.55": { x: 7.35, z: 26.35, hidden: true },
+    "mesh box 0.22x0.06x0.22@8.5,26,0.55": { x: 7.3, z: 27.35, hidden: true },
     "mesh box 0.22x0.06x0.22@8.5,6,0.55": { hidden: true },
     "mesh box 0.22x0.06x0.22@8.5,8.22,0.55": { z: 8.25, hidden: true },
     "mesh box 0.2x2.6x0.2@-12.2,50.6,1.3": { x: -12.05, z: 51.1 },
@@ -4124,8 +4155,8 @@
     "mesh box 0.8x0.85x1.9@9.5,10.4,0.43": { x: 21.55, z: 12.35, hidden: true },
     "mesh box 0.8x0.85x1.9@9.5,12.6,0.43": { x: 21.55, z: 14.55, hidden: true },
     "mesh box 0.8x0.85x1.9@9.5,14.8,0.43": { x: 8.45, z: 16.45, ry: -90 },
-    "mesh box 0.8x0.85x1.9@9.5,23.6,0.43": { x: 8.95, z: 23.55, ry: -90 },
-    "mesh box 0.8x0.85x1.9@9.5,25.8,0.43": { x: 11.8, z: 23.5, ry: -90 },
+    "mesh box 0.8x0.85x1.9@9.5,23.6,0.43": { x: 8, z: 23.5, ry: -90 },
+    "mesh box 0.8x0.85x1.9@9.5,25.8,0.43": { x: 10.6, z: 23.5, ry: -90 },
     "mesh box 0.8x0.85x1.9@9.5,6,0.43": { x: 10.8, z: 16.45, ry: -90 },
     "mesh box 0.8x0.85x1.9@9.5,8.2,0.43": { x: 21.55, z: 10.15, hidden: true },
     "mesh box 0.8x0.95x3@12.4,-2.2,0.48": { x: 11.6, z: -2.15 },
@@ -4143,8 +4174,8 @@
     "mesh box 1x0.22x2.1@9.5,10.4,0.11": { x: 21.55, z: 12.35, hidden: true },
     "mesh box 1x0.22x2.1@9.5,12.6,0.11": { x: 21.55, z: 14.55, hidden: true },
     "mesh box 1x0.22x2.1@9.5,14.8,0.11": { x: 8.45, z: 16.45, ry: -90 },
-    "mesh box 1x0.22x2.1@9.5,23.6,0.11": { x: 8.95, z: 23.55, ry: -90 },
-    "mesh box 1x0.22x2.1@9.5,25.8,0.11": { x: 11.8, z: 23.5, ry: -90 },
+    "mesh box 1x0.22x2.1@9.5,23.6,0.11": { x: 8, z: 23.5, ry: -90 },
+    "mesh box 1x0.22x2.1@9.5,25.8,0.11": { x: 10.6, z: 23.5, ry: -90 },
     "mesh box 1x0.22x2.1@9.5,6,0.11": { x: 10.8, z: 16.45, ry: -90 },
     "mesh box 1x0.22x2.1@9.5,8.2,0.11": { x: 21.55, z: 10.15, hidden: true },
     "mesh box 1x0.98x0.05@12.05,1.87,0.49": { x: 12, z: 1.85, hidden: true },
@@ -4156,7 +4187,7 @@
     "mesh box 5.6x0.98x0.05@14,-3.87,0.49": { hidden: true },
     "mesh box 5.6x0.98x0.05@16.87,-1,0.49": { hidden: true },
     "mesh box 6.46x0.62x6.46@14,-1,0.31": { hidden: true },
-    "mesh buffer@0,44,0.01": { x: -62.95, z: 12.8 },
+    "mesh buffer@0,44,0.01": { x: -62.8, z: 13.45 },
     "mesh buffer@2,-4,0.02": { x: 1.95, z: -4.1 },
     "mesh cone 0.16x0.15@12.34,-0.94,1.46": { hidden: true },
     "mesh cone 0.45x0.18@-14,20,2.6": { hidden: true },
@@ -4176,12 +4207,14 @@
     "mesh cone 0.5x0.35@-7,12,3.6": { hidden: true },
     "mesh cone 0.5x0.35@-7,24,3.6": { hidden: true },
     "mesh cone 0.5x0.35@7,0,3.6": { hidden: true },
+    "mesh cone 0.5x0.35@7,24,3.6": { hidden: true },
     "mesh cylinder 0.03x0.09@12.32,-0.98,1.03": { hidden: true },
     "mesh cylinder 0.11x0.05@12.62,-0.86,1.07": { hidden: true },
     "mesh cylinder 0.41x0.02@12.33,-0.96,1.23": { hidden: true },
     "mesh cylinder 0.42x0.05@14.3,-2.55,0.23": { x: 12.6, z: -2.15 },
     "mesh cylinder 0.42x0.15@16.4,-3.5,0.21": { hidden: true },
     "mesh cylinder 0.5x0.02@-7,12,4.35": { hidden: true },
+    "mesh cylinder 0.5x0.02@7,24,4.35": { hidden: true },
     "mesh cylinder 2.6x0.04@-14,20,1.3": { hidden: true },
     "mesh cylinder 2.6x0.04@-14,3,1.3": { hidden: true },
     "mesh plane 10x1.2@0,27.8,6": { ry: -180, hidden: true },
@@ -4191,13 +4224,18 @@
     "mesh plane 2.38x1.8@-38.25,30,0.95": { hidden: true },
     "mesh plane 2.38x1.8@-68.25,30,0.95": { x: -68.2, z: 30.05 },
     "mesh plane 2.6x6.6@13.6,5.2,0.05": { hidden: true },
+    "mesh plane 2.6x6.6@13.6,5.8,0.05": { hidden: true },
     "mesh plane 3.2x0.8@0,-4.4,3": { y: 3.65, z: 0 },
     "mesh plane 3.4x22.4@9.5,-69.5,0.04": { hidden: true },
+    "mesh plane 3.4x48@-46.8,27.7,0.06": { hidden: true },
     "mesh plane 3.7x10.3@14,-63.3,0.04": { hidden: true },
+    "mesh plane 3.7x10.3@14,-63.3,0.05": { hidden: true },
     "mesh plane 34x18@0,44,0.01": { x: 9, z: 41 },
     "mesh plane 36x18@2,-4,0.02": { z: -3.8 },
     "mesh plane 3x9.6@14,-63.3,0.04": { z: -63.25, hidden: true },
+    "mesh plane 3x9.6@14,-63.3,0.05": { hidden: true },
     "mesh plane 4.1x23.1@9.5,-69.5,0.04": { x: 9.45, z: -69.55, hidden: true },
+    "mesh plane 4.1x48.7@-46.8,27.7,0.06": { hidden: true },
     "mesh plane 420x420@0,0,-0.03": { z: -1.55 },
     "mesh plane 52x20@0,60,0.01": { z: 60.05 },
     "mesh plane 6x1.4@0,51.5,2.6": { x: 20.5, z: 37.6 },
@@ -4218,17 +4256,23 @@
     "mesh sphere 0.09@-7.28,12,3.5": { x: -7.3, hidden: true },
     "mesh sphere 0.09@-7.28,24,3.5": { hidden: true },
     "mesh sphere 0.09@6.72,0,3.5": { hidden: true },
+    "mesh sphere 0.09@6.72,24,3.5": { x: 6.7, hidden: true },
     "mesh sphere 0.09@6.86,-0.24,3.5": { x: 6.85, z: -0.25, hidden: true },
     "mesh sphere 0.09@6.86,0.24,3.5": { hidden: true },
+    "mesh sphere 0.09@6.86,23.76,3.5": { hidden: true },
+    "mesh sphere 0.09@6.86,24.24,3.5": { x: 6.85, z: 24.25, hidden: true },
     "mesh sphere 0.09@7.14,-0.24,3.5": { hidden: true },
     "mesh sphere 0.09@7.14,0.24,3.5": { hidden: true },
+    "mesh sphere 0.09@7.14,23.76,3.5": { hidden: true },
+    "mesh sphere 0.09@7.14,24.24,3.5": { x: 7.15, z: 24.25, hidden: true },
     "mesh sphere 0.09@7.28,0,3.5": { hidden: true },
+    "mesh sphere 0.09@7.28,24,3.5": { x: 7.3, hidden: true },
   });
   CO.worldCopies([
-    { id: "wc-mvco28o4-2", of: "mesh box 1x0.22x2.1@9.5,25.8,0.11", x: 17.25, y: 0.11, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
-    { id: "wc-mvco28o4-3", of: "mesh box 0.8x0.85x1.9@9.5,25.8,0.43", x: 17.25, y: 0.43, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
-    { id: "wc-mvco28o4-4", of: "mesh box 1x0.22x2.1@9.5,23.6,0.11", x: 14.6, y: 0.11, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
-    { id: "wc-mvco28o4-5", of: "mesh box 0.8x0.85x1.9@9.5,23.6,0.43", x: 14.6, y: 0.43, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvco28o4-2", of: "mesh box 1x0.22x2.1@9.5,25.8,0.11", x: 15.8, y: 0.11, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvco28o4-3", of: "mesh box 0.8x0.85x1.9@9.5,25.8,0.43", x: 15.8, y: 0.43, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvco28o4-4", of: "mesh box 1x0.22x2.1@9.5,23.6,0.11", x: 13.25, y: 0.11, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvco28o4-5", of: "mesh box 0.8x0.85x1.9@9.5,23.6,0.43", x: 13.25, y: 0.43, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvco3p46-7", of: "mesh box 1x0.22x2.1@9.5,14.8,0.11", x: 13.25, y: 0.11, z: 16.45, ry: -90, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvco3p46-8", of: "mesh box 0.8x0.85x1.9@9.5,14.8,0.43", x: 13.25, y: 0.43, z: 16.45, ry: -90, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvco3p47-9", of: "mesh box 0.8x0.85x1.9@9.5,6,0.43", x: 15.6, y: 0.43, z: 16.45, ry: -90, sx: 1, sy: 1, sz: 1 },
@@ -4237,8 +4281,8 @@
     { id: "wc-mvco3zku-c", of: "mesh box 1x0.22x2.1@9.5,6,0.11", x: 18, y: 0.11, z: 16.5, ry: -90, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvco4361-d", of: "mesh box 0.8x0.85x1.9@9.5,6,0.43", x: 20.55, y: 0.43, z: 16.45, ry: -90, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvco4361-e", of: "mesh box 1x0.22x2.1@9.5,6,0.11", x: 20.55, y: 0.11, z: 16.45, ry: -90, sx: 1, sy: 1, sz: 1 },
-    { id: "wc-mvco4im1-f", of: "mesh box 1x0.22x2.1@9.5,25.8,0.11", x: 20.1, y: 0.11, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
-    { id: "wc-mvco4im2-g", of: "mesh box 0.8x0.85x1.9@9.5,25.8,0.43", x: 20.1, y: 0.43, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvco4im1-f", of: "mesh box 1x0.22x2.1@9.5,25.8,0.11", x: 18.35, y: 0.11, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvco4im2-g", of: "mesh box 0.8x0.85x1.9@9.5,25.8,0.43", x: 18.35, y: 0.43, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvco99z9-i", of: "group@13,33", x: 0.25, y: 0, z: 48.95, ry: -90, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvco9wt7-j", of: "group@14,52", x: 0.15, y: 0, z: 46.8, ry: 0, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvcoa1ud-k", of: "group@14,52", x: 0.1, y: 0, z: 42.45, ry: 0, sx: 1, sy: 1, sz: 1 },
@@ -4310,7 +4354,7 @@
     { id: "wc-mvguvzx5-i", of: "group@-25.43,-17.3", x: -27.6, y: 0, z: -32.45, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvguw4hw-j", of: "group@-25.43,-17.3", x: -27.65, y: 0, z: -36.1, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvguwa8t-k", of: "group@-25.43,-17.3", x: -27.55, y: 0, z: -40.15, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
-    { id: "wc-mvgv18f5-1", of: "mesh buffer@2,-4,0.02", x: 3.5, y: 0.02, z: -2.55, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgv18f5-1", of: "mesh buffer@2,-4,0.02", x: 23.75, y: 0.02, z: -23.75, ry: 0, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvgv1kjo-2", of: "mesh buffer@-13,8,0.02", x: -12.7, y: 0.02, z: 12.9, ry: 0, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvgv1osh-3", of: "mesh buffer@-13,8,0.02", x: -14.1, y: 0.02, z: 12.25, ry: 0, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvgv22qi-4", of: "mesh buffer@2,-4,0.02", x: 46.15, y: 0.02, z: -28.95, ry: 0, sx: 1, sy: 1, sz: 1 },
@@ -4337,6 +4381,40 @@
     { id: "wc-mvgy0quw-q", of: "mesh box 0.3x0.12x0.3@-32.5,54.71,0.06", x: -35.05, y: 0.06, z: 54.75, ry: 0, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvgy14ky-r", of: "mesh box 0.12x1.95x0.12@-32.5,54.71,0.98", x: -35.05, y: 0.98, z: 54.75, ry: 0, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvgy1sv1-s", of: "mesh sphere 0.08@-32.5,54.71,2.02", x: -35.05, y: 2.02, z: 54.75, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhznuox-1", of: "mesh box 0.22x0.06x0.22@-8.5,26,0.55", x: 7.15, y: 0.55, z: 27.8, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhznuoy-2", of: "mesh box 0.14x0.5x0.14@-8.5,26,0.25", x: 7.15, y: 0.25, z: 27.8, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhznuoy-3", of: "mesh box 0.22x0.06x0.22@-8.5,26,0.55", x: 7.15, y: 0.55, z: 27.2, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhznuoy-4", of: "mesh box 0.14x0.5x0.14@-8.5,26,0.25", x: 7.15, y: 0.25, z: 27.2, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhznuoy-5", of: "mesh box 0.22x0.06x0.22@-8.5,26,0.55", x: 7.15, y: 0.55, z: 26.6, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhznuoy-6", of: "mesh box 0.14x0.5x0.14@-8.5,26,0.25", x: 7.15, y: 0.25, z: 26.6, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhznuoy-7", of: "mesh box 0.22x0.06x0.22@-8.5,26,0.55", x: 7.15, y: 0.55, z: 25.95, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhznuoy-8", of: "mesh box 0.14x0.5x0.14@-8.5,26,0.25", x: 7.15, y: 0.25, z: 25.95, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhznuoy-9", of: "mesh box 0.22x0.06x0.22@-8.5,26,0.55", x: 7.15, y: 0.55, z: 24.55, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhznuoy-a", of: "mesh box 0.14x0.5x0.14@-8.5,26,0.25", x: 7.15, y: 0.25, z: 24.55, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhznuoy-b", of: "mesh box 0.22x0.06x0.22@-8.5,26,0.55", x: 7.15, y: 0.55, z: 25.15, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhznuoy-c", of: "mesh box 0.14x0.5x0.14@-8.5,26,0.25", x: 7.15, y: 0.25, z: 25.15, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhzozpa-f", of: "mesh box 1x0.22x2.1@9.5,25.8,0.11", x: 20.9, y: 0.11, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhzozpa-g", of: "mesh box 0.8x0.85x1.9@9.5,25.8,0.43", x: 20.9, y: 0.43, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhzr7pz-l", of: "mesh box 1x0.22x2.1@9.5,14.8,0.11", x: 14.4, y: 0.11, z: 7.8, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhzr7pz-m", of: "mesh box 0.8x0.85x1.9@9.5,14.8,0.43", x: 14.4, y: 0.43, z: 7.8, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhzr7pz-n", of: "mesh box 0.8x0.85x1.9@9.5,6,0.43", x: 16.75, y: 0.43, z: 7.8, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhzr7pz-o", of: "mesh box 1x0.22x2.1@9.5,6,0.11", x: 16.75, y: 0.11, z: 7.8, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhzr7pz-p", of: "mesh box 1x0.22x2.1@9.5,6,0.11", x: 19.15, y: 0.11, z: 7.85, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhzr7pz-q", of: "mesh box 0.8x0.85x1.9@9.5,6,0.43", x: 19.15, y: 0.43, z: 7.85, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhzr7pz-r", of: "mesh box 1x0.22x2.1@9.5,6,0.11", x: 21.7, y: 0.11, z: 7.8, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhzr7pz-s", of: "mesh box 0.8x0.85x1.9@9.5,6,0.43", x: 21.7, y: 0.43, z: 7.8, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhzroak-t", of: "mesh box 0.8x0.85x1.9@9.5,6,0.43", x: 26.8, y: 0.43, z: 7.75, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhzroak-u", of: "mesh box 1x0.22x2.1@9.5,6,0.11", x: 26.8, y: 0.11, z: 7.75, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhzroak-v", of: "mesh box 1x0.22x2.1@9.5,6,0.11", x: 24.25, y: 0.11, z: 7.8, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhzroak-w", of: "mesh box 0.8x0.85x1.9@9.5,6,0.43", x: 24.25, y: 0.43, z: 7.8, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhzscjb-x", of: "mesh buffer@14,20,0.02", x: 15.95, y: 0.02, z: 14.2, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhzsjeo-y", of: "mesh buffer@14,20,0.02", x: 15.95, y: 0.02, z: 8.25, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhzsyg2-z", of: "mesh buffer@14,20,0.02", x: 22.25, y: 0.02, z: 8.4, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhzt2mg-10", of: "mesh buffer@14,20,0.02", x: 23.75, y: 0.02, z: 9.9, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhztq33-11", of: "mesh buffer@2,-4,0.02", x: 3.45, y: 0.02, z: -2.6, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhzupyb-12", of: "mesh buffer@2,-4,0.02", x: 6.6, y: 0.02, z: -25, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhzv6j3-13", of: "mesh buffer@2,-4,0.02", x: -7, y: 0.02, z: -25.95, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvhzvjn6-14", of: "mesh buffer@2,-4,0.02", x: -6.15, y: 0.02, z: -20, ry: 0, sx: 1, sy: 1, sz: 1 },
   ]);
   // ── Park Co ───────────────────────────────────────────────────────
   // A small park: a gate at the south, two ticket windows outside it, a midway running north to the coaster station, and the
@@ -7049,8 +7127,9 @@
         var ang = b / 24 * Math.PI * 2;
         sphere(0.17, glowMat(0xfff2c0, 0.9), p.x + Math.cos(ang) * 9.1, 10.6 + Math.sin(ang) * 9.1, p.z, g);
       }
-      box(2.4, 2.2, 2.0, std({ color: th.a, roughness: 0.8 }), p.x + p.r + 2.6, 1.1, p.z - 4.2, g);
-      sign(['TICKETS'], 1.8, 0.4, p.x + p.r + 2.6, 2.4, p.z - 5.22, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
+      // the ticket hut on the wheel's south side, clear of Baron's Drop coming home up its west side
+      box(2.4, 2.2, 2.0, std({ color: th.a, roughness: 0.8 }), 39.0, 1.1, 27.4, g);
+      sign(['TICKETS'], 1.8, 0.4, 39.0, 2.4, 26.38, Math.PI, { bg: '#1b232c', fg: '#f5b53d' }, g);
       // the sky quarter: three flag poles with festoon strung between them on the north
       // rim, a viewing deck with a brass telescope on the south rim, globe lamps and benches
       pkFlagPole(27, 30.1, g, th, 5.6); pkFlagPole(34, 29.9, g, th, 6.5); pkFlagPole(41, 30.1, g, th, 5.6);
@@ -10264,6 +10343,20 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     }
     return { p: pts, t: tans, up: ups, n: N };
   }
+  // the station: where the train stands the track is dead level and unbanked. Over the train's length (plus a car either end)
+  // every frame's 'up' is the world's up, faded back into the lap's own banking over the 6 m beyond. The curve itself is laid
+  // straight and level there by its control points; this takes out the bank the smoothing spreads in from the turns.
+  function pkCoLevel(F, curve, uPark, back, ahead) {
+    var L = curve.getLength(), N = F.n, fade = 6, up = new THREE.Vector3(), t = new THREE.Vector3();
+    for (var i = 0; i < N; i++) {
+      var du = ((i / N - uPark + 1.5) % 1 - 0.5) * L;                  // metres from the park point, + ahead, - behind
+      var out = du > ahead ? du - ahead : (du < -back ? -back - du : 0);
+      var w = out <= 0 ? 1 : out >= fade ? 0 : 1 - out / fade; w = w * w * (3 - 2 * w);
+      if (w <= 0) continue;
+      t.copy(F.t[i]); up.set(0, 1, 0).addScaledVector(t, -t.y).normalize();
+      F.up[i].lerp(up, w).addScaledVector(t, -F.up[i].dot(t)).normalize();
+    }
+  }
   function pkCoUpAt(F, u) {
     var x = u * F.n, i0 = Math.floor(x) % F.n, i1 = (i0 + 1) % F.n, f = x - Math.floor(x);
     PK_CO_UP.copy(F.up[i0]).lerp(F.up[i1], f).normalize();
@@ -10465,27 +10558,30 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     pkRod(x, h - 0.12, z, tx, ty, tz, 0.07, mat, g, 6);
   }
   // ── The Serpent ───────────────────────────────────────────────────
-  // A double looper in the north-east corner: out of the station, up the lift, down the first drop
-  // and straight into two vertical loops, then home along the trees.
+  // A double looper in the north-east corner: a long straight station, an 18 m lift up the east fence, the big drop along the
+  // back, a turnaround and a camelback run, then two vertical loops (each shifted sideways, so it crosses over itself) and
+  // home down the west side into the station.
   var PK_SERPENT_PTS = [
-    [47.5, 1.05, -70], [53.5, 1.05, -70], [59.5, 1.05, -70],
-    [63.5, 2.2, -70.6], [65.1, 6, -72], [65.5, 11, -74.5], [64, 14.8, -77.5],
-    [61.5, 12, -80.2], [58.5, 5.5, -81.2],
-    [56.9, 2.5, -81.6], [54.2, 3.12, -81.6], [52.22, 5.1, -81.6], [51.5, 7.8, -81.6],
-    [52.22, 10.5, -81.6], [54.2, 12.48, -81.6], [56.9, 13.2, -81.6], [59.6, 12.48, -81.6],
-    [61.58, 10.5, -81.6], [62.3, 7.8, -81.6], [61.58, 5.1, -81.6], [59.6, 3.12, -81.6],
-    [56.5, 2.45, -81.7], [54.1, 2.6, -82.6], [52.1, 2.85, -83.9],
-    [50.1, 3.3, -84.1], [48.05, 3.85, -84.1], [46.55, 5.35, -84.1], [46.0, 7.4, -84.1],
-    [46.55, 9.45, -84.1], [48.05, 10.95, -84.1], [50.1, 11.5, -84.1], [52.15, 10.95, -84.1],
-    [53.65, 9.45, -84.1], [54.2, 7.4, -84.1], [53.65, 5.35, -84.1], [52.15, 3.85, -84.1],
-    [49.7, 3.35, -84.0], [47.4, 3.5, -83.6], [45.7, 4.6, -82.4], [44.8, 6.0, -80.3],
-    [45.0, 5.6, -77.7], [46.0, 4.4, -75.3], [46.9, 2.6, -72.7]
+    [47, 1.05, -70], [49.4, 1.05, -70], [51.8, 1.05, -70], [54.2, 1.05, -70], [56.6, 1.05, -70], [59, 1.05, -70],
+    [61.4, 1.05, -70], [64, 1.3, -70.9], [66.4, 2.2, -72.8], [67.4, 3.8, -75.4], [67.6, 6.5, -78.4], [67.6, 10, -81.8],
+    [67.5, 13.5, -85.2], [67, 16.5, -88.4], [65.6, 18.2, -90.9], [63.2, 18.4, -91.9], [60.4, 17.8, -92.1], [57.6, 13, -91.9],
+    [55.2, 6.2, -91.4], [53, 2.2, -90.6], [50.2, 3.4, -91.6], [47.4, 5.4, -91.1], [45.9, 6.8, -89.6], [46.6, 7, -88.2],
+    [48.8, 6.4, -88], [51.2, 4.4, -88], [53.4, 6.2, -88.1], [55.4, 6, -88.1], [57.6, 3.6, -88], [60.4, 2.6, -87.7],
+    [63, 3, -86.6], [64.4, 3.4, -84.6], [64, 3, -82], [62.2, 2.7, -80.6], [59.6, 2.5, -80.3], [56.9, 2.5, -80.3],
+    [54.85, 2.91, -80.44], [53.12, 4.07, -80.59], [51.96, 5.8, -80.73], [51.55, 7.85, -80.88], [51.96, 9.9, -81.02], [53.12, 11.63, -81.16],
+    [54.85, 12.79, -81.31], [56.9, 13.2, -81.45], [58.95, 12.79, -81.59], [60.68, 11.63, -81.74], [61.84, 9.9, -81.88], [62.25, 7.85, -82.02],
+    [61.84, 5.8, -82.17], [60.68, 4.07, -82.31], [58.95, 2.91, -82.46], [56.9, 2.5, -82.6], [53.6, 2.7, -83], [49.8, 3.3, -83.4],
+    [48.02, 3.71, -83.57], [46.59, 4.84, -83.74], [45.8, 6.49, -83.91], [45.8, 8.31, -84.09], [46.59, 9.96, -84.26], [48.02, 11.09, -84.43],
+    [49.8, 11.5, -84.6], [51.58, 11.09, -84.77], [53.01, 9.96, -84.94], [53.8, 8.31, -85.11], [53.8, 6.49, -85.29], [53.01, 4.84, -85.46],
+    [51.58, 3.71, -85.63], [49.8, 3.3, -85.8], [47.6, 3.4, -86], [45.4, 3.5, -86.1], [43.7, 3.6, -84.7], [43.6, 3.3, -82.2],
+    [44.2, 2.6, -79.6], [44.4, 1.6, -76.6], [44.45, 1.1, -73.8], [44.9, 1.05, -71.8], [45.8, 1.05, -70.5]
   ];
   function pkBuildSerpent(p) {
     var th = PK_THEME.serpent, M = pkMats(), i;
     var g = new THREE.Group(); scene.add(g);
     var curve = pkCoCurve(PK_SERPENT_PTS), len = curve.getLength(), F = pkCoFrames(curve, 520);
     var E = { curve: curve, len: len, F: F, gap: 2.35, cars: [], uPark: pkCoUAt(curve, 57.4, -70), uOfF: [], run: 30 };
+    pkCoLevel(F, curve, E.uPark, 4 * 2.35 + 1.4, 1.4);
     var seats = [], cols = [0x2f8f6f, 0xf0c04a, 0x1f6f55, 0xf0c04a, 0x2f8f6f];
     for (i = 0; i < 5; i++) {
       var car = pkCoCar(cols[i]);
@@ -10499,9 +10595,10 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var supMat = std({ color: 0x2c7a63, roughness: 0.55, metalness: 0.25 });
     pkCoTrackBuild(g, E, {
       spineMat: spineMat, supMat: supMat, tieMat: std({ color: 0x35514b, roughness: 0.7 }),
-      skip: function (x, z) { return z > -71.6 && x > 46 && x < 60; }
+      skip: function (x, z) { return z > -71.6 && x > 45.5 && x < 62.5; }
     });
-    pkCoBrace(g, 66.2, -73.2, 9.6, 65.2, 9.4, -73.8, supMat);
+    pkCoBrace(g, 69.2, -80.2, 8.6, 67.7, 8.2, -80.2, supMat);
+    pkCoBrace(g, 69.2, -86.6, 15.6, 67.3, 15.2, -86.7, supMat);
     pkCoPlan(E, { vMin: 4.5, vMax: 22 });
     // the station: platform, boom gates, canopy
     pkCoPlatform(g, 47.0, 58.6, -69.35, -66.85, th);
@@ -10522,24 +10619,26 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     return a;
   }
   // ── Baron's Drop ─────────────────────────────────────────────────
-  // A dive coaster in the south-east: a long lift, a slow turn at the top, a straight vertical drop
-  // into a tunnel mouth in the rockery, then a loop and a sweeping run home.
+  // A dive coaster in the south-east: a long straight station, the near-vertical lift, a slow turn at the top, a straight
+  // vertical drop into a tunnel mouth in the rockery, a loop along the east fence (clear of the lift), then round the corner,
+  // back along the fence over a camelback and up the west side into the station.
   var PK_BARON_PTS = [
-    [48, 0.95, 15.5], [53, 0.95, 15.5], [58, 0.95, 15.5],
-    [60.8, 1.6, 15.7], [62.4, 4.5, 16.4], [63.4, 10, 17.3], [63.6, 16.5, 18.3], [62.6, 20.6, 19.6],
-    [60.2, 21.2, 20.9], [57.9, 21.1, 21.9], [56.2, 20.7, 22.5],
-    [56.0, 19.0, 22.55], [55.95, 12.0, 22.55], [55.9, 4.0, 22.55], [55.9, 1.6, 22.5],
-    [56.4, 1.15, 22.1], [57.6, 1.6, 20.8], [59.2, 3.0, 19.6], [60.4, 5.4, 18.6], [61.0, 6.2, 18.0],
-    [63.25, 6.8, 18.0], [64.9, 8.45, 18.0], [65.5, 10.7, 18.0], [64.9, 12.95, 18.0], [63.25, 14.6, 18.0],
-    [61.0, 15.2, 18.0], [58.75, 14.6, 18.0], [57.1, 12.95, 18.0], [56.5, 10.7, 18.0], [57.1, 8.45, 18.0],
-    [58.75, 6.8, 18.0], [60.7, 6.15, 18.0], [63.0, 5.6, 17.2], [64.0, 4.6, 16.2], [63.6, 3.4, 14.8],
-    [62.0, 2.6, 14.2], [59.5, 2.2, 14.4], [56.8, 2.0, 14.8], [54.0, 1.8, 15.2], [50.6, 1.3, 15.5]
+    [48.4, 0.95, 15.5], [50.8, 0.95, 15.5], [53.2, 0.95, 15.5], [55.6, 0.95, 15.5], [58, 0.95, 15.5], [60.4, 0.95, 15.5],
+    [62.8, 0.95, 15.5], [64.6, 2, 16], [65.4, 6, 16.6], [65.8, 11.5, 17.3], [65.6, 16.5, 18.3], [64.4, 20.6, 19.6],
+    [61.6, 21.2, 20.8], [60.2, 21.2, 21.1], [57.9, 21.1, 21.9], [56.2, 20.7, 22.5], [56, 19, 22.55], [55.95, 12, 22.55],
+    [55.9, 4, 22.55], [55.9, 1.6, 22.5], [56.4, 1.15, 22.1], [57.6, 1.6, 20.8], [59.4, 2.2, 20.2], [61.8, 2.6, 20.6],
+    [64.2, 3.4, 21.4], [65.6, 4.4, 22.6], [65.8, 5, 23.6], [65.97, 5.4, 25.34], [66.14, 6.51, 26.73], [66.31, 8.11, 27.5],
+    [66.49, 9.89, 27.5], [66.66, 11.49, 26.73], [66.83, 12.6, 25.34], [67, 13, 23.6], [67.17, 12.6, 21.86], [67.34, 11.49, 20.47],
+    [67.51, 9.89, 19.7], [67.69, 8.11, 19.7], [67.86, 6.51, 20.47], [68.03, 5.4, 21.86], [68.2, 5, 23.6], [68.6, 4.6, 25.8],
+    [67.4, 4.2, 28.1], [64.4, 3.6, 28.7], [61.2, 4.6, 28.7], [58.2, 6, 28.7], [55.2, 3, 28.7], [51.6, 2, 28.5],
+    [48.2, 1.8, 27.6], [46.6, 1.4, 25.4], [46.4, 1.05, 22.6], [46.4, 0.95, 19.8], [46.7, 0.95, 17.4], [47.4, 0.95, 16]
   ];
   function pkBuildBaron(p) {
     var th = PK_THEME.baron, i;
     var g = new THREE.Group(); scene.add(g);
     var curve = pkCoCurve(PK_BARON_PTS), len = curve.getLength(), F = pkCoFrames(curve, 500);
     var E = { curve: curve, len: len, F: F, gap: 2.42, cars: [], uPark: pkCoUAt(curve, 56.8, 15.5), uOfF: [], run: 30 };
+    pkCoLevel(F, curve, E.uPark, 3 * 2.42 + 1.4, 1.4);
     var seats = [], cols = [0x3a3f48, 0xd8c9a8, 0x3a3f48, 0xd8c9a8];
     for (i = 0; i < 4; i++) {
       var car = pkCoCar(cols[i], { w: 1.5, d: 2.1 });
@@ -10553,10 +10652,10 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var supMat = std({ color: 0xd0c2a4, roughness: 0.6, metalness: 0.15 });
     pkCoTrackBuild(g, E, {
       spineMat: spineMat, supMat: supMat, tieMat: std({ color: 0x352a24, roughness: 0.75 }),
-      skip: function (x, z) { return (x > 48 && x < 58.8 && z > 15.4 && z < 19.4); }
+      skip: function (x, z) { return (x > 47.5 && x < 63.2 && z > 14.8 && z < 19.4); }
     });
     // the lift tower and the drop tower: two columns with rods out to the spine
-    pkCoBrace(g, 64.9, 17.3, 9.6, 63.5, 9.8, 17.4, supMat);
+    pkCoBrace(g, 67.0, 17.3, 9.6, 65.6, 9.8, 17.4, supMat);
     pkCoBrace(g, 54.6, 22.55, 18.4, 55.7, 18.2, 22.55, supMat);
     pkCoBrace(g, 57.3, 22.55, 18.4, 56.1, 18.2, 22.55, supMat);
     pkCoPlan(E, { vMin: 4, vMax: 24 });
@@ -10634,7 +10733,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // keeps clear, the dressing dresses them, and the booth pass gives them the standard cabins.
   PK_PLOTS.push(
     { id: 'serpent', name: 'The Serpent', x: 55, z: -77.5, r: 12.5, q: [44.5, -65], level: 12, pad: 0.93 },
-    { id: 'baron', name: "Baron's Drop", x: 57, z: 19, r: 12, q: [48, 19], level: 13, pad: 0.82 },
+    { id: 'baron', name: "Baron's Drop", x: 57, z: 19, r: 12, q: [58.6, 19], qdx: 1, level: 13, pad: 0.82, boothAt: [67.4, 9.8] },   // the line runs east from the gate: the train comes home up the west side
     { id: 'nocturne', name: 'Nocturne', x: -50, z: -86.75, r: 13.5, q: [-59.1, -76.4], qdx: 1, level: 14, pad: 0.02 },
     { id: 'wreck', name: 'The Wreck', x: -20, z: -86.75, r: 13.5, q: [-29.1, -76.4], qdx: 1, level: 15, pad: 0.02 },
     { id: 'moonwood', name: 'Moonwood', x: 30, z: -86.75, r: 13.5, q: [39.1, -76.4], qdx: -1, level: 16, pad: 0.02 }
@@ -10949,6 +11048,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     pkIndoorCentre(g, cfg, AX + s * cfg.at[0], cfg.at[1]);
     var curve = pkCoCurve(pkIndoorPts(cfg)), len = curve.getLength(), F = pkCoFrames(curve, 460);
     var E = { curve: curve, len: len, F: F, gap: 2.4, cars: [], uPark: pkCoUAt(curve, AX + s * 12.0, zS), uOfF: [], run: 30 };
+    pkCoLevel(F, curve, E.uPark, 3 * 2.4 + 1.4, 1.4);
     var seats = [], cols = [cfg.band, 0xece6d8, cfg.band, 0xece6d8];
     for (i = 0; i < 4; i++) {
       var car = pkCoCar(cols[i], { w: 1.46, d: 2.05 });
@@ -11057,10 +11157,16 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   function pkBuildPuffin(p) {
     var th = PK_THEME[p.id], i, s;
     var g = new THREE.Group(); scene.add(g);
-    var pts = [[-65.5, 0.4, 40.0], [-64.0, 0.4, 36.6], [-60.0, 0.4, 36.2], [-56.0, 0.4, 36.6], [-54.5, 0.4, 40.0],
-      [-56.0, 0.4, 43.4], [-60.0, 0.4, 43.7], [-64.0, 0.4, 43.4], [-65.5, 0.4, 40.0]];
+    // a straight station along the platform, round the west end, a wiggle and a little hill along the north side, round the
+    // east end home: longer than the old oval, and clear of Wobbly Pots' booth and its own
+    var pts = [
+      [-54.8, 0.4, 43.6], [-57, 0.4, 43.6], [-59.2, 0.4, 43.6], [-61.4, 0.4, 43.6], [-63.6, 0.4, 43.6], [-65.8, 0.4, 43.6],
+      [-67.9, 0.4, 43], [-69.3, 0.42, 41.4], [-69.2, 0.5, 39.8], [-67.6, 0.62, 38.9], [-65, 0.85, 38.6], [-62.4, 1, 39.3],
+      [-59.8, 0.85, 39], [-57.4, 0.6, 38.9], [-55.2, 0.45, 39.1], [-53.5, 0.4, 40.4], [-53.2, 0.4, 42.2]
+    ];
     var curve = pkCoCurve(pts), len = curve.getLength(), F = pkCoFrames(curve, 300);
     var E = { curve: curve, len: len, F: F, gap: 2.2, cars: [], uPark: pkCoUAt(curve, -61.2, 43.6), uOfF: [], run: 34 };
+    pkCoLevel(F, curve, E.uPark, 2.2 + 1.2, 1.2);
     var seats = [], cols = [0xf0c04a, 0xd2622f];
     for (i = 0; i < 2; i++) {
       var car = pkCoCar(cols[i], { w: 1.2, d: 1.7 });
@@ -11082,11 +11188,11 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       pkRoundCyl(0.055, q.y, std({ color: 0x4a443c, roughness: 0.8 }), q.x, q.y / 2, q.z, g, 6);
     }
     pkCoPlatform(g, -63.5, -56.5, 43.9, 45.3, th);
-    for (i = 0; i < 6; i++) {
-      var qa = i / 6 * Math.PI * 2;
-      pkRoundCyl(0.34, 0.42, std({ color: 0x7a6a52, roughness: 0.85 }), -60 + Math.sin(qa) * 6.6, 0.21, 40 + Math.cos(qa) * 4.6, g, 12);
-      sphere(0.3, std({ color: 0x4d7a3a, roughness: 0.95 }), -60 + Math.sin(qa) * 6.6, 0.5, 40 + Math.cos(qa) * 4.6, g);
-    }
+    // a row of planted rocks down the middle of the loop, clear of the track all round
+    [-66.0, -63.5, -61.0, -58.5, -56.2].forEach(function (rx) {
+      pkRoundCyl(0.34, 0.42, std({ color: 0x7a6a52, roughness: 0.85 }), rx, 0.21, 41.2, g, 12);
+      sphere(0.3, std({ color: 0x4d7a3a, roughness: 0.95 }), rx, 0.5, 41.2, g);
+    });
     var a = pkAttr({
       id: p.id, name: p.name, x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats,
       board: 4, run: E.run, unload: 5, extra: E, tickRun: function (at) { pkCoRun(at); }
@@ -11688,6 +11794,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var c1x = ax, c1z = q[1] + OFF, c2x = ax, c2z = q[1] - OFF, bx = c1x, bz = c1z;
     if (dist2(c2x, c2z, plot.x, plot.z) > dist2(c1x, c1z, plot.x, plot.z)) { bx = c2x; bz = c2z; }
     if (plot.boothSide === 1) { bx = c1x; bz = c1z; } else if (plot.boothSide === -1) { bx = c2x; bz = c2z; }
+    if (plot.boothAt) { bx = plot.boothAt[0]; bz = plot.boothAt[1]; }   // or put outright, where the ride's track leaves no side free
     var ry = Math.atan2(plot.x - bx, plot.z - bz);
     var toQ = Math.atan2(q[0] - bx, q[1] - bz);
     var ds = Math.cos(toQ - (ry + Math.PI / 2)) >= 0 ? 1 : -1;          // the door side, in local x
