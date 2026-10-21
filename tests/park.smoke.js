@@ -12,6 +12,12 @@ module.exports = `
   ok(T.CO.save.key === 'park-co-slot1' && S.bank === 500 && S.day === 1 && S.ticketPrice === 25 && S.snackPrice === 6 && S.clerk === true, 'a fresh save on slot 1: bank ' + S.bank + ', clerk on');
   T.updateHud(1); ok(document.getElementById('h-cash').textContent === '$500' && /Day 1/.test(document.getElementById('h-day').textContent) && /in the park/.test(document.getElementById('h-guests').textContent) && /Coaster:/.test(document.getElementById('h-ride').textContent) && !/Riding/.test(document.getElementById('h-ride').textContent), 'the HUD shows the engine fields and the game fields');
   T.pay(-10, 'a test'); ok(S.bank === 490 && S.ledger[0].n === -10 && S.stats.spent === 10, 'pay writes the bank, the ledger and the stats');
+  // every operator key starts OFF: locked, a ride will not board or take a line, and the coaster's gates stay shut
+  { const a = T.PK.attrById.dodgems, locked = T.PK.attractions.every((x) => !T.pkCtl(x).key) && !S.coasterKey;
+    ok(locked && T.pkBoothGates(a) === false && T.pkOpenGates() === false && T.pkQueueJoin({ id: -9, rec: { x: 7, z: 9, path: [] }, state: 'toTurn' }) === false && /KEY OFF/.test(T.pkBoothStatus(a, T.pkCtl(a))),
+      'every operator key starts OFF and a locked ride refuses its gates, its line and its desk');
+    T.PK.attractions.forEach((x) => T.pkSetRideKey(x, true)); T.pkSetCoasterKey(true);
+    ok(T.PK.attractions.every((x) => T.pkCtl(x).key) && S.coasterKey === true && !!T.pkConsole().parts.key, 'turning the keys ON unlocks every ride and the coaster'); }
   // the world
   ok(!!T.pkTrack() && T.pkTrack().getLength() > 100, 'the coaster is a closed circuit ' + T.pkTrack().getLength().toFixed(0) + ' m long');
   ok(T.pkTrain().length === 3 && T.pkSeats().length === 12, 'three cars and twelve seats');

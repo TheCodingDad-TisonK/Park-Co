@@ -39,9 +39,10 @@ To see it: open this folder in the Co Engine editor, or `npm run dev`.
 - [x] 1d. Park Co HQ: three floors on the forecourt (Guest Services, Operations with the monitor wall, your
       office at the top with the management PC), a walkable stair. Parked, not polished: the floors show a
       scribble texture and the top floor's ceiling is too dark
-- [ ] 1f. Operator key on every ride's desk (booths, cabins, the coaster console): a keyswitch with a key;
+- [x] 1f. Operator key on every ride's desk (booths, cabins, the coaster console): a keyswitch with a key;
       OFF = desk dead, gates locked, the ride will not board or run (AUTO too); ON = unlocked. Every key starts
       OFF (your call) - you go round and turn them on
+- [ ] 1g. Clock in at a ride's booth (the wall unit by the door) and a light switch for the booth's lights
 - [ ] 2. Every coaster's station dead level, straight and unbanked where the train stands
       (measured: Serpent 60° bank / 27° slope, Baron 17°, indoor 37–44°, Puffin 42°; main coaster OK)
 - [ ] 3. New outdoor tracks: The Serpent (18 m lift, big drop, turnaround, camelback, both loops),
