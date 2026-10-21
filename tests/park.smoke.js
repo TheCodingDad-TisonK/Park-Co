@@ -27,7 +27,19 @@ module.exports = `
       return Math.sqrt(dx * dx + dz * dz) < 2.0 && Math.abs(a.x - a.plot.x) < 0.01;
     }), 'ride screens sit on their booth wall, inside the room');
     ok(attractions.every((a) => { const sc = a.boothScreen; return sc.ctx.getImageData(20, 20, 1, 1).data[3] === 255 && sc.zones.length === 0; }), 'all ride screens are status displays: painted, with no button row');
-    ok(attractions.every((a) => !!a.boothPanel && !!a.boothPanel.buttons.dispatch && !!a.boothPanel.stop && !!a.boothPanel.load), 'every booth desk has real hardware: buttons, a stop and a load gauge'); }
+    ok(attractions.every((a) => !!a.boothPanel && !!a.boothPanel.buttons.dispatch && !!a.boothPanel.stop && !!a.boothPanel.load), 'every booth desk has real hardware: buttons, a stop and a load gauge');
+    ok(attractions.every((a) => !!a.boothCabinet && !!a.boothCabinet.key && !!a.boothCabinet.amps && Object.keys(a.boothCabinet.lamps).length === 7), 'every booth has its ride control cabinet: key switch, meters and a lamp column');
+    { const f = T.PK.attrById.carousel.boothFrame;
+      ok(!!f && T.pkBkFloorAt(f.x, f.z) === 0.45 && T.pkFloor(f.x, f.z) === 0.45, 'a booth floor stands up its steps: ' + (f && T.pkBkFloorAt(f.x, f.z))); } }
+  // the key switch in MAINT locks a ride out: nobody boards, the desk refuses, and back to RUN it works again
+  { const a = T.PK.attrById.teacups, C = T.pkCtl(a); a.state = 'idle'; a.t = 0; a.riders = 0; a.queue.length = 0; C.fault = ''; C.auto = true; T.pkAttrUnseatAll(a);
+    const g = T.pkSpawnGuest(); const s0 = T.pkAttrSlot(a, 0); g.rec.x = s0.x; g.rec.z = s0.z; g.state = 'qwait'; g.slot = 0; g.attr = a.id; a.queue.push(g);
+    a.boothCabinet.key.set(1);
+    T.pkAttrTick(a, 0.05);
+    ok(C.maint === true && a.state === 'idle' && T.pkBoothGates(a) === false && /MAINT/.test(T.pkBoothStatus(a, C)), 'MAINT locks the teacups out: ' + a.state + ', ' + T.pkBoothStatus(a, C));
+    a.boothCabinet.key.set(0); T.pkAttrTick(a, 0.05);
+    ok(C.maint === false && a.state === 'boarding', 'back to RUN, the line boards: ' + a.state);
+    C.gates = false; a.state = 'idle'; a.queue.length = 0; T.pkAttrUnseatAll(a); g.state = 'leave'; g.attr = null; }
   ok(!!T.PK.console && T.PK.console.parts.mode && T.PK.console.parts.stop, 'the control desk runs off the physical hardware');
   ok(!!T.pkCabinet() && !!T.pkCabinet().rides.carousel && !!T.pkCabinet().gauges.load, 'the park switchboard has a breaker per ride and its own dials');
   { const a = T.PK.attrById.carousel; a.state = 'idle'; a.riders = 0; a.queue.length = 0;
