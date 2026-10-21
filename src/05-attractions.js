@@ -90,6 +90,7 @@
   function pkAttrBegin(a) {
     if (a.state !== 'idle' && a.state !== 'unloading') return;
     var C = pkCtl(a);
+    if (C.maint) return;                 // locked out at the cabinet: nobody boards
     a.state = 'boarding'; a.t = 0; C.gates = true; C.barsWant = 0;
     pkAttrReslot(a);
     a.boarding = 0;
@@ -98,7 +99,7 @@
   }
   function pkAttrStart(a) {
     var C = pkCtl(a);
-    if (C.fault || a.queue.length || a.riders <= 0 || pkAttrWalkers(a)) return false;
+    if (C.fault || C.maint || a.queue.length || a.riders <= 0 || pkAttrWalkers(a)) return false;
     a.state = 'running'; a.t = 0; C.gates = false; C.barsWant = 1;
     sfx('bell');
     if (a.start) a.start(a);

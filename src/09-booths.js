@@ -1,8 +1,8 @@
 //@ Park Co, part 09: booths - the per-ride control system and the operator
-// booths that stand beside each of the seven rides. The booth is enterable: a
-// door onto the midway, and inside a screen with Gates, Dispatch, E-stop and
-// AUTO. On AUTO (the default) a ride works its own gates, restraints and
-// start; off AUTO it waits for the booth screen.
+// booths that stand beside each ride. The booth itself (part 17) is a raised
+// cabin with the ride's desk, its control cabinet and its monitors. On AUTO (the
+// default) a ride works its own gates, restraints and start; off AUTO it waits
+// for the desk. The key switch on the cabinet locks a ride out for maintenance.
 
 // ── Per-ride control ────────────────────────────────────────────────
 // Every attraction gets a small control object: gate and restraint state that
@@ -21,6 +21,7 @@ function pkCtl(a) {
     spd: 0,            // drive speed (0..1)
     fault: '',         // fault string; stops everything when set
     lamps: [],         // lamp meshes above the booth window
+    maint: false,      // the cabinet's key switch in MAINT: the ride will not board or run
     auto: true         // AUTO: the ride runs its own gates, restraints, start
   };
   return C;
@@ -72,6 +73,7 @@ function pkBoothRefuse(msg) {
 
 function pkBoothStatus(a, C) {
   if (C.fault) return 'E-STOP · RESET REQUIRED';
+  if (C.maint) return 'MAINTENANCE · KEY IN MAINT';
   if (PK.closed && !a.riders) return 'PARK CLOSED';
   if (a.state === 'idle') return a.queue.length ? 'READY TO BOARD' : 'OPEN · WAITING FOR GUESTS';
   if (a.state === 'boarding') {
@@ -90,6 +92,7 @@ function pkBoothGates(a) {
   var C = pkCtl(a);
   if (PK.closed && !a.riders) return pkBoothRefuse('The park is closed');
   if (C.fault) return pkBoothRefuse('Reset ' + a.name + ' first');
+  if (C.maint) return pkBoothRefuse(a.name + ' is locked out - turn the key to RUN');
   if (a.state === 'idle' || a.state === 'unloading') {
     if (!a.queue.length) return pkBoothRefuse('Nobody is waiting at ' + a.name);
     a.manualStart = true;
@@ -112,6 +115,7 @@ function pkBoothGates(a) {
 function pkBoothDispatch(a) {
   var C = pkCtl(a);
   if (C.fault) return pkBoothRefuse('Reset ' + a.name + ' first');
+  if (C.maint) return pkBoothRefuse(a.name + ' is locked out - turn the key to RUN');
   if (a.state !== 'boarding' && a.state !== 'ready') return pkBoothRefuse(a.state === 'idle' ? 'Board the guests first' : a.name + ' is ' + a.state);
   if (a.queue.length) return pkBoothRefuse('Wait for the queue to finish boarding');
   if (a.boarding && pkAttrWalkers(a)) return pkBoothRefuse('Wait for the riders to sit');
@@ -154,6 +158,7 @@ function pkBoothTest(a) {
   // A test run is only safe from idle: it sends an empty car, never riders.
   var C = pkCtl(a);
   if (C.fault) return pkBoothRefuse('Reset ' + a.name + ' first');
+  if (C.maint) return pkBoothRefuse(a.name + ' is locked out - turn the key to RUN');
   if (a.state !== 'idle') return pkBoothRefuse(a.name + ' must be idle for a test run');
   if (a.queue.length || a.riders || a.boarding) return pkBoothRefuse('Clear the queue and ride before a test run');
   var oldRiders = a.riders;
@@ -185,13 +190,13 @@ function pkBoothAuto(a) {
 }
 
 // ── Operator booths ─────────────────────────────────────────────────
-// Geometry and screen layout live in pkRideBoothBetter (part 11).
+// Geometry, hardware and screens live in pkRideBooth (part 17).
 
 var PK_BOOTH = {};
 
 function pkBuildBooth(a, p, th) {
-  pkRideBoothBetter(a, p, th);
-  return;
+  pkCtlStart();
+  return pkRideBooth(a, p, th);
 }
 
 // ── Hook into the build ─────────────────────────────────────────────
@@ -212,6 +217,6 @@ pkBuildAttractions = function () {
 var _pkTestApi = GAME.T;
 GAME.T = function () {
   var o = _pkTestApi();
-  o.pkBoothTest = pkBoothTest; o.pkBoothGates = pkBoothGates; o.pkBoothDispatch = pkBoothDispatch; o.pkBoothStop = pkBoothStop; o.pkBoothAuto = pkBoothAuto; o.pkBoothStatus = pkBoothStatus; o.pkCtl = pkCtl;
+  o.pkBoothTest = pkBoothTest; o.pkBoothGates = pkBoothGates; o.pkBoothDispatch = pkBoothDispatch; o.pkBoothStop = pkBoothStop; o.pkBoothAuto = pkBoothAuto; o.pkBoothStatus = pkBoothStatus; o.pkCtl = pkCtl; o.pkBkFloorAt = pkBkFloorAt; o.pkBkWait = pkBkWait;
   return o;
 };
