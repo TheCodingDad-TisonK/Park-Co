@@ -33,6 +33,10 @@ A hub and four lands. The midway runs from the gate to **Station Square**, where
 
 Fifteen rides beside the coaster, all open from the first day.
 
+## The look
+
+A fairy-tale park in the Efteling manner rather than sheds with signs: deep-green cast-iron lanterns along every path, painted sign boards in gilt frames, a gatehouse with two towers under pointed slate roofs and a stepped gable with a clock, spires on the land arches and the ticket windows, a slate roof and a clock turret on the coaster station, and the three show halls with their stepped gables and towers.
+
 ## The loop
 
 1. Guests come by car, one to four to a car: off the road, under the barrier and up the drive into a free bay. They get out and join the shorter ticket line. The lot fills through the day (41 bays, up to 110 guests in the park) and empties at closing: at the end of their day each party walks back to its car, gets in, backs out and drives away.
@@ -70,6 +74,7 @@ Pull the lever and the coaster runs itself: gates, restraints, dispatch, round a
 | `17-booths.js` | the operator booths and their kit, shared with the indoor coasters' cabins |
 | `18-hq.js` | Park Co HQ: Guest Services, Operations and the owner's office over three floors |
 | `19-arrivals.js` | the guests' cars: the bays, the drive and its barrier, a car's way in and out, the party getting out and back in |
+| `20-fairytale.js` | the park in the Efteling manner: the lanterns on every path, the painted gilt-framed signs, the gatehouse towers and clock gable, spires on the land arches and the ticket windows, the coaster station's slate roof and clock turret |
 | `99-boot.js` | `CO.boot(GAME)` |
 
 The engine's contract, every hook and every page element, is in the engine repo under `docs/ENGINE.md`. `//@` lines at column 0 are notes for the reader and are left out of the build.
