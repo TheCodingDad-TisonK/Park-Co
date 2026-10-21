@@ -26,7 +26,7 @@
     [2, -60, 2, -66, 3.6, 'garden'], [9.5, -60, 9.5, -79, 3.4, 'garden'], [14, -60, 14, -66.6, 3, 'garden']          // to the bandstand, the maze and the windmill
   ];
   // the arches over the streets where each land begins: [x, z, the way the street runs ('x' or 'z'), land]
-  var PK_ARCHES = [[-17.5, 3, 'x', 'fair'], [19.5, 3, 'x', 'thrill'], [-31, -6.5, 'z', 'dark'], [35, -6.5, 'z', 'coaster']];
+  var PK_ARCHES = [[-17.5, 3, 'x', 'fair'], [23.5, 3, 'x', 'thrill'], [-31, -6.5, 'z', 'dark'], [35, -6.5, 'z', 'coaster']];
   var PK_KEEP = [];   // [x, z, r] circles other parts ask the planting to leave alone (part 13 adds its own)
   var PK_THEME_T = 0, PK_FOUNTAIN = { jet: null };
 
@@ -214,7 +214,7 @@
     pkParkFence(Y.x0, Y.z0, Y.x1, Y.z0);       // north, along the Garden Walk
     pkParkFence(Y.x1, Y.z0, Y.x1, Y.z1);       // east, along Coaster Country's street
     pkParkFence(Y.x0, Y.z1, -10.3, Y.z1);      // south-west, to the platform's west end
-    pkParkFence(17.2, Y.z1, Y.x1, Y.z1);       // south-east, to the operator's room
+    pkParkFence(PK_OP.x1 + 0.2, Y.z1, Y.x1, Y.z1);   // south-east, to the coaster control room
   }
 
   // ── Signposts ────────────────────────────────────────────────────
