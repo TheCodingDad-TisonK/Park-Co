@@ -410,7 +410,13 @@
     startNote: function (loaded) { return loaded ? 'Slot ' + CO.save.slot + ' · last saved ' + (S.savedAt ? new Date(S.savedAt).toLocaleString() : 'never') : 'Slot ' + CO.save.slot + ' · a new park'; },
     hud: function () {
       var g = $('h-guests'); if (g) g.textContent = PK.guests.length + ' in the park';
-      var r = $('h-ride'); if (r) r.textContent = 'Ride: ' + pkRideWord() + ' · ' + pkOpenCount() + '/' + (PK.attractions.length + 1) + ' open' + (pkCoasterAuto() ? ' · auto' : '');
+      // the main coaster's own state (it is the ride you work), how many rides are open, and - only while you are on one - the
+      // ride you are on, so the pill never reads as if you were riding when you are not
+      var r = $('h-ride');
+      if (r) {
+        var pr = PK.playerRide, on = pr ? (pr.kind === 'coaster' ? 'the coaster' : pr.a && pr.a.name) : '';
+        r.textContent = (on ? 'Riding ' + on + ' · ' : '') + 'Coaster: ' + pkRideWord() + (pkCoasterAuto() ? ' (auto)' : '') + ' · ' + pkOpenCount() + ' of ' + (PK.attractions.length + 1) + ' rides open';
+      }
     },
     panel: function (kind, tab) { return pkPanel(kind, tab); },
     panelAct: function (act, arg) { return pkPanelAct(act, arg); },
