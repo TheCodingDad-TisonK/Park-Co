@@ -62,6 +62,18 @@ module.exports = `
     const co = T.pkGatesToggle() === true && T.PK.gates[0].open === true && R.state === 'loading', cs = T.pkGatesToggle() === true && T.PK.gates[0].open === false;
     R.state = 'idle';
     ok(o && sh && co && cs, 'gates open and shut with nobody in line, and on the coaster with the bars down (' + [o, sh, co, cs].join(', ') + ')'); }
+  // Park Co HQ: in at the door, up both flights of the stair to the top floor, and the owner's PC is there
+  { const P = T.player, walk = (yaw, n) => { P.yaw = yaw; P.keys.KeyW = true; for (let i = 0; i < n; i++) T.updatePlayer(0.05); P.keys.KeyW = false; };
+    P.x = -16.5; P.z = 42.5; P.y = 0; P.vy = 0; walk(Math.PI / 2, 40); const inside = P.x < -20;
+    const trail = [];
+    P.x = -30.25; P.z = 40.4; T.updatePlayer(0.05);
+    for (let fl = 0; fl < 2; fl++) {
+      walk(Math.PI, 26); trail.push(P.y.toFixed(2));                                     // up the first flight onto the landing
+      walk(-Math.PI / 2, 6); walk(0, 22); trail.push(P.y.toFixed(2));                    // across the landing, up the second flight and off
+      walk(Math.PI / 2, 6);                                                              // off the top, round to the next first flight
+    }
+    ok(inside && Math.abs(P.y - 7.2) < 0.05, 'Park Co HQ: in at the door and up the stair to the top floor (y ' + trail.join(' > ') + ')');
+    ok(!!T.PK.office && !!T.PK.office.hq, 'the office of the owner is built at the top of HQ'); }
   // the key switch in MAINT locks a ride out: nobody boards, the desk refuses, and back to RUN it works again
   { const a = T.PK.attrById.teacups, C = T.pkCtl(a); a.state = 'idle'; a.t = 0; a.riders = 0; a.queue.length = 0; C.fault = ''; C.auto = true; T.pkAttrUnseatAll(a);
     const g = T.pkSpawnGuest(); const s0 = T.pkAttrSlot(a, 0); g.rec.x = s0.x; g.rec.z = s0.z; g.state = 'qwait'; g.slot = 0; g.attr = a.id; a.queue.push(g);

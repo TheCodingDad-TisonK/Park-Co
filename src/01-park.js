@@ -198,7 +198,7 @@
   }
   // the park office: a small room on the forecourt with the owner's PC, which opens the management panel
   function pkOffice() {
-    pkOfficeBetter(-20, 43);
+    pkBuildHQ();   // Park Co HQ, part 18: three floors on the forecourt, the owner's office at the top
   }
   function pkTurnstile(x, z) {
     pkTurnstileBetter(x, z);

@@ -36,7 +36,9 @@ To see it: open this folder in the Co Engine editor, or `npm run dev`.
       takes the aim from a control behind it
 - [x] 1e. Gates open and shut any time the ride is in the station: no line needed, bars up or down; only a
       moving ride, a stop or the MAINT key holds them
-- [~] 1d. THE PARK OFFICE as a big building with floors; the top floor is your office (moved up, asked for)
+- [x] 1d. Park Co HQ: three floors on the forecourt (Guest Services, Operations with the monitor wall, your
+      office at the top with the management PC), a walkable stair. Parked, not polished: the floors show a
+      scribble texture and the top floor's ceiling is too dark
 - [ ] 1f. Operator key on every ride's desk (booths, cabins, the coaster console): a keyswitch with a key;
       OFF = desk dead, gates locked, the ride will not board or run (AUTO too); ON = unlocked. Every key starts
       OFF (your call) - you go round and turn them on
