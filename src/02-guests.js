@@ -74,8 +74,8 @@
     gu.lockWait = 0;
     gu.slot = a.queue.length;
     a.queue.push(gu);
-    var s = pkAttrSlot(a, gu.slot);
-    pkGo(gu, s.x, s.z, 'walkAttr');
+    gu.rec.path = pkAttrWalkTo(a, gu, gu.slot);
+    gu.state = 'walkAttr';
     return true;
   }
   function pkAttrQueueLeave(gu, a) {
@@ -87,10 +87,10 @@
     for (var i = 0; i < a.queue.length; i++) {
       var gu = a.queue[i];
       if (gu.slot === i) continue;
+      var was = gu.slot;
       gu.slot = i;
       if (gu.state === 'walkAttr' || gu.state === 'qwait' || gu.state === 'qmove') {
-        var s = pkAttrSlot(a, i);
-        gu.rec.path = route({ x: gu.rec.x, z: gu.rec.z }, s);
+        gu.rec.path = pkAttrWalkTo(a, gu, i, gu.state === 'walkAttr' ? undefined : was);
         gu.state = gu.rec.path.length ? (gu.state === 'walkAttr' ? 'walkAttr' : 'qmove') : 'qwait';
       }
     }
