@@ -87,8 +87,12 @@ lamps, rich colour, planting and ornament, a themed entrance for every ride. Eac
       GATES OPEN, BARS LOCKED, RIDE RUNNING, FAULT/MAINT flashing) and an LED readout (queue, riders, time to the end of the
       cycle). The coaster console: a train-position mimic (station, lift, drop and loop, turn and hills, corkscrew, brakes)
       and an LED readout (speed, lap time, riders, queue)
-- [ ] 8. The whole park in the Efteling vibe: a pass over every ride's surroundings and entrance, the gate and the ticket
-      windows, the shops and stands, the lamps, the signs, the paths and the planting, so the park reads as one fairy tale
+- [x] 8. The whole park in the Efteling vibe (first pass): every path lamp is a deep-green cast-iron lantern with a scrolled
+      bracket and a glazed lantern under a little spire; every black sign board is a painted green board in a gilt frame with
+      cream-gold lettering; the gate has two towers with pointed slate roofs and a stepped gable with a clock; the land
+      arches and the ticket windows have spires; the coaster station has a slate roof, a scalloped valance and a clock
+      turret. With items 4 and 5 (the halls' fronts, the flat rides' porches) the park reads as one tale. Not touched: the
+      ride booths' striped tent roofs (fairground style already), the coaster control room and the parked HQ
 - [ ] 9. More full coasters like the main one, each with its own big control room
 - [ ] 10. One big coaster that runs partly indoors and partly outdoors
 - [ ] 11. Odd-angle audit of the whole park: overlaps, floating things, odd placement — and fix them
