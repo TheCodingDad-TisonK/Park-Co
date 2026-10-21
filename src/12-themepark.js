@@ -89,7 +89,8 @@
   }
   // lamps, benches, flower beds and an avenue of trees along every route
   function pkBuildRouteFurniture() {
-    var rng = pkRng(9001);
+    var rng = pkRng(9001), lamps = [];
+    var nearLamp = function (x, z, d) { return lamps.some(function (l) { return Math.hypot(l[0] - x, l[1] - z) < d; }); };
     PK_ROUTES.forEach(function (r, i) {
       var dx = r[2] - r[0], dz = r[3] - r[1], len = Math.sqrt(dx * dx + dz * dz), ux = dx / len, uz = dz / len, nx = -uz, nz = ux, w = r[4];
       function at(t, off) { return [r[0] + ux * t + nx * off, r[1] + uz * t + nz * off]; }
@@ -97,12 +98,13 @@
       for (var t = 4.5, k = 0; t < len - 3; t += 9, k++) {
         var side = k % 2 ? 1 : -1, p = at(t, side * (w / 2 + 0.9));
         if (pkNearRide(p[0], p[1], 1.5) || pkNearRoute(p[0], p[1], i, 1.2)) continue;
-        pkLamp(p[0], p[1], 4.4);
+        pkLamp(p[0], p[1], 4.4); lamps.push(p);
       }
       // a bench every 24 m, facing the route
       for (var tb = 11, kb = 0; tb < len - 6; tb += 24, kb++) {
         var sb = kb % 2 ? 1 : -1, pb = at(tb, sb * (w / 2 + 1.3));
         if (pkNearRide(pb[0], pb[1], 2) || pkNearRoute(pb[0], pb[1], i, 2)) continue;
+        if (nearLamp(pb[0], pb[1], 2.2)) { pb = at(tb + 3.5, sb * (w / 2 + 1.3)); if (nearLamp(pb[0], pb[1], 2.2) || pkNearRoute(pb[0], pb[1], i, 2)) continue; }   // a lamp stands there: step along
         pkBench(pb[0], pb[1], Math.atan2(-sb * nx, -sb * nz));
       }
       // a flower bed on each outer corner of the route and at every 30 m

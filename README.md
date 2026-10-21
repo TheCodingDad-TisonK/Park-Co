@@ -79,6 +79,7 @@ Pull the lever and the coaster runs itself: gates, restraints, dispatch, round a
 | `20-fairytale.js` | the park in the Efteling manner: the lanterns on every path, the painted gilt-framed signs, the gatehouse towers and clock gable, spires on the land arches and the ticket windows, the coaster station's slate roof and clock turret |
 | `21-east.js` | the east strip: The Dragon and The Firebird (circuits laid in the main coaster's frame and turned into the strip), their stations, canopies, control houses, yard fences and the East Walk |
 | `22-mountain.js` | The Mountain King: the castle hall with its portals, the king and the crystals, the circuit, the station and its cabin |
+| `23-editables.js` | every small prop takes its collision with it when the editor moves, turns or deletes it |
 | `99-boot.js` | `CO.boot(GAME)` |
 
 The engine's contract, every hook and every page element, is in the engine repo under `docs/ENGINE.md`. `//@` lines at column 0 are notes for the reader and are left out of the build.

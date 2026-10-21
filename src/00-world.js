@@ -327,7 +327,7 @@
     "mesh sphere 0.09@7.14,23.76,3.5": { hidden: true },
     "mesh sphere 0.09@7.14,24.24,3.5": { x: 7.15, z: 24.25, hidden: true },
     "mesh sphere 0.09@7.28,0,3.5": { hidden: true },
-    "mesh sphere 0.09@7.28,24,3.5": { x: 7.3, hidden: true }
+    "mesh sphere 0.09@7.28,24,3.5": { x: 7.3, hidden: true },
   });
   CO.worldCopies([
     { id: "wc-mvco28o4-2", of: "mesh box 1x0.22x2.1@9.5,25.8,0.11", x: 15.8, y: 0.11, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
@@ -453,5 +453,5 @@
     { id: "wc-mvhzroak-t", of: "mesh box 0.8x0.85x1.9@9.5,6,0.43", x: 26.8, y: 0.43, z: 7.75, ry: -90, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvhzroak-u", of: "mesh box 1x0.22x2.1@9.5,6,0.11", x: 26.8, y: 0.11, z: 7.75, ry: -90, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvhzroak-v", of: "mesh box 1x0.22x2.1@9.5,6,0.11", x: 24.25, y: 0.11, z: 7.8, ry: -90, sx: 1, sy: 1, sz: 1 },
-    { id: "wc-mvhzroak-w", of: "mesh box 0.8x0.85x1.9@9.5,6,0.43", x: 24.25, y: 0.43, z: 7.8, ry: -90, sx: 1, sy: 1, sz: 1 }
+    { id: "wc-mvhzroak-w", of: "mesh box 0.8x0.85x1.9@9.5,6,0.43", x: 24.25, y: 0.43, z: 7.8, ry: -90, sx: 1, sy: 1, sz: 1 },
   ]);
