@@ -50,6 +50,7 @@
   // the coaster queue: one lane, one guest to a slot. A guest joins at the back, stands on their slot, and shuffles up as the
   // line drains. PK.queue is the line, front first; gu.qslot is where in it they stand.
   function pkQueueJoin(gu) {
+    if (!S.coasterKey) return false;     // the coaster is locked: its line is closed
     if (gu.state === 'walkQueue' || gu.state === 'queue' || gu.state === 'board' || gu.state === 'seated') return false;
     if (PK.queue.indexOf(gu) >= 0) return false;
     if (PK.queue.length >= PK_QUEUE_SLOTS.length) return false;

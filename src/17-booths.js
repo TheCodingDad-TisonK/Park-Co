@@ -188,6 +188,7 @@
   // ── The ride's state, as lamps and words ─────────────────────────
   function pkBkWord(a) {
     var C = pkCtl(a);
+    if (!C.key) return 'CLOSED';
     if (C.maint) return 'MAINTENANCE';
     if (C.fault) return 'STOPPED';
     if (!a.open) return 'CLOSED';
@@ -221,6 +222,7 @@
       if (C.fault) on[2] = blink;
       else if (C.maint) on[1] = blink;
       else if (C.bkTest) on = [true, true, true];
+      else if (!C.key) on = [false, false, false];
       else if (a.state === 'running') on[2] = true;
       else if (a.state === 'boarding' || a.state === 'unloading' || a.state === 'ready') on[1] = true;
       else on[0] = a.open && !PK.closed;

@@ -92,7 +92,7 @@
   function pkAttrBegin(a) {
     if (a.state !== 'idle' && a.state !== 'unloading') return;
     var C = pkCtl(a);
-    if (C.maint) return;                 // locked out at the cabinet: nobody boards
+    if (C.maint || !C.key) return;       // locked out at the cabinet, or the operator key off: nobody boards
     a.state = 'boarding'; a.t = 0; C.gates = true; C.barsWant = 0;
     pkAttrReslot(a);
     a.boarding = 0;
@@ -102,7 +102,7 @@
   function pkAttrStart(a) {
     var C = pkCtl(a);
     // the line holds the ride only while it can still board: gates shut or seats full, whoever is left waits for the next cycle
-    if (C.fault || C.maint || (a.queue.length && C.gates && pkAttrHasSeat(a)) || a.riders <= 0 || pkAttrWalkers(a)) return false;
+    if (C.fault || C.maint || !C.key || (a.queue.length && C.gates && pkAttrHasSeat(a)) || a.riders <= 0 || pkAttrWalkers(a)) return false;
     a.state = 'running'; a.t = 0; C.gates = false; C.barsWant = 1;
     sfx('bell');
     if (a.start) a.start(a);
@@ -163,7 +163,7 @@
   // ── Who picks which ride ─────────────────────────────────────────
   function pkAttrPick(gu) {
     var open = [];
-    for (var i = 0; i < PK.attractions.length; i++) { var at = PK.attractions[i]; if (at.open && !(at.ctl && at.ctl.fault) && at.queue.length < at.seats.length * 2) open.push(at); }
+    for (var i = 0; i < PK.attractions.length; i++) { var at = PK.attractions[i]; if (at.open && at.ctl && at.ctl.key && !at.ctl.fault && !at.ctl.maint && at.queue.length < at.seats.length * 2) open.push(at); }   // nobody queues for a locked ride
     if (!open.length) return false;
     // the shortest line wins, with a little spread so the crowd is not one queue
     open.sort(function (a, b) { return a.queue.length - b.queue.length; });
@@ -171,7 +171,7 @@
     return pkAttrQueueJoin(gu, pick);
   }
   function pkGuestPickRide(gu) {
-    var coasterOk = PK.ride.state !== 'fault';
+    var coasterOk = PK.ride.state !== 'fault' && !!S.coasterKey;
     var anyOpen = false;
     for (var i = 0; i < PK.attractions.length; i++) if (PK.attractions[i].open) { anyOpen = true; break; }
     if (coasterOk && (!anyOpen || randf(0, 1) < 0.45)) {

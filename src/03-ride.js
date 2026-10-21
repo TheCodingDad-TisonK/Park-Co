@@ -658,8 +658,20 @@
     }
     return false;
   }
+  // the coaster's operator key: ON unlocks the coaster and its desk; OFF locks them (not while the train is out)
+  function pkSetCoasterKey(on) {
+    var R = PK.ride;
+    if (!on && (R.state === 'dispatch' || R.state === 'running' || R.state === 'arrive' || R.riders)) { sfx('bad'); toast('Not with the train out or riders aboard', 'bad'); return false; }
+    S.coasterKey = !!on;
+    if (!on) { PK.gates.forEach(function (gt) { gt.open = false; }); if (R.state === 'loading' || R.state === 'ready' || R.state === 'unload') R.state = 'idle'; }
+    toast(S.coasterKey ? 'The coaster: operator key ON - unlocked' : 'The coaster: operator key OFF - locked', S.coasterKey ? 'good' : '');
+    logEvent(S.coasterKey ? 'The coaster unlocked' : 'The coaster locked', '');
+    screenDirtyAll(); hudDirty = true;
+    return true;
+  }
   function pkOpenGates() {
     var R = PK.ride;
+    if (!S.coasterKey) return pkRefuse('The coaster is locked - turn the operator key on');
     if (PK.closed) return pkRefuse('The park is closed');
     if (R.fault) return pkRefuse('The ride is stopped');
     if (R.state === 'dispatch' || R.state === 'running' || R.state === 'arrive') return pkRefuse('Not while the train is moving');
@@ -687,6 +699,7 @@
   }
   function pkBarsDown() {
     var R = PK.ride;
+    if (!S.coasterKey) return pkRefuse('The coaster is locked - turn the operator key on');
     if (R.fault) return pkRefuse('The ride is stopped');
     if (R.state !== 'loading' && R.state !== 'ready') return pkRefuse('Open the gates and load first');
     if (pkStillBoarding()) return pkRefuse('Let the riders sit first');
@@ -722,6 +735,7 @@
   }
   function pkDispatch() {
     var R = PK.ride;
+    if (!S.coasterKey) return pkRefuse('The coaster is locked - turn the operator key on');
     if (PK.closed && R.riders === 0) return pkRefuse('The park is closed');
     if (R.fault) return pkRefuse('The ride is stopped');
     if (R.state !== 'ready') return pkRefuse('Restraints first, then dispatch');
@@ -739,6 +753,7 @@
   function pkTestRun() {
     // a test run: send the empty train round from the screen, without needing the gates and the bars first
     var R = PK.ride;
+    if (!S.coasterKey) return pkRefuse('The coaster is locked - turn the operator key on');
     if (PK.closed) return pkRefuse('The park is closed');
     if (R.fault) return pkRefuse('The ride is stopped');
     if (R.state === 'dispatch' || R.state === 'running' || R.state === 'arrive') return pkRefuse('Not while the train is moving');
@@ -810,7 +825,7 @@
     });
     if (R.fault) { R.v = 0; pkPlaceTrain(); return; }
     // the ride runs itself when AUTO is on, or when an operator is on the payroll
-    if ((pkCoasterAuto() || S.operator) && !R.fault) {
+    if ((pkCoasterAuto() || S.operator) && !R.fault && S.coasterKey) {
       R.autoT -= dt;
       if (R.autoT <= 0) {
         R.autoT = 1.4;
