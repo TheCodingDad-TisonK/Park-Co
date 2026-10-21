@@ -31,6 +31,19 @@ module.exports = `
     ok(attractions.every((a) => !!a.boothCabinet && !!a.boothCabinet.key && !!a.boothCabinet.amps && Object.keys(a.boothCabinet.lamps).length === 7), 'every booth has its ride control cabinet: key switch, meters and a lamp column');
     { const f = T.PK.attrById.carousel.boothFrame;
       ok(!!f && T.pkBkFloorAt(f.x, f.z) === 0.45 && T.pkFloor(f.x, f.z) === 0.45, 'a booth floor stands up its steps: ' + (f && T.pkBkFloorAt(f.x, f.z))); } }
+  // every booth: shut, its door keeps the player out; open, the player climbs the steps and walks in
+  { const out = [];
+    T.PK.attractions.forEach((a) => {
+      const f = a.boothFrame; if (!f) return;
+      const c = Math.cos(f.ry), s = Math.sin(f.ry), W = (lx, lz) => [f.x + lx * c + lz * s, f.z - lx * s + lz * c], L = (x, z) => { const dx = x - f.x, dz = z - f.z; return [dx * c - dz * s, dx * s + dz * c]; };
+      const walk = () => { const p0 = W(f.ds * 3.5, -0.35); T.player.x = p0[0]; T.player.z = p0[1]; T.player.y = 0; T.player.vy = 0; T.player.yaw = Math.atan2(f.ds * c, -f.ds * s);
+        T.player.keys.KeyW = true; for (let i = 0; i < 60; i++) T.updatePlayer(0.05); T.player.keys.KeyW = false; const l = L(T.player.x, T.player.z); return Math.abs(l[0]) < 1.6 && Math.abs(l[1]) < 1.3; };
+      a.boothDoor.setNow(0); const shut = walk();
+      a.boothDoor.setNow(1); const open = walk();
+      a.boothDoor.setNow(0);
+      if (shut || !open) out.push(a.id + (shut ? ' (walked through the shut door)' : ' (could not get in)'));
+    });
+    ok(out.length === 0, 'every booth: the shut door keeps you out, the open door lets you up the steps and in' + (out.length ? ': ' + out.join(', ') : '')); }
   // the key switch in MAINT locks a ride out: nobody boards, the desk refuses, and back to RUN it works again
   { const a = T.PK.attrById.teacups, C = T.pkCtl(a); a.state = 'idle'; a.t = 0; a.riders = 0; a.queue.length = 0; C.fault = ''; C.auto = true; T.pkAttrUnseatAll(a);
     const g = T.pkSpawnGuest(); const s0 = T.pkAttrSlot(a, 0); g.rec.x = s0.x; g.rec.z = s0.z; g.state = 'qwait'; g.slot = 0; g.attr = a.id; a.queue.push(g);
@@ -254,6 +267,7 @@ module.exports = `
   // the cabin doors open off the end of the platform: walk the player in from the platform (a west hall and an east one)
   [[-62, 1, 'nocturne'], [42, -1, 'moonwood']].forEach(function (c) {
     var x0 = c[0] + c[1] * 14.3, s = []; for (var uu = 14.3; uu < 16.6; uu += 0.3) s.push(uu.toFixed(1) + ':' + (T.collides(c[0] + c[1] * uu, -80.9) ? 1 : 0));
+    T.PK.attrById[c[2]].boothDoor.setNow(1);
     T.player.x = x0; T.player.z = -80.9; T.player.y = 0; T.player.yaw = -c[1] * Math.PI / 2;
     T.player.keys.KeyW = true; for (let i = 0; i < 30; i++) T.updatePlayer(0.05); T.player.keys.KeyW = false;
     ok((T.player.x - c[0]) * c[1] > 15.6, 'the ' + c[2] + ' cabin door walks (' + s.join(' ') + ') u ' + ((T.player.x - c[0]) * c[1]).toFixed(2));
