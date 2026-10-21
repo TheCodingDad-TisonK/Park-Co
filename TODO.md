@@ -115,9 +115,13 @@ lamps, rich colour, planting and ornament, a themed entrance for every ride. Eac
       The chain lift carries you out through a portal high in the north wall to 20.5 m, then a drop into a 14.9 m loop, a
       high turnaround, camelbacks, the block brake, and back in through a low portal to spiral down round the Mountain King
       on his throne among glowing crystals. 269 m, 68 km/h, 53 s, at most 4.7 g
-- [ ] 10b. The paths and the ground corrected across the whole park (your answer, 21 Oct: "the entire pathing and ground should
+- [x] 10b. The paths and the ground corrected across the whole park (your answer, 21 Oct: "the entire pathing and ground should
       be corrected, it's still all over the place"): every paved area, route and plaza laid on one plan, no stray slabs,
-      overlaps or gaps, the coaster yard included (the three editor-placed apron copies go)
+      overlaps or gaps, the coaster yard included. Done: 28 editor entries that had moved or copied paving slabs all over
+      the park are gone (the forecourt had been dragged west of the teacups; eight station-apron copies paved the coaster
+      yard and spots up to the flume; five forecourt copies covered the kids' garden). The ground is laid from code on one
+      plan: Station Square stops at the yard fence, the snack apron sits under the snack stand, the HQ has a step out to the
+      forecourt, the kids' lane is shown again, and the coaster's yard is a garden (lawn, beds, shrubs, a gravel service path)
 - [ ] 11. Odd-angle audit of the whole park: overlaps, floating things, odd placement — and fix them
 - [ ] 12. Ferris wheel / Baron's Drop pads overlap by ~1 m
 - [ ] 13. Cleanup: delete old installers in `dist/` and the Desktop zip (the zip is an 18 Oct backup that

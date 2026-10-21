@@ -210,6 +210,20 @@
   var PK_YARD = { x0: -24, x1: 30.5, z0: -37, z1: -1.5 };
   function pkCoasterYard() {
     var Y = PK_YARD;
+    // the ground under the coaster is a garden, not a car park: lawn, with flower beds and clipped shrubs wherever the track
+    // and its legs leave room, in a loose grid, and a gravel service path along the inside of the fence
+    var M = pkMats(), rng = pkRng(4411), gx, gz;
+    for (gx = Y.x0 + 3; gx < Y.x1 - 2; gx += 4.6) {
+      for (gz = Y.z0 + 3; gz < Y.z1 - 3; gz += 4.6) {
+        var bx = gx + (rng() - 0.5) * 1.6, bz = gz + (rng() - 0.5) * 1.6;
+        if (pkNearTrack(bx, bz, 2.8) || (bx > 9 && bz > -6)) continue;
+        if (rng() < 0.55) pkFlowerBed(bx, bz, 1.8 + rng() * 0.8, 1.0 + rng() * 0.5);
+        else pkHedge(bx, bz, 0.9, 0.9, 0.7 + rng() * 0.3);
+      }
+    }
+    pkPaved(Y.x1 - Y.x0 - 1.2, 1.2, std({ color: 0xb8ab94, roughness: 0.98 }), (Y.x0 + Y.x1) / 2, 0.015, Y.z0 + 1.0, 1.2);
+    pkPaved(1.2, Y.z1 - Y.z0 - 2.0, std({ color: 0xb8ab94, roughness: 0.98 }), Y.x0 + 1.0, 0.015, (Y.z0 + Y.z1) / 2, 1.2);
+    pkPaved(1.2, Y.z1 - Y.z0 - 2.0, std({ color: 0xb8ab94, roughness: 0.98 }), Y.x1 - 1.0, 0.015, (Y.z0 + Y.z1) / 2, 1.2);
     pkParkFence(Y.x0, Y.z1, Y.x0, Y.z0);       // west, along the Dark Woods street
     pkParkFence(Y.x0, Y.z0, Y.x1, Y.z0);       // north, along the Garden Walk
     pkParkFence(Y.x1, Y.z0, Y.x1, Y.z1);       // east, along Coaster Country's street
