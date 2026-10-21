@@ -3507,6 +3507,7 @@
   CO.material("pk-wood-rich", {"size":512,"repeat":[2,1],"layers":[{"type":"fill","color":"#a07850"},{"type":"grain","alpha":0.3},{"type":"planks","color":"#9c7349","color2":"#7c5836","size":64,"vary":true,"gap":2}],"roughness":0.85,"metalness":0.05,"bump":{"amp":12,"strength":0.6}});
   CO.material("pk-glass-rich", {"size":128,"repeat":[1,1],"layers":[{"type":"fill","color":"#b8c8d8","alpha":0.85}],"roughness":0.15,"metalness":0.05,"transparent":true,"opacity":0.85});
   CO.material("pk-metal-rich", {"size":256,"repeat":[1,1],"layers":[{"type":"fill","color":"#4a5058"},{"type":"grain","alpha":0.25},{"type":"speckle","color":"#2a2d33","n":2000}],"roughness":0.4,"metalness":0.8,"bump":{"amp":8,"strength":0.4}});
+  CO.material("pk-brick", {"size":512,"repeat":[4,4],"layers":[{"type":"fill","color":"#c9c2b4"},{"type":"bricks","color":"#8a4a3a","color2":"#95553f","size":64,"size2":22,"gap":2,"vary":true},{"type":"grain","alpha":0.12},{"type":"blotches","color":"#6a3a2a","n":40,"sz":90,"dark":true}],"roughness":0.95,"metalness":0.05,"bump":{"amp":16,"strength":0.8}});
   CO.menus({
     "start": {
       "title": "Park Co",
@@ -5219,11 +5220,25 @@
       box(bw, 0.07, 0.09, MAT.steelDark, bx, 1.27, Z1 + 0.005);
     });
     box(1.2, 1.05, 0.2, paint, 13.6, 2.675, Z1);
-    // striped tented canopy in coaster red/cream, shared booth recipe.
-    // wallTop (3.2) clears the fascia sign (top 2.85) + lamps (2.98);
-    // the valance hangs to ~2.86 in front of them (z 2.42 vs sign 2.13).
-    var opRoofG = new THREE.Group(); opRoofG.position.set(14, 0, -1); scene.add(opRoofG);
-    var opRoof = pkBoothTentRoof(opRoofG, { w: 6, d: 6, wallTop: H, roofA: '#a8402c', roofB: '#f3ead6', trimMat: red, roofH: 1.35 });
+    // ── the roof: flat, behind a parapet, with the coaster's name lit along its front, the plant and the signal tower on it ──
+    var brick = pkMatBrick(), cream2 = std({ color: 0xece5d7, roughness: 0.9 });
+    box(6.5, 0.18, 6.5, MAT.roof, 14, H + 0.09, -1);                                       // the slab, with its eaves
+    box(6.7, 0.12, 6.7, red, 14, H + 0.02, -1);                                            // the coaster-red cornice under it
+    [[14, -4.17, 6.5, 0.16], [14, 2.17, 6.5, 0.16]].forEach(function (p) { box(p[2], 0.5, p[3], cream2, p[0], H + 0.43, p[1]); box(p[2] + 0.04, 0.06, p[3] + 0.06, pkMats().stone, p[0], H + 0.71, p[1]); });
+    [[10.83, -1], [17.17, -1]].forEach(function (p) { box(0.16, 0.5, 6.5, cream2, p[0], H + 0.43, p[1]); box(0.22, 0.06, 6.54, pkMats().stone, p[0], H + 0.71, p[1]); });
+    // the roof sign: a lit box on two legs along the front, and a smaller one over the platform
+    [-1.9, 1.9].forEach(function (dx) { box(0.1, 0.5, 0.1, MAT.steelDark, 14 + dx, H + 0.95, 1.85); });
+    box(4.6, 0.86, 0.22, MAT.steelDark, 14, H + 1.6, 1.85);
+    pkSign3D(['THE COASTER'], 4.4, 0.7, 14, H + 1.6, 1.97, 0, { bg: '#151a20', fg: '#ffcf5a' });
+    pkSign3D(['RIDE CONTROL'], 2.6, 0.36, 10.72, H + 0.43, -1, -Math.PI / 2, { bg: '#151a20', fg: '#ffcf5a' });
+    // the air unit on the roof, its fan turning
+    var acG = new THREE.Group(); acG.position.set(16.0, H + 0.18, -2.9); scene.add(acG);
+    pkBevelBox(1.3, 0.7, 0.9, std({ color: 0xd9d6cc, roughness: 0.5 }), 0, 0.35, 0, acG, 0.03);
+    for (var acl = 0; acl < 6; acl++) box(0.9, 0.03, 0.02, MAT.steelDark, -0.1, 0.12 + acl * 0.08, 0.455, acG);
+    var acFanG = new THREE.Group(); acFanG.position.set(0, 0.71, 0.05); acFanG.userData.dynamic = true; acG.add(acFanG);
+    cyl(0.34, 0.03, MAT.black, 0, 0.705, 0.05, acG, 16);
+    for (var fb = 0; fb < 4; fb++) { var fbl = box(0.06, 0.012, 0.28, MAT.steel, 0, 0, 0.14, null); var fa = new THREE.Group(); fa.rotation.y = fb * Math.PI / 2; acFanG.add(fa); fa.add(fbl); }
+    pkCtlLive({ tick: function (dt) { acFanG.rotation.y += dt * 8; } });
     solid(X0 - 0.1, X0 + 0.1, Z0, Z1, 0, H);
     solid(X1 - 0.1, X1 + 0.1, Z0, Z1, 0, H);
     solid(X0, X1, Z0 - 0.1, Z0 + 0.1, 0, H);
@@ -5231,8 +5246,11 @@
     solid(14.2, X1, Z1 - 0.1, Z1 + 0.1, 0, H);
     // the outside: the booth language — perimeter plinth strips (not a
     // filled slab), steel corner posts, red-trimmed sill
-    var opPlinthG = new THREE.Group(); opPlinthG.position.set(14, 0, -1); scene.add(opPlinthG);
-    pkBoothPlinth(6, 6, stone, opPlinthG);
+    // a brick base course round the outside to the sill, capped in stone, and the coaster-red band above it
+    box(6.24, 0.62, 0.06, brick, 14, 0.31, Z0 - 0.13); box(0.06, 0.62, 6.24, brick, X1 + 0.13, 0.31, -1);
+    box(0.06, 0.62, 2.24, brick, X0 - 0.13, 0.31, 0.88); box(0.06, 0.62, 1.24, brick, X0 - 0.13, 0.31, -3.38);
+    box(6.3, 0.06, 0.12, pkMats().stone, 14, 0.64, Z0 - 0.13); box(0.12, 0.06, 6.3, pkMats().stone, X1 + 0.13, 0.64, -1);
+    box(6.3, 0.14, 0.08, red, 14, 2.4, Z0 - 0.14); box(0.08, 0.14, 6.3, red, X1 + 0.14, 2.4, -1);
     [[X0, Z0], [X0, Z1], [X1, Z0], [X1, Z1]].forEach(function (c) {
       box(0.14, H, 0.20, steel, c[0], H / 2, c[1]);
       box(0.22, 0.09, 0.28, steel, c[0], H - 0.05, c[1]);
@@ -5240,15 +5258,14 @@
     // eave plant: the old deck AC pack tucks under the tented eave on the
     // west side, with the beacon on its own mast clear of the valance;
     // a vent stack stays at the back corner
-    box(1.30, 0.52, 0.95, MAT.steel, 11.45, 2.85, 1.55);
-    for (var ac2 = 0; ac2 < 5; ac2++) box(0.92, 0.03, 0.02, MAT.steelDark, 11.45, 2.71 + ac2 * 0.075, 2.05);
-    cyl(0.30, 0.04, MAT.black, 11.45, 3.12, 1.55, null, 16);
-    cyl(0.26, 0.02, pkMats().iron, 11.45, 3.14, 1.55, null, 16);
-    // beacon on its own mast at the eave corner, clear of the valance
-    pkRoundCyl(0.04, 0.30, MAT.steelDark, 16.6, 3.10, 2.15, null, 8);
-    var beacon = sphere(0.11, glowMat(0xff3b30, 0.4), 16.6, 3.32, 2.15);
-    pkRoundCyl(0.07, 0.62, MAT.steel, 16.10, 3.65, -3.35, null, 10);
-    var cap = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.16, 10), MAT.steelDark); cap.position.set(16.10, 4.01, -3.35); scene.add(cap);
+    // the signal tower: green, amber and red lenses on a mast at the roof's platform corner, a beacon on top (pkOpSignal lights them)
+    pkRoundCyl(0.035, 0.9, MAT.steelDark, 11.4, H + 0.63, 1.5, null, 8);
+    var opLampM = [0xff3b30, 0xf0c04a, 0x5fd38d].map(function (col) { return glowMat(col, 0.12); });
+    [2, 1, 0].forEach(function (li, k) { pkRoundCyl(0.075, 0.12, opLampM[li], 11.4, H + 1.14 + k * 0.13, 1.5, null, 16); pkRoundCyl(0.08, 0.012, MAT.steelDark, 11.4, H + 1.205 + k * 0.13, 1.5, null, 16); });
+    var beacon = sphere(0.09, glowMat(0xff3b30, 0.4), 11.4, H + 1.62, 1.5);
+    // a camera on the platform corner, sweeping the platform; an aerial at the back
+    pkBkCamera(scene, X0 - 0.12, H - 0.35, -3.6, -Math.PI / 2 - 0.35, 0.5);
+    pkRoundCyl(0.025, 1.6, MAT.steelDark, 16.6, H + 1.0, -3.7, null, 6);
     // the east wall: ribbed steel and a louvered plant grille
     for (var er = 0; er < 8; er++) box(0.05, 1.86, 0.045, MAT.steelDark, 17.12, 1.55, -3.7 + er * 0.72);
     for (var lv = 0; lv < 7; lv++) box(0.04, 0.05, 0.80, MAT.steelDark, 17.13, 1.85 + lv * 0.11, -1.55);
@@ -5256,24 +5273,36 @@
     // pane, lanterns each side, planters flanking the approach
     [[12.94, 2.06], [14.26, 2.06]].forEach(function (c) { box(0.12, 2.2, 0.13, red, c[0], 1.1, c[1]); });
     box(1.44, 0.12, 0.13, red, 13.6, 2.21, 2.06);
-    var leafG = new THREE.Group(); leafG.position.set(13.02, 0, 1.92); leafG.rotation.y = 1.34; scene.add(leafG);
-    box(1.08, 2.10, 0.065, paint, 0.54, 1.05, 0, leafG);
-    box(0.50, 0.56, 0.02, M.glass, 0.54, 1.56, 0.043, leafG);
-    box(0.98, 0.24, 0.02, MAT.hazard, 0.54, 0.20, 0.043, leafG);
-    box(0.72, 0.05, 0.04, MAT.chrome, 0.54, 1.02, 0.055, leafG);
+    // the door: hung on the west jamb, it swings out onto the forecourt; shut, it closes the room
+    PK.opDoor = pkBkDoor(scene, 13.02, 0, 2.02, Math.PI / 2, -1.5, 1.16, 2.08, { leaf: paint, glass: M.glass, kick: MAT.hazard }, 'the control room door');
+    pkAwning(1.9, 0.75, 0.5, '#a8402c', '#f3ead6', 13.6, 2.62, 2.12, 0, null);
     box(1.28, 0.03, 0.62, MAT.steelDark, 13.6, 0.05, 2.32);
     for (var hz = 0; hz < 6; hz++) box(0.20, 0.012, 0.05, MAT.hazard, 13.05 + hz * 0.22, 0.066, 2.32);
     // the fascia board over the door (below the eave, clears the valance)
     // and the three signal lamps tucked under the eave
     pkSign3D(['PARK CO · RIDE CONTROL', 'THE COASTER'], 2.1, 0.34, 13.6, 2.62, 2.13, 0, { bg: '#1b232c', fg: '#f5b53d' });
-    box(0.66, 0.20, 0.12, red, 13.6, 2.94, 2.14);
-    var opLampM = [0xff3b30, 0xf0c04a, 0x5fd38d].map(function (col) { return glowMat(col, 0.3); });
-    var opLamps = [0, 1, 2].map(function (i2) { return sphere(0.055, opLampM[i2], 13.42 + i2 * 0.18, 2.94, 2.21); });
     PK.opLamps = { mats: opLampM, beacon: beacon.material };
+    // the queue board on its post by the lane's entry, facing the square: the wait, in amber dots
+    pkRoundCyl(0.05, 2.2, MAT.steelDark, 9.0, 1.1, 9.6, null, 10);
+    pkBevelBox(0.3, 0.12, 0.3, pkMats().stoneDark, 9.0, 0.06, 9.6, null, 0.02);
+    solid(8.85, 9.15, 9.45, 9.75, 0, 2.3);
+    var qbG = new THREE.Group(); qbG.position.set(9.0, 2.45, 9.68); scene.add(qbG);
+    pkBevelBox(1.36, 0.42, 0.08, MAT.steelDark, 0, 0, -0.03, qbG, 0.015);
+    var qb = touchScreen({ w: 320, h: 96, pw: 1.24, ph: 0.34, x: 0, y: 0, z: 0.012, parent: qbG, title: 'The coaster: the queue board',
+      draw: function (c, s) {
+        c.fillStyle = '#0a0806'; c.fillRect(0, 0, s.w, s.h);
+        c.fillStyle = 'rgba(255,170,40,0.05)'; for (var yy = 2; yy < s.h; yy += 4) for (var xx = 2; xx < s.w; xx += 4) c.fillRect(xx, yy, 2, 2);
+        var R = PK.ride, n = PK.queue.length, cyc = 75, wait = Math.ceil(Math.ceil((n + 1) / Math.max(1, PK.seats.length)) * cyc / 60);
+        c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillStyle = '#ffb03a'; c.font = 'bold 28px ' + SCREEN_THEME.font; c.fillText('THE COASTER', s.w / 2, 26);
+        c.fillStyle = R.fault ? '#ff5a3c' : '#ffcf6a'; c.font = 'bold 24px ' + SCREEN_THEME.font;
+        c.fillText(R.fault ? 'STOPPED' : PK.closed ? 'PARK CLOSED' : (n ? 'WAIT ' + wait + ' MIN' : 'NO WAIT · WALK ON'), s.w / 2, 68);
+      } });
+    PK_BK_LIVE.push({ sc: qb, g: qbG, every: 1.0 });
     // lanterns flanking the door + planters on the forecourt (world coords)
+    var opPlantG = new THREE.Group(); opPlantG.position.set(14, 0, -1); scene.add(opPlantG);
     pkBoothLantern(opPlantG, -1.28, 2.10, 3.14);
     pkBoothLantern(opPlantG, 0.48, 2.10, 3.14);
-    var opPlantG = new THREE.Group(); opPlantG.position.set(14, 0, -1); scene.add(opPlantG);
     pkPlanter(1.8, opPlantG, -2.2, 0, 3.9);
     pkPlanter(1.8, opPlantG, 2.2, 0, 3.9);
     // the tented eave shelters the door, as on every booth
@@ -5346,11 +5375,11 @@
     [[-0.36, 0.14, 0.3, 0.24], [0.02, -0.06, 0.34, 0.2], [0.32, 0.1, 0.22, 0.3]].forEach(function (p) {
       var pn = box(p[2], p[3], 0.01, MAT.paper, 12.3 + p[0], 1.95 + p[1], -3.85); pn.rotation.z = randf(-0.06, 0.06);
     });
-    var clock = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.05, 20), std({ color: 0xf4f1e8, roughness: 0.6 }));
-    clock.position.set(15.7, 2.5, -3.87); clock.rotation.x = Math.PI / 2; scene.add(clock);
-    cyl(0.19, 0.04, iron, 15.7, 2.5, -3.9, null, 20).rotation.x = Math.PI / 2;
-    box(0.02, 0.11, 0.012, MAT.black, 15.7, 2.55, -3.84);
-    box(0.08, 0.02, 0.012, MAT.black, 15.74, 2.5, -3.84);
+    pkBkClock(scene, 15.7, 2.5, -3.9, 0, 0.17);
+    pkBkIntercom(scene, 16.87, 1.45, 0.9, -Math.PI / 2);
+    pkBkRadio(scene, 12.5, 1.01, -3.55, Math.PI / 2);
+    pkOpMonitors();
+    pkOpMimic();
     // the east wall: a framed safety notice, a first-aid box and the key cabinet by the door
     box(0.9, 0.62, 0.05, oak, 16.87, 1.95, -2.6);
     box(0.78, 0.5, 0.01, std({ color: 0xf2efe6, roughness: 0.85 }), 16.84, 1.95, -2.6);
@@ -5411,6 +5440,71 @@
         scText(ctx, 16, 336, 'Cycles ' + (S.cycles || 0) + '   Riders today ' + PK.today.rides, '#a0acb8', 13);
         scText(ctx, 16, 356, 'Level ' + PK.level + '   Tickets ' + PK.today.tickets + '   Snacks ' + PK.today.snacks, '#7d8a96', 13);
       }
+    });
+  }
+  // ── The track mimic board ─────────────────────────────────────────
+  // the circuit drawn from above on a lit panel: the station, the lift, the blocks, and the train going round it live. Each
+  // block is a lamp: red while the train is in it, green when it is clear.
+  var PK_MIMIC = null;
+  function pkOpMimic() {
+    var g = new THREE.Group(); g.position.set(16.86, 1.95, -0.35); g.rotation.y = -Math.PI / 2; scene.add(g);
+    pkBevelBox(1.5, 0.92, 0.06, MAT.steelDark, 0, 0, -0.03, g, 0.015);
+    var N = 240, P = [], xs = [], zs = [];
+    for (var i = 0; i < N; i++) { var p = PK.curve.getPointAt(i / N); P.push(p); xs.push(p.x); zs.push(p.z); }
+    var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs), z0 = Math.min.apply(null, zs), z1 = Math.max.apply(null, zs);
+    var BL = 8;   // blocks round the lap
+    var sc = touchScreen({ w: 420, h: 256, pw: 1.4, ph: 0.85, x: 0, y: 0, z: 0.006, parent: g, title: 'The track mimic',
+      draw: function (c, s) {
+        c.fillStyle = '#10161b'; c.fillRect(0, 0, s.w, s.h);
+        c.fillStyle = '#c9a227'; c.font = 'bold 14px ' + SCREEN_THEME.font; c.textAlign = 'left'; c.fillText('THE COASTER  ·  TRACK MIMIC', 12, 20);
+        c.fillStyle = '#7d8a96'; c.font = '11px ' + SCREEN_THEME.font; c.fillText('BLOCKS ' + BL + '   LAP ' + Math.round(PK.len) + ' m', 12, 36);
+        var m = 30, kx = (s.w - m * 2) / (x1 - x0), kz = (s.h - 60 - m) / (z1 - z0), k = Math.min(kx, kz), ox = (s.w - (x1 - x0) * k) / 2, oz = 48;
+        function X(p) { return ox + (p.x - x0) * k; } function Z(p) { return oz + (p.z - z0) * k; }
+        var R = PK.ride, tb = Math.floor((((R.u - PK.stationU) % 1 + 1) % 1) * BL);
+        for (var b = 0; b < BL; b++) {
+          c.strokeStyle = b === tb ? '#ff4a3a' : '#3f8f5f'; c.lineWidth = 6; c.lineCap = 'round'; c.beginPath();
+          for (var j = 0; j <= N / BL; j++) { var q = P[(Math.floor(PK.stationU * N) + b * N / BL + j) % N]; if (j === 0) c.moveTo(X(q), Z(q)); else c.lineTo(X(q), Z(q)); }
+          c.stroke();
+        }
+        // the lift and the station, marked
+        c.fillStyle = '#9fb2c0'; c.font = '10px ' + SCREEN_THEME.font; c.textAlign = 'center';
+        var ps = PK.curve.getPointAt(PK.stationU), pl = PK.curve.getPointAt((PK.liftU[0] + PK.liftU[1]) / 2);
+        c.fillText('STATION', X(ps), Z(ps) + 18); c.fillText('LIFT', X(pl) + 18, Z(pl));
+        // the train: three cars, the lead one brighter
+        for (var t = 0; t < 3; t++) { var u = ((R.u - t * PK.carGap / PK.len) % 1 + 1) % 1, pt = PK.curve.getPointAt(u); c.fillStyle = t ? '#ffd27a' : '#ffffff'; c.beginPath(); c.arc(X(pt), Z(pt), t ? 4 : 5, 0, 6.283); c.fill(); }
+        c.textAlign = 'left'; c.fillStyle = R.fault ? '#ff6b5e' : '#d6dee3'; c.font = 'bold 12px ' + SCREEN_THEME.font;
+        c.fillText((R.fault ? 'STOP  ' : '') + 'BLOCK ' + (tb + 1) + '   ' + (R.v || 0).toFixed(1) + ' m/s', 12, s.h - 10);
+      } });
+    PK_BK_LIVE.push({ sc: sc, g: g, every: 0.25 });
+    PK_MIMIC = sc;
+  }
+  // two CCTV monitors from the ceiling over the desk, turned to the operator: the queue lane and the platform
+  function pkOpMonitors() {
+    var g = new THREE.Group(); g.position.set(11.75, 2.42, -2.0); g.rotation.y = Math.PI / 2; scene.add(g);
+    pkRoundCyl(0.02, 0.5, pkMats().iron, 0, 0.5, -0.06, g, 6);
+    box(1.0, 0.04, 0.04, pkMats().iron, 0, 0.24, -0.06, g);
+    pkBkMonitor(g, -0.27, 0, 0, 0.15, 0.18, 'CAM 1 · the coaster queue', function (c, s) {
+      c.fillStyle = '#071108'; c.fillRect(0, 0, s.w, s.h);
+      c.fillStyle = '#8fe0a0'; c.font = 'bold 13px monospace'; c.textAlign = 'left'; c.fillText('CAM 1  QUEUE LANE', 8, 16);
+      c.textAlign = 'right'; c.fillText(fmtTime(S.time), s.w - 8, 16);
+      var n = PK_QUEUE_SLOTS.length, q = PK.queue.length, bw = (s.w - 24) / n;
+      for (var i = 0; i < n; i++) { c.strokeStyle = 'rgba(143,224,160,0.3)'; c.strokeRect(12 + i * bw, 60, bw - 4, 38); if (i < q) { c.fillStyle = '#cfe9d4'; c.beginPath(); c.arc(12 + i * bw + (bw - 4) / 2, 79, Math.min(9, bw / 3), 0, 6.283); c.fill(); } }
+      c.fillStyle = '#8fe0a0'; c.textAlign = 'left'; c.font = '13px monospace'; c.fillText('IN LINE ' + q, 10, 132);
+      if (Math.floor(PK_BK_T) % 2 === 0) { c.fillStyle = '#ff3b30'; c.beginPath(); c.arc(s.w - 14, 150, 5, 0, 6.283); c.fill(); }
+      pkBkScanlines(c, s.w, s.h);
+    });
+    pkBkMonitor(g, 0.27, 0, 0, -0.15, 0.18, 'CAM 2 · the platform', function (c, s) {
+      var R = PK.ride;
+      c.fillStyle = '#070b11'; c.fillRect(0, 0, s.w, s.h);
+      c.fillStyle = '#9fc6ff'; c.font = 'bold 13px monospace'; c.textAlign = 'left'; c.fillText('CAM 2  PLATFORM', 8, 16);
+      for (var cr = 0; cr < 3; cr++) for (var st = 0; st < 4; st++) {
+        var x = 12 + cr * 74 + (st % 2) * 30, y = 36 + Math.floor(st / 2) * 30, seat = PK.seats[cr * 4 + st];
+        c.strokeStyle = 'rgba(159,198,255,0.45)'; c.strokeRect(x, y, 26, 26);
+        if (seat && seat.guest) { c.fillStyle = '#d7e6ff'; c.fillRect(x + 3, y + 3, 20, 20); }
+      }
+      c.fillStyle = R.fault ? '#ff6b5e' : '#9fc6ff'; c.font = 'bold 14px monospace'; c.fillText(pkRideWord().toUpperCase(), 10, 120);
+      c.font = '12px monospace'; c.fillText('BARS ' + (R.bars > 0.5 ? 'LOCKED' : 'OPEN') + '   GATES ' + (PK.gates[0] && PK.gates[0].open ? 'OPEN' : 'SHUT'), 10, 148);
+      pkBkScanlines(c, s.w, s.h);
     });
   }
   // the desk buttons and the AUTO lever are gone: the screen carries every control
@@ -5738,9 +5832,13 @@
       R.autoT -= dt;
       if (R.autoT <= 0) {
         R.autoT = 1.4;
-        if (R.state === 'idle' || R.state === 'unload') { pkOpenGates(); R.loadT = 0; }
-        else if (R.state === 'loading') { R.loadT += 1.4; if (pkSeatsFull() || R.loadT > 8) pkBarsDown(); }
-        else if (R.state === 'ready') { if (R.riders === 0) { pkBarsUp(); pkOpenGates(); } else pkDispatch(); }
+        // AUTO asks before it acts, so it never trips a refusal: an empty train waits with its gates open and its bars up,
+        // the bars come down once someone is aboard and seated (a full train at once, else after eight seconds of boarding),
+        // and a train readied with nobody aboard is put back to boarding once, not flapped
+        var walking = pkStillBoarding();
+        if (R.state === 'idle' || R.state === 'unload') { if (!PK.closed) { pkOpenGates(); R.loadT = 0; } }
+        else if (R.state === 'loading') { R.loadT += 1.4; if (R.riders > 0 && !walking && (pkSeatsFull() || R.loadT > 8)) pkBarsDown(); }
+        else if (R.state === 'ready') { if (R.riders === 0) { pkBarsUp(); R.loadT = 0; } else if (!walking && (S.wear || 0) < 90) pkDispatch(); }
       }
     }
     if (R.state === 'loading') pkRideLoad();
@@ -5999,6 +6097,8 @@
     if (n) { pkAttrReslot(a); screenDirtyAll(); }
     return n;
   }
+  // a seat nobody has taken or is walking to
+  function pkAttrHasSeat(a) { for (var i = 0; i < a.seats.length; i++) if (!a.seats[i].guest && !a.seats[i].player) return true; return false; }
   // guests still walking from the gate to their seat: the gates stay open and the ride waits
   function pkAttrWalkers(a) {
     var n = 0;
@@ -6017,7 +6117,8 @@
   }
   function pkAttrStart(a) {
     var C = pkCtl(a);
-    if (C.fault || C.maint || a.queue.length || a.riders <= 0 || pkAttrWalkers(a)) return false;
+    // the line holds the ride only while it can still board: gates shut or seats full, whoever is left waits for the next cycle
+    if (C.fault || C.maint || (a.queue.length && C.gates && pkAttrHasSeat(a)) || a.riders <= 0 || pkAttrWalkers(a)) return false;
     a.state = 'running'; a.t = 0; C.gates = false; C.barsWant = 1;
     sfx('bell');
     if (a.start) a.start(a);
@@ -6053,13 +6154,15 @@
     } else if (a.state === 'boarding') {
       if (C.gates) pkAttrFill(a);
       a.boarding = pkAttrWalkers(a);
-        if (auto && !PK.closed) {
-        if (a.t >= a.board - 1.4 && !a.queue.length && a.riders > 0 && C.barsWant < 1) { C.gates = false; C.barsWant = 1; }
-        if (a.t >= a.board) {
-          // Never dispatch with empty seats while people are still en route.
-          if (a.riders > 0 && !a.queue.length && !pkAttrWalkers(a)) pkAttrStart(a);
-          else a.t = a.board;
+      if (auto && !PK.closed) {
+        // close up when the ride is full, or when boarding time is up and the line has emptied into the seats, or (a line
+        // that is not moving) a few seconds past it; then go once the bars are down and nobody is still walking to a seat.
+        // Whoever is left in the line waits for the next cycle: a line longer than the ride never holds it at the gate.
+        var full = !pkAttrHasSeat(a), walkers = a.boarding;
+        if (a.riders > 0 && !walkers && C.barsWant < 1 && (full || (a.t >= a.board - 1.4 && !a.queue.length) || a.t >= a.board + 6)) {
+          C.gates = false; C.barsWant = 1; a.t = Math.max(a.t, a.board - 1.4);
         }
+        if (a.t >= a.board && C.barsWant >= 1 && !C.gates && a.riders > 0 && !walkers) pkAttrStart(a);
       }
     } else if (a.state === 'ready') {
         if (auto && !PK.closed) pkAttrStart(a);
@@ -7899,7 +8002,7 @@ function pkBoothDispatch(a) {
   if (C.fault) return pkBoothRefuse('Reset ' + a.name + ' first');
   if (C.maint) return pkBoothRefuse(a.name + ' is locked out - turn the key to RUN');
   if (a.state !== 'boarding' && a.state !== 'ready') return pkBoothRefuse(a.state === 'idle' ? 'Board the guests first' : a.name + ' is ' + a.state);
-  if (a.queue.length) return pkBoothRefuse('Wait for the queue to finish boarding');
+  if (a.queue.length && C.gates && pkAttrHasSeat(a)) return pkBoothRefuse('Wait for the queue to finish boarding');
   if (a.boarding && pkAttrWalkers(a)) return pkBoothRefuse('Wait for the riders to sit');
   if (!a.riders) return pkBoothRefuse('Nobody is aboard ' + a.name);
   if (a.state === 'boarding' && !C.gates) return pkBoothRefuse('Open the gates to board ' + a.name);
