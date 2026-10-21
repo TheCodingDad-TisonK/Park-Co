@@ -373,7 +373,7 @@
   }
   // ── The game ──────────────────────────────────────────────────────
   var GAME = {
-    handle: 'PARK_CO', version: '0.2.0',
+    handle: 'PARK_CO', version: '0.2.1',
     floorY: function (x, z) { return pkFloor(x, z); },
     insideWalk: function (x, z) { return pkInsidePark(x, z); },
     // the coaster's control room (part 03, PK_OP): indoors, under its roof, inside its four walls
