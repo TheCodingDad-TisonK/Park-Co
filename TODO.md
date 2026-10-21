@@ -98,7 +98,15 @@ lamps, rich colour, planting and ornament, a themed entrance for every ride. Eac
       52 s) and The Firebird (20 m lift, a falling helix, a corkscrew, 299 m, 58 km/h, 47 s), both under 4.8 g. Each has a
       slate-roofed platform canopy and a control house with the full cabin kit (desk and status bank, monitors, cabinet,
       status board, time clock, lights), brick plinth, slate roof and turret
-- [ ] 10. One big coaster that runs partly indoors and partly outdoors
+- [x] 9b. The crowd walks the whole park (it only went round the midway: every spot it knew was within 14 m of it): five
+      kinds of visitor, each touring a land and back (the Fairground and kids' garden, Thrills, the Dark Woods and the
+      halls, Coaster Country and the East Walk, the gardens), up to 25 at a time, and a sweeper and a gardener up north
+- [x] 9c. Nobody reached the rides when nobody sold tickets (your save: day 20, no clerk, so every guest waited at the window
+      while you ran a booth). A self-service machine beside each window now sells to the front of the line after 6 s when
+      the window is not staffed and you are not at it. In your current game: flip TICKET WINDOW to staffed on the park
+      services board, or hire the clerk
+- [ ] 9d. The two ticket windows as proper buildings with an inside you can walk into (your ask, 21 Oct)
+- [~] 10. One big coaster that runs partly indoors and partly outdoors
 - [ ] 11. Odd-angle audit of the whole park: overlaps, floating things, odd placement — and fix them
 - [ ] 12. Ferris wheel / Baron's Drop pads overlap by ~1 m
 - [ ] 13. Cleanup: delete old installers in `dist/` and the Desktop zip (the zip is an 18 Oct backup that

@@ -127,6 +127,20 @@
     gu.lockWait = 0;
     pkGo(gu, randf(-6, 6), randf(8, 22), 'off');
   }
+  // The self-service machine beside each ticket window: with no clerk staffing the window and the player not at it, the guest
+  // at the front of the line waits a moment, then buys there at the same price, so the park keeps filling while you run a
+  // ride. Selling at the window yourself (or a clerk) still serves first.
+  var PK_MACHINE_WAIT = 6;
+  function pkGuestMachine(gu, dt) {
+    var b = PK.booths[gu.booth];
+    if (S.clerk || PK.closed || !b || b.queue[0] !== gu) { gu.mWait = 0; return; }
+    if (player && Math.hypot(player.x - b.x, player.z - (b.z + 2.0)) < 3.2) { gu.mWait = 0; return; }   // you are at the window
+    gu.mWait = (gu.mWait || 0) + dt;
+    if (gu.mWait < PK_MACHINE_WAIT) return;
+    gu.mWait = 0;
+    pkServe(gu.booth, true);
+    if (b.machine) b.machine.blink = 1.2;
+  }
   function pkGuestStep(gu, dt) {
     var rec = gu.rec, g = gu.g;
     gu.t += dt;
@@ -139,7 +153,8 @@
     } else if (gu.state === 'walkBooth') {
       if (arrived) { PK.booths[gu.booth].queue.push(gu); gu.state = 'boothQueue'; }
     } else if (gu.state === 'boothQueue') {
-      // the window serves the front of the line
+      // the window serves the front of the line; when nobody staffs it, the front of the line pays at the machine
+      pkGuestMachine(gu, dt);
     } else if (gu.state === 'toTurn') {
       var tb = PK.booths[gu.booth] || PK.booths[0];
       if (!rec.path.length) pkGo(gu, tb.turnstile, PK_GATE_Z + 2, 'walkTurn');
@@ -244,7 +259,7 @@
     });
   }
   // ── The ticket window ─────────────────────────────────────────────
-  function pkServe(bi) {
+  function pkServe(bi, machine) {
     if (PK.closed) { sfx('bad'); toast('The park is closed', 'bad'); return false; }
     var b = PK.booths[bi]; if (!b) return false;
     var gu = null;
@@ -255,8 +270,8 @@
     pkXp(1);
     gu.ticket = true; gu.state = 'toTurn'; gu.booth = bi;
     b.queue.splice(b.queue.indexOf(gu), 1);
-    sfx('cash'); say(gu.g, 'One, please!');
-    toast('Ticket sold - ' + money(S.ticketPrice), 'good');
+    if (machine) { say(gu.g, pick(['The machine, then', 'Card, beep, done', 'Got it!'])); PK.today.machine = (PK.today.machine || 0) + 1; }
+    else { sfx('cash'); say(gu.g, 'One, please!'); toast('Ticket sold - ' + money(S.ticketPrice), 'good'); }
     screenDirtyAll(); hudDirty = true;
     return true;
   }

@@ -20,37 +20,56 @@
         "steps": [
           {
             "do": "walk",
-            "to": "plaza"
-          },
-          {
-            "do": "wander",
-            "radius": 6,
-            "seconds": 12
-          },
-          {
-            "do": "walk",
             "to": "midway"
           },
           {
             "do": "wander",
             "radius": 4,
+            "seconds": 8
+          },
+          {
+            "do": "walk",
+            "to": "carousel"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 12
+          },
+          {
+            "do": "walk",
+            "to": "fairCross"
+          },
+          {
+            "do": "walk",
+            "to": "teacups"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
             "seconds": 10
           },
           {
             "do": "walk",
-            "to": "station"
+            "to": "kidsLane"
           },
           {
-            "do": "wait",
-            "seconds": 6
+            "do": "wander",
+            "radius": 5,
+            "seconds": 14
+          },
+          {
+            "do": "say",
+            "text": "Look at the little train!"
           },
           {
             "do": "walk",
             "to": "snack"
           },
           {
-            "do": "wait",
-            "seconds": 4
+            "do": "wander",
+            "radius": 3,
+            "seconds": 6
           },
           {
             "do": "walk",
@@ -80,20 +99,16 @@
         "steps": [
           {
             "do": "walk",
-            "to": "plaza"
-          },
-          {
-            "do": "walk",
-            "to": "carousel"
+            "to": "midway"
           },
           {
             "do": "wander",
-            "radius": 5,
-            "seconds": 14
+            "radius": 4,
+            "seconds": 8
           },
           {
             "do": "walk",
-            "to": "midway"
+            "to": "ferris"
           },
           {
             "do": "wander",
@@ -102,11 +117,33 @@
           },
           {
             "do": "walk",
-            "to": "ferris"
+            "to": "thrillCross"
+          },
+          {
+            "do": "walk",
+            "to": "dodgems"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 14
+          },
+          {
+            "do": "face",
+            "to": "baron"
           },
           {
             "do": "wait",
-            "seconds": 5
+            "seconds": 6
+          },
+          {
+            "do": "walk",
+            "to": "station"
+          },
+          {
+            "do": "wander",
+            "radius": 3,
+            "seconds": 6
           },
           {
             "do": "walk",
@@ -136,12 +173,43 @@
         "steps": [
           {
             "do": "walk",
-            "to": "midway"
+            "to": "fairCross"
           },
           {
             "do": "wander",
-            "radius": 7,
-            "seconds": 16
+            "radius": 3,
+            "seconds": 4
+          },
+          {
+            "do": "walk",
+            "to": "darkWoods"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 14
+          },
+          {
+            "do": "walk",
+            "to": "dropTower"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 10
+          },
+          {
+            "do": "walk",
+            "to": "promWest"
+          },
+          {
+            "do": "walk",
+            "to": "halls"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 12
           },
           {
             "do": "say",
@@ -149,11 +217,196 @@
           },
           {
             "do": "walk",
-            "to": "teacups"
+            "to": "gardenWalk"
           },
           {
             "do": "wander",
-            "radius": 4,
+            "radius": 5,
+            "seconds": 10
+          },
+          {
+            "do": "walk",
+            "to": "plaza"
+          },
+          {
+            "do": "leave"
+          }
+        ]
+      },
+      "visitorD": {
+        "names": [
+          "Lars",
+          "Julia",
+          "Bas",
+          "Roos",
+          "Milan",
+          "Fleur"
+        ],
+        "look": {
+          "shirt": "#7a4a8a",
+          "pants": "#2b2f36",
+          "skin": "#e2b48a",
+          "hair": "#4a2f1c"
+        },
+        "speed": 1.45,
+        "steps": [
+          {
+            "do": "walk",
+            "to": "thrillCross"
+          },
+          {
+            "do": "wander",
+            "radius": 3,
+            "seconds": 4
+          },
+          {
+            "do": "walk",
+            "to": "coasterCountry"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 12
+          },
+          {
+            "do": "walk",
+            "to": "promEast"
+          },
+          {
+            "do": "walk",
+            "to": "eastWalk"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 10
+          },
+          {
+            "do": "walk",
+            "to": "firebird"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 12
+          },
+          {
+            "do": "face",
+            "to": "firebirdTrack"
+          },
+          {
+            "do": "wait",
+            "seconds": 8
+          },
+          {
+            "do": "walk",
+            "to": "dragon"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 12
+          },
+          {
+            "do": "say",
+            "text": "That loop!"
+          },
+          {
+            "do": "walk",
+            "to": "promEast"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 6
+          },
+          {
+            "do": "walk",
+            "to": "plaza"
+          },
+          {
+            "do": "leave"
+          }
+        ]
+      },
+      "visitorE": {
+        "names": [
+          "Wim",
+          "Ellen",
+          "Jan",
+          "Ilse",
+          "Koen",
+          "Maud"
+        ],
+        "look": {
+          "shirt": "#c9a227",
+          "pants": "#3a3f48",
+          "skin": "#d39a72",
+          "hair": "#8a6a4a"
+        },
+        "speed": 1.2,
+        "steps": [
+          {
+            "do": "walk",
+            "to": "fairCross"
+          },
+          {
+            "do": "wander",
+            "radius": 3,
+            "seconds": 4
+          },
+          {
+            "do": "walk",
+            "to": "gardenWest"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 8
+          },
+          {
+            "do": "walk",
+            "to": "gardenWalk"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 12
+          },
+          {
+            "do": "walk",
+            "to": "clock"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 14
+          },
+          {
+            "do": "walk",
+            "to": "bandstand"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 16
+          },
+          {
+            "do": "walk",
+            "to": "maze"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 10
+          },
+          {
+            "do": "walk",
+            "to": "promWest"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
             "seconds": 8
           },
           {
@@ -203,6 +456,79 @@
             "do": "wander",
             "radius": 5,
             "seconds": 18
+          }
+        ]
+      },
+      "sweeperNorth": {
+        "names": [
+          "Joop"
+        ],
+        "look": {
+          "shirt": "#e0a92c",
+          "pants": "#2f3440",
+          "skin": "#c99266",
+          "hair": "#3a3a3a"
+        },
+        "speed": 1.1,
+        "steps": [
+          {
+            "do": "walk",
+            "to": "gardenWalk"
+          },
+          {
+            "do": "wander",
+            "radius": 9,
+            "seconds": 30
+          },
+          {
+            "do": "walk",
+            "to": "promWest"
+          },
+          {
+            "do": "wander",
+            "radius": 8,
+            "seconds": 25
+          },
+          {
+            "do": "walk",
+            "to": "promEast"
+          },
+          {
+            "do": "wander",
+            "radius": 8,
+            "seconds": 25
+          }
+        ]
+      },
+      "gardener": {
+        "names": [
+          "Truus"
+        ],
+        "look": {
+          "shirt": "#4d7a3a",
+          "pants": "#3a2f24",
+          "skin": "#e0b48e",
+          "hair": "#b8b8b8"
+        },
+        "speed": 1,
+        "steps": [
+          {
+            "do": "walk",
+            "to": "clock"
+          },
+          {
+            "do": "wander",
+            "radius": 6,
+            "seconds": 40
+          },
+          {
+            "do": "walk",
+            "to": "maze"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 30
           }
         ]
       },
@@ -256,7 +582,7 @@
         "x": -5,
         "z": 26,
         "every": 13,
-        "max": 5,
+        "max": 6,
         "hours": [
           9,
           22
@@ -267,8 +593,8 @@
         "character": "visitorB",
         "x": 5,
         "z": 26,
-        "every": 17,
-        "max": 4,
+        "every": 15,
+        "max": 5,
         "hours": [
           9,
           22
@@ -279,7 +605,31 @@
         "character": "visitorC",
         "x": 0,
         "z": 24,
-        "every": 21,
+        "every": 17,
+        "max": 5,
+        "hours": [
+          9,
+          22
+        ]
+      },
+      {
+        "id": "crowdD",
+        "character": "visitorD",
+        "x": 3,
+        "z": 24,
+        "every": 17,
+        "max": 5,
+        "hours": [
+          9,
+          22
+        ]
+      },
+      {
+        "id": "crowdE",
+        "character": "visitorE",
+        "x": -3,
+        "z": 24,
+        "every": 19,
         "max": 4,
         "hours": [
           9,
@@ -293,6 +643,36 @@
         "character": "sweeper",
         "x": 0,
         "z": 20,
+        "ry": 0,
+        "home": [
+          0,
+          24
+        ],
+        "hours": [
+          9,
+          22
+        ]
+      },
+      {
+        "id": "sweeperNorth",
+        "character": "sweeperNorth",
+        "x": 2,
+        "z": -44,
+        "ry": 0,
+        "home": [
+          0,
+          24
+        ],
+        "hours": [
+          9,
+          22
+        ]
+      },
+      {
+        "id": "gardener",
+        "character": "gardener",
+        "x": 4,
+        "z": -58,
         "ry": 0,
         "home": [
           0,
@@ -324,6 +704,10 @@
         "x": 0,
         "z": 26
       },
+      "gate": {
+        "x": 0,
+        "z": 28
+      },
       "midway": {
         "x": 0,
         "z": 14
@@ -331,6 +715,10 @@
       "station": {
         "x": 0,
         "z": 4
+      },
+      "coaster": {
+        "x": 0,
+        "z": -2
       },
       "snack": {
         "x": -11,
@@ -340,21 +728,93 @@
         "x": -14,
         "z": 19
       },
-      "teacups": {
-        "x": -14,
-        "z": 3
-      },
       "ferris": {
         "x": 13,
         "z": 19
       },
-      "coaster": {
-        "x": 0,
-        "z": -2
+      "fairCross": {
+        "x": -31,
+        "z": 3
       },
-      "gate": {
-        "x": 0,
-        "z": 28
+      "teacups": {
+        "x": -40,
+        "z": 3
+      },
+      "kidsLane": {
+        "x": -46.8,
+        "z": 36
+      },
+      "thrillCross": {
+        "x": 35,
+        "z": 3
+      },
+      "dodgems": {
+        "x": 42,
+        "z": 3
+      },
+      "baron": {
+        "x": 57,
+        "z": 19
+      },
+      "darkWoods": {
+        "x": -36,
+        "z": -24
+      },
+      "dropTower": {
+        "x": -36,
+        "z": -52
+      },
+      "promWest": {
+        "x": -20,
+        "z": -60
+      },
+      "halls": {
+        "x": -46.5,
+        "z": -70
+      },
+      "gardenWest": {
+        "x": -28,
+        "z": -44
+      },
+      "gardenWalk": {
+        "x": 2,
+        "z": -44
+      },
+      "clock": {
+        "x": 6,
+        "z": -58
+      },
+      "bandstand": {
+        "x": 2,
+        "z": -66
+      },
+      "maze": {
+        "x": 9.5,
+        "z": -72
+      },
+      "coasterCountry": {
+        "x": 40,
+        "z": -24
+      },
+      "promEast": {
+        "x": 50,
+        "z": -60
+      },
+      "eastWalk": {
+        "x": 76,
+        "z": -20
+      },
+      "firebird": {
+        "x": 77,
+        "z": -36
+      },
+      "firebirdTrack": {
+        "x": 100,
+        "z": -30
+      },
+      "dragon": {
+        "x": 77,
+        "z": -92
       }
     }
   });

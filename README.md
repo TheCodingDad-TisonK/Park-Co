@@ -41,7 +41,7 @@ A fairy-tale park in the Efteling manner rather than sheds with signs: deep-gree
 ## The loop
 
 1. Guests come by car, one to four to a car: off the road, under the barrier and up the drive into a free bay. They get out and join the shorter ticket line. The lot fills through the day (41 bays, up to 110 guests in the park) and empties at closing: at the end of their day each party walks back to its car, gets in, backs out and drives away.
-2. You serve the window: the ticket is sold, the money lands, the guest walks to a turnstile.
+2. You serve the window (or the clerk does): the ticket is sold, the money lands, the guest walks to a turnstile. With nobody at the window, the guest at the front of the line buys at the self-service machine beside it after a few seconds, so the park keeps filling while you run a ride.
 3. Past the turnstile the guest picks the ride with the shortest line — the coaster, or any open ride. A ride whose operator key is still OFF takes a line too: the guests stand and wait for it to open, and give up after a minute or two. Up to 90 guests are in the park at once, and each rides up to four times before going home.
 4. For the coaster: you open the gates and the front of the queue walks in, one seat at a time; pull the restraints down and dispatch.
 5. The train runs the circuit and comes home; the guests get off and either ride again, buy a snack or go home.
