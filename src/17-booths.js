@@ -423,8 +423,47 @@
     pkBevelBox(0.46, 0.5, 0.08, chairM, 0, 0.72, -0.24, g, 0.03);
     pkRoundCyl(0.035, 0.4, iron, 0, 0.21, 0, g, 8);
     for (var c = 0; c < 5; c++) { var arm = pkBevelBox(0.04, 0.035, 0.28, iron, Math.sin(c * 1.2566) * 0.13, 0.04, Math.cos(c * 1.2566) * 0.13, g, 0.008); arm.rotation.y = c * 1.2566; }
+    // E sits you in it, facing the way it faces: at the desk, at desk height
+    hitBox(0.62, 1.05, 0.62, 0, 0.55, 0, { prompt: function () { return PK_SIT ? '' : 'Sit down'; }, use: function () { pkBkSit(g); } }, g);
     return g;
   }
+  // ── Sitting down ──────────────────────────────────────────────────
+  // seated, the camera stays on the chair at a seated eye height and the mouse still looks round, so the panel in front is
+  // in reach; E, or walking off, stands you up where you sat
+  var PK_SIT = null, PK_SIT_V = new THREE.Vector3(), PK_SIT_F = new THREE.Vector3();
+  function pkBkSit(chair) {
+    if (PK_SIT || PK.playerRide) return;
+    chair.updateWorldMatrix(true, false);
+    PK_SIT_V.setFromMatrixPosition(chair.matrixWorld);
+    PK_SIT_F.set(0, 0, 1).transformDirection(chair.matrixWorld);
+    PK_SIT = { chair: chair, x: PK_SIT_V.x, y: PK_SIT_V.y, z: PK_SIT_V.z, sx: player.x, sz: player.z };
+    player.yaw = Math.atan2(-PK_SIT_F.x, -PK_SIT_F.z); player.pitch = -0.18;
+    sfx('click'); toast('Seated - E or a step to stand up', '');
+  }
+  function pkBkStand() {
+    if (!PK_SIT) return false;
+    player.x = PK_SIT.x + Math.sin(player.yaw) * 0.55; player.z = PK_SIT.z + Math.cos(player.yaw) * 0.55;   // a step back from the desk
+    if (collides(player.x, player.z)) { player.x = PK_SIT.sx; player.z = PK_SIT.sz; }
+    PK_SIT = null; sfx('click');
+    return true;
+  }
+  var _pkBkPrevOverride = GAME.playerOverride;
+  GAME.playerOverride = function (dt) {
+    if (PK_SIT) {
+      var k = player.keys;
+      if (k.KeyW || k.KeyS || k.KeyA || k.KeyD) { pkBkStand(); return false; }
+      player.x = PK_SIT.x; player.z = PK_SIT.z; player.y = PK_SIT.y; player.vy = 0;
+      camera.position.set(PK_SIT.x, PK_SIT.y + 1.18, PK_SIT.z);
+      camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
+      return true;
+    }
+    return _pkBkPrevOverride ? _pkBkPrevOverride(dt) : false;
+  };
+  var _pkBkPrevKey = GAME.key;
+  GAME.key = function (e) {
+    if (PK_SIT && e.code === 'KeyE' && !e.repeat) return pkBkStand();
+    return _pkBkPrevKey ? _pkBkPrevKey(e) : false;
+  };
 
   // ── The booth ─────────────────────────────────────────────────────
   var PK_BK = { W: 3.8, D: 2.9, FLOOR: 0.45, WALL: 2.5, SILL: 0.95, HEAD: 2.05, T: 0.14, DOORW: 1.1, DOORZ: -0.35, STAIR: 0.45 };   // STAIR: the steps run this far past the door each side

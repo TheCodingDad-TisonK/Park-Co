@@ -27,12 +27,17 @@ To see it: open this folder in the Co Engine editor, or `npm run dev`.
 
 ## Next, in this order
 
-- [ ] 1. HUD: the "Ride: boarding …" pill reads as if you are on a ride; relabel it as the coaster's status
+- [x] 1. HUD: the pill now reads "Coaster: boarding (auto) · 16 of 16 rides open", and "Riding …" only while you are on one
+- [x] 1b. Coaster control room: the coaster desk moved under the long window, facing the platform; the
+      station desk with the CCTV moved to the north wall
+- [x] 1c. Sit in the chairs: E on any booth, cabin or control-room chair sits you at the desk; E or a step stands you up
 - [~] 2. Every coaster's station dead level, straight and unbanked where the train stands
       (measured: Serpent 60° bank / 27° slope, Baron 17°, indoor 37–44°, Puffin 42°; main coaster OK)
 - [ ] 3. New outdoor tracks: The Serpent (18 m lift, big drop, turnaround, camelback, both loops),
       Baron's Drop (keep lift, dive and tunnel; new south-east run; fix its hairpin approach),
       Puffin Line (bigger loop, straight station)
+- [ ] 3b. Speed test on every ride: top speed and lap time on the coasters, spin rate on the flat rides,
+      against real rides; tune the ones that are far too fast or too slow
 - [ ] 4. Indoor coasters bigger and better looking: bigger, taller halls (north fence moves back),
       longer tracks, proper facades and theming
 - [ ] 5. A proper station for every flat ride: platform, entry and exit, gates, canopy, sign

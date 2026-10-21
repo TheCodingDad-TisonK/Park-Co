@@ -426,14 +426,17 @@ function pkCtlGuard() {
 // ── The coaster's control desk ───────────────────────────────────────
 // One group at the top of the world: the editor selects, moves and turns the whole console as
 // one item, and nothing on the fascia can be nudged out of place on its own.
-function pkBuildCoasterConsole() {
+// at: where the desk stands and which way it faces ({ x, z, ry }; its front, the operator's side, is local +z). Every part
+// hangs off one group, so the whole desk is placed and turned as one.
+function pkBuildCoasterConsole(at) {
   pkCtlStart();
   var C = pkCtlState();
   if (C.built) return C;
   C.built = true;
   var M = pkCtlM();
-  var G = new THREE.Group(); scene.add(G);
-  var CX = 14.30, CZ = -3.50, TOP = 0.91, PW = 2.60, PH = 0.72, TILT = 0.52;
+  at = at || { x: 14.30, z: -3.50, ry: 0 };
+  var G = new THREE.Group(); G.position.set(at.x, 0, at.z); G.rotation.y = at.ry || 0; scene.add(G);
+  var CX = 0, CZ = 0, TOP = 0.91, PW = 2.60, PH = 0.72, TILT = 0.52;
 
   // ── the cabinet: a steel pedestal with two doors, a kick plate and a vent ──
   pkBevelBox(2.72, 0.84, 0.68, M.case, CX, 0.43, CZ, G, 0.025);
@@ -606,7 +609,8 @@ function pkBuildCoasterConsole() {
     }
   });
   // the console is a fixture of the room: it is solid so nobody walks through the doors
-  solid(CX - 1.36, CX + 1.36, CZ - 0.34, CZ + 0.34, 0, 0.95);
+  var rc = Math.abs(Math.cos(at.ry || 0)), rs = Math.abs(Math.sin(at.ry || 0)), hx = 1.36 * rc + 0.34 * rs, hz = 1.36 * rs + 0.34 * rc;
+  solid(at.x - hx, at.x + hx, at.z - hz, at.z + hz, 0, 0.95);
   return C;
 }
 

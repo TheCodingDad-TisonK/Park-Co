@@ -10,7 +10,7 @@ module.exports = `
   ok(T.counts().draws > 0 && T.counts().baked > 0, 'frames draw with the bake in: ' + JSON.stringify(T.counts()));
   // the save and the HUD
   ok(T.CO.save.key === 'park-co-slot1' && S.bank === 500 && S.day === 1 && S.ticketPrice === 25 && S.snackPrice === 6 && S.clerk === true, 'a fresh save on slot 1: bank ' + S.bank + ', clerk on');
-  T.updateHud(1); ok(document.getElementById('h-cash').textContent === '$500' && /Day 1/.test(document.getElementById('h-day').textContent) && /in the park/.test(document.getElementById('h-guests').textContent) && /Ride:/.test(document.getElementById('h-ride').textContent), 'the HUD shows the engine fields and the game fields');
+  T.updateHud(1); ok(document.getElementById('h-cash').textContent === '$500' && /Day 1/.test(document.getElementById('h-day').textContent) && /in the park/.test(document.getElementById('h-guests').textContent) && /Coaster:/.test(document.getElementById('h-ride').textContent) && !/Riding/.test(document.getElementById('h-ride').textContent), 'the HUD shows the engine fields and the game fields');
   T.pay(-10, 'a test'); ok(S.bank === 490 && S.ledger[0].n === -10 && S.stats.spent === 10, 'pay writes the bank, the ledger and the stats');
   // the world
   ok(!!T.pkTrack() && T.pkTrack().getLength() > 100, 'the coaster is a closed circuit ' + T.pkTrack().getLength().toFixed(0) + ' m long');
@@ -44,6 +44,12 @@ module.exports = `
       if (shut || !open) out.push(a.id + (shut ? ' (walked through the shut door)' : ' (could not get in)'));
     });
     ok(out.length === 0, 'every booth: the shut door keeps you out, the open door lets you up the steps and in' + (out.length ? ': ' + out.join(', ') : '')); }
+  // a booth chair seats the player at the desk, and a step stands them up
+  { let chair = null; T.scene.traverse((o) => { if (!chair && o.userData && o.userData.it && /Sit down/.test((o.userData.it.prompt && o.userData.it.prompt()) || '')) chair = o.parent; });
+    if (chair) { T.pkBkSit(chair); T.updatePlayer(0.05); const sat = !!T.pkBkSitting() && T.camera.position.y < T.pkBkSitting().y + 1.3;
+      T.player.keys.KeyW = true; T.updatePlayer(0.05); T.player.keys.KeyW = false;
+      ok(sat && !T.pkBkSitting(), 'a chair seats the player at desk height and a step stands them up'); }
+    else ok(false, 'no chair to sit in'); }
   // the key switch in MAINT locks a ride out: nobody boards, the desk refuses, and back to RUN it works again
   { const a = T.PK.attrById.teacups, C = T.pkCtl(a); a.state = 'idle'; a.t = 0; a.riders = 0; a.queue.length = 0; C.fault = ''; C.auto = true; T.pkAttrUnseatAll(a);
     const g = T.pkSpawnGuest(); const s0 = T.pkAttrSlot(a, 0); g.rec.x = s0.x; g.rec.z = s0.z; g.state = 'qwait'; g.slot = 0; g.attr = a.id; a.queue.push(g);
@@ -281,7 +287,7 @@ module.exports = `
     ok(a.seats.length >= 6 && Math.abs(a.seats[0].par.rotation.y - p0) > 0.2, a.name + ' turns on its deck');
   });
   { const a = T.PK.attrById.kpuffin, E = a.extra;
-    a.ctl.auto = true; a.ctl.fault = ''; a.state = 'running';
+    a.ctl.auto = true; a.ctl.fault = ''; a.state = 'running'; a.t = 0; T.pkAttrTick(a, 0.0001);   // from the station, wherever AUTO left it
     const x0 = E.cars[0].g.position.x, z0 = E.cars[0].g.position.z;
     a.t = a.run * 0.5; T.pkAttrTick(a, 0.016);
     const moved = Math.hypot(E.cars[0].g.position.x - x0, E.cars[0].g.position.z - z0);
@@ -315,10 +321,10 @@ module.exports = `
   T.menuAct('guide'); ok(/Park Co/.test(document.getElementById('dc-menu-body').innerHTML) && /AUTO/.test(document.getElementById('dc-menu-body').innerHTML), 'the guide comes from the game');
   T.closeMenu(); ok(!T.ui.menuOpen, 'resume');
   // the player: the operator desk carries no buttons now, and the ramp
-  { T.player.x = 13.4; T.player.z = -1.0; T.player.y = 0; T.lookAt(12.4, 1.1, -1.0); ok(!/Gates|Restraints|Dispatch|E-stop|MANUAL|AUTO/.test(T.focusText()), 'the old button row focuses nothing: ' + (T.focusText() || 'nothing')); }
+  { T.player.x = 12.75; T.player.z = -0.98; T.player.y = 0; T.lookAt(11.67, 1.37, -0.98); ok(/Press|BARS/.test(T.focusText()), 'the coaster desk stands under the window, facing it, its buttons in reach: ' + (T.focusText() || 'nothing')); }
   { T.player.x = 0; T.player.z = 3; T.player.y = 0; T.player.yaw = 0; T.player.keys.KeyW = true; for (let i = 0; i < 25; i++) T.updatePlayer(0.05); T.player.keys.KeyW = false; ok(T.player.z < -0.6 && T.player.y > 0.5, 'W walks up the ramp onto the platform: z ' + T.player.z.toFixed(2) + ', y ' + T.player.y.toFixed(2)); }
-  { const desk = T.collides(14.3, -3.5), floor = T.collides(14.3, -1.6), midway = T.collides(0, 5);
-    ok(desk === true && floor === false && midway === false, 'the control desk is solid and the booth floor stays walkable (' + desk + ', ' + floor + ', ' + midway + ')'); }
+  { const desk = T.collides(11.6, -0.85), station = T.collides(14.3, -3.5), floor = T.collides(14.3, -1.6), midway = T.collides(0, 5);
+    ok(desk === true && station === true && floor === false && midway === false, 'the coaster desk and the station desk are solid and the room floor stays walkable (' + desk + ', ' + station + ', ' + floor + ', ' + midway + ')'); }
   // the day rolls over and pays the wages
    { const d0 = S.day; S.operator = true; S.clerk = true; const w = (S.clerk ? 40 : 0) + (S.operator ? 60 : 0);
         S.time = 22; T.setTime(22); for (let i = 0; i < 2520; i++) T.pkTick(0.05);

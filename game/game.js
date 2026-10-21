@@ -3979,7 +3979,7 @@
     "group@-8,10": { x: -6.75, z: 10.6, hidden: true },
     "group@-8,2": { x: -6.65, z: 13.6, hidden: true },
     "group@-8,20": { x: -9.25, z: 22.35, ry: -180 },
-    "group@0,0": { x: -1.75, ry: -360 },
+    "group@0,0": { z: -0.15, ry: -360 },
     "group@0,0#2": { x: -0.1, z: 0.1 },
     "group@0,0#3": { x: 0.2, z: 0.05 },
     "group@10.23,-70.99": { x: 10.1, z: -71.15, hidden: true },
@@ -4747,7 +4747,13 @@
     startNote: function (loaded) { return loaded ? 'Slot ' + CO.save.slot + ' · last saved ' + (S.savedAt ? new Date(S.savedAt).toLocaleString() : 'never') : 'Slot ' + CO.save.slot + ' · a new park'; },
     hud: function () {
       var g = $('h-guests'); if (g) g.textContent = PK.guests.length + ' in the park';
-      var r = $('h-ride'); if (r) r.textContent = 'Ride: ' + pkRideWord() + ' · ' + pkOpenCount() + '/' + (PK.attractions.length + 1) + ' open' + (pkCoasterAuto() ? ' · auto' : '');
+      // the main coaster's own state (it is the ride you work), how many rides are open, and - only while you are on one - the
+      // ride you are on, so the pill never reads as if you were riding when you are not
+      var r = $('h-ride');
+      if (r) {
+        var pr = PK.playerRide, on = pr ? (pr.kind === 'coaster' ? 'the coaster' : pr.a && pr.a.name) : '';
+        r.textContent = (on ? 'Riding ' + on + ' · ' : '') + 'Coaster: ' + pkRideWord() + (pkCoasterAuto() ? ' (auto)' : '') + ' · ' + pkOpenCount() + ' of ' + (PK.attractions.length + 1) + ' rides open';
+      }
     },
     panel: function (kind, tab) { return pkPanel(kind, tab); },
     panelAct: function (act, arg) { return pkPanelAct(act, arg); },
@@ -5321,20 +5327,21 @@
     box(W - 0.4, 0.9, 0.04, wains, CX, 0.45, Z0 + 0.12); box(W - 0.38, 0.06, 0.08, oak, CX, 0.92, Z0 + 0.13);
     box(0.04, 0.9, D - 0.4, wains, X1 - 0.12, 0.45, CZ); box(0.08, 0.06, D - 0.38, oak, X1 - 0.13, 0.92, CZ);
     [0.6, 2.1, 3.6].forEach(function (k) { pkBkBatten(scene, X0 + 1.4 + (k / 3.6) * (W - 2.8), H - 0.06, CZ - 0.6, 0, 1.3); });
-    // the coaster desk on the north wall, and the status board above it
-    pkBuildCoasterConsole();
-    box(1.08, 0.96, 0.06, MAT.steelDark, 14, 2.02, Z0 + 0.07);
-    // the station desk under the long window: oak on a steel frame, the CCTV monitors on their stands, the radio and the log
-    var sdx = X0 + 0.55;
-    pkBevelBox(0.72, 0.05, 3.2, oak, sdx, 0.78, -1.9, null, 0.012);
-    pkBevelBox(0.7, 0.72, 0.04, dark, sdx + 0.28, 0.38, -1.9, null, 0.008);
-    [-3.4, -0.4].forEach(function (z) { pkBevelBox(0.66, 0.74, 0.06, steel, sdx, 0.38, z, null, 0.01); });
-    pkOpMonitors(sdx - 0.08, -2.35);
-    pkBkRadio(scene, sdx - 0.05, 0.805, -0.75, Math.PI / 2);
-    pkBevelBox(0.3, 0.03, 0.22, S2({ color: 0x2f4f7a, roughness: 0.7 }), sdx + 0.05, 0.82, -1.15, null, 0.008);
-    pkRoundCyl(0.045, 0.1, S2({ color: 0xf2efe6, roughness: 0.5 }), sdx + 0.12, 0.85, -0.5, null, 12);
-    pkBkChair(scene, sdx + 0.95, -1.8, -Math.PI / 2, 0);
-    pkBkChair(scene, 14.3, -2.5, 0, 0);
+    // the coaster desk under the long window, facing it: the operator works the ride with the platform and the train in
+    // front of them; the status board hangs on the north wall at their right hand
+    pkBuildCoasterConsole({ x: X0 + 0.6, z: -0.85, ry: Math.PI / 2 });
+    pkBkChair(scene, X0 + 1.55, -0.85, -Math.PI / 2, 0);
+    box(1.08, 0.96, 0.06, MAT.steelDark, 14.8, 2.02, Z0 + 0.07);
+    // the station desk on the north wall: oak on a steel frame, the CCTV monitors on their stands, the radio and the log
+    var sdz = Z0 + 0.5;
+    pkBevelBox(3.0, 0.05, 0.72, oak, 14.8, 0.78, sdz, null, 0.012);
+    pkBevelBox(3.0, 0.72, 0.04, dark, 14.8, 0.38, sdz - 0.28, null, 0.008);
+    [13.4, 16.2].forEach(function (x) { pkBevelBox(0.06, 0.74, 0.66, steel, x, 0.38, sdz, null, 0.01); });
+    pkOpMonitors(14.5, sdz - 0.08, 0);
+    pkBkRadio(scene, 15.9, 0.805, sdz - 0.05, 0);
+    pkBevelBox(0.22, 0.03, 0.3, S2({ color: 0x2f4f7a, roughness: 0.7 }), 15.45, 0.82, sdz + 0.05, null, 0.008);
+    pkRoundCyl(0.045, 0.1, S2({ color: 0xf2efe6, roughness: 0.5 }), 13.7, 0.85, sdz + 0.12, null, 12);
+    pkBkChair(scene, 14.6, sdz + 0.95, Math.PI, 0);
     // the equipment bay: the lift drive and the PLC rack under the clerestory, the track mimic on the east wall
     pkOpLiftDrive(16.95, Z0 + 0.42);
     pkOpPlcRack(18.75, Z0 + 0.42);
@@ -5353,10 +5360,10 @@
     pkBkIntercom(scene, 11.7, 1.5, Z0 + 0.1, 0);
     pkBkVest(scene, X1 - 0.13, 1.85, 1.2, -Math.PI / 2);
     pkBkFirstAid(scene, X1 - 0.13, 2.2, -2.6, -Math.PI / 2);
-    pkBkClipboard(scene, 15.55, 1.6, Z0 + 0.11, 0);
+    pkBkClipboard(scene, 16.25, 1.6, Z0 + 0.11, 0);
     // the screen on the north wall: a status board that reports, while the desk does the work
     PK.screen = touchScreen({
-      w: 420, h: 380, pw: 0.9, ph: 0.78, x: 14, y: 2.02, z: Z0 + 0.12, parent: null, title: 'Ride control',
+      w: 420, h: 380, pw: 0.9, ph: 0.78, x: 14.8, y: 2.02, z: Z0 + 0.12, parent: null, title: 'Ride control',
       draw: function (ctx, s) {
         var R = PK.ride;
         scBg(ctx, s.w, s.h); scHead(ctx, s.w, 'RIDE CONTROL', pkRideWord());
@@ -5397,7 +5404,7 @@
     solid(X0, X1, Z0 - 0.15, Z0 + 0.15, 0, H);                       // north
     solid(X0, DX0 - 0.04, Z1 - 0.15, Z1 + 0.15, 0, H);               // south, west of the door
     solid(DX1 + 0.04, X1, Z1 - 0.15, Z1 + 0.15, 0, H);               // south, east of the door
-    solid(X0 + 0.15, X0 + 0.95, -3.55, -0.25, 0, 1.0);               // the station desk
+    solid(13.3, 16.3, Z0 + 0.15, Z0 + 0.86, 0, 1.0);                 // the station desk (the coaster desk makes its own)
     solid(16.4, 19.6, Z0 + 0.15, Z0 + 0.75, 0, 2.0);                 // the lift drive and the rack
     solid(17.45, X1 - 0.1, Z1 - 0.65, Z1 - 0.1, 0, 1.9);             // the lockers
   }
@@ -5503,8 +5510,8 @@
     PK_MIMIC = sc;
   }
   // two CCTV monitors on their stands on the station desk, turned to the operator: the queue lane and the platform
-  function pkOpMonitors(x, z) {
-    var g = new THREE.Group(); g.position.set(x, 1.12, z); g.rotation.y = Math.PI / 2; scene.add(g);
+  function pkOpMonitors(x, z, ry) {
+    var g = new THREE.Group(); g.position.set(x, 1.12, z); g.rotation.y = ry === undefined ? Math.PI / 2 : ry; scene.add(g);
     [-0.27, 0.27].forEach(function (dx) { pkRoundCyl(0.025, 0.2, pkMats().iron, dx, -0.22, -0.08, g, 6); pkBevelBox(0.22, 0.02, 0.16, pkMats().iron, dx, -0.32, -0.06, g, 0.006); });
     pkBkMonitor(g, -0.27, 0, 0, 0.15, -0.05, 'CAM 1 · the coaster queue', function (c, s) {
       c.fillStyle = '#071108'; c.fillRect(0, 0, s.w, s.h);
@@ -8129,7 +8136,7 @@ pkBuildAttractions = function () {
 var _pkTestApi = GAME.T;
 GAME.T = function () {
   var o = _pkTestApi();
-  o.pkBoothTest = pkBoothTest; o.pkBoothGates = pkBoothGates; o.pkBoothDispatch = pkBoothDispatch; o.pkBoothStop = pkBoothStop; o.pkBoothAuto = pkBoothAuto; o.pkBoothStatus = pkBoothStatus; o.pkCtl = pkCtl; o.pkBkFloorAt = pkBkFloorAt; o.pkBkWait = pkBkWait; o.pkBkDoors = PK_BK_DOORS; o.pkBkDoorBlocks = pkBkDoorBlocks;
+  o.pkBoothTest = pkBoothTest; o.pkBoothGates = pkBoothGates; o.pkBoothDispatch = pkBoothDispatch; o.pkBoothStop = pkBoothStop; o.pkBoothAuto = pkBoothAuto; o.pkBoothStatus = pkBoothStatus; o.pkCtl = pkCtl; o.pkBkFloorAt = pkBkFloorAt; o.pkBkWait = pkBkWait; o.pkBkDoors = PK_BK_DOORS; o.pkBkDoorBlocks = pkBkDoorBlocks; o.pkBkSit = pkBkSit; o.pkBkStand = pkBkStand; o.pkBkSitting = function () { return PK_SIT; };
   return o;
 };
 // String lights across the midway on their own masts, a popcorn cart and a balloon seller by the hub fountain.
@@ -9633,14 +9640,17 @@ function pkCtlGuard() {
 // ── The coaster's control desk ───────────────────────────────────────
 // One group at the top of the world: the editor selects, moves and turns the whole console as
 // one item, and nothing on the fascia can be nudged out of place on its own.
-function pkBuildCoasterConsole() {
+// at: where the desk stands and which way it faces ({ x, z, ry }; its front, the operator's side, is local +z). Every part
+// hangs off one group, so the whole desk is placed and turned as one.
+function pkBuildCoasterConsole(at) {
   pkCtlStart();
   var C = pkCtlState();
   if (C.built) return C;
   C.built = true;
   var M = pkCtlM();
-  var G = new THREE.Group(); scene.add(G);
-  var CX = 14.30, CZ = -3.50, TOP = 0.91, PW = 2.60, PH = 0.72, TILT = 0.52;
+  at = at || { x: 14.30, z: -3.50, ry: 0 };
+  var G = new THREE.Group(); G.position.set(at.x, 0, at.z); G.rotation.y = at.ry || 0; scene.add(G);
+  var CX = 0, CZ = 0, TOP = 0.91, PW = 2.60, PH = 0.72, TILT = 0.52;
 
   // ── the cabinet: a steel pedestal with two doors, a kick plate and a vent ──
   pkBevelBox(2.72, 0.84, 0.68, M.case, CX, 0.43, CZ, G, 0.025);
@@ -9813,7 +9823,8 @@ function pkBuildCoasterConsole() {
     }
   });
   // the console is a fixture of the room: it is solid so nobody walks through the doors
-  solid(CX - 1.36, CX + 1.36, CZ - 0.34, CZ + 0.34, 0, 0.95);
+  var rc = Math.abs(Math.cos(at.ry || 0)), rs = Math.abs(Math.sin(at.ry || 0)), hx = 1.36 * rc + 0.34 * rs, hz = 1.36 * rs + 0.34 * rc;
+  solid(at.x - hx, at.x + hx, at.z - hz, at.z + hz, 0, 0.95);
   return C;
 }
 
@@ -11570,8 +11581,47 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     pkBevelBox(0.46, 0.5, 0.08, chairM, 0, 0.72, -0.24, g, 0.03);
     pkRoundCyl(0.035, 0.4, iron, 0, 0.21, 0, g, 8);
     for (var c = 0; c < 5; c++) { var arm = pkBevelBox(0.04, 0.035, 0.28, iron, Math.sin(c * 1.2566) * 0.13, 0.04, Math.cos(c * 1.2566) * 0.13, g, 0.008); arm.rotation.y = c * 1.2566; }
+    // E sits you in it, facing the way it faces: at the desk, at desk height
+    hitBox(0.62, 1.05, 0.62, 0, 0.55, 0, { prompt: function () { return PK_SIT ? '' : 'Sit down'; }, use: function () { pkBkSit(g); } }, g);
     return g;
   }
+  // ── Sitting down ──────────────────────────────────────────────────
+  // seated, the camera stays on the chair at a seated eye height and the mouse still looks round, so the panel in front is
+  // in reach; E, or walking off, stands you up where you sat
+  var PK_SIT = null, PK_SIT_V = new THREE.Vector3(), PK_SIT_F = new THREE.Vector3();
+  function pkBkSit(chair) {
+    if (PK_SIT || PK.playerRide) return;
+    chair.updateWorldMatrix(true, false);
+    PK_SIT_V.setFromMatrixPosition(chair.matrixWorld);
+    PK_SIT_F.set(0, 0, 1).transformDirection(chair.matrixWorld);
+    PK_SIT = { chair: chair, x: PK_SIT_V.x, y: PK_SIT_V.y, z: PK_SIT_V.z, sx: player.x, sz: player.z };
+    player.yaw = Math.atan2(-PK_SIT_F.x, -PK_SIT_F.z); player.pitch = -0.18;
+    sfx('click'); toast('Seated - E or a step to stand up', '');
+  }
+  function pkBkStand() {
+    if (!PK_SIT) return false;
+    player.x = PK_SIT.x + Math.sin(player.yaw) * 0.55; player.z = PK_SIT.z + Math.cos(player.yaw) * 0.55;   // a step back from the desk
+    if (collides(player.x, player.z)) { player.x = PK_SIT.sx; player.z = PK_SIT.sz; }
+    PK_SIT = null; sfx('click');
+    return true;
+  }
+  var _pkBkPrevOverride = GAME.playerOverride;
+  GAME.playerOverride = function (dt) {
+    if (PK_SIT) {
+      var k = player.keys;
+      if (k.KeyW || k.KeyS || k.KeyA || k.KeyD) { pkBkStand(); return false; }
+      player.x = PK_SIT.x; player.z = PK_SIT.z; player.y = PK_SIT.y; player.vy = 0;
+      camera.position.set(PK_SIT.x, PK_SIT.y + 1.18, PK_SIT.z);
+      camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
+      return true;
+    }
+    return _pkBkPrevOverride ? _pkBkPrevOverride(dt) : false;
+  };
+  var _pkBkPrevKey = GAME.key;
+  GAME.key = function (e) {
+    if (PK_SIT && e.code === 'KeyE' && !e.repeat) return pkBkStand();
+    return _pkBkPrevKey ? _pkBkPrevKey(e) : false;
+  };
 
   // ── The booth ─────────────────────────────────────────────────────
   var PK_BK = { W: 3.8, D: 2.9, FLOOR: 0.45, WALL: 2.5, SILL: 0.95, HEAD: 2.05, T: 0.14, DOORW: 1.1, DOORZ: -0.35, STAIR: 0.45 };   // STAIR: the steps run this far past the door each side
