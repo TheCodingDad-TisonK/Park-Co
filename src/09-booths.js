@@ -117,7 +117,7 @@ function pkBoothDispatch(a) {
   if (C.fault) return pkBoothRefuse('Reset ' + a.name + ' first');
   if (C.maint) return pkBoothRefuse(a.name + ' is locked out - turn the key to RUN');
   if (a.state !== 'boarding' && a.state !== 'ready') return pkBoothRefuse(a.state === 'idle' ? 'Board the guests first' : a.name + ' is ' + a.state);
-  if (a.queue.length) return pkBoothRefuse('Wait for the queue to finish boarding');
+  if (a.queue.length && C.gates && pkAttrHasSeat(a)) return pkBoothRefuse('Wait for the queue to finish boarding');
   if (a.boarding && pkAttrWalkers(a)) return pkBoothRefuse('Wait for the riders to sit');
   if (!a.riders) return pkBoothRefuse('Nobody is aboard ' + a.name);
   if (a.state === 'boarding' && !C.gates) return pkBoothRefuse('Open the gates to board ' + a.name);

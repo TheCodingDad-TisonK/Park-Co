@@ -3507,6 +3507,7 @@
   CO.material("pk-wood-rich", {"size":512,"repeat":[2,1],"layers":[{"type":"fill","color":"#a07850"},{"type":"grain","alpha":0.3},{"type":"planks","color":"#9c7349","color2":"#7c5836","size":64,"vary":true,"gap":2}],"roughness":0.85,"metalness":0.05,"bump":{"amp":12,"strength":0.6}});
   CO.material("pk-glass-rich", {"size":128,"repeat":[1,1],"layers":[{"type":"fill","color":"#b8c8d8","alpha":0.85}],"roughness":0.15,"metalness":0.05,"transparent":true,"opacity":0.85});
   CO.material("pk-metal-rich", {"size":256,"repeat":[1,1],"layers":[{"type":"fill","color":"#4a5058"},{"type":"grain","alpha":0.25},{"type":"speckle","color":"#2a2d33","n":2000}],"roughness":0.4,"metalness":0.8,"bump":{"amp":8,"strength":0.4}});
+  CO.material("pk-brick", {"size":512,"repeat":[4,4],"layers":[{"type":"fill","color":"#c9c2b4"},{"type":"bricks","color":"#8a4a3a","color2":"#95553f","size":64,"size2":22,"gap":2,"vary":true},{"type":"grain","alpha":0.12},{"type":"blotches","color":"#6a3a2a","n":40,"sz":90,"dark":true}],"roughness":0.95,"metalness":0.05,"bump":{"amp":16,"strength":0.8}});
   CO.menus({
     "start": {
       "title": "Park Co",
@@ -4446,7 +4447,7 @@
     pkSlab(28, 10, 0, 33, 0.014, M.paversWarm);      // the plaza under the gate
     pkSlab(14, 32, 0, 12, 0.016);      // the midway
     pkSlab(36, 18, 2, -4, 0.018);      // the station apron
-    pkSlab(6, 6, 14, -1, 0.02);        // the operator's room floor
+    pkSlab(9.4, 6.8, 15.5, -0.8, 0.02);   // the coaster control room's floor
     pkSlab(10, 8, -13, 8, 0.02, M.paversWarm);       // the snack stand apron
     pkSlab(62, 18, 0, 62, 0.01, pkAsphalt());       // the car park: two ranks of bays off a wide aisle
     // the entrance drive up from the road
@@ -4701,9 +4702,10 @@
     handle: 'PARK_CO', version: '0.1.1',
     floorY: function (x, z) { return pkFloor(x, z); },
     insideWalk: function (x, z) { return pkInsidePark(x, z); },
-    indoors: function (x, z) { return x > 11 && x < 17 && z > -4 && z < 2; },
-    roofAt: function (x, z) { return x > 11 && x < 17 && z > -4 && z < 2 ? 3.3 : 0; },
-    wallPlanes: function () { return [{ a: 'x', v: 11, n: 1, z0: -4, z1: 2 }, { a: 'x', v: 17, n: -1, z0: -4, z1: 2 }, { a: 'z', v: -4, n: 1, x0: 11, x1: 17 }, { a: 'z', v: 2, n: -1, x0: 11, x1: 17 }]; },
+    // the coaster's control room (part 03, PK_OP): indoors, under its roof, inside its four walls
+    indoors: function (x, z) { var O = PK_OP; return x > O.x0 && x < O.x1 && z > O.z0 && z < O.z1; },
+    roofAt: function (x, z) { var O = PK_OP; return x > O.x0 && x < O.x1 && z > O.z0 && z < O.z1 ? O.h : 0; },
+    wallPlanes: function () { var O = PK_OP; return [{ a: 'x', v: O.x0, n: 1, z0: O.z0, z1: O.z1 }, { a: 'x', v: O.x1, n: -1, z0: O.z0, z1: O.z1 }, { a: 'z', v: O.z0, n: 1, x0: O.x0, x1: O.x1 }, { a: 'z', v: O.z1, n: -1, x0: O.x0, x1: O.x1 }]; },
     editClamp: function (pt) { return { x: clamp(pt.x, PK_PARK.x0 + 1, PK_PARK.x1 - 1), z: clamp(pt.z, PK_PARK.z0 + 1, PK_PARK.z1 - 1) }; },
     doorOpeners: function () {
       var w = PK.guests.map(function (g) { return { x: g.rec.x, z: g.rec.z }; });
@@ -5179,222 +5181,194 @@
   }
   // ── The operator's room ───────────────────────────────────────────
   function pkBuildOperatorRoom() {
-    var X0 = 11, X1 = 17, Z0 = -4, Z1 = 2, H = 3.2;
-    var M = pkMats(), plaster = pkMatPlasterRich(), oak = pkMatWoodRich(), stone = pkMatStone();
-    var paint = std({ color: 0xece5d7, roughness: 0.94, emissive: 0x3a352c, emissiveIntensity: 0.42 });        // the walls, painted cream
-    var wains = std({ color: 0x3d5b49, roughness: 0.62, metalness: 0.04, emissive: 0x1b2a20, emissiveIntensity: 0.5 });   // the wainscot, park green
-    var red = std({ color: 0xa8402c, roughness: 0.62 });          // the coaster's own red
-    var iron = MAT.steelDark, brass = pkMatMetalRich();
-    var steel = std({ color: 0x39434a, roughness: 0.45, metalness: 0.45 });      // the booth's steel
-    var darkSill = std({ color: 0x20272c, roughness: 0.62, metalness: 0.30 });   // the anti-bandit sill
-    var hzDark = std({ color: 0x111417, roughness: 0.7 }), hzGold = std({ color: 0xc9a227, roughness: 0.7 });
-    // ── the shell: cream bays + coaster-red trim, striped tented canopy.
-    // Window/door openings + all interior (desk, console, screen) stay
-    // exactly as they were — only the exterior skin is rebuilt.
-    // the west wall, with a window onto the platform
-    // the west wall, with a window onto the platform
-    box(0.2, H, 1, plaster, X0, H / 2, -3.5);
-    box(0.2, H, 3, plaster, X0, H / 2, 0.5);
-    box(0.2, 1.0, 2, plaster, X0, 0.5, -2);
-    box(0.2, 1.0, 2, plaster, X0, 2.7, -2);
-    box(0.2, H, 6, plaster, X1, H / 2, -1);
-    box(6, H, 0.2, plaster, 14, H / 2, Z0);
-    // the south wall: cream bays each side of the door, red trim band,
-    // sill wall and header band (openings unchanged)
-    [[11.96, 1.92], [15.64, 2.72]].forEach(function (bay) {
-      var bx = bay[0], bw = bay[1], half = bw / 2, panes = bw > 2.2 ? 3 : 2;
-      box(bw, 0.65, 0.2, paint, bx, 0.945, Z1);
-      box(bw, 0.18, 0.22, red, bx, 0.72, Z1);
-      box(bw + 0.06, 0.06, 0.28, MAT.steelDark, bx, 1.27, Z1);
-      for (var hz2 = 0, hzN = Math.floor((bw - 0.2) / 0.18); hz2 < hzN; hz2++) {
-        box(0.08, 0.10, 0.02, hz2 % 2 ? hzGold : hzDark, bx - half + 0.10 + hz2 * 0.18, 0.72, Z1 + 0.105);
-      }
-      var lw = Math.min(1.5, bw - 0.9);
-      for (var lv2 = 0; lv2 < 5; lv2++) box(lw, 0.035, 0.03, iron, bx + half - lw / 2 - 0.15, 0.86 + lv2 * 0.075, Z1 + 0.105);
-      box(bw, 0.93, 0.2, plaster, bx, 2.735, Z1);                        // the solid plaster header, as on the booths
-      box(bw - 0.10, 1.0, 0.035, M.glass, bx, 1.77, Z1);                 // the same metre of glass, booth band height
-      [bx - half + 0.03, bx + half - 0.03].forEach(function (vx) { box(0.08, 1.06, 0.09, MAT.steelDark, vx, 1.77, Z1 + 0.005); });
-      for (var pm = 1; pm < panes; pm++) box(0.06, 1.0, 0.075, MAT.steelDark, bx - half + (bw / panes) * pm, 1.77, Z1 + 0.01);
-      box(bw, 0.07, 0.09, MAT.steelDark, bx, 2.31, Z1 + 0.005);
-      box(bw, 0.07, 0.09, MAT.steelDark, bx, 1.27, Z1 + 0.005);
-    });
-    box(1.2, 1.05, 0.2, paint, 13.6, 2.675, Z1);
-    // striped tented canopy in coaster red/cream, shared booth recipe.
-    // wallTop (3.2) clears the fascia sign (top 2.85) + lamps (2.98);
-    // the valance hangs to ~2.86 in front of them (z 2.42 vs sign 2.13).
-    var opRoofG = new THREE.Group(); opRoofG.position.set(14, 0, -1); scene.add(opRoofG);
-    var opRoof = pkBoothTentRoof(opRoofG, { w: 6, d: 6, wallTop: H, roofA: '#a8402c', roofB: '#f3ead6', trimMat: red, roofH: 1.35 });
-    solid(X0 - 0.1, X0 + 0.1, Z0, Z1, 0, H);
-    solid(X1 - 0.1, X1 + 0.1, Z0, Z1, 0, H);
-    solid(X0, X1, Z0 - 0.1, Z0 + 0.1, 0, H);
-    solid(X0, 13, Z1 - 0.1, Z1 + 0.1, 0, H);
-    solid(14.2, X1, Z1 - 0.1, Z1 + 0.1, 0, H);
-    // the outside: the booth language — perimeter plinth strips (not a
-    // filled slab), steel corner posts, red-trimmed sill
-    var opPlinthG = new THREE.Group(); opPlinthG.position.set(14, 0, -1); scene.add(opPlinthG);
-    pkBoothPlinth(6, 6, stone, opPlinthG);
-    [[X0, Z0], [X0, Z1], [X1, Z0], [X1, Z1]].forEach(function (c) {
-      box(0.14, H, 0.20, steel, c[0], H / 2, c[1]);
-      box(0.22, 0.09, 0.28, steel, c[0], H - 0.05, c[1]);
-    });
-    // eave plant: the old deck AC pack tucks under the tented eave on the
-    // west side, with the beacon on its own mast clear of the valance;
-    // a vent stack stays at the back corner
-    box(1.30, 0.52, 0.95, MAT.steel, 11.45, 2.85, 1.55);
-    for (var ac2 = 0; ac2 < 5; ac2++) box(0.92, 0.03, 0.02, MAT.steelDark, 11.45, 2.71 + ac2 * 0.075, 2.05);
-    cyl(0.30, 0.04, MAT.black, 11.45, 3.12, 1.55, null, 16);
-    cyl(0.26, 0.02, pkMats().iron, 11.45, 3.14, 1.55, null, 16);
-    // beacon on its own mast at the eave corner, clear of the valance
-    pkRoundCyl(0.04, 0.30, MAT.steelDark, 16.6, 3.10, 2.15, null, 8);
-    var beacon = sphere(0.11, glowMat(0xff3b30, 0.4), 16.6, 3.32, 2.15);
-    pkRoundCyl(0.07, 0.62, MAT.steel, 16.10, 3.65, -3.35, null, 10);
-    var cap = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.16, 10), MAT.steelDark); cap.position.set(16.10, 4.01, -3.35); scene.add(cap);
-    // the east wall: ribbed steel and a louvered plant grille
-    for (var er = 0; er < 8; er++) box(0.05, 1.86, 0.045, MAT.steelDark, 17.12, 1.55, -3.7 + er * 0.72);
-    for (var lv = 0; lv < 7; lv++) box(0.04, 0.05, 0.80, MAT.steelDark, 17.13, 1.85 + lv * 0.11, -1.55);
-    // the door: red-trimmed jambs, an open cream service door with a wired
-    // pane, lanterns each side, planters flanking the approach
-    [[12.94, 2.06], [14.26, 2.06]].forEach(function (c) { box(0.12, 2.2, 0.13, red, c[0], 1.1, c[1]); });
-    box(1.44, 0.12, 0.13, red, 13.6, 2.21, 2.06);
-    var leafG = new THREE.Group(); leafG.position.set(13.02, 0, 1.92); leafG.rotation.y = 1.34; scene.add(leafG);
-    box(1.08, 2.10, 0.065, paint, 0.54, 1.05, 0, leafG);
-    box(0.50, 0.56, 0.02, M.glass, 0.54, 1.56, 0.043, leafG);
-    box(0.98, 0.24, 0.02, MAT.hazard, 0.54, 0.20, 0.043, leafG);
-    box(0.72, 0.05, 0.04, MAT.chrome, 0.54, 1.02, 0.055, leafG);
-    box(1.28, 0.03, 0.62, MAT.steelDark, 13.6, 0.05, 2.32);
-    for (var hz = 0; hz < 6; hz++) box(0.20, 0.012, 0.05, MAT.hazard, 13.05 + hz * 0.22, 0.066, 2.32);
-    // the fascia board over the door (below the eave, clears the valance)
-    // and the three signal lamps tucked under the eave
-    pkSign3D(['PARK CO · RIDE CONTROL', 'THE COASTER'], 2.1, 0.34, 13.6, 2.62, 2.13, 0, { bg: '#1b232c', fg: '#f5b53d' });
-    box(0.66, 0.20, 0.12, red, 13.6, 2.94, 2.14);
-    var opLampM = [0xff3b30, 0xf0c04a, 0x5fd38d].map(function (col) { return glowMat(col, 0.3); });
-    var opLamps = [0, 1, 2].map(function (i2) { return sphere(0.055, opLampM[i2], 13.42 + i2 * 0.18, 2.94, 2.21); });
-    PK.opLamps = { mats: opLampM, beacon: beacon.material };
-    // lanterns flanking the door + planters on the forecourt (world coords)
-    pkBoothLantern(opPlantG, -1.28, 2.10, 3.14);
-    pkBoothLantern(opPlantG, 0.48, 2.10, 3.14);
-    var opPlantG = new THREE.Group(); opPlantG.position.set(14, 0, -1); scene.add(opPlantG);
-    pkPlanter(1.8, opPlantG, -2.2, 0, 3.9);
-    pkPlanter(1.8, opPlantG, 2.2, 0, 3.9);
-    // the tented eave shelters the door, as on every booth
-    // the platform side: a canopy over the window, the fascia board, and the pane untouched
-    box(1.15, 0.10, 2.55, MAT.steelDark, 10.42, 2.88, -2);
-    box(1.18, 0.06, 0.07, MAT.chrome, 9.87, 2.92, -2);
-    [[-3.30], [-0.70]].forEach(function (c) { pkRod(11.0, 3.06, c[0], 9.92, 2.92, c[0], 0.018, MAT.steelDark, null, 6); });
-    pkSign3D(['PARK CO · RIDE CONTROL', 'THE COASTER'], 2.05, 0.36, 10.93, 2.58, -2, -Math.PI / 2, { bg: '#1b232c', fg: '#f5b53d' });
-    // the forecourt: a paved way from the door to the fountain, so the booth is entered, not marooned
-    pkPaved(2.6, 6.6, pkMats().paversWarm, 13.6, 0.045, 5.2, 0);
-    // ── inside ──
-    pkPaved(5.72, 5.72, MAT.tile, 14, 0.043, -1, 1.1);              // a tiled floor
-    box(5.76, 0.06, 5.76, paint, 14, 3.15, -1);                     // the ceiling
-    // wainscot round the room, with an oak chair rail on top
-    box(5.6, 0.98, 0.05, wains, 14, 0.49, -3.87); box(5.62, 0.07, 0.09, oak, 14, 1.0, -3.86);
-    box(5.6, 0.98, 0.05, wains, 16.87, 0.49, -1); box(5.62, 0.07, 0.09, oak, 16.86, 1.0, -1);
-    [[11.1, 2.98], [11.1, -0.98]].forEach(function (c) { box(0.05, 0.98, 2.0, wains, 11.13, 0.49, c[1]); box(0.09, 0.07, 2.02, oak, 11.14, 1.0, c[1]); });
-    [[12.05, 1.0], [15.5, 1.6]].forEach(function (c) { box(c[1], 0.98, 0.05, wains, c[0], 0.49, 1.87); box(c[1] + 0.02, 0.07, 0.09, oak, c[0], 1.0, 1.86); });
-    // a skirting board all the way round
-    [[14, -3.9, 5.7, 0.06], [14, 1.9, 5.7, 0.06]].forEach(function (w) { box(w[2], 0.12, w[3], oak, w[0], 0.06, w[1]); });
-    [[11.12, -1], [16.88, -1]].forEach(function (w) { box(0.06, 0.12, 5.7, oak, w[0], 0.06, w[1]); });
-    // two ceiling lights, which go dark with the power like every other lamp
-    troffer(13, 3.11, -2.3, 1.15, 0.5);
-    troffer(15.2, 3.11, 0.3, 1.15, 0.5);
-    // the desk along the west wall, facing the platform: an oak top on a steel frame with a drawer pedestal
-    box(0.86, 0.06, 3.1, oak, 12.4, 0.98, -2.2);
-    box(0.86, 0.06, 3.1, red, 12.4, 0.94, -2.2);
-    [[-3.66], [-0.74]].forEach(function (z) { box(0.08, 0.9, 0.08, iron, 12.82, 0.45, z[0]); box(0.08, 0.9, 0.08, iron, 12.05, 0.45, z[0]); });
-    box(0.06, 0.86, 2.9, paint, 12.83, 0.45, -2.2);
-    box(0.62, 0.6, 0.62, iron, 12.5, 0.3, -1.02);
-    [0.44, 0.24, 0.04].forEach(function (y) { box(0.5, 0.02, 0.03, brass, 12.5, y + 0.14, -0.7); });
-    solid(12.0, 12.8, -3.7, -0.7, 0, 1.0);
-    // the monitor, turned to the operator's chair
-    box(0.08, 0.34, 0.06, iron, 12.44, 1.24, -2.86);
-    box(0.06, 0.16, 0.22, iron, 12.44, 1.06, -2.86);
-    var mon = box(0.05, 0.5, 0.72, MAT.black, 12.4, 1.42, -2.86); mon.rotation.z = 0.02;
-    box(0.01, 0.44, 0.66, glowMat(0x8fb6d8, 0.5), 12.37, 1.42, -2.86);
-    // desk clutter: keyboard, mouse, papers, a mug, a radio and a lamp
-    box(0.16, 0.025, 0.44, MAT.plastic, 12.62, 1.02, -2.2);
-    box(0.06, 0.03, 0.1, MAT.plastic, 12.66, 1.02, -1.9);
-    var paper = box(0.3, 0.008, 0.4, MAT.paper, 12.6, 1.02, -1.5); paper.rotation.y = 0.18;
-    box(0.3, 0.008, 0.4, MAT.paper, 12.55, 1.03, -1.46);
-    cyl(0.05, 0.11, std({ color: 0xf2efe6, roughness: 0.5 }), 12.62, 1.07, -0.86, null, 12);
-    box(0.18, 0.12, 0.1, MAT.plastic, 12.44, 1.08, -3.34);
-    box(0.14, 0.05, 0.02, brass, 12.5, 1.1, -3.34);
-    cyl(0.09, 0.03, iron, 12.32, 1.03, -0.98, null, 12);
-    pkRod(12.32, 1.03, -0.98, 12.34, 1.44, -0.94, 0.02, brass, null, 6);
-    var shade = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.16, 14, 1, true), std({ color: 0x2c4739, roughness: 0.5, side: THREE.DoubleSide }));
-    shade.position.set(12.34, 1.46, -0.94); scene.add(shade);
-    sphere(0.055, glowMat(0xfff0c8, 1.1), 12.34, 1.4, -0.94);
-    // the operator's chair, at the console on the north wall
-    var seatMat = std({ color: 0x1f2a33, roughness: 0.85 });
-    box(0.5, 0.09, 0.5, seatMat, 14.3, 0.47, -2.55);
-    box(0.5, 0.52, 0.09, seatMat, 14.3, 0.74, -2.30);
-    box(0.44, 0.06, 0.06, seatMat, 14.3, 0.97, -2.30);
-    cyl(0.045, 0.42, iron, 14.3, 0.23, -2.55, null, 8);
-    for (var ca = 0; ca < 5; ca++) {
-      var an = ca / 5 * Math.PI * 2;
-      var arm = box(0.05, 0.04, 0.34, iron, 14.3 + Math.sin(an) * 0.16, 0.06, -2.55 + Math.cos(an) * 0.16);
-      arm.rotation.y = an;
+    // ── The coaster's control room ────────────────────────────────────
+    // A proper control building at the end of the platform, in the booths' language (part 17): a brick base, coaster-red
+    // framing, steel-framed glazing and a flat roof behind a parapet with the coaster's name lit along it. Inside: the coaster
+    // desk on the north wall (part 14, where it always stood) under the status board; the station desk under the long window
+    // onto the platform with the CCTV monitors; the equipment bay at the east end, the lift drive and the PLC rack under the
+    // clerestory and the track mimic on the east wall; and the staff corner by the door. OP holds the room's extents (the
+    // floor, the roof and the walls the engine asks about).
+    var OP = PK_OP, X0 = OP.x0, X1 = OP.x1, Z0 = OP.z0, Z1 = OP.z1, H = OP.h, T = 0.2, CX = (X0 + X1) / 2, CZ = (Z0 + Z1) / 2;
+    var W = X1 - X0, D = Z1 - Z0, DX0 = 13.02, DX1 = 14.18, SILL = 0.95, HEAD = 2.55;
+    var M = pkMats(), S2 = pkBkStd;
+    var cream = S2({ color: 0xece5d7, roughness: 0.9 }), red = S2({ color: 0xa8402c, roughness: 0.6 }), brick = pkMatBrick();
+    var steel = S2({ color: 0x39434a, roughness: 0.45, metalness: 0.45 }), dark = S2({ color: 0x20272c, roughness: 0.62, metalness: 0.3 });
+    var inner = S2({ color: 0xe6e1d6, roughness: 0.92 }), oak = pkMatWoodRich(), glass = pkMatGlassRich();
+    var hzDark = S2({ color: 0x111417, roughness: 0.7 }), hzGold = S2({ color: 0xc9a227, roughness: 0.7 });
+    // a wall along x (at z) from xa to xb with glazing between ga and gb (or none), and one along z (at x) the same way
+    function wallX(z, xa, xb, ga, gb, outSide) {
+      var segs = ga === undefined ? [[xa, xb, false]] : [[xa, ga, false], [ga, gb, true], [gb, xb, false]];
+      segs.forEach(function (sg) {
+        var a0 = sg[0], a1 = sg[1], len = a1 - a0, mx = (a0 + a1) / 2; if (len < 0.01) return;
+        if (!sg[2]) { box(len, H, T, cream, mx, H / 2, z); return; }
+        box(len, SILL, T, cream, mx, SILL / 2, z); box(len, H - HEAD, T, cream, mx, HEAD + (H - HEAD) / 2, z);
+        box(len - 0.08, HEAD - SILL, 0.04, glass, mx, (SILL + HEAD) / 2, z + outSide * 0.02);
+        box(len, 0.08, 0.14, steel, mx, SILL, z + outSide * 0.03); box(len, 0.08, 0.14, steel, mx, HEAD, z + outSide * 0.03);
+        for (var m = 1, n = Math.max(1, Math.round(len / 1.3)); m < n; m++) box(0.06, HEAD - SILL, 0.1, steel, a0 + len * m / n, (SILL + HEAD) / 2, z + outSide * 0.03);
+      });
     }
-    // the control desk, and the status screen above it
-    pkBuildCoasterConsole();
-    // the north wall: the control screen in a steel bezel, a notice board and a clock
-    box(1.08, 0.96, 0.06, iron, 14, 2.02, -3.93);
-    box(0.98, 0.86, 0.03, MAT.black, 14, 2.02, -3.9);
-    box(1.2, 0.72, 0.05, MAT.cork, 12.3, 1.95, -3.88);
-    box(1.24, 0.06, 0.08, oak, 12.3, 2.34, -3.87);
-    box(1.24, 0.06, 0.08, oak, 12.3, 1.56, -3.87);
-    [[-0.36, 0.14, 0.3, 0.24], [0.02, -0.06, 0.34, 0.2], [0.32, 0.1, 0.22, 0.3]].forEach(function (p) {
-      var pn = box(p[2], p[3], 0.01, MAT.paper, 12.3 + p[0], 1.95 + p[1], -3.85); pn.rotation.z = randf(-0.06, 0.06);
+    function wallZ(x, za, zb, ga, gb, outSide) {
+      var segs = ga === undefined ? [[za, zb, false]] : [[za, ga, false], [ga, gb, true], [gb, zb, false]];
+      segs.forEach(function (sg) {
+        var a0 = sg[0], a1 = sg[1], len = a1 - a0, mz = (a0 + a1) / 2; if (len < 0.01) return;
+        if (!sg[2]) { box(T, H, len, cream, x, H / 2, mz); return; }
+        box(T, SILL, len, cream, x, SILL / 2, mz); box(T, H - HEAD, len, cream, x, HEAD + (H - HEAD) / 2, mz);
+        box(0.04, HEAD - SILL, len - 0.08, glass, x + outSide * 0.02, (SILL + HEAD) / 2, mz);
+        box(0.14, 0.08, len, steel, x + outSide * 0.03, SILL, mz); box(0.14, 0.08, len, steel, x + outSide * 0.03, HEAD, mz);
+        for (var m = 1, n = Math.max(1, Math.round(len / 1.3)); m < n; m++) box(0.1, HEAD - SILL, 0.06, steel, x + outSide * 0.03, (SILL + HEAD) / 2, a0 + len * m / n);
+      });
+    }
+
+    // ── the shell ──
+    // north, toward the track: solid to the console's height, a clerestory over the equipment bay
+    box(W, H, T, cream, CX, H / 2, Z0);
+    box(3.6, 0.6, 0.04, glass, 18.0, 2.85, Z0 - 0.02); box(3.6, 0.07, 0.14, steel, 18.0, 2.55, Z0 - 0.03); box(3.6, 0.07, 0.14, steel, 18.0, 3.15, Z0 - 0.03);
+    // west, onto the platform: the long window over the station desk
+    wallZ(X0, Z0, Z1, -3.6, 1.9, -1);
+    // south, onto the square: a window, the door, a long window, then the staff corner's solid end
+    box(DX0 - X0, H, T, cream, (X0 + DX0) / 2, H / 2, Z1);  // (the pier west of the door is glazed below)
+    box(DX0 - X0 - 0.5, HEAD - SILL, 0.04, glass, (X0 + DX0) / 2, (SILL + HEAD) / 2, Z1 + 0.11);
+    box(DX1 - DX0, H - 2.1, T, cream, (DX0 + DX1) / 2, 2.1 + (H - 2.1) / 2, Z1);
+    wallX(Z1, DX1, X1, 14.6, 17.3, 1);
+    // east: solid, the equipment wall
+    box(T, H, D, cream, X1, H / 2, CZ);
+    // the brick base course round the outside, a stone cap on it and the coaster-red band at the sill, corner pilasters
+    box(W + 0.12, SILL, 0.06, brick, CX, SILL / 2, Z0 - 0.13); box(W + 0.12, SILL, 0.06, brick, CX, SILL / 2, Z1 + 0.13);
+    box(0.06, SILL, D + 0.12, brick, X0 - 0.13, SILL / 2, CZ); box(0.06, SILL, D + 0.12, brick, X1 + 0.13, SILL / 2, CZ);
+    box(W + 0.3, 0.06, 0.14, M.stone, CX, SILL + 0.02, Z0 - 0.13); box(W + 0.3, 0.06, 0.14, M.stone, CX, SILL + 0.02, Z1 + 0.13);
+    box(0.14, 0.06, D + 0.3, M.stone, X0 - 0.13, SILL + 0.02, CZ); box(0.14, 0.06, D + 0.3, M.stone, X1 + 0.13, SILL + 0.02, CZ);
+    box(W + 0.2, 0.14, 0.08, red, CX, HEAD + 0.18, Z1 + 0.14); box(0.08, 0.14, D + 0.2, red, X0 - 0.14, HEAD + 0.18, CZ);
+    box(W + 0.2, 0.14, 0.08, red, CX, HEAD + 0.18, Z0 - 0.14); box(0.08, 0.14, D + 0.2, red, X1 + 0.14, HEAD + 0.18, CZ);
+    [[X0, Z0], [X0, Z1], [X1, Z0], [X1, Z1], [15.6, Z1]].forEach(function (c) {
+      box(0.3, H, 0.3, red, c[0], H / 2, c[1]); box(0.36, 0.1, 0.36, M.stone, c[0], 0.05, c[1]);
     });
-    var clock = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.05, 20), std({ color: 0xf4f1e8, roughness: 0.6 }));
-    clock.position.set(15.7, 2.5, -3.87); clock.rotation.x = Math.PI / 2; scene.add(clock);
-    cyl(0.19, 0.04, iron, 15.7, 2.5, -3.9, null, 20).rotation.x = Math.PI / 2;
-    box(0.02, 0.11, 0.012, MAT.black, 15.7, 2.55, -3.84);
-    box(0.08, 0.02, 0.012, MAT.black, 15.74, 2.5, -3.84);
-    // the east wall: a framed safety notice, a first-aid box and the key cabinet by the door
-    box(0.9, 0.62, 0.05, oak, 16.87, 1.95, -2.6);
-    box(0.78, 0.5, 0.01, std({ color: 0xf2efe6, roughness: 0.85 }), 16.84, 1.95, -2.6);
-    box(0.6, 0.34, 0.03, std({ color: 0xb8452f, roughness: 0.7 }), 16.83, 2.0, -2.6);
-    box(0.34, 0.4, 0.12, std({ color: 0xf4f4f0, roughness: 0.6 }), 16.84, 1.5, -1.4);
-    box(0.12, 0.05, 0.13, std({ color: 0x2f9e44, roughness: 0.6 }), 16.84, 1.68, -1.4);
-    box(0.5, 0.66, 0.12, oak, 15.35, 1.6, 1.87);
-    box(0.42, 0.58, 0.02, MAT.steelDark, 15.35, 1.6, 1.8);
-    for (var kk = 0; kk < 6; kk++) box(0.03, 0.09, 0.01, brass, 15.2 + (kk % 3) * 0.14, 1.78 - Math.floor(kk / 3) * 0.16, 1.79);
-    // the fire extinguisher by the door, and a hi-vis on a hook
-    cyl(0.075, 0.46, red, 16.5, 0.62, 1.6, null, 12);
-    cyl(0.03, 0.1, MAT.black, 16.5, 0.9, 1.6, null, 8);
-    box(0.14, 0.05, 0.05, MAT.black, 16.5, 0.86, 1.53);
-    box(0.06, 0.1, 0.06, iron, 16.86, 1.62, 1.48);
-    var vest = box(0.03, 0.52, 0.36, MAT.hivis, 16.84, 1.32, 1.48); vest.rotation.z = 0.02;
-    // a bin in the corner
-    cyl(0.15, 0.42, iron, 16.4, 0.21, -3.5, null, 12);
+    // a hazard band along the south kick plate, as on every booth
+    for (var hz = 0; hz < 16; hz++) box(0.08, 0.1, 0.02, hz % 2 ? hzGold : hzDark, 14.7 + hz * 0.17, 0.08, Z1 + 0.17);
+    // the roof: a slab with eaves, the coaster-red cornice, a parapet with a stone coping
+    box(W + 0.5, 0.18, D + 0.5, MAT.roof, CX, H + 0.09, CZ);
+    box(W + 0.7, 0.12, D + 0.7, red, CX, H + 0.02, CZ);
+    [[CX, Z0 - 0.17, W + 0.5, 0.16], [CX, Z1 + 0.17, W + 0.5, 0.16]].forEach(function (p) { box(p[2], 0.5, p[3], cream, p[0], H + 0.43, p[1]); box(p[2] + 0.04, 0.06, p[3] + 0.06, M.stone, p[0], H + 0.71, p[1]); });
+    [[X0 - 0.17, CZ], [X1 + 0.17, CZ]].forEach(function (p) { box(0.16, 0.5, D + 0.5, cream, p[0], H + 0.43, p[1]); box(0.22, 0.06, D + 0.54, M.stone, p[0], H + 0.71, p[1]); });
+    // the roof sign over the square, and the smaller one over the platform
+    [-2.1, 2.1].forEach(function (dx) { box(0.1, 0.5, 0.1, MAT.steelDark, 15.0 + dx, H + 0.95, Z1 - 0.15); });
+    box(5.0, 0.9, 0.22, MAT.steelDark, 15.0, H + 1.62, Z1 - 0.15);
+    pkSign3D(['THE COASTER'], 4.8, 0.74, 15.0, H + 1.62, Z1 - 0.03, 0, { bg: '#151a20', fg: '#ffcf5a' });
+    pkSign3D(['RIDE CONTROL'], 2.6, 0.36, X0 - 0.28, H + 0.43, CZ, -Math.PI / 2, { bg: '#151a20', fg: '#ffcf5a' });
+    // the plant on the roof, its fan turning
+    var acG = new THREE.Group(); acG.position.set(18.4, H + 0.18, -2.6); scene.add(acG);
+    pkBevelBox(1.3, 0.7, 0.9, S2({ color: 0xd9d6cc, roughness: 0.5 }), 0, 0.35, 0, acG, 0.03);
+    for (var acl = 0; acl < 6; acl++) box(0.9, 0.03, 0.02, MAT.steelDark, -0.1, 0.12 + acl * 0.08, 0.455, acG);
+    var acFanG = new THREE.Group(); acFanG.position.set(0, 0.71, 0.05); acFanG.userData.dynamic = true; acG.add(acFanG);
+    cyl(0.34, 0.03, MAT.black, 0, 0.705, 0.05, acG, 16);
+    for (var fb = 0; fb < 4; fb++) { var fbl = box(0.06, 0.012, 0.28, MAT.steel, 0, 0, 0.14, null); var fa = new THREE.Group(); fa.rotation.y = fb * Math.PI / 2; acFanG.add(fa); fa.add(fbl); }
+    pkCtlLive({ tick: function (dt) { acFanG.rotation.y += dt * 8; } });
+    // the signal tower on the roof's platform corner (pkOpSignal lights it), a camera sweeping the platform, an aerial
+    pkRoundCyl(0.035, 0.9, MAT.steelDark, X0 + 0.4, H + 0.63, Z1 - 0.5, null, 8);
+    var opLampM = [0xff3b30, 0xf0c04a, 0x5fd38d].map(function (col) { return glowMat(col, 0.12); });
+    [2, 1, 0].forEach(function (li, k) { pkRoundCyl(0.075, 0.12, opLampM[li], X0 + 0.4, H + 1.14 + k * 0.13, Z1 - 0.5, null, 16); pkRoundCyl(0.08, 0.012, MAT.steelDark, X0 + 0.4, H + 1.205 + k * 0.13, Z1 - 0.5, null, 16); });
+    var beacon = sphere(0.09, glowMat(0xff3b30, 0.4), X0 + 0.4, H + 1.62, Z1 - 0.5);
+    PK.opLamps = { mats: opLampM, beacon: beacon.material };
+    pkBkCamera(scene, X0 - 0.17, H - 0.35, Z0 + 0.4, -Math.PI / 2 - 0.35, 0.5);
+    pkRoundCyl(0.025, 1.6, MAT.steelDark, X1 - 0.4, H + 1.0, Z0 + 0.4, null, 6);
+    // the east wall outside: louvres, the services box and its conduit, a downpipe
+    for (var lv = 0; lv < 7; lv++) box(0.04, 0.05, 1.0, MAT.steelDark, X1 + 0.13, 1.6 + lv * 0.11, -2.4);
+    pkBevelBox(0.2, 0.7, 0.55, S2({ color: 0x8a949b, roughness: 0.45, metalness: 0.5 }), X1 + 0.22, 1.25, 0.6, null, 0.02);
+    pkSign3D(['DANGER 400V'], 0.34, 0.1, X1 + 0.33, 1.45, 0.6, Math.PI / 2, { bg: '#f0c04a', fg: '#1b232c' });
+    cyl(0.04, 0.9, MAT.steelDark, X1 + 0.22, 0.45, 0.6, null, 8);
+    pkRoundCyl(0.05, H, MAT.steelDark, X1 + 0.18, H / 2, Z1 - 0.3, null, 8);
+
+    // ── the door, the porch and the square ──
+    [[DX0 - 0.06, Z1 + 0.06], [DX1 + 0.06, Z1 + 0.06]].forEach(function (c) { box(0.12, 2.2, 0.13, red, c[0], 1.1, c[1]); });
+    box(DX1 - DX0 + 0.26, 0.12, 0.13, red, (DX0 + DX1) / 2, 2.16, Z1 + 0.06);
+    PK.opDoor = pkBkDoor(scene, DX0, 0, Z1 - 0.02, Math.PI / 2, -1.5, DX1 - DX0, 2.08, { leaf: cream, glass: M.glass, kick: MAT.hazard }, 'the control room door');
+    pkAwning(2.0, 0.8, 0.5, '#a8402c', '#f3ead6', (DX0 + DX1) / 2, 2.62, Z1 + 0.12, 0, null);
+    pkSign3D(['RIDE CONTROL', 'THE COASTER'], 2.3, 0.36, 15.9, 2.95, Z1 + 0.13, 0, { bg: '#1b232c', fg: '#f5b53d' });
+    box(1.4, 0.03, 0.7, MAT.steelDark, (DX0 + DX1) / 2, 0.05, Z1 + 0.5);
+    var opPlantG = new THREE.Group(); opPlantG.position.set(0, 0, 0); scene.add(opPlantG);
+    pkBoothLantern(opPlantG, DX0 - 0.3, 2.1, Z1 + 0.22);
+    pkBoothLantern(opPlantG, DX1 + 0.3, 2.1, Z1 + 0.22);
+    pkPlanter(1.6, opPlantG, 11.9, 0, Z1 + 0.65);
+    pkPlanter(1.6, opPlantG, 16.2, 0, Z1 + 0.65);
+    pkBkFirePoint(scene, 17.6, 0.0, Z1 + 0.1, 0);
+    pkPaved(2.6, 6.6, M.paversWarm, (DX0 + DX1) / 2, 0.045, Z1 + 3.4, 0);
+    // the queue board on its post by the lane's entry, facing the square: the wait, in amber dots
+    pkRoundCyl(0.05, 2.2, MAT.steelDark, 9.0, 1.1, 9.6, null, 10);
+    pkBevelBox(0.3, 0.12, 0.3, M.stoneDark, 9.0, 0.06, 9.6, null, 0.02);
+    solid(8.85, 9.15, 9.45, 9.75, 0, 2.3);
+    var qbG = new THREE.Group(); qbG.position.set(9.0, 2.45, 9.68); scene.add(qbG);
+    pkBevelBox(1.36, 0.42, 0.08, MAT.steelDark, 0, 0, -0.03, qbG, 0.015);
+    var qb = touchScreen({ w: 320, h: 96, pw: 1.24, ph: 0.34, x: 0, y: 0, z: 0.012, parent: qbG, title: 'The coaster: the queue board',
+      draw: function (c, s) {
+        c.fillStyle = '#0a0806'; c.fillRect(0, 0, s.w, s.h);
+        c.fillStyle = 'rgba(255,170,40,0.05)'; for (var yy = 2; yy < s.h; yy += 4) for (var xx = 2; xx < s.w; xx += 4) c.fillRect(xx, yy, 2, 2);
+        var R = PK.ride, n = PK.queue.length, wait = Math.ceil(Math.ceil((n + 1) / Math.max(1, PK.seats.length)) * 75 / 60);
+        c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillStyle = '#ffb03a'; c.font = 'bold 28px ' + SCREEN_THEME.font; c.fillText('THE COASTER', s.w / 2, 26);
+        c.fillStyle = R.fault ? '#ff5a3c' : '#ffcf6a'; c.font = 'bold 24px ' + SCREEN_THEME.font;
+        c.fillText(R.fault ? 'STOPPED' : PK.closed ? 'PARK CLOSED' : (n ? 'WAIT ' + wait + ' MIN' : 'NO WAIT · WALK ON'), s.w / 2, 68);
+      } });
+    PK_BK_LIVE.push({ sc: qb, g: qbG, every: 1.0 });
+
+    // ── inside ──
+    pkPaved(W - 0.2, D - 0.2, S2({ color: 0x8f969b, roughness: 0.85 }), CX, 0.043, CZ, 0.6);   // grey anti-static floor tiles
+    box(W - 0.2, 0.06, D - 0.2, inner, CX, H - 0.03, CZ);                                       // the ceiling
+    // a wainscot round the walls: the coaster's green to the chair rail
+    var wains = S2({ color: 0x3d5b49, roughness: 0.62 });
+    box(W - 0.4, 0.9, 0.04, wains, CX, 0.45, Z0 + 0.12); box(W - 0.38, 0.06, 0.08, oak, CX, 0.92, Z0 + 0.13);
+    box(0.04, 0.9, D - 0.4, wains, X1 - 0.12, 0.45, CZ); box(0.08, 0.06, D - 0.38, oak, X1 - 0.13, 0.92, CZ);
+    [0.6, 2.1, 3.6].forEach(function (k) { pkBkBatten(scene, X0 + 1.4 + (k / 3.6) * (W - 2.8), H - 0.06, CZ - 0.6, 0, 1.3); });
+    // the coaster desk on the north wall, and the status board above it
+    pkBuildCoasterConsole();
+    box(1.08, 0.96, 0.06, MAT.steelDark, 14, 2.02, Z0 + 0.07);
+    // the station desk under the long window: oak on a steel frame, the CCTV monitors on their stands, the radio and the log
+    var sdx = X0 + 0.55;
+    pkBevelBox(0.72, 0.05, 3.2, oak, sdx, 0.78, -1.9, null, 0.012);
+    pkBevelBox(0.7, 0.72, 0.04, dark, sdx + 0.28, 0.38, -1.9, null, 0.008);
+    [-3.4, -0.4].forEach(function (z) { pkBevelBox(0.66, 0.74, 0.06, steel, sdx, 0.38, z, null, 0.01); });
+    pkOpMonitors(sdx - 0.08, -2.35);
+    pkBkRadio(scene, sdx - 0.05, 0.805, -0.75, Math.PI / 2);
+    pkBevelBox(0.3, 0.03, 0.22, S2({ color: 0x2f4f7a, roughness: 0.7 }), sdx + 0.05, 0.82, -1.15, null, 0.008);
+    pkRoundCyl(0.045, 0.1, S2({ color: 0xf2efe6, roughness: 0.5 }), sdx + 0.12, 0.85, -0.5, null, 12);
+    pkBkChair(scene, sdx + 0.95, -1.8, -Math.PI / 2, 0);
+    pkBkChair(scene, 14.3, -2.5, 0, 0);
+    // the equipment bay: the lift drive and the PLC rack under the clerestory, the track mimic on the east wall
+    pkOpLiftDrive(16.95, Z0 + 0.42);
+    pkOpPlcRack(18.75, Z0 + 0.42);
+    pkOpMimic(X1 - 0.13, -0.6);
+    // the staff corner by the door: lockers, a water cooler, the key box, the clock, the intercom, a vest on its hook
+    for (var lk = 0; lk < 4; lk++) {
+      var lx = 17.75 + lk * 0.52;
+      pkBevelBox(0.5, 1.85, 0.48, S2({ color: lk % 2 ? 0x5a6f7c : 0x51656f, roughness: 0.5, metalness: 0.35 }), lx, 0.925, Z1 - 0.36, null, 0.01);
+      for (var sl = 0; sl < 4; sl++) box(0.3, 0.012, 0.01, MAT.black, lx, 1.55 + sl * 0.04, Z1 - 0.6);
+      box(0.03, 0.12, 0.02, MAT.chrome, lx + 0.17, 1.0, Z1 - 0.61);
+    }
+    pkRoundCyl(0.16, 1.0, S2({ color: 0xe8e6e0, roughness: 0.5 }), 17.2, 0.5, Z1 - 0.3, null, 14);
+    pkRoundCyl(0.14, 0.38, S2({ color: 0x8fc6e8, roughness: 0.1, transparent: true, opacity: 0.6 }), 17.2, 1.2, Z1 - 0.3, null, 14);
+    pkBkKeyBox(scene, 12.3, 1.6, Z1 - 0.12, Math.PI);
+    pkBkClock(scene, 12.2, 2.55, Z0 + 0.12, 0, 0.17);
+    pkBkIntercom(scene, 11.7, 1.5, Z0 + 0.1, 0);
+    pkBkVest(scene, X1 - 0.13, 1.85, 1.2, -Math.PI / 2);
+    pkBkFirstAid(scene, X1 - 0.13, 2.2, -2.6, -Math.PI / 2);
+    pkBkClipboard(scene, 15.55, 1.6, Z0 + 0.11, 0);
     // the screen on the north wall: a status board that reports, while the desk does the work
     PK.screen = touchScreen({
       w: 420, h: 380, pw: 0.9, ph: 0.78, x: 14, y: 2.02, z: Z0 + 0.12, parent: null, title: 'Ride control',
       draw: function (ctx, s) {
         var R = PK.ride;
         scBg(ctx, s.w, s.h); scHead(ctx, s.w, 'RIDE CONTROL', pkRideWord());
-        // the state, large, because it is the one thing you look up at
         var live = R.fault ? 'STOPPED' : R.state === 'running' ? 'ON TRACK' : R.state === 'dispatch' ? 'DISPATCHING' : R.state === 'ready' ? 'READY TO SEND' : R.state === 'unloading' ? 'UNLOADING' : 'AT THE STATION';
         var col = R.fault ? '#ff6b5e' : R.state === 'running' ? '#5fd38d' : '#f5b53d';
         ctx.fillStyle = col; ctx.font = 'bold 42px ' + SCREEN_THEME.font; ctx.textAlign = 'left'; ctx.fillText(live, 16, 92);
         ctx.textAlign = 'right'; ctx.fillStyle = '#a0acb8'; ctx.font = '16px ' + SCREEN_THEME.font;
         ctx.fillText((R.v || 0).toFixed(1) + ' m/s', s.w - 16, 92);
         ctx.textAlign = 'left';
-        // the train, car by car: filled seats are riders
-        var cars = 3, per = Math.ceil(PK.seats.length / cars), st = Math.round(R.u * PK.seats.length);
+        var cars = 3, per = Math.ceil(PK.seats.length / cars);
         for (var c = 0; c < cars; c++) {
           var x0 = 16 + c * 132, y0 = 112;
           ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(x0, y0, 120, 46);
-          for (var q = 0; q < per; q++) {
-            var filled = ((c * per + q) < R.riders);
-            ctx.fillStyle = filled ? '#5fd38d' : 'rgba(255,255,255,0.18)';
-            ctx.fillRect(x0 + 8 + q * 18, y0 + 10, 13, 26);
-          }
-          ctx.fillStyle = '#7d8a96'; ctx.font = '12px ' + SCREEN_THEME.font;
-          ctx.fillText('CAR ' + (c + 1), x0 + 4, y0 + 44);
+          for (var q = 0; q < per; q++) { ctx.fillStyle = ((c * per + q) < R.riders) ? '#5fd38d' : 'rgba(255,255,255,0.18)'; ctx.fillRect(x0 + 8 + q * 18, y0 + 10, 13, 26); }
+          ctx.fillStyle = '#7d8a96'; ctx.font = '12px ' + SCREEN_THEME.font; ctx.fillText('CAR ' + (c + 1), x0 + 4, y0 + 44);
         }
-        // the line of state, row by row
         var rows = [
           ['GATES', PK.gates[0] && PK.gates[0].open ? 'OPEN' : 'CLOSED', PK.gates[0] && PK.gates[0].open ? '#5fd38d' : '#a0acb8'],
           ['RESTRAINTS', R.barsWant > 0.5 ? 'DOWN' : 'UP', R.barsWant > 0.5 ? '#5fd38d' : '#a0acb8'],
@@ -5411,6 +5385,145 @@
         scText(ctx, 16, 336, 'Cycles ' + (S.cycles || 0) + '   Riders today ' + PK.today.rides, '#a0acb8', 13);
         scText(ctx, 16, 356, 'Level ' + PK.level + '   Tickets ' + PK.today.tickets + '   Snacks ' + PK.today.snacks, '#7d8a96', 13);
       }
+    });
+
+    // ── collision ──
+    solid(X0 - 0.15, X0 + 0.15, Z0, Z1, 0, H);                       // west
+    solid(X1 - 0.15, X1 + 0.15, Z0, Z1, 0, H);                       // east
+    solid(X0, X1, Z0 - 0.15, Z0 + 0.15, 0, H);                       // north
+    solid(X0, DX0 - 0.04, Z1 - 0.15, Z1 + 0.15, 0, H);               // south, west of the door
+    solid(DX1 + 0.04, X1, Z1 - 0.15, Z1 + 0.15, 0, H);               // south, east of the door
+    solid(X0 + 0.15, X0 + 0.95, -3.55, -0.25, 0, 1.0);               // the station desk
+    solid(16.4, 19.6, Z0 + 0.15, Z0 + 0.75, 0, 2.0);                 // the lift drive and the rack
+    solid(17.45, X1 - 0.1, Z1 - 0.65, Z1 - 0.1, 0, 1.9);             // the lockers
+  }
+  // the room's extents: the floor the player stands on indoors, the roof over it and the walls the engine asks about
+  var PK_OP = { x0: 11, x1: 20, z0: -4, z1: 2.4, h: 3.4 };
+
+  // ── The lift drive ────────────────────────────────────────────────
+  // a floor-standing cabinet for the lift motor: its current and speed on meters, the interlock lamps (lift run, the anti-
+  // rollback dogs, the station brakes, the block ahead clear) and a lamp test. It reads the train: the motor pulls while the
+  // lead car is on the lift.
+  function pkOpLiftDrive(x, z) {
+    var M = pkCtlM(), H2 = new THREE.Group(); H2.position.set(x, 0, z); scene.add(H2);
+    pkBevelBox(1.05, 1.95, 0.55, M.case, 0, 0.975, 0, H2, 0.02);
+    pkBevelBox(1.1, 0.05, 0.6, M.face, 0, 1.97, 0, H2, 0.01);
+    for (var v = 0; v < 6; v++) box(0.6, 0.014, 0.01, M.well, 0, 0.18 + v * 0.04, 0.281, H2);
+    var PW = 0.86, PH = 0.9;
+    var P = pkCtlPanel({ w: PW, h: PH, x: 0, y: 1.35, z: 0.28, parent: H2, key: 'pk-op-lift',
+      draw: function (c, W2, H3) {
+        var R2 = pkCtlRuler(W2, H3, PW, PH); R2.c = c;
+        R2.engrave('LIFT DRIVE', 0, 0.405, 0.030);
+        R2.txt('M1  ·  90 kW  ·  VFD', 0, 0.37, 0.0135, '#a6b4bc');
+        R2.txt('MOTOR A', -0.21, 0.13, 0.016, '#aebcc4'); R2.txt('CHAIN m/s', 0.21, 0.13, 0.016, '#aebcc4');
+        var L = ['LIFT RUN', 'ANTI-ROLLBACK', 'STATION BRAKES', 'BLOCK CLEAR'];
+        for (var i = 0; i < L.length; i++) R2.txt(L[i], -0.24, -0.03 - i * 0.07, 0.0145, '#d6dee3', 'left');
+        R2.txt('LAMP TEST', 0.27, -0.25, 0.013, '#aebcc4');
+        R2.txt('ISOLATE BEFORE OPENING', 0, -0.425, 0.013, '#7d8a96');
+      } });
+    function onLift() { var u = PK.ride.u; return PK.ride.state === 'running' && u >= PK.liftU[0] && u <= PK.liftU[1]; }
+    pkCtlGauge(P, -0.21, 0.24, { id: 'liftA', unit: 'amps', min: 0, max: 200, red: 0.85, ticks: 5, r: 0.085, ease: 3, get: function () { return onLift() ? 0.62 + 0.04 * Math.sin(PK_BK_T * 6) : 0.04; } });
+    pkCtlGauge(P, 0.21, 0.24, { id: 'chain', unit: 'm/s', min: 0, max: 6, red: 0.8, ticks: 6, r: 0.085, ease: 2, get: function () { return onLift() ? 0.66 : (PK.ride.state === 'running' ? 0.66 : 0); } });
+    var lamps = [0x5fd38d, 0xf0c04a, 0xff3b30, 0x5fd38d].map(function (col, i) { return pkCtlLamp(P, -0.31, -0.03 - i * 0.07, { r: 0.016, col: col }); });
+    var testT = 0;
+    pkCtlBtn(P, 0.27, -0.17, { id: 'liftTest', label: 'LAMP TEST', col: 'white', r: 0.026, lampCol: 0xe8e4d8, prompt: 'Lamp test', act: function () { testT = 2; sfx('click'); } });
+    pkCtlLive({ tick: function (dt) {
+      if (testT > 0) testT -= dt;
+      var all = testT > 0, R = PK.ride, d = Math.abs(((R.u - PK.stationU + 1.5) % 1) - 0.5);
+      lamps[0].on = all || onLift();
+      lamps[1].on = all || (R.state === 'running' && R.u >= PK.liftU[0] && R.u <= PK.liftU[1] + 0.02);
+      lamps[2].on = all || d < 0.02;
+      lamps[3].on = all || (R.state !== 'running' || d > 0.15);
+    } });
+  }
+  // ── The PLC rack ──────────────────────────────────────────────────
+  // a glazed rack with the ride computer: rows of I/O cards whose lamps flicker with the ride, a power supply and a patch field
+  function pkOpPlcRack(x, z) {
+    var M = pkCtlM(), H2 = new THREE.Group(); H2.position.set(x, 0, z); scene.add(H2);
+    pkBevelBox(1.05, 1.95, 0.55, M.case, 0, 0.975, 0, H2, 0.02);
+    box(0.92, 1.6, 0.02, pkMats().glass, 0, 1.05, 0.285, H2);
+    var leds = [];
+    for (var row = 0; row < 4; row++) {
+      var ry = 1.6 - row * 0.32;
+      pkBevelBox(0.86, 0.26, 0.04, S2c(0x23292e), 0, ry, 0.24, H2, 0.006);
+      for (var card = 0; card < 10; card++) {
+        var cx = -0.38 + card * 0.084;
+        box(0.07, 0.22, 0.03, S2c(card % 3 ? 0x6a7680 : 0x4f6a5a), cx, ry, 0.26, H2);
+        for (var l = 0; l < 4; l++) { var m = glowMat([0x5fd38d, 0xf0c04a, 0x5fd38d, 0xff3b30][l], 0.1); leds.push({ m: m, k: Math.random() * 6, f: 2 + Math.random() * 7, base: l === 0 }); box(0.012, 0.012, 0.01, m, cx - 0.02, ry + 0.07 - l * 0.035, 0.277, H2); }
+      }
+    }
+    pkBevelBox(0.86, 0.2, 0.05, S2c(0x8a949b), 0, 0.32, 0.24, H2, 0.008);
+    box(0.03, 0.03, 0.01, glowMat(0x5fd38d, 1.4), 0.36, 0.32, 0.27, H2);
+    pkSign3D(['RIDE PLC'], 0.4, 0.1, 0, 1.88, 0.29, 0, { bg: '#1b232c', fg: '#e8e4d8' }, H2);
+    pkCtlLive({ tick: function (dt) {
+      var busy = PK.ride.state === 'running' ? 1 : (PK.ride.state === 'idle' ? 0.25 : 0.6);
+      for (var i = 0; i < leds.length; i++) { var L = leds[i]; L.k += dt * L.f; L.m.emissiveIntensity = L.base ? 1.4 : (Math.sin(L.k) > 1 - busy * 1.6 ? 1.6 : 0.08); }
+    } });
+    function S2c(c) { return pkBkStd({ color: c, roughness: 0.5, metalness: 0.35 }); }
+  }
+
+  // ── The track mimic board ─────────────────────────────────────────
+  // the circuit drawn from above on a lit panel: the station, the lift, the blocks, and the train going round it live. Each
+  // block is a lamp: red while the train is in it, green when it is clear.
+  var PK_MIMIC = null;
+  function pkOpMimic(x, z) {
+    var g = new THREE.Group(); g.position.set(x, 1.95, z); g.rotation.y = -Math.PI / 2; scene.add(g);
+    pkBevelBox(1.5, 0.92, 0.06, MAT.steelDark, 0, 0, -0.03, g, 0.015);
+    var N = 240, P = [], xs = [], zs = [];
+    for (var i = 0; i < N; i++) { var p = PK.curve.getPointAt(i / N); P.push(p); xs.push(p.x); zs.push(p.z); }
+    var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs), z0 = Math.min.apply(null, zs), z1 = Math.max.apply(null, zs);
+    var BL = 8;   // blocks round the lap
+    var sc = touchScreen({ w: 420, h: 256, pw: 1.4, ph: 0.85, x: 0, y: 0, z: 0.006, parent: g, title: 'The track mimic',
+      draw: function (c, s) {
+        c.fillStyle = '#10161b'; c.fillRect(0, 0, s.w, s.h);
+        c.fillStyle = '#c9a227'; c.font = 'bold 14px ' + SCREEN_THEME.font; c.textAlign = 'left'; c.fillText('THE COASTER  ·  TRACK MIMIC', 12, 20);
+        c.fillStyle = '#7d8a96'; c.font = '11px ' + SCREEN_THEME.font; c.fillText('BLOCKS ' + BL + '   LAP ' + Math.round(PK.len) + ' m', 12, 36);
+        var m = 30, kx = (s.w - m * 2) / (x1 - x0), kz = (s.h - 60 - m) / (z1 - z0), k = Math.min(kx, kz), ox = (s.w - (x1 - x0) * k) / 2, oz = 48;
+        function X(p) { return ox + (p.x - x0) * k; } function Z(p) { return oz + (p.z - z0) * k; }
+        var R = PK.ride, tb = Math.floor((((R.u - PK.stationU) % 1 + 1) % 1) * BL);
+        for (var b = 0; b < BL; b++) {
+          c.strokeStyle = b === tb ? '#ff4a3a' : '#3f8f5f'; c.lineWidth = 6; c.lineCap = 'round'; c.beginPath();
+          for (var j = 0; j <= N / BL; j++) { var q = P[(Math.floor(PK.stationU * N) + b * N / BL + j) % N]; if (j === 0) c.moveTo(X(q), Z(q)); else c.lineTo(X(q), Z(q)); }
+          c.stroke();
+        }
+        // the lift and the station, marked
+        c.fillStyle = '#9fb2c0'; c.font = '10px ' + SCREEN_THEME.font; c.textAlign = 'center';
+        var ps = PK.curve.getPointAt(PK.stationU), pl = PK.curve.getPointAt((PK.liftU[0] + PK.liftU[1]) / 2);
+        c.fillText('STATION', X(ps), Z(ps) + 18); c.fillText('LIFT', X(pl) + 18, Z(pl));
+        // the train: three cars, the lead one brighter
+        for (var t = 0; t < 3; t++) { var u = ((R.u - t * PK.carGap / PK.len) % 1 + 1) % 1, pt = PK.curve.getPointAt(u); c.fillStyle = t ? '#ffd27a' : '#ffffff'; c.beginPath(); c.arc(X(pt), Z(pt), t ? 4 : 5, 0, 6.283); c.fill(); }
+        c.textAlign = 'left'; c.fillStyle = R.fault ? '#ff6b5e' : '#d6dee3'; c.font = 'bold 12px ' + SCREEN_THEME.font;
+        c.fillText((R.fault ? 'STOP  ' : '') + 'BLOCK ' + (tb + 1) + '   ' + (R.v || 0).toFixed(1) + ' m/s', 12, s.h - 10);
+      } });
+    PK_BK_LIVE.push({ sc: sc, g: g, every: 0.25 });
+    PK_MIMIC = sc;
+  }
+  // two CCTV monitors on their stands on the station desk, turned to the operator: the queue lane and the platform
+  function pkOpMonitors(x, z) {
+    var g = new THREE.Group(); g.position.set(x, 1.12, z); g.rotation.y = Math.PI / 2; scene.add(g);
+    [-0.27, 0.27].forEach(function (dx) { pkRoundCyl(0.025, 0.2, pkMats().iron, dx, -0.22, -0.08, g, 6); pkBevelBox(0.22, 0.02, 0.16, pkMats().iron, dx, -0.32, -0.06, g, 0.006); });
+    pkBkMonitor(g, -0.27, 0, 0, 0.15, -0.05, 'CAM 1 · the coaster queue', function (c, s) {
+      c.fillStyle = '#071108'; c.fillRect(0, 0, s.w, s.h);
+      c.fillStyle = '#8fe0a0'; c.font = 'bold 13px monospace'; c.textAlign = 'left'; c.fillText('CAM 1  QUEUE LANE', 8, 16);
+      c.textAlign = 'right'; c.fillText(fmtTime(S.time), s.w - 8, 16);
+      var n = PK_QUEUE_SLOTS.length, q = PK.queue.length, bw = (s.w - 24) / n;
+      for (var i = 0; i < n; i++) { c.strokeStyle = 'rgba(143,224,160,0.3)'; c.strokeRect(12 + i * bw, 60, bw - 4, 38); if (i < q) { c.fillStyle = '#cfe9d4'; c.beginPath(); c.arc(12 + i * bw + (bw - 4) / 2, 79, Math.min(9, bw / 3), 0, 6.283); c.fill(); } }
+      c.fillStyle = '#8fe0a0'; c.textAlign = 'left'; c.font = '13px monospace'; c.fillText('IN LINE ' + q, 10, 132);
+      if (Math.floor(PK_BK_T) % 2 === 0) { c.fillStyle = '#ff3b30'; c.beginPath(); c.arc(s.w - 14, 150, 5, 0, 6.283); c.fill(); }
+      pkBkScanlines(c, s.w, s.h);
+    });
+    pkBkMonitor(g, 0.27, 0, 0, -0.15, -0.05, 'CAM 2 · the platform', function (c, s) {
+      var R = PK.ride;
+      c.fillStyle = '#070b11'; c.fillRect(0, 0, s.w, s.h);
+      c.fillStyle = '#9fc6ff'; c.font = 'bold 13px monospace'; c.textAlign = 'left'; c.fillText('CAM 2  PLATFORM', 8, 16);
+      for (var cr = 0; cr < 3; cr++) for (var st = 0; st < 4; st++) {
+        var x = 12 + cr * 74 + (st % 2) * 30, y = 36 + Math.floor(st / 2) * 30, seat = PK.seats[cr * 4 + st];
+        c.strokeStyle = 'rgba(159,198,255,0.45)'; c.strokeRect(x, y, 26, 26);
+        if (seat && seat.guest) { c.fillStyle = '#d7e6ff'; c.fillRect(x + 3, y + 3, 20, 20); }
+      }
+      c.fillStyle = R.fault ? '#ff6b5e' : '#9fc6ff'; c.font = 'bold 14px monospace'; c.fillText(pkRideWord().toUpperCase(), 10, 120);
+      c.font = '12px monospace'; c.fillText('BARS ' + (R.bars > 0.5 ? 'LOCKED' : 'OPEN') + '   GATES ' + (PK.gates[0] && PK.gates[0].open ? 'OPEN' : 'SHUT'), 10, 148);
+      pkBkScanlines(c, s.w, s.h);
     });
   }
   // the desk buttons and the AUTO lever are gone: the screen carries every control
@@ -5738,9 +5851,13 @@
       R.autoT -= dt;
       if (R.autoT <= 0) {
         R.autoT = 1.4;
-        if (R.state === 'idle' || R.state === 'unload') { pkOpenGates(); R.loadT = 0; }
-        else if (R.state === 'loading') { R.loadT += 1.4; if (pkSeatsFull() || R.loadT > 8) pkBarsDown(); }
-        else if (R.state === 'ready') { if (R.riders === 0) { pkBarsUp(); pkOpenGates(); } else pkDispatch(); }
+        // AUTO asks before it acts, so it never trips a refusal: an empty train waits with its gates open and its bars up,
+        // the bars come down once someone is aboard and seated (a full train at once, else after eight seconds of boarding),
+        // and a train readied with nobody aboard is put back to boarding once, not flapped
+        var walking = pkStillBoarding();
+        if (R.state === 'idle' || R.state === 'unload') { if (!PK.closed) { pkOpenGates(); R.loadT = 0; } }
+        else if (R.state === 'loading') { R.loadT += 1.4; if (R.riders > 0 && !walking && (pkSeatsFull() || R.loadT > 8)) pkBarsDown(); }
+        else if (R.state === 'ready') { if (R.riders === 0) { pkBarsUp(); R.loadT = 0; } else if (!walking && (S.wear || 0) < 90) pkDispatch(); }
       }
     }
     if (R.state === 'loading') pkRideLoad();
@@ -5999,6 +6116,8 @@
     if (n) { pkAttrReslot(a); screenDirtyAll(); }
     return n;
   }
+  // a seat nobody has taken or is walking to
+  function pkAttrHasSeat(a) { for (var i = 0; i < a.seats.length; i++) if (!a.seats[i].guest && !a.seats[i].player) return true; return false; }
   // guests still walking from the gate to their seat: the gates stay open and the ride waits
   function pkAttrWalkers(a) {
     var n = 0;
@@ -6017,7 +6136,8 @@
   }
   function pkAttrStart(a) {
     var C = pkCtl(a);
-    if (C.fault || C.maint || a.queue.length || a.riders <= 0 || pkAttrWalkers(a)) return false;
+    // the line holds the ride only while it can still board: gates shut or seats full, whoever is left waits for the next cycle
+    if (C.fault || C.maint || (a.queue.length && C.gates && pkAttrHasSeat(a)) || a.riders <= 0 || pkAttrWalkers(a)) return false;
     a.state = 'running'; a.t = 0; C.gates = false; C.barsWant = 1;
     sfx('bell');
     if (a.start) a.start(a);
@@ -6053,13 +6173,15 @@
     } else if (a.state === 'boarding') {
       if (C.gates) pkAttrFill(a);
       a.boarding = pkAttrWalkers(a);
-        if (auto && !PK.closed) {
-        if (a.t >= a.board - 1.4 && !a.queue.length && a.riders > 0 && C.barsWant < 1) { C.gates = false; C.barsWant = 1; }
-        if (a.t >= a.board) {
-          // Never dispatch with empty seats while people are still en route.
-          if (a.riders > 0 && !a.queue.length && !pkAttrWalkers(a)) pkAttrStart(a);
-          else a.t = a.board;
+      if (auto && !PK.closed) {
+        // close up when the ride is full, or when boarding time is up and the line has emptied into the seats, or (a line
+        // that is not moving) a few seconds past it; then go once the bars are down and nobody is still walking to a seat.
+        // Whoever is left in the line waits for the next cycle: a line longer than the ride never holds it at the gate.
+        var full = !pkAttrHasSeat(a), walkers = a.boarding;
+        if (a.riders > 0 && !walkers && C.barsWant < 1 && (full || (a.t >= a.board - 1.4 && !a.queue.length) || a.t >= a.board + 6)) {
+          C.gates = false; C.barsWant = 1; a.t = Math.max(a.t, a.board - 1.4);
         }
+        if (a.t >= a.board && C.barsWant >= 1 && !C.gates && a.riders > 0 && !walkers) pkAttrStart(a);
       }
     } else if (a.state === 'ready') {
         if (auto && !PK.closed) pkAttrStart(a);
@@ -7899,7 +8021,7 @@ function pkBoothDispatch(a) {
   if (C.fault) return pkBoothRefuse('Reset ' + a.name + ' first');
   if (C.maint) return pkBoothRefuse(a.name + ' is locked out - turn the key to RUN');
   if (a.state !== 'boarding' && a.state !== 'ready') return pkBoothRefuse(a.state === 'idle' ? 'Board the guests first' : a.name + ' is ' + a.state);
-  if (a.queue.length) return pkBoothRefuse('Wait for the queue to finish boarding');
+  if (a.queue.length && C.gates && pkAttrHasSeat(a)) return pkBoothRefuse('Wait for the queue to finish boarding');
   if (a.boarding && pkAttrWalkers(a)) return pkBoothRefuse('Wait for the riders to sit');
   if (!a.riders) return pkBoothRefuse('Nobody is aboard ' + a.name);
   if (a.state === 'boarding' && !C.gates) return pkBoothRefuse('Open the gates to board ' + a.name);
@@ -8657,7 +8779,7 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
     [2, -60, 2, -66, 3.6, 'garden'], [9.5, -60, 9.5, -79, 3.4, 'garden'], [14, -60, 14, -66.6, 3, 'garden']          // to the bandstand, the maze and the windmill
   ];
   // the arches over the streets where each land begins: [x, z, the way the street runs ('x' or 'z'), land]
-  var PK_ARCHES = [[-17.5, 3, 'x', 'fair'], [19.5, 3, 'x', 'thrill'], [-31, -6.5, 'z', 'dark'], [35, -6.5, 'z', 'coaster']];
+  var PK_ARCHES = [[-17.5, 3, 'x', 'fair'], [23.5, 3, 'x', 'thrill'], [-31, -6.5, 'z', 'dark'], [35, -6.5, 'z', 'coaster']];
   var PK_KEEP = [];   // [x, z, r] circles other parts ask the planting to leave alone (part 13 adds its own)
   var PK_THEME_T = 0, PK_FOUNTAIN = { jet: null };
 
@@ -8845,7 +8967,7 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
     pkParkFence(Y.x0, Y.z0, Y.x1, Y.z0);       // north, along the Garden Walk
     pkParkFence(Y.x1, Y.z0, Y.x1, Y.z1);       // east, along Coaster Country's street
     pkParkFence(Y.x0, Y.z1, -10.3, Y.z1);      // south-west, to the platform's west end
-    pkParkFence(17.2, Y.z1, Y.x1, Y.z1);       // south-east, to the operator's room
+    pkParkFence(PK_OP.x1 + 0.2, Y.z1, Y.x1, Y.z1);   // south-east, to the coaster control room
   }
 
   // ── Signposts ────────────────────────────────────────────────────

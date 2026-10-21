@@ -110,7 +110,7 @@
     pkSlab(28, 10, 0, 33, 0.014, M.paversWarm);      // the plaza under the gate
     pkSlab(14, 32, 0, 12, 0.016);      // the midway
     pkSlab(36, 18, 2, -4, 0.018);      // the station apron
-    pkSlab(6, 6, 14, -1, 0.02);        // the operator's room floor
+    pkSlab(9.4, 6.8, 15.5, -0.8, 0.02);   // the coaster control room's floor
     pkSlab(10, 8, -13, 8, 0.02, M.paversWarm);       // the snack stand apron
     pkSlab(62, 18, 0, 62, 0.01, pkAsphalt());       // the car park: two ranks of bays off a wide aisle
     // the entrance drive up from the road
@@ -365,9 +365,10 @@
     handle: 'PARK_CO', version: '0.1.1',
     floorY: function (x, z) { return pkFloor(x, z); },
     insideWalk: function (x, z) { return pkInsidePark(x, z); },
-    indoors: function (x, z) { return x > 11 && x < 17 && z > -4 && z < 2; },
-    roofAt: function (x, z) { return x > 11 && x < 17 && z > -4 && z < 2 ? 3.3 : 0; },
-    wallPlanes: function () { return [{ a: 'x', v: 11, n: 1, z0: -4, z1: 2 }, { a: 'x', v: 17, n: -1, z0: -4, z1: 2 }, { a: 'z', v: -4, n: 1, x0: 11, x1: 17 }, { a: 'z', v: 2, n: -1, x0: 11, x1: 17 }]; },
+    // the coaster's control room (part 03, PK_OP): indoors, under its roof, inside its four walls
+    indoors: function (x, z) { var O = PK_OP; return x > O.x0 && x < O.x1 && z > O.z0 && z < O.z1; },
+    roofAt: function (x, z) { var O = PK_OP; return x > O.x0 && x < O.x1 && z > O.z0 && z < O.z1 ? O.h : 0; },
+    wallPlanes: function () { var O = PK_OP; return [{ a: 'x', v: O.x0, n: 1, z0: O.z0, z1: O.z1 }, { a: 'x', v: O.x1, n: -1, z0: O.z0, z1: O.z1 }, { a: 'z', v: O.z0, n: 1, x0: O.x0, x1: O.x1 }, { a: 'z', v: O.z1, n: -1, x0: O.x0, x1: O.x1 }]; },
     editClamp: function (pt) { return { x: clamp(pt.x, PK_PARK.x0 + 1, PK_PARK.x1 - 1), z: clamp(pt.z, PK_PARK.z0 + 1, PK_PARK.z1 - 1) }; },
     doorOpeners: function () {
       var w = PK.guests.map(function (g) { return { x: g.rec.x, z: g.rec.z }; });
