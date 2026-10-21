@@ -49,8 +49,13 @@ To see it: open this folder in the Co Engine editor, or `npm run dev`.
 - [x] 3. New outdoor tracks: The Serpent (18 m lift, big drop, turnaround, camelback, both loops),
       Baron's Drop (keep lift, dive and tunnel; new south-east run; fix its hairpin approach),
       Puffin Line (bigger loop, straight station)
-- [ ] 3b. Speed test on every ride: top speed and lap time on the coasters, spin rate on the flat rides,
-      against real rides; tune the ones that are far too fast or too slow
+- [x] 3b. Speed test on every ride, tuned to real rides. Coasters now run on physics (station tyres, chain lift
+      at 9 km/h, speed from the drop with friction, a brake run): the coaster 53 km/h / 25 s lap (was 62 / 11 s),
+      Serpent 64 km/h / 34 s (was 108 / 15 s), Baron 70 / 27 s (was 84 / 12 s), indoor 32-35 / ~20 s, Puffin 6 km/h.
+      Ferris wheel one slow turn in 45 s (1.3 rpm), dodgems up to ~8 km/h, drop tower a true free fall to 63 km/h
+      with a hold at the top and no bounce (was 118). Also fixed on the way: the tracks' roll wound up round the
+      lap (the Serpent's lift was ridden 134° on its side, the indoor lifts ~120°); every lift is upright now,
+      turns bank by speed, loops invert, Baron crests upright
 - [ ] 4. Indoor coasters bigger and better looking: bigger, taller halls (north fence moves back),
       longer tracks, proper facades and theming
 - [ ] 5. A proper station for every flat ride: platform, entry and exit, gates, canopy, sign
