@@ -44,12 +44,24 @@ module.exports = `
       if (shut || !open) out.push(a.id + (shut ? ' (walked through the shut door)' : ' (could not get in)'));
     });
     ok(out.length === 0, 'every booth: the shut door keeps you out, the open door lets you up the steps and in' + (out.length ? ': ' + out.join(', ') : '')); }
+  // standing behind a booth's chair and aiming over it at the desk, the desk's control has the aim, not the chair
+  { const f = T.PK.attrById.carousel.boothFrame, c = Math.cos(f.ry), s = Math.sin(f.ry), W = (lx, ly, lz) => [f.x + lx * c + lz * s, ly, f.z - lx * s + lz * c];
+    const e = W(0.15, 0, -0.55), t = W(0.18, 1.48, 0.82);
+    T.player.x = e[0]; T.player.z = e[2]; T.player.y = 0.45; T.lookAt(t[0], t[1], t[2]);
+    ok(!/Sit down/.test(T.focusText() || '') && !!T.focusText(), 'aiming over a chair at the desk focuses the desk, not the chair: ' + (T.focusText() || 'nothing')); }
   // a booth chair seats the player at the desk, and a step stands them up
   { let chair = null; T.scene.traverse((o) => { if (!chair && o.userData && o.userData.it && /Sit down/.test((o.userData.it.prompt && o.userData.it.prompt()) || '')) chair = o.parent; });
     if (chair) { T.pkBkSit(chair); T.updatePlayer(0.05); const sat = !!T.pkBkSitting() && T.camera.position.y < T.pkBkSitting().y + 1.5 && T.camera.position.y > T.pkBkSitting().y + 1.3;
       T.player.keys.KeyW = true; T.updatePlayer(0.05); T.player.keys.KeyW = false;
       ok(sat && !T.pkBkSitting(), 'a chair seats the player at desk height and a step stands them up'); }
     else ok(false, 'no chair to sit in'); }
+  // the gates open with nobody in line and shut again, on a booth ride and on the coaster
+  { const a = T.PK.attrById.dodgems, C = T.pkCtl(a); a.state = 'idle'; a.queue.length = 0; a.riders = 0; C.fault = ''; C.maint = false; C.gates = false; T.pkAttrUnseatAll(a);
+    const o = T.pkBoothGates(a) === true && C.gates === true && a.state === 'boarding', sh = T.pkBoothGates(a) === true && C.gates === false && a.state === 'idle';
+    const R = T.PK.ride; R.fault = ''; R.state = 'ready'; T.PK.gates.forEach((g) => { g.open = false; });
+    const co = T.pkGatesToggle() === true && T.PK.gates[0].open === true && R.state === 'loading', cs = T.pkGatesToggle() === true && T.PK.gates[0].open === false;
+    R.state = 'idle';
+    ok(o && sh && co && cs, 'gates open and shut with nobody in line, and on the coaster with the bars down (' + [o, sh, co, cs].join(', ') + ')'); }
   // the key switch in MAINT locks a ride out: nobody boards, the desk refuses, and back to RUN it works again
   { const a = T.PK.attrById.teacups, C = T.pkCtl(a); a.state = 'idle'; a.t = 0; a.riders = 0; a.queue.length = 0; C.fault = ''; C.auto = true; T.pkAttrUnseatAll(a);
     const g = T.pkSpawnGuest(); const s0 = T.pkAttrSlot(a, 0); g.rec.x = s0.x; g.rec.z = s0.z; g.state = 'qwait'; g.slot = 0; g.attr = a.id; a.queue.push(g);
