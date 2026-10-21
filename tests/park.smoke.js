@@ -434,6 +434,15 @@ module.exports = `
     car.party.forEach((g) => { g.state = 'leave'; g.rec.path = []; g.rec.x = car.bay.x + 3; g.rec.z = 62; });
     let m = 0; while (L.cars.indexOf(car) >= 0 && m < 2000) { T.pkTick(0.1); m++; }
     ok(parked && party >= 1 && party <= 4 && L.cars.indexOf(car) < 0 && !car.bay.car, 'a family comes by car (' + party + ', parked in ' + (n / 10).toFixed(0) + ' s), goes home in it and the bay is free again (' + (m / 10).toFixed(0) + ' s)'); }
+  // the status banks: the coaster's mimic lights the section the train is in, a booth's windows follow its ride
+  { const P = T.pkConsole().parts, R = T.PK.ride, u0 = R.u, st0 = R.state, lit = () => P.mimic.findIndex((m) => m.on);
+    T.pkSetCoasterKey(true); R.u = T.PK.stationU; T.pkCtlTick(0.05); const a1 = lit();
+    R.u = (T.PK.liftU[0] + T.PK.liftU[1]) / 2; T.pkCtlTick(0.05); const a2 = lit();
+    R.u = T.pkCoUAt(T.PK.curve, 2.5, -28.3); T.pkCtlTick(0.05); const a3 = lit();
+    R.u = u0; R.state = st0; T.pkCtlTick(0.05);
+    const a = T.PK.attrById.carousel, C = T.pkCtl(a), bp = a.boothPanel; T.pkSetRideKey(a, false); T.pkCtlTick(0.05); const off = !bp.ann.key.on;
+    T.pkSetRideKey(a, true); C.fault = 'test'; T.pkCtlTick(0.05); const fault = bp.ann.fault.on === 'flash' && bp.ann.key.on; C.fault = ''; T.pkCtlTick(0.05);
+    ok(a1 === 0 && a2 === 1 && a3 === 4 && off && fault && !bp.ann.fault.on, 'the status banks follow the rides: mimic ' + [a1, a2, a3].join('/') + ', booth key ' + off + ', fault ' + fault); }
   // the save round trip
   T.save(); { const raw = JSON.parse(localStorage.getItem('park-co-slot1')); ok(!!raw && raw.bank === S.bank && raw.ticketPrice === S.ticketPrice && raw.auto === S.auto && raw.xp === T.PK.xp, 'save wrote the slot: ' + JSON.stringify({ bank: raw && raw.bank, s: S.bank, failed: !!T.save.failed })); }
   // the pure layer
