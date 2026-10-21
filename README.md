@@ -34,7 +34,7 @@ Fifteen rides beside the coaster, all open from the first day.
 
 1. A guest arrives from the car park and joins the shorter ticket line.
 2. You serve the window: the ticket is sold, the money lands, the guest walks to a turnstile.
-3. Past the turnstile the guest picks the ride with the shortest line — the coaster, or any open ride.
+3. Past the turnstile the guest picks the ride with the shortest line — the coaster, or any open ride. A ride whose operator key is still OFF takes a line too: the guests stand and wait for it to open, and give up after a minute or two. Up to 90 guests are in the park at once, and each rides up to four times before going home.
 4. For the coaster: you open the gates and the front of the queue walks in, one seat at a time; pull the restraints down and dispatch.
 5. The train runs the circuit and comes home; the guests get off and either ride again, buy a snack or go home.
 6. Tickets, rides and snacks earn xp. The ladder opens the snack stand, a clerk, an operator and the park lights.

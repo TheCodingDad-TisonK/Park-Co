@@ -12,10 +12,13 @@ module.exports = `
   ok(T.CO.save.key === 'park-co-slot1' && S.bank === 500 && S.day === 1 && S.ticketPrice === 25 && S.snackPrice === 6 && S.clerk === true, 'a fresh save on slot 1: bank ' + S.bank + ', clerk on');
   T.updateHud(1); ok(document.getElementById('h-cash').textContent === '$500' && /Day 1/.test(document.getElementById('h-day').textContent) && /in the park/.test(document.getElementById('h-guests').textContent) && /Coaster:/.test(document.getElementById('h-ride').textContent) && !/Riding/.test(document.getElementById('h-ride').textContent), 'the HUD shows the engine fields and the game fields');
   T.pay(-10, 'a test'); ok(S.bank === 490 && S.ledger[0].n === -10 && S.stats.spent === 10, 'pay writes the bank, the ledger and the stats');
-  // every operator key starts OFF: locked, a ride will not board or take a line, and the coaster's gates stay shut
+  // every operator key starts OFF: locked, a ride will not board and its gates stay shut, but it still takes a line (the
+  // guests stand and wait for it to open, and give up in time)
   { const a = T.PK.attrById.dodgems, locked = T.PK.attractions.every((x) => !T.pkCtl(x).key) && !S.coasterKey;
-    ok(locked && T.pkBoothGates(a) === false && T.pkOpenGates() === false && T.pkQueueJoin({ id: -9, rec: { x: 7, z: 9, path: [] }, state: 'toTurn' }) === false && /KEY OFF/.test(T.pkBoothStatus(a, T.pkCtl(a))),
-      'every operator key starts OFF and a locked ride refuses its gates, its line and its desk');
+    const fake = { id: -9, rec: { x: 7, z: 9, path: [] }, state: 'toTurn' }, joined = T.pkQueueJoin(fake) === true && T.PK.queue.indexOf(fake) >= 0;
+    T.PK.queue.splice(T.PK.queue.indexOf(fake), 1);
+    ok(locked && T.pkBoothGates(a) === false && T.pkOpenGates() === false && joined && /KEY OFF/.test(T.pkBoothStatus(a, T.pkCtl(a))),
+      'every operator key starts OFF: a locked ride refuses its gates and its desk, and still takes a line');
     T.PK.attractions.forEach((x) => T.pkSetRideKey(x, true)); T.pkSetCoasterKey(true);
     ok(T.PK.attractions.every((x) => T.pkCtl(x).key) && S.coasterKey === true && !!T.pkConsole().parts.key, 'turning the keys ON unlocks every ride and the coaster'); }
   // the world
@@ -389,6 +392,19 @@ module.exports = `
   ok(T.devCommandList().indexOf('cash') >= 0 && T.devCommandList().indexOf('spawn') >= 0 && T.devCommandList().indexOf('dispatch') >= 0, 'the command list merges the engine and the game');
   { const b0 = S.bank; ok(/bank/.test(T.devCommand('cash', 5)) && S.bank === b0 + 5 && /guests/.test(T.devCommand('guests')) && /unknown/.test(T.devCommand('nope')), 'devCommand runs engine and game commands: bank ' + S.bank); }
   { const st = T.devState(); ok(st.bank === S.bank && st.engine === T.CO.version && Array.isArray(st.commands) && typeof st.guests === 'number' && typeof st.ride === 'string', 'devState merges the engine readout and the game readout'); }
+  // every guest is in the world: a new figure (not one back from the pool) is added to the scene, so the crowd can be seen
+  { T.pkPool().length = 0; const fresh = []; for (let i = 0; i < 3; i++) fresh.push(T.pkSpawnGuest());   // the pool emptied: these are new figures
+    const inWorld = (g) => { let p = g; while (p.parent) p = p.parent; return p.type === 'Scene'; };
+    ok(fresh.every((gu) => inWorld(gu.g) && gu.g.visible) && T.PK.guests.every((gu) => inWorld(gu.g)), 'every guest stands in the scene, new ones too (' + fresh.filter((gu) => inWorld(gu.g)).length + ' of 3 new in the world, ' + T.PK.guests.length + ' guests)');
+    fresh.forEach((gu) => { gu.state = 'gone'; }); T.pkGuestTick(0.01); }
+  // a guest in a locked ride's line waits, then gives up past their patience and does not go back to that line
+  { const a = T.PK.attrById.teacups, C = T.pkCtl(a), key0 = C.key; T.pkSetRideKey(a, false);
+    const gu = T.pkSpawnGuest(); gu.rec.x = a.qx; gu.rec.z = a.qz; gu.patience = 5;
+    const joined = T.pkAttrQueueJoin(gu, a); gu.rec.path = []; gu.state = 'qwait';
+    let n = 0; while (gu.state === 'qwait' && n < 200) { T.pkGuestTick(0.05); n++; }
+    const left = a.queue.indexOf(gu) < 0 && gu.gaveUp && gu.gaveUp.teacups;
+    ok(joined && n > 90 && left && gu.state === 'off', 'a guest waits in the line of a locked ride, then gives up (' + (n * 0.05).toFixed(1) + ' s) and leaves it');
+    T.pkSetRideKey(a, key0); gu.state = 'gone'; T.pkGuestTick(0.01); }
   // the save round trip
   T.save(); { const raw = JSON.parse(localStorage.getItem('park-co-slot1')); ok(!!raw && raw.bank === S.bank && raw.ticketPrice === S.ticketPrice && raw.auto === S.auto && raw.xp === T.PK.xp, 'save wrote the slot: ' + JSON.stringify({ bank: raw && raw.bank, s: S.bank, failed: !!T.save.failed })); }
   // the pure layer
