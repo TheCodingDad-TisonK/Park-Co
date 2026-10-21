@@ -262,6 +262,14 @@ module.exports = `
   { const a = T.PK.attrById.ferris, L = T.pkLanes().find((l) => l.a === a), P = T.pkAttrLanePath(a, 18, 0);
     const hits = P.slice(1).filter((p, k) => { const q = P[k]; for (let s = 0.1; s < 1; s += 0.1) if (T.pkLaneCollides(q.x + (p.x - q.x) * s, q.z + (p.z - q.z) * s)) return true; return false; });
     ok(P.length === 18 && hits.length === 0, 'the ferris line walks its ' + L.rows + ' rows slot by slot without crossing a fence (' + hits.length + ' crossings)'); }
+  // every flat ride has its station: a fence ring, an entrance toward the line and an exit round the ring, the riders
+  // coming off outside it, and the fence itself solid between the gaps
+  { const ids = ['kround', 'kpots', 'carousel', 'teacups', 'ferris', 'dodgems', 'droptower'], bad = [], py = T.player.y; T.player.y = 0;
+    ids.forEach((id) => { const a = T.PK.attrById[id], s = a.station, p = a.plot; if (!s) { bad.push(id + ' none'); return; }
+      const dExit = Math.hypot(a.exit[0] - p.x, a.exit[1] - p.z), gap = Math.hypot(s.entry[0] - s.exit[0], s.entry[1] - s.exit[1]);
+      const mid = Math.atan2(s.entry[1] - p.z, s.entry[0] - p.x) + Math.PI, fx = p.x + Math.cos(mid) * s.r, fz = p.z + Math.sin(mid) * s.r;
+      if (dExit < s.r + 0.8 || gap < 4 || (!T.collides(fx, fz) && !T.collides(fx + 0.3, fz) && !T.collides(fx, fz + 0.3))) bad.push(id + ' exit ' + dExit.toFixed(1) + '/' + s.r + ' gap ' + gap.toFixed(1)); });
+    T.player.y = py; ok(bad.length === 0, 'every flat ride stands in its own station: fence, entrance porch and a separate exit' + (bad.length ? ': ' + bad.join(', ') : '')); }
   // every ride can be walked to from Station Square. When the pathfinder finds no way it falls back to one straight leg to
   // the slot - through whatever fence is in the way - so a long walk that comes back as a single leg is a ride nobody can reach
   { const blocked = [];

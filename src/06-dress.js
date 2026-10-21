@@ -37,6 +37,8 @@
       pkGatewayBetter(p.q[0], p.q[1], th.name, th, side, dg);   // centred on the switchbacks, its posts just outside them
       // the line itself: a fenced lane behind the arch with a boarding gate
       pkQueueLaneBetter(a, th, dg);
+      // the ride's own station round it: the fence, the entrance porch and the exit
+      pkFlatStation(a, th, dg);
       // planters by the gateway and two lamps, where the plot has the room for them
       if (!th.noDecor) {
         pkBedIn(p.q[0] + side * 2.8, p.q[1] - 2.6, dg);
@@ -173,6 +175,84 @@
     pkBevelBox(alongX ? len : 0.045, 0.045, alongX ? 0.045 : len, MAT.steelDark, mx, 0.52, mz, parent, 0.008);
   }
   function pkLaneFence(x0, x1, z, parent) { pkLaneFenceSeg(x0, z, x1, z, parent); }
+  // ── The flat rides' stations ─────────────────────────────────────
+  // Every flat ride stands in its own enclosure, the way a park does it: a ring of low ornamental iron fence round the ride
+  // with gold finials, the operator's booth set into it, an entrance facing the queue under a little fairy-tale porch (a
+  // pointed roof in the ride's colours, its name over the way in, two lanterns) and a separate exit round the ring with its
+  // own sign, where the riders come off. The fence is solid; the gaps are the only ways in and out, so the guests walk in at
+  // the entrance and leave by the exit. The radius keeps clear of everything the ride swings round. The flume (its own
+  // channel) and the haunted manor (its porch) have their stations already.
+  // the fence radius, and 'arch' where something overhead (a ride's own canopy, the arena's eaves) leaves no room for a roof
+  var PK_FLAT_STATIONS = { kround: [5.0, 'arch'], kpots: [5.3, 'arch'], carousel: [8.6], teacups: [7.4], ferris: [10.2], dodgems: [10.0, 'arch'], droptower: [6.2] };
+  function pkFlatStation(a, th, parent) {
+    var S = PK_FLAT_STATIONS[a.id]; if (!S) return;
+    var R = S[0], arch = S[1] === 'arch';
+    var p = a.plot, cx = p.x, cz = p.z, L = pkAttrLane(a), i;
+    var gx = a.qx - L.dir * 0.66, gz = L.z0;                                   // the boarding gate at the front of the line
+    var aIn = Math.atan2(gz - cz, gx - cx);
+    var bAng = a.booth ? Math.atan2(a.booth.position.z - cz, a.booth.position.x - cx) : aIn + Math.PI;
+    var dAng = function (x, y) { var d = x - y; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; };
+    // the exit goes round the ring from the entrance, on the side away from the booth
+    var aOut = aIn + (dAng(bAng, aIn) > 0 ? -1 : 1) * 1.35;
+    var gapIn = 1.25 / R, gapOut = 1.05 / R;
+    var iron = std({ color: 0x23272b, roughness: 0.5, metalness: 0.45 }), gold = pkMats().gold, band = std({ color: th.a, roughness: 0.6, metalness: 0.15 });
+    // where the fence breaks: the two gaps and the booth (which stands in the line of the fence)
+    var bx = a.booth ? a.booth.position.x : 1e9, bz = a.booth ? a.booth.position.z : 1e9;
+    var open = function (ang) {
+      if (Math.abs(dAng(ang, aIn)) < gapIn || Math.abs(dAng(ang, aOut)) < gapOut) return true;
+      var x = cx + Math.cos(ang) * R, z = cz + Math.sin(ang) * R;
+      return Math.abs(x - bx) < 2.3 && Math.abs(z - bz) < 2.3;
+    };
+    // the ring: posts every metre and a bit, a top rail, a lower rail and a band in the ride's colour, laid as chords
+    var n = Math.max(16, Math.round(2 * Math.PI * R / 1.2)), prev = null;
+    for (i = 0; i <= n; i++) {
+      var ang = i / n * 2 * Math.PI, x = cx + Math.cos(ang) * R, z = cz + Math.sin(ang) * R, here = !open(ang);
+      if (here && i < n) { pkRoundCyl(0.045, 1.0, iron, x, 0.5, z, parent, 6); sphere(0.06, gold, x, 1.04, z, parent); }
+      if (here && prev) {
+        var mx = (x + prev[0]) / 2, mz = (z + prev[1]) / 2, len = Math.hypot(x - prev[0], z - prev[1]), ry = Math.atan2(x - prev[0], z - prev[1]);
+        box(0.05, 0.05, len, iron, mx, 0.94, mz, parent).rotation.y = ry;
+        box(0.04, 0.04, len, iron, mx, 0.36, mz, parent).rotation.y = ry;
+        box(0.03, 0.16, len, band, mx, 0.66, mz, parent).rotation.y = ry;
+        solid(Math.min(x, prev[0]) - 0.06, Math.max(x, prev[0]) + 0.06, Math.min(z, prev[1]) - 0.06, Math.max(z, prev[1]) + 0.06, 0, 1.0);
+      }
+      prev = here ? [x, z] : null;
+    }
+    // the entrance porch: four posts in the ride's colour astride the fence, a pointed roof, the name, lanterns
+    var ex = cx + Math.cos(aIn) * R, ez = cz + Math.sin(aIn) * R, out = [Math.cos(aIn), Math.sin(aIn)], tg = [-Math.sin(aIn), Math.cos(aIn)];
+    var postMat = std({ color: th.a, roughness: 0.55, metalness: 0.1 }), roofMat = std({ color: th.b, roughness: 0.6, metalness: 0.1 });
+    var PH = arch ? 2.25 : 2.6, depth = arch ? 0 : 0.75;
+    [[-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(function (s) {
+      if (arch && s[1] > 0) return;                                          // an arch stands on two posts
+      var px = ex + tg[0] * s[0] * 1.3 + out[0] * s[1] * depth, pz = ez + tg[1] * s[0] * 1.3 + out[1] * s[1] * depth;
+      pkRoundCyl(0.09, PH, postMat, px, PH / 2, pz, parent, 8);
+      pkRoundCyl(0.13, 0.16, gold, px, PH + 0.02, pz, parent, 8);
+      solid(px - 0.12, px + 0.12, pz - 0.12, pz + 0.12, 0, PH);
+    });
+    var porch = new THREE.Group(); porch.position.set(ex, PH + 0.1, ez); porch.rotation.y = Math.atan2(out[0], out[1]); parent.add(porch);
+    if (arch) {
+      box(2.9, 0.16, 0.22, postMat, 0, 0, 0, porch);
+      pkSign3D([th.name.toUpperCase()], 2.4, 0.34, 0, -0.3, 0.12, 0, { bg: '#151a20', fg: '#f5d38a' }, porch);
+      sphere(0.14, gold, 0, 0.18, 0, porch);
+    } else {
+      box(3.0, 0.14, 1.9, postMat, 0, 0, 0, porch);
+      var roof = new THREE.Mesh(new THREE.ConeGeometry(2.1, 1.7, 4, 1), roofMat); roof.rotation.y = Math.PI / 4; roof.scale.set(1.0, 1.0, 0.68); roof.position.y = 0.92; roof.castShadow = true; porch.add(roof);
+      pkRoundCyl(0.04, 0.6, gold, 0, 2.0, 0, porch, 6); sphere(0.12, gold, 0, 2.32, 0, porch);
+      pkSign3D([th.name.toUpperCase()], 2.6, 0.36, 0, -0.32, 0.98, 0, { bg: '#151a20', fg: '#f5d38a' }, porch);
+    }
+    [-1, 1].forEach(function (s) { pkRoundCyl(0.11, 0.24, glowMat(0xfff2c0, 1.0), s * 1.3, -0.3, arch ? 0.15 : 0.9, porch, 10); });
+    // the exit: two posts, an EXIT board facing out, and the riders come off just outside it
+    var xx = cx + Math.cos(aOut) * R, xz = cz + Math.sin(aOut) * R, o2 = [Math.cos(aOut), Math.sin(aOut)], t2 = [-Math.sin(aOut), Math.cos(aOut)];
+    [-1, 1].forEach(function (s) {
+      var px = xx + t2[0] * s * 1.05, pz = xz + t2[1] * s * 1.05;
+      pkRoundCyl(0.07, 2.2, postMat, px, 1.1, pz, parent, 8); sphere(0.09, gold, px, 2.24, pz, parent);
+      solid(px - 0.1, px + 0.1, pz - 0.1, pz + 0.1, 0, 2.2);
+    });
+    var exitSign = new THREE.Group(); exitSign.position.set(xx, 2.05, xz); exitSign.rotation.y = Math.atan2(o2[0], o2[1]); parent.add(exitSign);
+    box(2.3, 0.1, 0.1, postMat, 0, 0.12, 0, exitSign);
+    pkSign3D(['EXIT'], 1.2, 0.34, 0, -0.14, 0.07, 0, { bg: '#1d5c3a', fg: '#ffffff' }, exitSign);
+    a.exit = [xx + o2[0] * 1.3, xz + o2[1] * 1.3];
+    a.station = { r: R, entry: [ex, ez], exit: [xx, xz] };
+  }
   // the beds by a ride's gateway stand in the world on their own, not inside the ride's dressing group, so the editor can
   // pick each one up: move it, turn it, copy it or take it away (the parent is kept in the call only for the old signature)
   function pkBedIn(x, z, parent) {
