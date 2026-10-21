@@ -29,7 +29,7 @@ module.exports = `
   ok(!!T.pkScreen() && !!T.pkSnack() && !!T.pkConsole() && !!T.pkConsole().parts.buttons.dispatch && !!T.pkConsole().parts.gauges.speed && !!T.pkConsole().parts.lever, 'the operator room has its screen and a real desk: buttons, a throttle and gauges');
   ok(T.pkScreen().zones.length === 0, 'the room screen reports the ride; it does not take taps');
   { const attractions = T.PK.attractions;
-    ok(attractions.length === 17 && attractions.every((a) => !!a.booth && !!a.boothScreen), 'every attraction has an operator booth and screen');
+    ok(attractions.length === 18 && attractions.every((a) => !!a.booth && !!a.boothScreen), 'every attraction has an operator booth and screen');
     ok(attractions.every((a) => {
       const sc = a.boothScreen, m = sc.mesh, g = a.booth, wp = m.getWorldPosition(new T.THREE.Vector3());
       const dx = wp.x - g.position.x, dz = wp.z - g.position.z;
@@ -233,7 +233,7 @@ module.exports = `
     for (let k = 0; k < 1200 && R.riders < 2; k++) { T.pkRideTick(0.05); T.pkGuestTick(0.05); }
     ok(R.riders === 2 && next.every((g) => g.state === 'seated'), 'the second line walks in from the lane'); }
   // the rides
-  ok(T.PK.attractions.length === 17, 'seventeen rides besides the main coaster: ' + T.PK.attractions.length);
+  ok(T.PK.attractions.length === 18, 'eighteen rides besides the main coaster: ' + T.PK.attractions.length);
   ok(T.PK.attrById.carousel && T.PK.attrById.carousel.seats.length === 8, 'the carousel has eight horses');
   ok(T.PK.attrById.ferris && T.PK.attrById.ferris.seats.length === 16, 'the ferris wheel has eight cabins of two');
   { const d = T.CO.npcs(); ok(d && d.characters && d.spawners.length === 5 && d.workers.length === 4 && Object.keys(d.spots).some((k) => d.spots[k].z < -60) && Object.keys(d.spots).some((k) => d.spots[k].x > 70), 'the crowd is described to the engine and its spots reach the far lands: ' + d.spawners.length + ' spawners, ' + d.workers.length + ' workers'); }
@@ -255,7 +255,7 @@ module.exports = `
      ok(T.pkBoothDispatch(a) === true && a.state === 'running', 'manual dispatch waits until queue and boarding paths clear');
     T.pkCtl(a).fault = ''; a.state = 'unloading'; a.t = a.unload; a.queue.length = 0; a.riders = 0; T.pkAttrTick(a, 0.05); T.pkAttrUnseatAll(a); }
   // the real queue lanes and the player's own turn on the rides
-  ok(T.pkLanes().length === 17 && T.pkLanes().every((L) => L.a && !!L.leafL && !!L.leafR), 'every ride has a fenced queue lane and a boarding gate');
+  ok(T.pkLanes().length === 18 && T.pkLanes().every((L) => L.a && !!L.leafL && !!L.leafR), 'every ride has a fenced queue lane and a boarding gate');
   ok(T.pkLanes().every((L) => L.x1 > L.x0 && L.zB > L.zA && L.x1 - L.x0 < 8.5 && L.zB - L.zA < 3.6 && L.rows % 2 === 1),
     'the lanes fold into switchbacks, none longer than 8.5 m: ' + T.pkLanes().map((L) => L.a.id + ' ' + (L.x1 - L.x0).toFixed(1) + 'x' + (L.zB - L.zA).toFixed(1)).join(', '));
   // a guest walks the rows: every step of the way into the lane runs along a row or across a turn, never through a fence
@@ -370,7 +370,7 @@ module.exports = `
   // the level ladder and the prices
   ok(T.PK_LEVELS.length === 5 && T.PK_LEVELS[0].name === 'The gate' && T.PK_LEVELS[4].unlock === 'lights', 'the level ladder runs from the gate to the park lights');
   ok(T.pkPrice(5) === 30 && T.pkPrice(-100) === 5 && T.pkPrice(1000) === 200, 'the ticket price clamps 5 to 200');
-  ok(T.pkOpenCount() === 18, 'every ride is open from the first day (' + T.pkOpenCount() + ')');
+  ok(T.pkOpenCount() === 19, 'every ride is open from the first day (' + T.pkOpenCount() + ')');
   { const x0 = T.PK.xp; T.pkXp(60); ok(T.PK.xp === x0 + 60 && T.PK.level >= 2 && T.PK.snackOpen === true && S.snackOpen === true, 'xp opens the snack stand at level 2'); }
   ok(T.pkSnackPrice(1) === 7 && T.pkSnackPrice(-100) === 1, 'the snack price clamps 1 to 40');
   // the snack stand
