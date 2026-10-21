@@ -72,7 +72,7 @@
   }
   function pkOnPlatform(x, z) { return x > -10 && x < 10 && z > -3.6 && z < -0.6; }
   function pkInsidePark(x, z) { return x > PK_PARK.x0 && x < PK_PARK.x1 && z > PK_PARK.z0 && z < PK_PARK.z1; }
-  function pkBoothSlot(bi, i) { var b = PK_BOOTHS[bi]; return { x: b.x, z: b.z + 2.0 + i * 1.1 }; }
+  function pkBoothSlot(bi, i) { var b = PK_BOOTHS[bi]; return { x: b.x, z: b.z + 2.7 + i * 1.1 }; }   // in front of the ticket office's counter
   function pkCoasterAuto() { return !!S.auto || !!S.operator; }
   function pkRideWord() {
     var R = PK.ride;
@@ -228,7 +228,7 @@
     // lanterns down the midway, benches and bins at the sides
     [[-7, 24], [7, 24], [-7, 12], [5.9, 12.8], [-7, 0], [7, 0], [-14, 40], [14, 40], [-14, 52], [14, 52]].forEach(function (p) { pkLamp(p[0], p[1], 4.6); });
     [[-8, 20], [8, 20], [-8, 10], [8, 10], [-8, 2], [8, 2]].forEach(function (p) { pkBench(p[0], p[1], p[0] < 0 ? Math.PI / 2 : -Math.PI / 2); });
-    [[-6, 26], [6, 26], [-6, 6], [8.4, 13.7], [-6, 38], [6, 38]].forEach(function (p) { pkBin(p[0], p[1]); solid(p[0] - 0.35, p[0] + 0.35, p[1] - 0.35, p[1] + 0.35, 0, 1.0); });
+    [[-6, 26], [6, 26], [-6, 6], [8.4, 13.7], [-4.2, 40.4], [4.2, 40.4]].forEach(function (p) { pkBin(p[0], p[1]); solid(p[0] - 0.35, p[0] + 0.35, p[1] - 0.35, p[1] + 0.35, 0, 1.0); });
     // hedges either side of the midway, with a gap at each ride path: clipped hedge on a stone kerb,
     // broken by flower beds so it reads as planting, not a wall
     [-9.5, 9.5].forEach(function (x) {
