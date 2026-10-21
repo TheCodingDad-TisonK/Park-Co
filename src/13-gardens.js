@@ -1,8 +1,8 @@
-//@ Park Co, part 13: the gardens - two crossroads plazas with food stalls, and the North Promenade: a flower clock, a bandstand, a windmill, a hedge maze and a picnic lawn
+//@ Park Co, part 13: the gardens - three plazas with food stalls, and the North Promenade: a flower clock, a bandstand, a windmill, a hedge maze and a picnic lawn
   // ── Why ──────────────────────────────────────────────────────────
   // A park is more than its rides. These are the places to stop: somewhere to eat where the streets cross, and a garden quarter at the
   // north end where the west and east spines meet. They are scenery - nothing here is staffed or sold - but they are solid, lit and lived in.
-  var PK_PLAZAS = [{ x: -31, z: 3, r: 5.6 }, { x: 35, z: 3, r: 5.6 }];
+  var PK_PLAZAS = [{ x: -31, z: 3, r: 5.6 }, { x: 35, z: 3, r: 5.6 }, { x: 2, z: -44, r: 5.6 }];   // the two crossroads, and the Garden Walk's middle
   var PK_GARDEN = { clock: { x: 2, z: -60, r: 6.6 }, band: { x: 2, z: -73.5 }, maze: { x: 5, z: -86 }, mill: { x: 14, z: -70 } };
   var PK_SAILS = null, PK_CLOCK = null;
   PK_PLAZAS.forEach(function (p) { PK_KEEP.push([p.x, p.z, p.r + 1.5]); });

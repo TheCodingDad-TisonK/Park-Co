@@ -160,8 +160,10 @@
     pkBevelBox(Math.abs(x1 - x0), 0.05, 0.05, MAT.steelDark, (x0 + x1) / 2, 0.99, z, parent, 0.008);
     pkBevelBox(Math.abs(x1 - x0), 0.045, 0.045, MAT.steelDark, (x0 + x1) / 2, 0.52, z, parent, 0.008);
   }
+  // the beds by a ride's gateway stand in the world on their own, not inside the ride's dressing group, so the editor can
+  // pick each one up: move it, turn it, copy it or take it away (the parent is kept in the call only for the old signature)
   function pkBedIn(x, z, parent) {
-    pkFlowerBed(x, z, 1.8, 1.1, parent, true);
+    pkFlowerBed(x, z, 1.8, 1.1, null, true);
   }
   // the one thing each ride is known for
   function pkSignature(a, p, th, parent) {
@@ -171,12 +173,12 @@
       band.rotation.x = Math.PI / 2; band.position.set(p.x, 4.0, p.z); parent.add(band);
       box(1.7, 1.9, 1.0, std({ color: 0x8a5a3a, roughness: 0.9 }), p.x - p.r - 2.6, 0.95, p.z + 2.4, g);
       for (var i = 0; i < 5; i++) cyl(0.07, 1.0 - i * 0.13, std({ color: 0xf0c04a, roughness: 0.4 }), p.x - p.r - 3.1 + i * 0.25, 2.2, p.z + 2.4, g, 8);
-      // the fairground quarter: brass lamps on the rim, a souvenir kiosk by the organ
-      // box, flower beds flanking the west lamp and a bench on the north rim
+      // the fairground quarter: brass lamps on the rim, a souvenir kiosk facing the avenue,
+      // flower beds flanking the west lamp (inside the kids' lane) and a bench on the north rim
       [[-41.6, 12.5], [-41.6, 27.5], [-43.0, 20]].forEach(function (q) { pkLandLamp(q[0], q[1], g, th); });
-      parent.add(pkStall(-46.8, 14.6, Math.PI / 2, th.a, th.b, 'SOUVENIRS'));
-      pkFlowerBed(-44.7, 17.3, 1.8, 1.1, g, true);
-      pkFlowerBed(-44.7, 25.2, 1.8, 1.1, g, true);
+      parent.add(pkStall(-36.5, 8.2, Math.PI, th.a, th.b, 'SOUVENIRS'));
+      pkFlowerBed(-43.4, 17.3, 1.8, 1.1, null, true);   // in the world, so the editor can move them
+      pkFlowerBed(-43.4, 25.2, 1.8, 1.1, null, true);
       pkBench(-37.5, 30.4, Math.PI, g);
     } else if (a.id === 'teacups') {
       var pot = new THREE.Mesh(new THREE.SphereGeometry(1.55, 16, 12), std({ color: 0xf0a6c0, roughness: 0.5 }));
@@ -191,8 +193,8 @@
       pkHedgeRun(-65.6, -3.4, -65.6, 9.4, g, 1.05);
       pkHedgeRun(-63.6, 12.6, -49.2, 12.6, g, 1.05);
       [[-63.4, -4.4], [-63.4, 10.4], [-49.4, 10.4]].forEach(function (q) { pkTopiary(q[0], q[1], g, 1); });
-      pkTeaTable(-49.8, -4.8, g);
-      [[-47.6, 5.6], [-47.6, 0.4]].forEach(function (q) { pkCupLamp(q[0], q[1], g); });
+      pkTeaTable(-58.5, -5.2, g);   // on the pad's north-west, clear of the booth
+      [[-49.4, 6.0], [-47.6, 0.4]].forEach(function (q) { pkCupLamp(q[0], q[1], g); });   // the south one stands clear of the kids' lane
       pkTrellis(-40.8, 3, g);
     } else if (a.id === 'ferris') {
       for (var b = 0; b < 24; b++) {

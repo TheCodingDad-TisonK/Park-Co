@@ -484,6 +484,8 @@ function pkRideBoothBetter(a, plot, th) {
   var c1x = ax, c1z = q[1] + OFF, c2x = ax, c2z = q[1] - OFF;
   var bx = c1x, bz = c1z;
   if (dist2(c2x, c2z, plot.x, plot.z) > dist2(c1x, c1z, plot.x, plot.z)) { bx = c2x; bz = c2z; }
+  // a plot can name its side outright (boothSide: 1 south of the lane, -1 north) where the far side is taken by a street
+  if (plot.boothSide === 1) { bx = c1x; bz = c1z; } else if (plot.boothSide === -1) { bx = c2x; bz = c2z; }
   var ry = Math.atan2(plot.x - bx, plot.z - bz);
   var toQ = Math.atan2(q[0] - bx, q[1] - bz);
   var doorSide = Math.cos(toQ - (ry + Math.PI / 2)) >= 0 ? 1 : -1;
