@@ -10807,30 +10807,62 @@ function pkBuildParkCabinet(px, py, pz, ry) {
 
   // ── The indoor coasters ───────────────────────────────────────────
   // Three show buildings along the north wall. Each has a wide portal on the promenade side, a queue
-  // lane outside under its portico, a station just inside the portal, a lift up the far side, a
-  // descending helix round the centrepiece, and a glazed control cabin at the back corner looking
-  // over the platform, so the booth hardware sits with the ride instead of out on the promenade.
+  // lane outside under its portico, a station just inside the portal and a glazed control cabin at the
+  // end of the platform, so the booth hardware sits with the ride instead of out on the promenade.
+  // Each runs its own circuit round its own centrepiece: Nocturne dives, humps and spirals down round
+  // the moon; The Wreck flies a figure-eight with the ship in one loop; Moonwood runs camelbacks along
+  // the back wall and ducks under the tree's crown.
   var PK_INDOOR = {
-    nocturne: { name: 'Nocturne', box: [-62, -38, -94.5, -79], portal: 'w', wall: 0x2b2e3d, band: 0x8f7bd6, trim: 0x40465e, roof: 0x1d2030, sign: '#b9a7f0', ground: 0x767b93, centre: 'moon' },
-    wreck:    { name: 'The Wreck', box: [-32, -8, -94.5, -79], portal: 'w', wall: 0x5b5348, band: 0xd8a24a, trim: 0x4a443c, roof: 0x3b3630, sign: '#e8bd6a', ground: 0x8a7c66, centre: 'ship' },
-    moonwood: { name: 'Moonwood', box: [18, 42, -94.5, -79], portal: 'e', wall: 0x6b5340, band: 0x8fd3c7, trim: 0x4f4132, roof: 0x4a3a2c, sign: '#9fe0d4', ground: 0x7c7058, centre: 'tree' }
+    nocturne: { name: 'Nocturne', box: [-62, -38, -94.5, -79], portal: 'w', wall: 0x2b2e3d, band: 0x8f7bd6, trim: 0x40465e, roof: 0x1d2030, sign: '#b9a7f0', ground: 0x767b93, centre: 'moon', at: [5.0, -89.0] },
+    wreck:    { name: 'The Wreck', box: [-32, -8, -94.5, -79], portal: 'w', wall: 0x5b5348, band: 0xd8a24a, trim: 0x4a443c, roof: 0x3b3630, sign: '#e8bd6a', ground: 0x8a7c66, centre: 'ship', at: [13.0, -89.2] },
+    moonwood: { name: 'Moonwood', box: [18, 42, -94.5, -79], portal: 'e', wall: 0x6b5340, band: 0x8fd3c7, trim: 0x4f4132, roof: 0x4a3a2c, sign: '#9fe0d4', ground: 0x7c7058, centre: 'tree', at: [11.5, -88.6] }
   };
-  // one circuit serves all three: station along the wall by the portal, up the far side, a descending
-  // helix round the middle piece, then home to the platform
-  function pkIndoorPts(cfg) {
-    var b = cfg.box, X0 = b[0], X1 = b[1], CZ = (b[2] + b[3]) / 2;
-    var s = cfg.portal === 'w' ? 1 : -1, AX = s > 0 ? X0 : X1;
-    var zS = CZ + 3.4, CXh = AX + s * 13, CZH = CZ - 2.9;
-    var pts = [[AX + s * 1.2, 1.0, zS], [AX + s * 7.7, 1.0, zS], [AX + s * 14.2, 1.0, zS]];
-    // out of the station and up the far side
-    pts.push([AX + s * 16.4, 1.8, zS - 1.6], [AX + s * 20.2, 4.4, CZ - 1.0], [AX + s * 18.4, 6.8, CZH - 3.4], [AX + s * 16.6, 6.9, CZH - 3.4]);
-    // the helix: two and a quarter turns round the centre, descending
-    for (var k = 0; k <= 30; k++) {
-      var f = k / 30, a = -Math.PI / 2 - f * 4.5 * Math.PI;
-      pts.push([CXh + Math.cos(a) * 3.4, 6.9 - f * 5.4, CZH + Math.sin(a) * 3.4]);
+  // the circuits are laid out in the hall's own frame: u is metres in from the portal wall (the hall is mirrored for an east
+  // portal), z is the world z. The inside of the hall is u 0.3..23.7, z -94.2..-79.3; the track keeps to u 1.4..22.3,
+  // z -92.75..-83.3 and below 6.5 m, under the ceiling beams. Every circuit shares the station: the brake run down the portal
+  // side, the turn in, the platform straight along z -83.35 and the turn out at its far end. Checked clear of itself
+  // (2.5 m between passes stacked over each other, 1.9 m side by side) and of the control cabin at u 14.6..19.6, z > -82.6.
+  function pkIndoorArc(cu, cz, r, a0, a1, y0, y1, n, out, yf) {
+    for (var k = 0; k <= n; k++) { var f = k / n, a = a0 + (a1 - a0) * f; out.push([cu + r * Math.cos(a), yf ? yf(f) : y0 + (y1 - y0) * f, cz - r * Math.sin(a)]); }
+    return out;
+  }
+  function pkIndoorStation(p, fromHelix) {
+    if (!fromHelix) p.push([1.75, 1.0, -88.0]);
+    p.push([2.0, 1.0, -85.4], [3.3, 1.0, -83.5], [6.0, 1.0, -83.35], [9.0, 1.0, -83.35], [12.0, 1.0, -83.35], [14.6, 1.0, -83.5]);
+    return p;
+  }
+  var PK_INDOOR_LAYOUT = {
+    // up the far wall, a dive and a camelback along the back, then a turn and a quarter down round the moon, out onto the brakes
+    moon: function () {
+      var p = pkIndoorStation([], true);
+      p.push([16.6, 1.15, -84.5], [18.4, 1.8, -86.3], [19.5, 3.0, -88.3], [19.7, 4.6, -90.2], [19.0, 6.0, -91.9], [17.2, 6.4, -92.6]);
+      p.push([15.0, 4.6, -92.6], [13.0, 3.0, -92.5], [11.0, 4.6, -92.4], [9.0, 6.0, -92.3]);
+      return pkIndoorArc(5.0, -89.0, 3.0, Math.PI / 2 + 0.2, 3 * Math.PI, 6.2, 1.1, 26, p);
+    },
+    // up the far wall, then a figure-eight across the hall: high through the crossing the first time, low the second
+    ship: function () {
+      var p = pkIndoorStation([]);
+      p.push([16.6, 1.15, -84.5], [18.6, 1.9, -86.5], [19.6, 3.4, -88.7], [19.5, 5.0, -90.8], [18.2, 6.2, -92.3], [16.2, 6.4, -92.6]);
+      var key = [[0.75, 6.4], [1.0, 6.4], [1.25, 5.6], [1.5, 5.0], [1.75, 4.5], [1.9, 3.9], [2.0, 3.2], [2.25, 2.2], [2.5, 1.7], [2.7, 1.4]];
+      function yAt(t) { var q = t / Math.PI; for (var i = 1; i < key.length; i++) if (q <= key[i][0]) { var f = (q - key[i - 1][0]) / (key[i][0] - key[i - 1][0]); return key[i - 1][1] + (key[i][1] - key[i - 1][1]) * f; } return 1.4; }
+      for (var k = 0; k <= 36; k++) { var t = Math.PI * (0.75 + 1.95 * k / 36); p.push([10.0 + 6.0 * Math.sin(t), yAt(t), -89.2 + 2.6 * Math.sin(2 * t)]); }
+      p.push([12.4, 1.2, -92.5], [9.0, 1.0, -92.6], [5.4, 1.0, -92.55], [3.2, 1.0, -92.0], [2.0, 1.0, -90.6]);
+      return p;
+    },
+    // up the far wall, camelbacks along the back, down the near side and round the trunk under the crown
+    tree: function () {
+      var p = pkIndoorStation([]);
+      p.push([16.6, 1.15, -84.5], [18.4, 1.8, -86.3], [19.5, 3.0, -88.3], [19.7, 4.4, -90.3], [19.0, 5.5, -92.0], [17.0, 5.6, -92.6]);
+      p.push([14.4, 3.9, -92.6], [12.2, 4.8, -92.6], [9.8, 5.0, -92.6], [7.2, 4.5, -92.6], [5.4, 4.6, -92.5], [4.2, 4.4, -91.2], [4.5, 3.8, -89.6], [5.0, 2.6, -88.2], [6.4, 1.6, -86.5], [8.7, 1.4, -86.1]);
+      pkIndoorArc(11.5, -88.6, 2.5, -Math.PI / 2 + 0.3, Math.PI / 2, 1.4, 1.4, 14, p);
+      p.push([9.0, 1.3, -91.25], [6.0, 1.15, -91.3], [3.4, 1.0, -90.8], [2.1, 1.0, -89.6]);
+      return p;
     }
-    pts.push([CXh - 5.0, 1.35, CZ - 0.6], [CXh - 7.4, 1.15, CZ + 0.8], [CXh - 9.2, 1.0, CZ + 2.4]);
-    return pts;
+  };
+  // the ride's circuit, from its layout, into world space
+  function pkIndoorPts(cfg) {
+    var s = cfg.portal === 'w' ? 1 : -1, AX = s > 0 ? cfg.box[0] : cfg.box[1];
+    return PK_INDOOR_LAYOUT[cfg.centre]().map(function (q) { return [AX + s * q[0], q[1], q[2]]; });
   }
   // the shell: four walls with the portal cut in, a gable roof, the marquee and a portico over the
   // queue, a paved apron and the run of interior floor
@@ -10908,12 +10940,14 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       pkRoundCyl(1.5, 6.4, std({ color: 0x232637, roughness: 0.9 }), CX, 3.2, CZ, g, 18);
       pkRoundCyl(1.95, 0.4, std({ color: 0x2f3350, roughness: 0.8 }), CX, 6.6, CZ, g, 18);
       sphere(1.45, std({ color: 0xe8ecff, roughness: 0.5 }), CX, 7.3, CZ, g);
+      // the stars ride on the moon's collar, inside the helix (the track runs at 3 m round the column)
       for (i = 0; i < 12; i++) {
         a = i / 12 * Math.PI * 2;
-        sphere(0.11 + (i % 3) * 0.05, MAT.bulb, CX + Math.cos(a) * 2.7, 6.1 + (i % 4) * 0.5, CZ + Math.sin(a) * 2.7, g);
+        sphere(0.09 + (i % 3) * 0.04, MAT.bulb, CX + Math.cos(a) * 1.75, 6.85 + (i % 4) * 0.12, CZ + Math.sin(a) * 1.75, g);
       }
     } else if (cfg.centre === 'ship') {
-      var hull = new THREE.Group(); hull.position.set(CX, 0, CZ); hull.rotation.set(0.06, 0.5, 0.32); g.add(hull);
+      // the wreck lies in the figure-eight's east loop, run aground along it, small enough for the train to fly round
+      var hull = new THREE.Group(); hull.position.set(CX, 0, CZ); hull.rotation.set(0.06, Math.PI / 2 + 0.12, 0.3); hull.scale.setScalar(0.42); g.add(hull);
       pkBevelBox(3.0, 2.2, 7.0, std({ color: 0x6a4f33, roughness: 0.85 }), 0, 1.5, 0, hull, 0.12);
       pkBevelBox(2.7, 1.5, 6.4, std({ color: 0x543d27, roughness: 0.9 }), 0, 2.6, 0, hull, 0.08);
       pkRoundCyl(0.16, 6.4, std({ color: 0x4a341f, roughness: 0.85 }), 0, 5.2, -1.2, hull, 8);
@@ -10921,7 +10955,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       box(3.4, 0.12, 1.1, std({ color: 0xc9c2b0, roughness: 0.8 }), 0, 4.4, -1.2, hull);
       for (i = 0; i < 6; i++) {
         a = i / 6 * Math.PI * 2;
-        box(0.9 + (i % 3) * 0.15, 0.7, 0.9, std({ color: [0x5a4a36, 0x6e5a40, 0x4e4030][i % 3], roughness: 0.9 }), CX + Math.cos(a) * 3.4, 0.35, CZ + Math.sin(a) * 3.4, g);
+        box(0.5 + (i % 3) * 0.1, 0.4, 0.5, std({ color: [0x5a4a36, 0x6e5a40, 0x4e4030][i % 3], roughness: 0.9 }), CX + Math.cos(a) * 1.9, 0.2, CZ + Math.sin(a) * 1.25, g);
       }
     } else {
       pkRoundCyl(1.15, 5.8, std({ color: 0x4e3a26, roughness: 0.92 }), CX, 2.9, CZ, g, 12);
@@ -10942,34 +10976,53 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       }
     }
   }
-  // the control cabin: a glazed corner room set back from the platform, with the booth console and its
-  // status board inside, so the hardware sits with the ride
+  // the control cabin: a glazed room at the far end of the platform, the operator's back to the portal wall. A long window
+  // over the track, a side window and the door onto the platform, the desk under the long window and the status board on
+  // the back wall. Laid out in the hall's own u, so it mirrors with the hall and its screen still reads the right way round.
+  var PK_CABIN = { u0: 15.2, u1: 18.8, z0: -82.45, z1: -79.35, door: [-81.4, -80.45] };
   function pkIndoorCabin(g, cfg, a) {
-    var b = cfg.box, CZ = (b[2] + b[3]) / 2, s = cfg.portal === 'w' ? 1 : -1;
-    var CXh = (s > 0 ? b[0] : b[1]) + s * 13, cx = CXh - s * 6.6, cz = -90.5;
+    var s = cfg.portal === 'w' ? 1 : -1, AX = s > 0 ? cfg.box[0] : cfg.box[1], K = PK_CABIN, T = 0.12, H = 2.9;
+    function X(u) { return AX + s * u; }
     var trim = std({ color: cfg.trim, roughness: 0.7, metalness: 0.15 });
+    var band = std({ color: cfg.band, roughness: 0.5, metalness: 0.3 });
     var glass = std({ color: 0x9fc6cc, roughness: 0.1, metalness: 0.2, transparent: true, opacity: 0.34 });
-    var rg = new THREE.Group(); rg.position.set(cx, 0, cz); rg.rotation.y = s > 0 ? 0 : Math.PI; g.add(rg);
-    box(3.6, 0.12, 3.6, std({ color: 0x2e2e34, roughness: 0.95 }), 0, 0.06, 0, rg);
-    box(3.6, 2.9, 0.24, trim, 0, 1.45, -1.68, rg);            // back wall
-    box(0.24, 2.9, 3.6, trim, -1.68, 1.45, 0, rg);            // west wall, carries the board
-    box(0.24, 2.9, 3.6, trim, 1.68, 1.45, 0, rg);             // east wall
-    box(1.8, 0.95, 0.24, trim, -0.9, 0.47, 1.68, rg);         // window parapet
-    box(1.8, 1.8, 0.08, glass, -0.9, 1.9, 1.68, rg);
-    box(1.56, 0.7, 0.08, glass, 0.75, 2.55, 1.68, rg);        // the light over the door
-    [0.0, 1.5].forEach(function (dx) { box(0.22, 2.9, 0.3, trim, dx, 1.45, 1.68, rg); });
-    box(1.56, 0.5, 0.3, trim, 0.75, 2.65, 1.68, rg);          // door head
-    // the doorway is the open half of the south side, the window the other half
-    solid(cx - Math.max(0, s * 1.8), cx - Math.min(0, s * 1.8), cz + 1.56, cz + 1.8, 0, 0.96);
-    solid(cx - 1.8, cx + 1.8, cz - 1.8, cz - 1.56, 0, 2.9);
-    solid(cx - 1.8, cx - 1.56, cz - 1.8, cz + 1.8, 0, 2.9);
-    solid(cx + 1.56, cx + 1.8, cz - 1.8, cz + 1.8, 0, 2.9);
-    // the desk and its panel face the operator, who watches the platform through the window
-    var con = new THREE.Group(); con.position.set(-0.2, 0, -0.3); con.rotation.y = Math.PI; rg.add(con);
+    var xa = Math.min(X(K.u0), X(K.u1)), xb = Math.max(X(K.u0), X(K.u1)), cx = (xa + xb) / 2, cz = (K.z0 + K.z1) / 2, W = xb - xa, D = K.z1 - K.z0;
+    var xn = X(K.u0 + T / 2), xf = X(K.u1 - T / 2);          // the platform-side wall and the far wall
+    box(W, 0.12, D, std({ color: 0x2e2e34, roughness: 0.95 }), cx, 0.06, cz, g);
+    // the long window over the track: parapet, glass, header, posts
+    box(W, 0.95, T, trim, cx, 0.475, K.z0 + T / 2, g);
+    box(W - 0.2, 1.4, 0.05, glass, cx, 1.65, K.z0 + T / 2, g);
+    box(W, 0.55, T, trim, cx, H - 0.275, K.z0 + T / 2, g);
+    [xa + 0.06, cx, xb - 0.06].forEach(function (px) { box(0.12, H, 0.16, trim, px, H / 2, K.z0 + T / 2, g); });
+    box(W + 0.1, 0.12, 0.2, band, cx, 0.98, K.z0 + 0.02, g);
+    // the platform side: a window at the track end, then the door
+    var d0 = K.door[0], d1 = K.door[1];
+    box(T, 0.95, d0 - K.z0, trim, xn, 0.475, (K.z0 + d0) / 2, g);
+    box(0.05, 1.4, d0 - K.z0 - 0.2, glass, xn, 1.65, (K.z0 + d0) / 2, g);
+    box(T, 0.55, d0 - K.z0, trim, xn, H - 0.275, (K.z0 + d0) / 2, g);
+    box(T, H - 2.1, d1 - d0, trim, xn, 2.1 + (H - 2.1) / 2, (d0 + d1) / 2, g);
+    box(T, H, K.z1 - d1, trim, xn, H / 2, (d1 + K.z1) / 2, g);
+    box(T + 0.06, 2.12, 0.08, band, xn, 1.06, d0 - 0.04, g); box(T + 0.06, 2.12, 0.08, band, xn, 1.06, d1 + 0.04, g);
+    // the far wall and the back panel (the hall's own wall stands behind it)
+    box(T, H, D, trim, xf, H / 2, cz, g);
+    box(W, H, 0.06, std({ color: 0x34343c, roughness: 0.85 }), cx, H / 2, K.z1 - 0.05, g);
+    box(W + 0.2, 0.1, D + 0.2, trim, cx, H + 0.05, cz, g);                                       // the roof slab
+    pkSign3D([cfg.name.toUpperCase() + ' · CONTROL'], Math.min(3.2, W - 0.3), 0.26, cx, H - 0.27, K.z0 + T / 2 - 0.07, Math.PI, { bg: '#151a20', fg: cfg.sign }, g);
+    // the walls are solid, the doorway is not; the desk is solid too
+    solid(xa, xb, K.z0, K.z0 + T + 0.04, 0, H);
+    solid(xf - 0.08, xf + 0.08, K.z0, K.z1, 0, H);
+    solid(xn - 0.08, xn + 0.08, K.z0, d0, 0, H);
+    solid(xn - 0.08, xn + 0.08, d1, K.z1, 0, H);
+    // the desk under the long window, the operator facing the track with the platform on the side
+    var con = new THREE.Group(); con.position.set(cx, 0, K.z0 + 0.5); g.add(con);
     pkBoothPanel(a, con);
-    solid(cx - 1.05, cx + 0.6, cz - 0.9, cz + 0.4, 0, 0.95);
+    solid(cx - 1.0, cx + 1.0, K.z0 + 0.1, K.z0 + 0.82, 0, 0.95);
+    // a ceiling light
+    box(0.6, 0.04, 0.3, MAT.trim, cx, H - 0.02, cz + 0.3, g);
+    sphere(0.09, glowMat(0xffe9b0, 0.9), cx, H - 0.08, cz + 0.3, g);
+    // the status board on the back wall, facing the operator
     var screen = touchScreen({
-      w: 380, h: 320, pw: 0.94, ph: 0.80, x: -1.62, y: 1.62, z: 0.15, ry: Math.PI / 2, parent: rg, title: a.name,
+      w: 380, h: 320, pw: 0.94, ph: 0.80, x: cx, y: 1.62, z: K.z1 - 0.1, ry: Math.PI, parent: g, title: a.name,
       draw: function (ctx, sc) {
         var C = pkCtl(a);
         scBg(ctx, sc.w, sc.h);
@@ -10985,7 +11038,8 @@ function pkBuildParkCabinet(px, py, pz, ry) {
         scText(ctx, 16, 242, 'CONTROL ROOM  ' + (C.fault ? 'RESET' : 'READY'), C.fault ? '#ff6b5e' : '#8f98a4');
       }
     });
-    a.booth = rg;
+    var anchor = new THREE.Group(); anchor.position.set(cx, 0, cz); g.add(anchor);
+    a.booth = anchor;
     a.boothScreen = screen;
   }
   // a whole indoor coaster: shell, centrepiece, track, station, cabin
@@ -10993,12 +11047,11 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var cfg = PK_INDOOR[p.id], th = PK_THEME[p.id], i;
     var b = cfg.box, CZ = (b[2] + b[3]) / 2, zS = CZ + 3.4;
     var s = cfg.portal === 'w' ? 1 : -1, AX = s > 0 ? b[0] : b[1];
-    var CXh = AX + s * 13, cabX = CXh - s * 6.6;
     var g = new THREE.Group(); scene.add(g);
     pkIndoorShell(g, cfg);
-    pkIndoorCentre(g, cfg, CXh, CZ - 2.9);
+    pkIndoorCentre(g, cfg, AX + s * cfg.at[0], cfg.at[1]);
     var curve = pkCoCurve(pkIndoorPts(cfg)), len = curve.getLength(), F = pkCoFrames(curve, 460);
-    var E = { curve: curve, len: len, F: F, gap: 2.4, cars: [], uPark: pkCoUAt(curve, AX + s * 10.8, zS), uOfF: [], run: 30 };
+    var E = { curve: curve, len: len, F: F, gap: 2.4, cars: [], uPark: pkCoUAt(curve, AX + s * 12.0, zS), uOfF: [], run: 30 };
     var seats = [], cols = [cfg.band, 0xece6d8, cfg.band, 0xece6d8];
     for (i = 0; i < 4; i++) {
       var car = pkCoCar(cols[i], { w: 1.46, d: 2.05 });
@@ -11012,10 +11065,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       spineMat: std({ color: cfg.band, roughness: 0.4, metalness: 0.3 }),
       supMat: std({ color: cfg.trim, roughness: 0.6, metalness: 0.2 }),
       tieMat: std({ color: 0x2a2a30, roughness: 0.8 }),
-      skip: function (x, z) {
-        if (z > -83.4 && z < -79.0) return true;                                     // the station and platform
-        return z > -92.6 && z < -88.3 && x > cabX - 2.4 && x < cabX + 2.4;           // the control cabin
-      }
+      skip: function (x, z) { return z > -84.2; }                                     // the station, the platform and the cabin
     });
     pkCoPlan(E, { vMin: 4.5, vMax: 19 });
     // the station inside: kerbed platform, the boom gates at the car doors, hanging lamps
@@ -11031,7 +11081,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       pl.position.set(AX + s * lx, 3.0, -81.5); g.add(pl);
     });
     var hallLight = new THREE.PointLight(0xfff0d0, 0.75, 22, 2);
-    hallLight.position.set(CXh, 5.8, CZ - 1.5); g.add(hallLight);
+    hallLight.position.set(AX + s * 12, 5.8, CZ - 1.5); g.add(hallLight);
     var a = pkAttr({
       id: p.id, name: cfg.name, x: p.x, z: p.z,
       qx: p.q[0], qz: p.q[1], qdx: s, g: g, seats: seats,
@@ -11040,7 +11090,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     });
     var C = pkCtl(a);
     E.a = a;
-    pkCoGates(g, [AX + s * 10.8, AX + s * 8.4, AX + s * 6.0, AX + s * 3.6], -82.85, C);
+    pkCoGates(g, [AX + s * 12.0, AX + s * 9.6, AX + s * 7.2, AX + s * 4.8], -82.85, C);
     E.cars.forEach(function (c) {
       C.barObjs.push(function (bb) { c.bar.rotation.x = -1.35 * (1 - bb); });
     });
