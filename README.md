@@ -18,6 +18,7 @@ A hub and four lands. The midway runs from the gate to **Station Square**, where
 
 - **The gate** at the south, with four turnstiles and a fence either side, so the only way in is a turnstile. **Two ticket windows** outside it: stand at one and press E to serve the guest at the front of the line.
 - **The coaster**: one closed circuit, 141 m, in its own fenced yard behind the station: a lift hill in the north-east, a drop, a hill, a turn and a run home. Three cars of four seats, a fenced queue lane beside the platform, and the operator's room east of it with the full desk.
+- **The queue lanes**: every ride's line folds into switchbacks (rows of up to six, an odd number of rows so the entry is at the outer end) under the ride's gateway arch, so a line takes a block no wider than the old straight lane and at most 6.6 m long (the ferris wheel's was 18.6 m). Guests walk the rows slot by slot and shuffle up as the line moves.
 - **The Fairground** (south-west): the carousel, the teacups, and the kids' garden with the Little Roundabout, Wobbly Pots, the Puffin Line and the playhouse, down the kids' lane.
 - **Thrills** (south-east): the ferris wheel, the dodgems and Baron's Drop.
 - **The Dark Woods** (north-west): the haunted manor, the drop tower, and the Nocturne and The Wreck show buildings.

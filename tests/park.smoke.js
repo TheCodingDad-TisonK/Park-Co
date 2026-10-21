@@ -256,7 +256,12 @@ module.exports = `
     T.pkCtl(a).fault = ''; a.state = 'unloading'; a.t = a.unload; a.queue.length = 0; a.riders = 0; T.pkAttrTick(a, 0.05); T.pkAttrUnseatAll(a); }
   // the real queue lanes and the player's own turn on the rides
   ok(T.pkLanes().length === 15 && T.pkLanes().every((L) => L.a && !!L.leafL && !!L.leafR), 'every ride has a fenced queue lane and a boarding gate');
-  ok(T.pkLanes().every((L) => L.x1 > L.x0 && L.zB > L.zA), 'the lanes run from the gateway to an open entry with room for a line');
+  ok(T.pkLanes().every((L) => L.x1 > L.x0 && L.zB > L.zA && L.x1 - L.x0 < 8.5 && L.zB - L.zA < 3.6 && L.rows % 2 === 1),
+    'the lanes fold into switchbacks, none longer than 8.5 m: ' + T.pkLanes().map((L) => L.a.id + ' ' + (L.x1 - L.x0).toFixed(1) + 'x' + (L.zB - L.zA).toFixed(1)).join(', '));
+  // a guest walks the rows: every step of the way into the lane runs along a row or across a turn, never through a fence
+  { const a = T.PK.attrById.ferris, L = T.pkLanes().find((l) => l.a === a), P = T.pkAttrLanePath(a, 18, 0);
+    const hits = P.slice(1).filter((p, k) => { const q = P[k]; for (let s = 0.1; s < 1; s += 0.1) if (T.pkLaneCollides(q.x + (p.x - q.x) * s, q.z + (p.z - q.z) * s)) return true; return false; });
+    ok(P.length === 18 && hits.length === 0, 'the ferris line walks its ' + L.rows + ' rows slot by slot without crossing a fence (' + hits.length + ' crossings)'); }
   // every ride can be walked to from Station Square. When the pathfinder finds no way it falls back to one straight leg to
   // the slot - through whatever fence is in the way - so a long walk that comes back as a single leg is a ride nobody can reach
   { const blocked = [];

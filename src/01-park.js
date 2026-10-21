@@ -467,7 +467,7 @@
         pkAttrQueueJoin: pkAttrQueueJoin, pkAttrQueueLeave: pkAttrQueueLeave,
         pkPlayerRideJoin: pkPlayerRideJoin, pkPlayerRideStepOff: pkPlayerRideStepOff, pkPlayerRideExitTry: pkPlayerRideExitTry,
         pkPlayerRides: pkPlayerRides, pkPlayerTick: pkPlayerTick, pkLanes: function () { return PK.lanes; },
-        pkAttrTick: pkAttrTick, pkAttrSeat: pkAttrSeat, pkAttrUnseatAll: pkAttrUnseatAll, pkAttrSlot: pkAttrSlot,
+        pkAttrTick: pkAttrTick, pkAttrSeat: pkAttrSeat, pkAttrUnseatAll: pkAttrUnseatAll, pkAttrSlot: pkAttrSlot, pkAttrLanePath: pkAttrLanePath, pkLaneCollides: pkLaneCollides,
         pkTurnstiles: function () { return PK.turnstiles; }, pkGates: function () { return PK.gates; }, pkBooths: function () { return PK.booths; },
         pkSnack: function () { return PK.snack; }, pkScreen: function () { return PK.screen; },
         pkConsole: function () { return PK.console; },
