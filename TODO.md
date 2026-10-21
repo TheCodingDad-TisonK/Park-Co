@@ -79,8 +79,10 @@ lamps, rich colour, planting and ornament, a themed entrance for every ride. Eac
       ornamental iron fence round the ride with the booth set into it, an entrance facing the line under a pointed-roof porch
       with the name and lanterns (a low arch under the kids' canopies and the dodgems' eaves), a separate EXIT round the ring
       where riders come off. The flume and the haunted manor keep the stations they have
-- [ ] 6. Guests arrive by car: drive in off the road, park in a free bay, get out, queue at the
-      ticket window, walk in; and go home the same way. More guests in the park
+- [x] 6. Guests arrive by car: a car (1-4 guests) comes along the road, the barrier lifts, it drives up the drive and along the
+      aisle into a free bay (41 bays); the party gets out and walks to the ticket windows. At the end of their day they walk
+      back, get in, the car backs out and drives away. The lot fills through the morning and empties at closing; the static
+      parked cars are gone. Up to 110 guests (was 90). Cars wait for the one in front and never lock up
 - [ ] 7. The desk panels made even better (booth desks; the coaster console too)
 - [ ] 8. The whole park in the Efteling vibe: a pass over every ride's surroundings and entrance, the gate and the ticket
       windows, the shops and stands, the lamps, the signs, the paths and the planting, so the park reads as one fairy tale

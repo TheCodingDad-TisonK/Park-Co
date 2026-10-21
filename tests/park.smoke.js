@@ -426,6 +426,14 @@ module.exports = `
     const left = a.queue.indexOf(gu) < 0 && gu.gaveUp && gu.gaveUp.teacups;
     ok(joined && n > 90 && left && gu.state === 'off', 'a guest waits in the line of a locked ride, then gives up (' + (n * 0.05).toFixed(1) + ' s) and leaves it');
     T.pkSetRideKey(a, key0); gu.state = 'gone'; T.pkGuestTick(0.01); }
+  // a family comes by car: up the drive into a free bay, out of the car; at the end of their day back to it, and the car
+  // backs out and drives away, freeing the bay
+  { const L = T.pkLot(), car = T.pkLotArrive(); let n = 0;
+    while (car.state === 'in' && n < 900) { T.pkTick(0.1); n++; }
+    const parked = car.state === 'parked' && Math.hypot(car.g.position.x - car.bay.x, car.g.position.z - car.bay.z) < 0.3, party = car.party.length;
+    car.party.forEach((g) => { g.state = 'leave'; g.rec.path = []; g.rec.x = car.bay.x + 3; g.rec.z = 62; });
+    let m = 0; while (L.cars.indexOf(car) >= 0 && m < 2000) { T.pkTick(0.1); m++; }
+    ok(parked && party >= 1 && party <= 4 && L.cars.indexOf(car) < 0 && !car.bay.car, 'a family comes by car (' + party + ', parked in ' + (n / 10).toFixed(0) + ' s), goes home in it and the bay is free again (' + (m / 10).toFixed(0) + ' s)'); }
   // the save round trip
   T.save(); { const raw = JSON.parse(localStorage.getItem('park-co-slot1')); ok(!!raw && raw.bank === S.bank && raw.ticketPrice === S.ticketPrice && raw.auto === S.auto && raw.xp === T.PK.xp, 'save wrote the slot: ' + JSON.stringify({ bank: raw && raw.bank, s: S.bank, failed: !!T.save.failed })); }
   // the pure layer

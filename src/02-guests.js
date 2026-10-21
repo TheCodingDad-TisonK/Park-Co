@@ -2,7 +2,7 @@
   // ── The guests ────────────────────────────────────────────────────
   // A guest arrives from the car park, joins the shorter ticket line, buys a ticket, passes a turnstile, queues for the
   // coaster, boards when the gates open, rides, and goes home. The whole thing is a small state machine on a walk record.
-  var PK_POOL = [], PK_GUEST_MAX = 90;
+  var PK_POOL = [], PK_GUEST_MAX = 110;
   function pkTakeHuman() {
     if (PK_POOL.length) { var g = PK_POOL.pop(); g.visible = true; scene.add(g); return g; }
     // makeHuman builds the figure but does not put it in the world: without this every new guest walked, queued and rode
@@ -200,7 +200,9 @@
         else pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
       }
     } else if (gu.state === 'leave') {
-      if (arrived) gu.state = 'gone';
+      if (arrived && !pkLotHome(gu)) gu.state = 'gone';             // out through the gate, then back to the car they came in
+    } else if (gu.state === 'toCar') {
+      if (arrived) pkLotBoard(gu);
     }
     if (gu.state !== 'seated') {
       g.position.set(rec.x, pkFloor(rec.x, rec.z), rec.z);
