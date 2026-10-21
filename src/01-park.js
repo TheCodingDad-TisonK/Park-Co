@@ -68,7 +68,7 @@
   function pkFloor(x, z) {
     if (pkOnPlatform(x, z)) return PK_PLATFORM_Y;
     if (x > -10 && x < 10 && z >= -0.6 && z < 0.4) return PK_PLATFORM_Y * (0.4 - z);
-    return 0;
+    return pkBkFloorAt(x, z);            // up the steps into a ride's booth (part 17)
   }
   function pkOnPlatform(x, z) { return x > -10 && x < 10 && z > -3.6 && z < -0.6; }
   function pkInsidePark(x, z) { return x > PK_PARK.x0 && x < PK_PARK.x1 && z > PK_PARK.z0 && z < PK_PARK.z1; }
