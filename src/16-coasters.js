@@ -716,7 +716,7 @@
     pkBkClock(k, -s * 1.15, 2.2, K.z1 - 0.09 - cz, Math.PI, 0.14);
     pkBkIntercom(k, -s * 1.2, 1.5, K.z1 - 0.08 - cz, Math.PI);
     pkBkKeyBox(k, s * 1.2, 2.05, K.z1 - 0.08 - cz, Math.PI);
-    pkBkChair(k, 0.1, -0.35, 0, 0);
+    pkBkChair(k, 0.1, -0.35, Math.PI, 0);   // facing the desk under the long window
     pkBkBatten(k, 0, H - 0.17, 0.2, 0, 1.4);
     pkBkStack(a, k, s * 1.3, H + 0.02, 0.9);
     pkBkCamera(k, -s * (W / 2 + 0.02), H - 0.3, K.z0 - cz + 0.3, s * Math.PI / 2 + Math.PI, 0.5);

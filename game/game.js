@@ -3984,6 +3984,7 @@
     "group@0,0#3": { x: 0.2, z: 0.05 },
     "group@10.23,-70.99": { x: 10.1, z: -71.15, hidden: true },
     "group@11.93,-53.12": { hidden: true },
+    "group@12.2,-3.88,2.55": { x: 11.8, z: -3.85 },
     "group@13,33": { x: 0.15, z: 44.9, ry: -90 },
     "group@13.5,-84.5": { x: 13.45, hidden: true },
     "group@14,-70": { x: 13.8, hidden: true },
@@ -3993,6 +3994,7 @@
     "group@15,33.5": { x: 0, z: 40.2, ry: -90 },
     "group@16,-76": { hidden: true },
     "group@19.25,-53.25": { hidden: true },
+    "group@19.87,-0.6,1.95": { x: 12.95, z: -3.85, ry: 0 },
     "group@21.32,9.45": { x: 21.3, z: 9.45, hidden: true },
     "group@21.62,-54.31": { hidden: true },
     "group@21.78,-49.1": { hidden: true },
@@ -10948,7 +10950,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     pkBkClock(k, -s * 1.15, 2.2, K.z1 - 0.09 - cz, Math.PI, 0.14);
     pkBkIntercom(k, -s * 1.2, 1.5, K.z1 - 0.08 - cz, Math.PI);
     pkBkKeyBox(k, s * 1.2, 2.05, K.z1 - 0.08 - cz, Math.PI);
-    pkBkChair(k, 0.1, -0.35, 0, 0);
+    pkBkChair(k, 0.1, -0.35, Math.PI, 0);   // facing the desk under the long window
     pkBkBatten(k, 0, H - 0.17, 0.2, 0, 1.4);
     pkBkStack(a, k, s * 1.3, H + 0.02, 0.9);
     pkBkCamera(k, -s * (W / 2 + 0.02), H - 0.3, K.z0 - cz + 0.3, s * Math.PI / 2 + Math.PI, 0.5);
@@ -11575,7 +11577,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   }
   // the operator's chair: five-star base, gas lift, seat and back
   function pkBkChair(parent, x, z, ry, y0) {
-    var g = new THREE.Group(); g.position.set(x, y0 || 0, z); g.rotation.y = ry || 0; parent.add(g);
+    var g = new THREE.Group(); g.position.set(x, y0 || 0, z); g.rotation.y = ry || 0; g.scale.setScalar(1.25); parent.add(g);   // an operator's chair, sized for a grown-up
     var chairM = pkBkStd({ color: 0x222a31, roughness: 0.85 }), iron = MAT.steelDark;
     pkBevelBox(0.46, 0.08, 0.46, chairM, 0, 0.44, 0, g, 0.03);
     pkBevelBox(0.46, 0.5, 0.08, chairM, 0, 0.72, -0.24, g, 0.03);
@@ -11611,7 +11613,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       var k = player.keys;
       if (k.KeyW || k.KeyS || k.KeyA || k.KeyD) { pkBkStand(); return false; }
       player.x = PK_SIT.x; player.z = PK_SIT.z; player.y = PK_SIT.y; player.vy = 0;
-      camera.position.set(PK_SIT.x, PK_SIT.y + 1.18, PK_SIT.z);
+      camera.position.set(PK_SIT.x, PK_SIT.y + 1.42, PK_SIT.z);   // a seated eye on the bigger chair, over the desk
       camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
       return true;
     }
@@ -11769,7 +11771,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var con = new THREE.Group(); con.position.set(0, F, HD - 0.5); con.rotation.y = Math.PI; g.add(con);
     pkBkDesk(con, 2.6);
     pkBoothPanel(a, con);
-    pkBkChair(g, 0.15, HD - 1.35, Math.PI, F);
+    pkBkChair(g, 0.15, HD - 1.35, 0, F);   // facing the desk and the window (a chair faces its local +z)
     // the CCTV monitors hang from the ceiling over the desk, toed in at the chair
     pkBkMonitors(a, g, 0, F + 1.92, HD - 0.36, Math.PI, 0.3);
 

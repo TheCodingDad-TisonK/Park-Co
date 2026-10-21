@@ -30,8 +30,10 @@ To see it: open this folder in the Co Engine editor, or `npm run dev`.
 - [x] 1. HUD: the pill now reads "Coaster: boarding (auto) · 16 of 16 rides open", and "Riding …" only while you are on one
 - [x] 1b. Coaster control room: the coaster desk moved under the long window, facing the platform; the
       station desk with the CCTV moved to the north wall
-- [x] 1c. Sit in the chairs: E on any booth, cabin or control-room chair sits you at the desk; E or a step stands you up
-- [~] 2. Every coaster's station dead level, straight and unbanked where the train stands
+- [x] 1c. Sit in the chairs: E on any booth, cabin or control-room chair sits you at the desk; E or a step stands you up.
+      Chairs 25% bigger, seated eye higher; booth and cabin chairs turned to face their desks
+- [~] 1d. THE PARK OFFICE as a big building with floors; the top floor is your office (moved up, asked for)
+- [ ] 2. Every coaster's station dead level, straight and unbanked where the train stands
       (measured: Serpent 60° bank / 27° slope, Baron 17°, indoor 37–44°, Puffin 42°; main coaster OK)
 - [ ] 3. New outdoor tracks: The Serpent (18 m lift, big drop, turnaround, camelback, both loops),
       Baron's Drop (keep lift, dive and tunnel; new south-east run; fix its hairpin approach),
@@ -44,7 +46,6 @@ To see it: open this folder in the Co Engine editor, or `npm run dev`.
 - [ ] 6. Guests arrive by car: drive in off the road, park in a free bay, get out, queue at the
       ticket window, walk in; and go home the same way. More guests in the park
 - [ ] 7. The desk panels made even better (booth desks; the coaster console too)
-- [ ] 8. The park office as a big building with floors; the top floor is your office
 - [ ] 9. More full coasters like the main one, each with its own big control room
 - [ ] 10. One big coaster that runs partly indoors and partly outdoors
 - [ ] 11. Odd-angle audit of the whole park: overlaps, floating things, odd placement — and fix them
