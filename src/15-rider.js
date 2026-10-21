@@ -152,12 +152,13 @@
     for (var i = 0; i < PK.lanes.length; i++) {
       var L = PK.lanes[i];
       if (!L.a.open) continue;
-      if (x > L.x0 - 0.10 && x < L.x1 + 0.10) {
-        if (z > L.zA - 0.14 && z < L.zA + 0.14) return true;
-        if (z > L.zB - 0.14 && z < L.zB + 0.14) return true;
+      if (x < L.x0 - 0.3 || x > L.x1 + 0.3 || z < L.zA - 0.3 || z > L.zB + 0.3) continue;
+      for (var k = 0; k < L.segs.length; k++) {
+        var S = L.segs[k];
+        if (x > S.x0 - 0.12 && x < S.x1 + 0.12 && z > S.z0 - 0.12 && z < S.z1 + 0.12) return true;
       }
-      // a closed boarding gate carries across the lane
-      if (!(L.a.ctl && L.a.ctl.gates) && x > L.gx - 0.14 && x < L.gx + 0.14 && z > L.zA && z < L.zB) return true;
+      // a closed boarding gate carries across row 0
+      if (!(L.a.ctl && L.a.ctl.gates) && x > L.gx - 0.14 && x < L.gx + 0.14 && z > L.gz0 && z < L.gz1) return true;
     }
     return false;
   }

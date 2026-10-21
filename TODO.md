@@ -70,8 +70,9 @@ lamps, rich colour, planting and ornament, a themed entrance for every ride. Eac
       Efteling (stepped gable, towers, emblem, marquee); a starfield, a sea floor and lanterns, fireflies inside
 - [ ] 4c. The main coaster made far better: it has the whole middle of the park to use; a longer, bigger layout built with
       the same track kit and checks as the halls (your call, 21 Oct: keep it in the middle rather than move it north-east)
-- [ ] 4b. Queue lanes take far too much room: every lane is one straight run as long as the ride has seats (1 m a seat,
-      18 m+ for the bigger rides). Fold them into compact switchbacks
+- [x] 4b. Queue lanes fold into switchbacks: rows of up to six slots, an odd number of rows (the entry stays at the outer
+      end), centred on where the straight lane stood. The longest lane is 6.6 m (the ferris wheel's was 18.6 m, the teacups'
+      and dodgems' 14.4); guests walk the rows slot by slot, never through a fence
 - [ ] 5. A proper station for every flat ride: platform, entry and exit, gates, canopy, sign
 - [ ] 6. Guests arrive by car: drive in off the road, park in a free bay, get out, queue at the
       ticket window, walk in; and go home the same way. More guests in the park
