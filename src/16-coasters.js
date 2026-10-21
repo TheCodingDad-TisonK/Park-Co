@@ -23,7 +23,10 @@
   // held to the world's up as it goes, so turns on a slope and helices do not wind roll into it: wherever the track is not
   // near vertical, any roll it has gathered is eased back to upright, or to cleanly inverted over the top of a loop.
   // P (the speed profile from pkCoProfile, laid from u0) banks the turns by physics: tan(bank) = v^2 x curvature / g.
-  function pkCoFrames(curve, N, P, u0) {
+  // o.roll lists stretches [ua, ub] (a corkscrew) where the felt force rolls the train on round over the top instead of being
+  // held upright as it would be floating over a hill: there it is the track's shape, not airtime, that turns it over.
+  function pkCoFrames(curve, N, P, u0, o) {
+    var rolls = (o && o.roll) || [], inRoll = function (u) { for (var r = 0; r < rolls.length; r++) { var a = rolls[r][0], b = rolls[r][1]; if (a <= b ? (u >= a && u <= b) : (u >= a || u <= b)) return true; } return false; };
     var pts = [], tans = [], ups = [], i;
     for (i = 0; i < N; i++) { pts.push(curve.getPointAt(i / N)); tans.push(curve.getTangentAt(i / N).normalize()); }
     var up = new THREE.Vector3(0, 1, 0);
@@ -73,7 +76,7 @@
       var ra = Math.atan2(cr2.crossVectors(ups[i], f).dot(tans[i]), ups[i].dot(f));
       // floating over a hump on an upright stretch pulls the rider up out of the seat: that keeps the track upright (banked
       // by the sideways part only), it never rolls the train over. Only the track's own shape turns it upside down.
-      if (Math.abs(ra) > Math.PI / 2 && Math.abs(tans[i].y) < 0.88 && ups[i].y > 0) ra -= (ra > 0 ? Math.PI : -Math.PI);
+      if (Math.abs(ra) > Math.PI / 2 && Math.abs(tans[i].y) < 0.88 && ups[i].y > 0 && !inRoll(i / N)) ra -= (ra > 0 ? Math.PI : -Math.PI);
       raw.push(ra);
     }
     // unwrap where the force is clear; where it is not, hold the last clear roll, then ease across the gap
@@ -177,7 +180,8 @@
   // Booster tyres keep it from ever stalling, and a brake run brings it home to a slow roll and a stop at the platform.
   // The lift is the sustained climb up to the lap's highest point, found from the track (o.lift overrides it, as
   // [u0, u1]); o.pedal gives a kiddie train its steady pace instead. o.rollIn stretches the final slow roll to that many metres
-  // before the stop (2.5 by default), for a station entered round a tight turn. Returns the speed and the time at K+1 even steps.
+  // before the stop (2.5 by default), for a station entered round a tight turn. o.trim lists trim brakes as [u0, u1, v]: through
+  // that stretch the train is held to v m/s, and runs on from there. Returns the speed and the time at K+1 even steps.
   function pkCoProfile(curve, len, u0, o) {
     o = o || {};
     var K = Math.max(240, Math.ceil(len / 0.3)), S = len / K, ys = [], i, g = 9.81;
@@ -192,6 +196,7 @@
       while (l0 > 1 && ys[l0 - 1] < ys[l0] - 1e-4) l0--;                // back down the climb to where it starts
       if (c - l0 > 4) lift = [l0, c];
     }
+    var trims = (o.trim || []).map(function (t) { return [Math.round(((t[0] - u0 + 1) % 1) * K), Math.round(((t[1] - u0 + 1) % 1) * K), t[2]]; });
     var vSt = o.vStation || 2.5, vChain = o.vChain || 2.4, mu = 0.022, drag = 0.0009, V = [0], dIn = o.rollIn || 2.5;
     for (i = 1; i <= K; i++) {
       var v, s = i * S, d = len - s;
@@ -202,6 +207,7 @@
         var v2 = w * w + 2 * g * (ys[i - 1] - ys[i]) - 2 * g * mu * S - 2 * drag * w * w * S;
         v = Math.sqrt(Math.max(0, v2));
         v = Math.max(v, i < lift[0] ? vSt : 2.0);                          // station tyres before the lift, boosters after
+        for (var tb = 0; tb < trims.length; tb++) if (i >= trims[tb][0] && i <= trims[tb][1]) v = Math.min(v, trims[tb][2]);
       }
       if (s < 4) v = Math.min(v, Math.max(0.5, Math.sqrt(2 * 0.9 * s)));  // pulling away from the platform
       v = Math.min(v, Math.sqrt(4 + 2 * 4 * d));                          // the brake run
@@ -279,7 +285,10 @@
     var step = Math.max(1, Math.round(N * 5.4 / E.len)), last = null;
     for (i = 0; i < N; i += step) {
       var p2 = E.F.p[i], t2 = E.F.t[i];
-      if (Math.abs(t2.y) > 0.72 || p2.y < 1.5) continue;
+      if (Math.abs(t2.y) > 0.72 || p2.y < 1.5 || E.F.up[i].y < 0.3) continue;      // not on the steep, not under an inversion
+      var under = false;                                                     // nor down through a lower pass of the track
+      for (var jj = 0; jj < N && !under; jj += 2) { var pj = E.F.p[jj]; if (pj.y < p2.y - 0.8 && Math.abs(pj.x - p2.x) < 1.0 && Math.abs(pj.z - p2.z) < 1.0) under = true; }
+      if (under) continue;
       if (last && dist2(p2.x, p2.z, last.x, last.z) < 10) continue;
       if (o.skip && o.skip(p2.x, p2.z, p2.y)) continue;
       var h = p2.y - 0.6;
