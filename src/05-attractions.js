@@ -81,6 +81,8 @@
     if (n) { pkAttrReslot(a); screenDirtyAll(); }
     return n;
   }
+  // a seat nobody has taken or is walking to
+  function pkAttrHasSeat(a) { for (var i = 0; i < a.seats.length; i++) if (!a.seats[i].guest && !a.seats[i].player) return true; return false; }
   // guests still walking from the gate to their seat: the gates stay open and the ride waits
   function pkAttrWalkers(a) {
     var n = 0;
@@ -99,7 +101,8 @@
   }
   function pkAttrStart(a) {
     var C = pkCtl(a);
-    if (C.fault || C.maint || a.queue.length || a.riders <= 0 || pkAttrWalkers(a)) return false;
+    // the line holds the ride only while it can still board: gates shut or seats full, whoever is left waits for the next cycle
+    if (C.fault || C.maint || (a.queue.length && C.gates && pkAttrHasSeat(a)) || a.riders <= 0 || pkAttrWalkers(a)) return false;
     a.state = 'running'; a.t = 0; C.gates = false; C.barsWant = 1;
     sfx('bell');
     if (a.start) a.start(a);
@@ -135,13 +138,15 @@
     } else if (a.state === 'boarding') {
       if (C.gates) pkAttrFill(a);
       a.boarding = pkAttrWalkers(a);
-        if (auto && !PK.closed) {
-        if (a.t >= a.board - 1.4 && !a.queue.length && a.riders > 0 && C.barsWant < 1) { C.gates = false; C.barsWant = 1; }
-        if (a.t >= a.board) {
-          // Never dispatch with empty seats while people are still en route.
-          if (a.riders > 0 && !a.queue.length && !pkAttrWalkers(a)) pkAttrStart(a);
-          else a.t = a.board;
+      if (auto && !PK.closed) {
+        // close up when the ride is full, or when boarding time is up and the line has emptied into the seats, or (a line
+        // that is not moving) a few seconds past it; then go once the bars are down and nobody is still walking to a seat.
+        // Whoever is left in the line waits for the next cycle: a line longer than the ride never holds it at the gate.
+        var full = !pkAttrHasSeat(a), walkers = a.boarding;
+        if (a.riders > 0 && !walkers && C.barsWant < 1 && (full || (a.t >= a.board - 1.4 && !a.queue.length) || a.t >= a.board + 6)) {
+          C.gates = false; C.barsWant = 1; a.t = Math.max(a.t, a.board - 1.4);
         }
+        if (a.t >= a.board && C.barsWant >= 1 && !C.gates && a.riders > 0 && !walkers) pkAttrStart(a);
       }
     } else if (a.state === 'ready') {
         if (auto && !PK.closed) pkAttrStart(a);
