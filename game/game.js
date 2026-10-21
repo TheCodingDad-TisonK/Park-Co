@@ -1,0 +1,11169 @@
+(function () {
+  'use strict';
+  if (typeof THREE === 'undefined') { document.body.innerHTML = '<p style="padding:40px;font-family:sans-serif">three.js failed to load (vendor/three/three.min.js).</p>'; return; }
+  // ── Co Engine ─────────────────────────────────────────────────────
+  // The engine parts come first in the closure, the game's parts after. The engine declares the names both sides share
+  // here, unassigned, and fills them when the game calls CO.setup (the renderer, the scene, the palette) and CO.boot (the
+  // state, the shell, the frame loop). A game part may use any of them at its top level once CO.setup has run.
+  var CO = { version: '0.13.1', cfg: null, game: null, root: null, flash: 0, ready: false, paused: false, stepOnce: false, editor: null };
+  var S, SET, SAVE, SETTINGS_KEY, BOOT_SLOT, BOOT_SAVE;               // 40-state fills these
+  var canvas, renderer, scene, camera;                                 // 10-three fills these in CO.setup
+  var player = null, focus = null, hudDirty = true;                    // 42-player owns player and focus; the HUD throttle flag is read everywhere
+
+  // ── Utilities ─────────────────────────────────────────────────────
+  var now = function () { return Date.now(); };
+  var clamp = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
+  var lerp = function (a, b, t) { return a + (b - a) * t; };
+  var money = function (n) { return (n < 0 ? '-$' : '$') + Math.floor(Math.abs(n)).toLocaleString('en-US'); };
+  var randi = function (a, b) { return a + Math.floor(Math.random() * (b - a + 1)); };
+  var randf = function (a, b) { return a + Math.random() * (b - a); };
+  var pick = function (arr) { return arr[Math.floor(Math.random() * arr.length)]; };
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  var pad2 = function (n) { return (n < 10 ? '0' : '') + n; };
+  var fmtTime = function (h) { h = ((h % 24) + 24) % 24; var m = Math.floor((h % 1) * 60); return pad2(Math.floor(h)) + ':' + pad2(m); };
+  var dist2 = function (ax, az, bx, bz) { var dx = ax - bx, dz = az - bz; return dx * dx + dz * dz; };
+  var uid = (function () { var n = 0; return function (p) { n++; return (p || 'id') + '-' + Date.now().toString(36) + '-' + n.toString(36); }; })();
+  var mtof = function (m) { return 440 * Math.pow(2, (m - 69) / 12); };   // MIDI note to Hz, for anything that plays a tune
+  // the hook bus: a game or a pack registers a function under a name, the engine calls every one in order, each inside its own try
+  var HOOKS = {};
+  function hook(name, fn) { (HOOKS[name] = HOOKS[name] || []).push(fn); return fn; }
+  // every argument reaches every hook (the lighting hook takes four: day, dawn, overcast, power; until 0.5.1 only three got through, so power was always undefined)
+  function runHooks(name) { var list = HOOKS[name]; if (!list) return; var args = Array.prototype.slice.call(arguments, 1); for (var i = 0; i < list.length; i++) { try { list[i].apply(null, args); } catch (e) { if (typeof console !== 'undefined') console.error('hook ' + name + ': ' + (e && e.message || e)); } } }
+  // CO.setup(cfg): the game's first part calls this once, before any part uses the scene. It reads the settings and the save slot
+  // (40-state), makes the renderer, the scene, the camera, the lights and the palette (10-three), then runs the 'setup' hooks.
+  // cfg.game is the game's hook object (CO.game). Function declarations are hoisted, so the parts that define the setup steps come later.
+  function coSetup(cfg) { cfg = cfg || {}; CO.cfg = cfg; CO.game = cfg.game || CO.game || {}; coSetupState(cfg); if (cfg.fov === undefined && SET && SET.fov) cfg.fov = SET.fov; coSetupThree(cfg); coSetupShell(cfg); coSetupPlayer(cfg); runHooks('setup', cfg); CO.ready = true; return CO; }
+  CO.setup = coSetup;
+  // ── Three.js world ────────────────────────────────────────────────
+  // Nothing here runs at parse time. CO.setup(cfg) makes the renderer, the scene, the camera, the sun and the sky bounce, draws
+  // the base textures and builds the palette; from then on a game's parts can call box(), sign(), MAT.wall and the rest at
+  // their top level. cfg (every field optional):
+  //   canvas 'co-canvas'  exposure 0.82  background 0x8fb0d4  fog { color, near 70, far 190 }  fov 75  near 0.08  far 260
+  //   env true (the reflection studio)  hemi { sky 0xdfeaff, ground 0x5a4d40, intensity 0.45 }
+  //   sun { color 0xfff0d8, intensity 1.1, box 70, near 1, far 230, mapSize 4096, target [0, 0, -20] }  lightBudget 12  post true
+  var shadowDirty = true, shadowT = 0;
+  var worldTime = 0;   // seconds since boot, for anything that sways, spins or pulses
+  var hemi = null, sun = null;
+  var TEX = {}, NRM = {}, RGH = {}, MAT = {};
+
+  function resize() { var w = window.innerWidth, h = window.innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+
+  // Reflections: a small studio (dark shell, a few bright troffers, one warm and one cool wall) is drawn once and baked into
+  // the environment map. It is dim on purpose: it is there so chrome, glass and screens have something to reflect, not to light the hall.
+  function buildEnvStudio() {
+    var es = new THREE.Scene();
+    es.add(new THREE.Mesh(new THREE.BoxGeometry(24, 12, 24), new THREE.MeshBasicMaterial({ color: 0x0b0d0f, side: THREE.BackSide })));
+    function pane(w, h, col, k, x, y, z, rx, ry) { var m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(col).multiplyScalar(k) })); m.position.set(x, y, z); m.rotation.set(rx || 0, ry || 0, 0); es.add(m); }
+    pane(24, 24, 0x14100c, 1, 0, -5.9, 0, -Math.PI / 2); pane(24, 24, 0x141517, 1, 0, 5.9, 0, Math.PI / 2);
+    [[-5, -4], [5, -4], [-5, 4], [5, 4], [0, 0]].forEach(function (p) { pane(3.0, 1.1, 0xfff4e2, 1.1, p[0], 5.8, p[1], Math.PI / 2); });
+    pane(6, 4, 0xcfe4ff, 1.2, 0, 1, -11.8, 0, 0); pane(5, 3.5, 0xffd9a8, 0.9, 11.8, 0.5, 2, 0, -Math.PI / 2);
+    var pm = new THREE.PMREMGenerator(renderer); pm.compileEquirectangularShader();
+    try { var rt = pm.fromScene(es, 0.04); scene.environment = rt.texture; } catch (e) { /* no env map on this GPU: materials fall back to the lights */ }
+    pm.dispose();
+  }
+
+  // Three.js lights every pixel with every visible point light, whether or not the light can reach it, so thirty lamps mean thirty
+  // evaluations per pixel. Every point light in the scene goes in one list and only the nearest few to the camera stay visible; the
+  // rest are hidden. The visible count is held constant so the shaders are not recompiled when you walk from one end of the hall
+  // to the other. A lamp inside a hidden group is left alone (the renderer skips it anyway). Lamps that are off sort last.
+  var lightBudget = { n: 12, lights: null, scanT: 0, tickT: 0, tmp: new THREE.Vector3(), cam: new THREE.Vector3() };
+  function updateLightBudget() {
+    var t = worldTime;
+    if (!lightBudget.lights || t - lightBudget.scanT > 2) { var list = []; scene.traverse(function (o) { if (o.isPointLight) list.push(o); }); lightBudget.lights = list; lightBudget.scanT = t; }
+    if (t - lightBudget.tickT < 0.1) return; lightBudget.tickT = t;
+    camera.getWorldPosition(lightBudget.cam);
+    var cand = [];
+    lightBudget.lights.forEach(function (l) {
+      for (var p = l.parent; p; p = p.parent) if (p.visible === false) return;
+      l.getWorldPosition(lightBudget.tmp); var d = lightBudget.tmp.distanceTo(lightBudget.cam);
+      l.userData.budgetScore = (l.intensity > 0 ? 0 : 1e6) + Math.max(0, d - (l.distance || 40) * 0.25) - (l.visible ? 3 : 0); cand.push(l);   // a lamp already on keeps its place: two near-equal lamps at the cut used to swap every tick
+    });
+    cand.sort(function (a, b) { return a.userData.budgetScore - b.userData.budgetScore; });
+    for (var i = 0; i < cand.length; i++) cand[i].visible = i < lightBudget.n;
+  }
+
+  // ── Textures: every one is drawn on a canvas ──────────────────────
+  function tex(w, h, draw, rx, ry) {
+    var c = document.createElement('canvas'); c.width = w; c.height = h; var ctx = c.getContext('2d'); draw(ctx, w, h);
+    var t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx || 1, ry || 1); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8; return t;
+  }
+  function makeAlphaTex(w, h, draw) { var c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); var t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; return t; }   // a cut-out sheet: transparent canvas, no repeat
+  function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+  function grain(ctx, w, h, n, alpha, dark) { for (var i = 0; i < n; i++) { var v = Math.floor(Math.random() * 255); ctx.fillStyle = 'rgba(' + (dark ? 0 : v) + ',' + (dark ? 0 : v) + ',' + (dark ? 0 : v) + ',' + alpha + ')'; ctx.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 3, 1 + Math.random() * 3); } }
+  // soft blotches: water marks, oil, wear. Dark or light, a few big and many small.
+  function blotches(ctx, w, h, n, rmin, rmax, dark, alpha) { for (var i = 0; i < n; i++) { var r = randf(rmin, rmax), x = Math.random() * w, y = Math.random() * h; var g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, 'rgba(' + (dark ? '0,0,0,' : '255,255,255,') + alpha + ')'); g.addColorStop(1, 'rgba(' + (dark ? '0,0,0,0)' : '255,255,255,0)')); ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2); } }
+  function cracks(ctx, w, h, n, alpha) { for (var i = 0; i < n; i++) { ctx.strokeStyle = 'rgba(20,20,20,' + alpha + ')'; ctx.lineWidth = 1; ctx.beginPath(); var x = Math.random() * w, y = Math.random() * h; ctx.moveTo(x, y); for (var k = 0; k < 6; k++) { x += (Math.random() - 0.5) * 50; y += (Math.random() - 0.5) * 50; ctx.lineTo(x, y); } ctx.stroke(); } }
+  // the base sheets: concrete, asphalt, cladding, plaster, brick, block, wood, grass, a few floors and fabrics. A game adds its own
+  // entries to TEX by assignment, with the same helpers.
+  function buildBaseTextures() {
+    TEX.concrete = tex(1024, 1024, function (c, w, h) {
+      c.fillStyle = '#8b8d8e'; c.fillRect(0, 0, w, h); grain(c, w, h, 26000, 0.12); grain(c, w, h, 5000, 0.08, true);
+      blotches(c, w, h, 30, 40, 160, true, 0.09); blotches(c, w, h, 16, 30, 110, false, 0.07); cracks(c, w, h, 10, 0.25);
+      c.strokeStyle = 'rgba(0,0,0,0.3)'; c.lineWidth = 3; c.beginPath(); c.moveTo(0, h / 2); c.lineTo(w, h / 2); c.moveTo(w / 2, 0); c.lineTo(w / 2, h); c.stroke();   // the slab joints
+      for (var i = 0; i < 6; i++) { c.strokeStyle = 'rgba(30,30,30,0.18)'; c.lineWidth = randf(6, 14); c.beginPath(); var x = Math.random() * w, y = Math.random() * h; c.moveTo(x, y); c.quadraticCurveTo(x + randf(-120, 120), y + randf(-120, 120), x + randf(-260, 260), y + randf(-260, 260)); c.stroke(); }   // tyre scuffs
+    }, 5, 3.5);
+    TEX.asphalt = tex(1024, 1024, function (c, w, h) { c.fillStyle = '#3d3f42'; c.fillRect(0, 0, w, h); grain(c, w, h, 50000, 0.16); grain(c, w, h, 12000, 0.12, true); for (var i = 0; i < 9000; i++) { c.fillStyle = Math.random() < 0.5 ? 'rgba(120,118,112,0.35)' : 'rgba(86,84,80,0.4)'; c.fillRect(Math.random() * w, Math.random() * h, 2, 2); } blotches(c, w, h, 10, 60, 260, true, 0.14); blotches(c, w, h, 6, 40, 160, false, 0.05); cracks(c, w, h, 16, 0.25); for (var s = 0; s < 4; s++) { c.strokeStyle = 'rgba(14,14,16,0.5)'; c.lineWidth = randf(3, 6); c.beginPath(); var x = Math.random() * w, y = Math.random() * h; c.moveTo(x, y); for (var k = 0; k < 8; k++) { x += randf(-60, 60); y += randf(-60, 60); c.lineTo(x, y); } c.stroke(); } }, 22, 22);
+    TEX.corrugated = tex(512, 256, function (c, w, h) {
+      c.fillStyle = '#9aa3ad'; c.fillRect(0, 0, w, h);
+      for (var x = 0; x < w; x += 16) { var g = c.createLinearGradient(x, 0, x + 16, 0); g.addColorStop(0, '#7e8792'); g.addColorStop(0.5, '#b7bfc8'); g.addColorStop(1, '#7e8792'); c.fillStyle = g; c.fillRect(x, 0, 16, h); }
+      grain(c, w, h, 2500, 0.06, true);
+      for (var y = 24; y < h; y += 104) for (var rx = 8; rx < w; rx += 16) { c.fillStyle = 'rgba(40,45,50,0.5)'; c.beginPath(); c.arc(rx, y, 1.6, 0, 6.3); c.fill(); }   // rivet rows
+      for (var i = 0; i < 8; i++) { var sx = Math.random() * w; var sg = c.createLinearGradient(0, h * 0.5, 0, h); sg.addColorStop(0, 'rgba(120,70,30,0)'); sg.addColorStop(1, 'rgba(110,60,25,0.35)'); c.fillStyle = sg; c.fillRect(sx, h * 0.5, randf(2, 6), h * 0.5); }   // rust streaks down from the fixings
+    }, 8, 2);
+    TEX.corrugatedDoor = tex(256, 256, function (c, w, h) { c.fillStyle = '#5d6771'; c.fillRect(0, 0, w, h); for (var y = 0; y < h; y += 20) { var g = c.createLinearGradient(0, y, 0, y + 20); g.addColorStop(0, '#4a535c'); g.addColorStop(0.5, '#7b858f'); g.addColorStop(1, '#4a535c'); c.fillStyle = g; c.fillRect(0, y, w, 20); } grain(c, w, h, 1500, 0.08, true); blotches(c, w, h, 6, 20, 60, true, 0.2); }, 2, 4);
+    TEX.plaster = tex(256, 256, function (c, w, h) { c.fillStyle = '#e4e1d8'; c.fillRect(0, 0, w, h); grain(c, w, h, 2500, 0.05); blotches(c, w, h, 4, 20, 50, true, 0.05); }, 4, 2);
+    TEX.wood = tex(256, 128, function (c, w, h) {
+      c.fillStyle = '#b08a5a'; c.fillRect(0, 0, w, h);
+      var drift = [randf(-6, 6), randf(-6, 6), randf(-6, 6)];
+      for (var i = 0; i < 60; i++) { c.strokeStyle = 'rgba(80,50,20,' + (0.1 + Math.random() * 0.25) + ')'; c.lineWidth = 1 + Math.random() * 1.5; c.beginPath(); var y = Math.random() * h; c.moveTo(0, y); c.bezierCurveTo(w * 0.3, y + drift[0] + randf(-3, 3), w * 0.65, y + drift[1] + randf(-3, 3), w + 4, y + drift[2]); c.stroke(); }
+      for (var p = 0; p < 500; p++) { c.fillStyle = 'rgba(60,35,10,0.18)'; c.fillRect(Math.random() * w, Math.random() * h, randf(3, 10), 1); }
+      c.fillStyle = 'rgba(0,0,0,0.3)'; [0.2, 0.5, 0.8].forEach(function (f) { c.fillRect(0, h * f, w, 2); });   // the slat gaps of a pallet deck
+    }, 1, 1);
+    TEX.grass = tex(512, 512, function (c, w, h) { c.fillStyle = '#4f6a3a'; c.fillRect(0, 0, w, h); var cols = ['#3f6f2e', '#5c8f44', '#6f9a4a', '#45752f', '#7ea25a']; for (var i = 0; i < 3000; i++) { var x = Math.random() * w, y = Math.random() * h; c.strokeStyle = cols[i % 5]; c.lineWidth = randf(0.8, 1.6); c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + randf(-4, 4), y - randf(4, 9), x + randf(-6, 6), y - randf(8, 16)); c.stroke(); } c.fillStyle = 'rgba(70,50,30,.16)'; for (var d = 0; d < 20; d++) { c.beginPath(); c.ellipse(Math.random() * w, Math.random() * h, randf(14, 40), randf(8, 22), Math.random() * 3, 0, 6.29); c.fill(); } }, 30, 30);
+    TEX.skylight = tex(64, 64, function (c, w, h) { c.fillStyle = '#eef6ff'; c.fillRect(0, 0, w, h); }, 1, 1);
+    TEX.hazard = tex(128, 32, function (c, w, h) { c.fillStyle = '#f5b53d'; c.fillRect(0, 0, w, h); c.fillStyle = '#111'; for (var x = -32; x < w; x += 32) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x + 16, 0); c.lineTo(x + 32, h); c.lineTo(x + 16, h); c.closePath(); c.fill(); } grain(c, w, h, 300, 0.1, true); }, 4, 1);
+    TEX.noiseMetal = tex(128, 128, function (c, w, h) { c.fillStyle = '#9ea4aa'; c.fillRect(0, 0, w, h); grain(c, w, h, 3000, 0.1); }, 1, 1);
+    TEX.vmesh = tex(128, 256, function (c, w, h) { c.clearRect(0, 0, w, h); c.strokeStyle = 'rgba(60,96,70,1)'; c.lineWidth = 2.2; for (var vx = 4; vx < w; vx += 10) { c.beginPath(); c.moveTo(vx, 0); c.lineTo(vx, h); c.stroke(); } for (var hy = 4; hy < h; hy += 28) { c.beginPath(); c.moveTo(0, hy); c.lineTo(w, hy); c.stroke(); } }, 2, 1);
+    TEX.mesh = tex(128, 128, function (c, w, h) { c.clearRect(0, 0, w, h); c.strokeStyle = 'rgba(70,75,80,0.95)'; c.lineWidth = 2; for (var i = 0; i <= w; i += 16) { c.beginPath(); c.moveTo(i, 0); c.lineTo(i + 16, h); c.stroke(); c.beginPath(); c.moveTo(i + 16, 0); c.lineTo(i, h); c.stroke(); } }, 8, 2);
+    TEX.brick = tex(256, 256, function (c, w, h) { c.fillStyle = '#c9c2b4'; c.fillRect(0, 0, w, h); var cols = ['#8a4a3a', '#95553f', '#7c4335', '#9a5c45', '#874836', '#a0634c']; var bw = w / 8, bh = h / 8; for (var r = 0; r < 8; r++) for (var k = -1; k < 9; k++) { var x = k * bw + (r % 2 ? bw / 2 : 0); c.fillStyle = pick(cols); c.fillRect(x + 2, r * bh + 2, bw - 4, bh - 4); } grain(c, w, h, 6000, 0.2); }, 2, 0.6);
+    TEX.paper = tex(128, 128, function (c, w, h) { c.fillStyle = '#f3efe4'; c.fillRect(0, 0, w, h); grain(c, w, h, 800, 0.05); }, 1, 1);
+    TEX.cork = tex(256, 256, function (c, w, h) { c.fillStyle = '#b8905c'; c.fillRect(0, 0, w, h); grain(c, w, h, 8000, 0.25); blotches(c, w, h, 60, 3, 10, true, 0.3); }, 1, 1);
+    TEX.fabric = tex(128, 128, function (c, w, h) { c.fillStyle = '#2f4a73'; c.fillRect(0, 0, w, h); grain(c, w, h, 4000, 0.12); }, 1, 1);
+    TEX.cloth = tex(128, 128, function (c, w, h) { c.fillStyle = '#ffffff'; c.fillRect(0, 0, w, h); for (var y = 0; y < h; y += 2) for (var x = 0; x < w; x += 2) { c.fillStyle = 'rgba(0,0,0,' + (((x + y) / 2) % 2 ? 0.14 : 0.04) + ')'; c.fillRect(x, y, 2, 2); } }, 6, 6);   // a white weave that takes whatever colour a shirt is given
+    TEX.rubberMat = tex(128, 128, function (c, w, h) { c.fillStyle = '#1b1d20'; c.fillRect(0, 0, w, h); c.fillStyle = '#24272b'; for (var y = 0; y < h; y += 16) for (var x = 0; x < w; x += 16) { c.beginPath(); c.arc(x + 8, y + 8, 5, 0, 6.3); c.fill(); } }, 6, 6);
+    // painted blockwork: four courses of 400 x 200 blocks in a sheet 1.6 by 0.8 m, grey paint over grey block, a few blocks a shade off
+    TEX.block = tex(512, 256, function (c, w, h) { c.fillStyle = '#6e7276'; c.fillRect(0, 0, w, h); var bw = w / 4, bh = h / 4; for (var r = 0; r < 4; r++) for (var k = -1; k < 5; k++) { var x = k * bw + (r % 2 ? bw / 2 : 0); c.fillStyle = pick(['#9a9c9a', '#959895', '#9fa19e', '#929592', '#9c9e9b']); c.fillRect(x + 3, r * bh + 3, bw - 6, bh - 6); } grain(c, w, h, 5000, 0.08); blotches(c, w, h, 10, 20, 70, true, 0.08); for (var i = 0; i < 40; i++) { c.fillStyle = 'rgba(40,40,42,' + randf(0.05, 0.2) + ')'; c.fillRect(Math.random() * w, h * 0.7 + Math.random() * h * 0.3, randf(2, 10), randf(2, 5)); } }, 1, 1);
+    // carpet tile for an office: half-metre tiles in a blue-grey loop pile, the joints just showing, laid chequerboard
+    TEX.carpet = tex(256, 256, function (c, w, h) { c.fillStyle = '#3f4857'; c.fillRect(0, 0, w, h); for (var ty = 0; ty < 2; ty++) for (var tx = 0; tx < 2; tx++) { c.fillStyle = (tx + ty) % 2 ? '#404a5a' : '#3b4453'; c.fillRect(tx * 128 + 1, ty * 128 + 1, 126, 126); } grain(c, w, h, 14000, 0.1); for (var y = 0; y < h; y += 3) { c.fillStyle = 'rgba(255,255,255,0.025)'; c.fillRect(0, y, w, 1); } }, 1, 1);
+    // vinyl sheet: a pale speckled floor with a faint weld line every 1.5 m
+    TEX.vinyl = tex(256, 256, function (c, w, h) { c.fillStyle = '#c9c6bd'; c.fillRect(0, 0, w, h); for (var i = 0; i < 9000; i++) { c.fillStyle = pick(['rgba(90,86,80,0.35)', 'rgba(255,255,255,0.3)', 'rgba(120,110,100,0.25)']); c.fillRect(Math.random() * w, Math.random() * h, randf(1, 3), randf(1, 3)); } blotches(c, w, h, 6, 30, 90, true, 0.05); c.fillStyle = 'rgba(0,0,0,0.12)'; c.fillRect(0, h / 2 - 1, w, 2); }, 1, 1);
+    // a ceiling tile for rooms, and a plain lining for the inside of a trailer or a container
+    TEX.tile = tex(256, 256, function (c, w, h) { c.fillStyle = '#e9e9e4'; c.fillRect(0, 0, w, h); grain(c, w, h, 3000, 0.05, true); c.strokeStyle = 'rgba(0,0,0,0.25)'; c.lineWidth = 3; c.strokeRect(1.5, 1.5, w - 3, h - 3); c.beginPath(); c.moveTo(w / 2, 0); c.lineTo(w / 2, h); c.stroke(); }, 6, 4);
+    TEX.lining = tex(256, 256, function (c, w, h) { c.fillStyle = '#c9cdd1'; c.fillRect(0, 0, w, h); grain(c, w, h, 2500, 0.08); for (var y = 0; y < h; y += 64) { c.fillStyle = 'rgba(0,0,0,0.18)'; c.fillRect(0, y, w, 3); } for (var i = 0; i < 24; i++) { c.fillStyle = 'rgba(0,0,0,' + randf(0.05, 0.18) + ')'; c.fillRect(Math.random() * w, Math.random() * h, randf(10, 40), randf(2, 6)); } }, 6, 2);
+  }
+  // a sign on the house slate (#1b232c) is an enamelled plate: the slate shades a little towards the bottom, a hairline of
+  // light sits just in from the edge and a hairline of the sign's own colour inside that. opt.plate false turns that off (paint)
+  function isPlate(opt) { return !!opt && opt.plate !== false && (opt.plate === true || opt.bg === '#1b232c'); }
+  function textTex(lines, opt) {
+    opt = opt || {}; var w = opt.w || 512, h = opt.h || 128, plate = isPlate(opt);
+    return tex(w, h, function (c) {
+      if (plate) { var g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#222c38'); g.addColorStop(1, '#10161d'); c.fillStyle = g; c.fillRect(0, 0, w, h); var e = Math.max(2, Math.round(Math.min(w, h) * 0.02)); c.strokeStyle = 'rgba(255,255,255,0.14)'; c.lineWidth = e; c.strokeRect(e / 2, e / 2, w - e, h - e); c.strokeStyle = opt.fg || '#f5b53d'; c.globalAlpha = 0.5; c.lineWidth = Math.max(1, e * 0.6); c.strokeRect(e * 3, e * 3, w - e * 6, h - e * 6); c.globalAlpha = 1; }
+      else { c.fillStyle = opt.bg || '#1b232c'; c.fillRect(0, 0, w, h); }
+      if (opt.border) { c.strokeStyle = opt.border; c.lineWidth = 8; c.strokeRect(4, 4, w - 8, h - 8); }
+      c.fillStyle = opt.fg || '#f5b53d'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      var size = opt.size || Math.min(h * 0.6, w / (Math.max.apply(null, lines.map(function (l) { return l.length; })) * 0.6));
+      c.font = (opt.weight || 'bold') + ' ' + Math.floor(size) + 'px ' + (opt.font || 'Bahnschrift, Arial, sans-serif');
+      if (plate) { c.shadowColor = 'rgba(0,0,0,0.6)'; c.shadowBlur = Math.max(2, size * 0.08); c.shadowOffsetY = Math.max(1, size * 0.04); }
+      lines.forEach(function (l, i) { c.fillText(l, w / 2, h / 2 + (i - (lines.length - 1) / 2) * size * 1.15, w * 0.92); });   // never off the plate
+      c.shadowColor = 'rgba(0,0,0,0)'; c.shadowBlur = 0; c.shadowOffsetY = 0;
+    });
+  }
+  // normal maps: a height field drawn on a canvas, turned into tangent-space normals with a Sobel filter. Linear, never sRGB.
+  function normalTex(w, h, drawHeight, strength, rx, ry) {
+    var hc = document.createElement('canvas'); hc.width = w; hc.height = h; var hx = hc.getContext('2d'); drawHeight(hx, w, h);
+    var src = hx.getImageData(0, 0, w, h).data, out = hx.createImageData(w, h), o = out.data, s = strength || 1;
+    var at = function (x, y) { x = (x + w) % w; y = (y + h) % h; return src[(y * w + x) * 4] / 255; };
+    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
+      var dx = (at(x + 1, y - 1) + 2 * at(x + 1, y) + at(x + 1, y + 1)) - (at(x - 1, y - 1) + 2 * at(x - 1, y) + at(x - 1, y + 1));
+      var dy = (at(x - 1, y + 1) + 2 * at(x, y + 1) + at(x + 1, y + 1)) - (at(x - 1, y - 1) + 2 * at(x, y - 1) + at(x + 1, y - 1));
+      var nx = -dx * s, ny = -dy * s, nz = 1, len = Math.sqrt(nx * nx + ny * ny + nz * nz), i = (y * w + x) * 4;
+      o[i] = (nx / len * 0.5 + 0.5) * 255; o[i + 1] = (ny / len * 0.5 + 0.5) * 255; o[i + 2] = (nz / len * 0.5 + 0.5) * 255; o[i + 3] = 255;
+    }
+    hx.putImageData(out, 0, 0);
+    var t = new THREE.CanvasTexture(hc); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx || 1, ry || 1); t.anisotropy = 8; return t;
+  }
+  function heightNoise(c, w, h, base, n, amp) { c.fillStyle = base; c.fillRect(0, 0, w, h); for (var i = 0; i < n; i++) { var v = Math.floor(128 + (Math.random() - 0.5) * amp); c.fillStyle = 'rgba(' + v + ',' + v + ',' + v + ',0.6)'; c.fillRect(Math.random() * w, Math.random() * h, randf(1, 4), randf(1, 4)); } }
+  function buildBaseNormals() {
+    NRM.concrete = normalTex(512, 512, function (c, w, h) { heightNoise(c, w, h, '#808080', 14000, 90); for (var i = 0; i < 20; i++) { var r = randf(20, 90), x = Math.random() * w, y = Math.random() * h, g = c.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, 'rgba(60,60,60,0.5)'); g.addColorStop(1, 'rgba(128,128,128,0)'); c.fillStyle = g; c.fillRect(x - r, y - r, r * 2, r * 2); } c.strokeStyle = '#303030'; c.lineWidth = 4; c.beginPath(); c.moveTo(0, h / 2); c.lineTo(w, h / 2); c.moveTo(w / 2, 0); c.lineTo(w / 2, h); c.stroke(); }, 1.6, 5, 3.5);
+    NRM.corrugated = normalTex(256, 128, function (c, w, h) { for (var x = 0; x < w; x++) { var v = Math.floor(128 + Math.sin(x / 16 * Math.PI * 2) * 90); c.fillStyle = 'rgb(' + v + ',' + v + ',' + v + ')'; c.fillRect(x, 0, 1, h); } for (var y = 12; y < h; y += 52) for (var rx = 8; rx < w; rx += 16) { c.fillStyle = '#404040'; c.beginPath(); c.arc(rx, y, 2.2, 0, 6.3); c.fill(); } }, 2.2, 8, 2);
+    NRM.ribs = normalTex(128, 256, function (c, w, h) { for (var y = 0; y < h; y++) { var v = Math.floor(128 + Math.sin(y / 20 * Math.PI * 2) * 100); c.fillStyle = 'rgb(' + v + ',' + v + ',' + v + ')'; c.fillRect(0, y, w, 1); } }, 2.0, 2, 4);
+    NRM.asphalt = normalTex(512, 512, function (c, w, h) { heightNoise(c, w, h, '#808080', 40000, 120); }, 1.2, 22, 22);
+    NRM.plaster = normalTex(256, 256, function (c, w, h) { heightNoise(c, w, h, '#808080', 3000, 40); }, 0.8, 4, 2);
+    NRM.brick = normalTex(256, 256, function (c, w, h) { c.fillStyle = '#a0a0a0'; c.fillRect(0, 0, w, h); var bw = w / 8, bh = h / 8; for (var r = 0; r < 8; r++) for (var k = -1; k < 9; k++) { var x = k * bw + (r % 2 ? bw / 2 : 0); c.fillStyle = '#404040'; c.fillRect(x, r * bh, bw, bh); c.fillStyle = '#a8a8a8'; c.fillRect(x + 2, r * bh + 2, bw - 4, bh - 4); } heightNoise(c, w, h, 'rgba(0,0,0,0)', 2000, 30); }, 1.8, 2, 0.6);
+    NRM.wood = normalTex(256, 128, function (c, w, h) { c.fillStyle = '#808080'; c.fillRect(0, 0, w, h); for (var i = 0; i < 70; i++) { var y = Math.random() * h; c.strokeStyle = 'rgba(40,40,40,' + randf(0.2, 0.6) + ')'; c.lineWidth = randf(1, 2); c.beginPath(); c.moveTo(0, y); c.bezierCurveTo(w * 0.3, y + randf(-4, 4), w * 0.7, y + randf(-4, 4), w, y); c.stroke(); } c.fillStyle = '#202020'; [0.2, 0.5, 0.8].forEach(function (f) { c.fillRect(0, h * f, w, 3); }); }, 1.2, 1, 1);
+    NRM.cardboard = normalTex(256, 256, function (c, w, h) { heightNoise(c, w, h, '#808080', 2500, 30); c.fillStyle = '#505050'; c.fillRect(0, h * 0.48, w, 4); c.fillStyle = '#9a9a9a'; c.fillRect(w * 0.44, 0, w * 0.12, h); c.fillStyle = '#8c8c8c'; c.fillRect(w * 0.08, h * 0.08, w * 0.34, h * 0.3); for (var i = 0; i < h; i += 6) { c.fillStyle = 'rgba(100,100,100,0.25)'; c.fillRect(0, i, w, 1); } }, 1.0, 1, 1);
+    NRM.chequer = normalTex(128, 128, function (c, w, h) { c.fillStyle = '#808080'; c.fillRect(0, 0, w, h); for (var y = 0; y < h; y += 32) for (var x = 0; x < w; x += 32) { var d = ((x + y) / 32) % 2; c.save(); c.translate(x + 16, y + 16); c.rotate(d ? 0.5 : -0.5); c.fillStyle = '#c0c0c0'; c.fillRect(-10, -3, 20, 6); c.restore(); } }, 1.5, 3, 3);
+    NRM.rubber = normalTex(128, 128, function (c, w, h) { c.fillStyle = '#808080'; c.fillRect(0, 0, w, h); for (var y = 0; y < h; y += 16) for (var x = 0; x < w; x += 16) { c.fillStyle = '#b0b0b0'; c.beginPath(); c.arc(x + 8, y + 8, 5, 0, 6.3); c.fill(); } }, 1.2, 6, 6);
+    NRM.block = normalTex(512, 256, function (c, w, h) { c.fillStyle = '#505050'; c.fillRect(0, 0, w, h); var bw = w / 4, bh = h / 4; for (var r = 0; r < 4; r++) for (var k = -1; k < 5; k++) { var x = k * bw + (r % 2 ? bw / 2 : 0); c.fillStyle = '#9a9a9a'; c.fillRect(x + 3, r * bh + 3, bw - 6, bh - 6); } heightNoise(c, w, h, 'rgba(0,0,0,0)', 3000, 30); }, 1.6, 1, 1);
+    NRM.carpet = normalTex(256, 256, function (c, w, h) { heightNoise(c, w, h, '#808080', 6000, 50); c.fillStyle = '#606060'; c.fillRect(0, 127, w, 2); c.fillRect(127, 0, 2, h); }, 0.9, 1, 1);
+  }
+  function roughTex(w, h, base, amp, rx, ry) { var t = tex(w, h, function (c) { var v = Math.floor(base * 255); c.fillStyle = 'rgb(' + v + ',' + v + ',' + v + ')'; c.fillRect(0, 0, w, h); for (var i = 0; i < 4000; i++) { var k = Math.floor(v + (Math.random() - 0.5) * amp * 255); c.fillStyle = 'rgba(' + k + ',' + k + ',' + k + ',0.7)'; c.fillRect(Math.random() * w, Math.random() * h, randf(1, 6), randf(1, 6)); } for (var j = 0; j < 12; j++) { var r = randf(10, 50), x = Math.random() * w, y = Math.random() * h, g = c.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, 'rgba(' + Math.floor(v - amp * 120) + ',' + Math.floor(v - amp * 120) + ',' + Math.floor(v - amp * 120) + ',0.8)'); g.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = g; c.fillRect(x - r, y - r, r * 2, r * 2); } }, rx, ry); t.encoding = THREE.LinearEncoding; return t; }
+
+  // ── Materials ─────────────────────────────────────────────────────
+  // the environment map is for reflections only: every lit material takes very little light from it
+  function dimEnv(m) { if (m && m.isMeshStandardMaterial) m.envMapIntensity = m.isMeshPhysicalMaterial ? 0.45 : (m.metalness > 0.5 ? 0.4 : 0.22); return m; }
+  var std = function (o) { return dimEnv(new THREE.MeshStandardMaterial(o)); };
+  function glowMat(col, k) { var m = std({ color: 0x111111, emissive: col, emissiveIntensity: k || 1, roughness: 0.4 }); m.userData.glow = true; return m; }
+  function buildBasePalette() {
+    RGH.floor = roughTex(256, 256, 0.9, 0.25, 5, 3.5); RGH.paint = roughTex(256, 256, 0.45, 0.35, 1, 1); RGH.metal = roughTex(256, 256, 0.5, 0.3, 1, 1);
+    var V2 = function (a, b) { return new THREE.Vector2(a, b); };
+    MAT.floor = std({ map: TEX.concrete, roughness: 0.92, metalness: 0.03, normalMap: NRM.concrete, normalScale: V2(0.7, 0.7), roughnessMap: RGH.floor });
+    MAT.yard = std({ map: TEX.asphalt, roughness: 0.95, normalMap: NRM.asphalt, normalScale: V2(0.6, 0.6) });
+    MAT.grass = std({ map: TEX.grass, roughness: 1 });
+    MAT.wall = std({ map: TEX.corrugated, roughness: 0.55, metalness: 0.4, normalMap: NRM.corrugated, normalScale: V2(1, 1), roughnessMap: RGH.metal });
+    MAT.wallIn = std({ map: TEX.corrugated, roughness: 0.65, metalness: 0.3, color: 0xcfd6dd, normalMap: NRM.corrugated, normalScale: V2(1, 1) });
+    MAT.roof = std({ color: 0x3b4249, roughness: 0.9 });
+    MAT.roofIn = std({ color: 0x5c6670, roughness: 0.9 });   // the plane is turned to face down, so its front is what you see from the floor
+    MAT.door = std({ map: TEX.corrugatedDoor, roughness: 0.55, metalness: 0.4, normalMap: NRM.ribs, normalScale: V2(1, 1) });
+    MAT.plaster = std({ map: TEX.plaster, roughness: 0.9, normalMap: NRM.plaster, normalScale: V2(0.4, 0.4) });
+    MAT.brick = std({ map: TEX.brick, roughness: 0.95, normalMap: NRM.brick, normalScale: V2(0.9, 0.9) });
+    MAT.block = std({ map: TEX.block, roughness: 0.9, normalMap: NRM.block, normalScale: V2(0.8, 0.8) });
+    MAT.carpet = std({ map: TEX.carpet, roughness: 1, normalMap: NRM.carpet, normalScale: V2(0.4, 0.4) });
+    MAT.vinyl = std({ map: TEX.vinyl, roughness: 0.45, metalness: 0.02 });
+    MAT.gunmetal = std({ color: 0x4a5058, roughness: 0.38, metalness: 0.85, map: TEX.noiseMetal });
+    MAT.rack = std({ color: 0xcf6417, roughness: 0.55, metalness: 0.3, roughnessMap: RGH.paint });
+    MAT.beam = std({ color: 0x2b5aa6, roughness: 0.5, metalness: 0.4 });
+    MAT.deck = std({ color: 0x6a737c, roughness: 0.7, metalness: 0.5 });
+    MAT.wood = std({ map: TEX.wood, roughness: 0.85, normalMap: NRM.wood, normalScale: V2(0.6, 0.6) });
+    MAT.steel = std({ map: TEX.noiseMetal, roughness: 0.45, metalness: 0.6 });
+    MAT.steelDark = std({ color: 0x3a3f45, roughness: 0.5, metalness: 0.6 });
+    MAT.chrome = std({ color: 0xd8dde3, roughness: 0.18, metalness: 0.95 });
+    MAT.black = std({ color: 0x15171a, roughness: 0.8 });
+    MAT.plastic = std({ color: 0x2a2d33, roughness: 0.6 });
+    MAT.rubber = std({ color: 0x1d1f22, roughness: 0.95 });
+    MAT.rubberMat = std({ map: TEX.rubberMat, roughness: 0.95, normalMap: NRM.rubber, normalScale: V2(0.8, 0.8) });
+    MAT.chequer = std({ color: 0x8e959c, roughness: 0.45, metalness: 0.7, normalMap: NRM.chequer, normalScale: V2(1, 1) });
+    MAT.yellow = std({ color: 0xf5b53d, roughness: 0.6 });
+    MAT.yellowLine = new THREE.MeshBasicMaterial({ color: 0xd9a12c });
+    MAT.whiteLine = new THREE.MeshBasicMaterial({ color: 0xd8dbdf });
+    MAT.hazard = std({ map: TEX.hazard, roughness: 0.6 });
+    MAT.mesh = std({ map: TEX.mesh, alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.6, metalness: 0.5 });
+    MAT.red = std({ color: 0xc8342a, roughness: 0.6 });
+    MAT.green = std({ color: 0x2f9e44, roughness: 0.6 });
+    MAT.blue = std({ color: 0x2f6fb3, roughness: 0.6 });
+    MAT.white = std({ color: 0xf0f0f0, roughness: 0.6 });
+    MAT.grey = std({ color: 0x8c949c, roughness: 0.7 });
+    MAT.trim = std({ color: 0xf2efe6, roughness: 0.8 });
+    MAT.paper = std({ map: TEX.paper, roughness: 0.95 });
+    MAT.cork = std({ map: TEX.cork, roughness: 0.95 });
+    MAT.fabric = std({ map: TEX.fabric, roughness: 1 });
+    MAT.screen = new THREE.MeshBasicMaterial({ color: 0x0d1216 }); MAT.screen.userData.noBake = true;
+    MAT.screenGlass = new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.08, roughness: 0.04, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.03, depthWrite: false });
+    MAT.skylight = new THREE.MeshBasicMaterial({ map: TEX.skylight });
+    MAT.lamp = new THREE.MeshBasicMaterial({ color: 0xfff6e4 });
+    MAT.exit = new THREE.MeshBasicMaterial({ color: 0x5fd38d }); MAT.exit.userData.noBake = true;
+    MAT.glass = std({ color: 0xa9c7e8, roughness: 0.1, metalness: 0.1, transparent: true, opacity: 0.3 });
+    MAT.tile = std({ map: TEX.tile, roughness: 0.95 });
+    MAT.lining = std({ map: TEX.lining, roughness: 0.8, metalness: 0.15 });
+    MAT.skin = std({ color: 0xd9a98a, roughness: 0.8 });
+    MAT.hivis = std({ color: 0xf6c21b, roughness: 0.8 });
+    MAT.hivisOrange = std({ color: 0xf07a1a, roughness: 0.8 });
+    MAT.jeans = std({ color: 0x2e3f63, roughness: 0.95 });
+    MAT.hair = std({ color: 0x3a2a1c, roughness: 0.95 });
+    MAT.hit = new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide }); MAT.hit.userData.noBake = true;
+  }
+
+  // ── Geometry helpers ──────────────────────────────────────────────
+  var geoCache = {};
+  function cachedGeo(k, make) { var g = geoCache[k]; if (!g) { g = geoCache[k] = make(); g.userData.shared = true; } return g; }   // a cached geometry is shared by every mesh built from it: never dispose it with a mesh
+  function boxGeo(w, h, d) { return cachedGeo(w + ',' + h + ',' + d, function () { return new THREE.BoxGeometry(w, h, d); }); }
+  // A box with every edge eased: a dead sharp edge catches no light and reads as cardboard. The rows of vertices nearest each edge
+  // are moved onto an arc, spaced so the corner turns in equal angles, and the normals follow; the texture keeps its scale (the
+  // picture did not move, only the rows). Thinner than 30 mm or longer than 4 m stays sharp unless a radius is asked for.
+  var BEVEL = { on: true, max: 0.012, faces: [['z', 'y', -1, -1], ['z', 'y', 1, -1], ['x', 'z', 1, 1], ['x', 'z', 1, -1], ['x', 'y', 1, -1], ['x', 'y', -1, -1]] };
+  function bevelGeo(w, h, d, r, k) {
+    var mn = Math.min(w, h, d), mx = Math.max(w, h, d);
+    if (r === undefined) r = (!BEVEL.on || mn < 0.03 || mx > 4) ? 0 : Math.min(BEVEL.max, mn * 0.22);
+    if (!(r > 0) || !(mn > 0)) return boxGeo(w, h, d);
+    r = Math.min(r, mn * 0.499); k = Math.max(1, Math.round(k || (r > 0.03 ? 3 : r > 0.015 ? 2 : 1)));   /* a big radius needs more than one step to read as round */
+    var key = 'b' + w + ',' + h + ',' + d + ',' + r + ',' + k; if (geoCache[key]) return geoCache[key];
+    var n = 2 * k + 1, per = (n + 1) * (n + 1), g = new THREE.BoxGeometry(w, h, d, n, n, n), pos = g.attributes.position, nor = g.attributes.normal, uv = g.attributes.uv, half = { x: w / 2, y: h / 2, z: d / 2 }, v = new THREE.Vector3(), c = new THREE.Vector3();
+    function ax(p, hf) { var i = Math.round((p + hf) / (2 * hf) * n); return i <= k ? -hf + r - r * Math.tan((k - i) / k * Math.PI / 4) : hf - r + r * Math.tan((i - (n - k)) / k * Math.PI / 4); }
+    for (var i = 0; i < pos.count; i++) {
+      v.set(ax(pos.getX(i), half.x), ax(pos.getY(i), half.y), ax(pos.getZ(i), half.z));
+      var fc = BEVEL.faces[Math.floor(i / per)]; uv.setXY(i, (v[fc[0]] * fc[2] + half[fc[0]]) / (2 * half[fc[0]]), 1 - (v[fc[1]] * fc[3] + half[fc[1]]) / (2 * half[fc[1]]));
+      c.set(clamp(v.x, -half.x + r, half.x - r), clamp(v.y, -half.y + r, half.y - r), clamp(v.z, -half.z + r, half.z - r));
+      v.sub(c); if (v.lengthSq() > 1e-12) { v.normalize(); nor.setXYZ(i, v.x, v.y, v.z); pos.setXYZ(i, c.x + v.x * r, c.y + v.y * r, c.z + v.z * r); }
+    }
+    g.userData.shared = true; return (geoCache[key] = g);
+  }
+  // a body part cut from an eased box: narrower at one end than the other, the way a chest runs down to a waist. Give it a fresh geometry.
+  function taperGeo(g, h, sx0, sz0) { var p = g.attributes.position; for (var i = 0; i < p.count; i++) { var t = clamp((p.getY(i) + h / 2) / h, 0, 1); p.setX(i, p.getX(i) * lerp(sx0, 1, t)); p.setZ(i, p.getZ(i) * lerp(sz0, 1, t)); } g.computeVertexNormals(); return g; }
+  // The same for anything turned: a cylinder's rims are eased and it gets enough sides to read as round. Wires and rods are left alone.
+  function roundCylGeo(rt, rb, h, seg) {
+    var rmax = Math.max(rt, rb), rmin = Math.min(rt, rb), r = (!BEVEL.on || rmax < 0.025 || h < 0.02) ? 0 : Math.min(BEVEL.max, h * 0.22, rmin * 0.3);
+    seg = seg || 18; if (rmax >= 0.025) seg = Math.max(seg, rmax > 0.12 ? 32 : rmax > 0.05 ? 24 : 16);
+    var key = 'c' + rt + ',' + rb + ',' + h + ',' + seg + (r > 0.0012 ? '' : 's'); if (geoCache[key]) return geoCache[key];
+    if (!(r > 0.0012)) return cachedGeo(key, function () { return new THREE.CylinderGeometry(rt, rb, h, seg); });
+    var g = new THREE.CylinderGeometry(rt, rb, h, seg, 3), pos = g.attributes.position, nor = g.attributes.normal, row = seg + 1, torso = 4 * row, slope = (rb - rt) / h;
+    for (var i = 0; i < pos.count; i++) {
+      var x = pos.getX(i), z = pos.getZ(i), top = pos.getY(i) > 0, len = Math.hypot(x, z) || 1, ux = x / len, uz = z / len, rad, y;
+      if (i < torso) {
+        var rw = Math.floor(i / row);
+        if (rw === 0) { rad = rt - r; y = h / 2; } else if (rw === 1) { rad = rt + slope * r; y = h / 2 - r; } else if (rw === 2) { rad = rb - slope * r; y = -h / 2 + r; } else { rad = rb - r; y = -h / 2; }
+        if (rw === 0 || rw === 3) { var ny = rw === 0 ? 0.7071 : -0.7071; nor.setXYZ(i, nor.getX(i) * 0.7071, ny, nor.getZ(i) * 0.7071); var nl = Math.hypot(nor.getX(i), nor.getY(i), nor.getZ(i)) || 1; nor.setXYZ(i, nor.getX(i) / nl, nor.getY(i) / nl, nor.getZ(i) / nl); }
+        pos.setXYZ(i, ux * rad, y, uz * rad);
+      } else if (len > 1e-6) { rad = (top ? rt : rb) - r; pos.setXYZ(i, ux * rad, pos.getY(i), uz * rad); }
+    }
+    g.userData.shared = true; return (geoCache[key] = g);
+  }
+  // ── Placers: a mesh made, placed and parented in one call. The default parent is CO.root, else the scene ──
+  function parentOf(p) { return p || WORLD_PARENT || CO.root || scene; }   // inside a kit call (part 26) the call's own item
+  // box(w, h, d, mat, x, y, z, parent) or box(..., opts) with opts { parent, sharp, r, cast, receive, solid, tag, floorLevel }: a textured, tiled,
+  // invisible or userData.sharp material gets a plain box, anything else an eased one (r: the bevel radius). A material with
+  // userData.tile = [w, h] is tiled in metres, so the same brick lands on every panel whatever its size. opts.solid adds the box's
+  // footprint to the game's blockers: CO.game.boxSolid(w, h, d, x, y, z, opts) when the game keeps its own list, else solids.
+  function box(w, h, d, mat, x, y, z, parent) {
+    var opts = parent && !parent.isObject3D ? parent : null, par = opts ? opts.parent : parent;
+    var sharp = (opts && opts.sharp) || !mat || (mat.map && !(opts && opts.r)) || mat.visible === false || !!(mat.userData && (mat.userData.sharp || mat.userData.tile));
+    var g = sharp ? boxGeo(w, h, d) : bevelGeo(w, h, d, opts && opts.r);
+    if (mat && mat.userData && mat.userData.tile) { var tl = mat.userData.tile, geo = new THREE.BoxGeometry(w, h, d), uv = geo.attributes.uv; for (var ui = 0; ui < uv.count; ui++) { var fc = Math.floor(ui / 4), fw = fc < 2 ? d : w, fh = fc >= 2 && fc < 4 ? d : h; uv.setXY(ui, uv.getX(ui) * fw / tl[0], uv.getY(ui) * fh / tl[1]); } g = geo; }
+    var m = new THREE.Mesh(g, mat); m.position.set(x, y, z); m.castShadow = !opts || opts.cast !== false; m.receiveShadow = !opts || opts.receive !== false; parentOf(par).add(m);
+    if (opts && opts.solid) { if (CO.game && CO.game.boxSolid) CO.game.boxSolid(w, h, d, x, y, z, opts); else solid(x - w / 2, x + w / 2, z - d / 2, z + d / 2, y - h / 2, y + h / 2); }
+    return m;
+  }
+  function plane(w, h, mat, x, y, z, rx, ry, parent) {
+    var m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat); m.position.set(x, y, z); m.rotation.x = rx || 0; m.rotation.y = ry || 0; m.receiveShadow = true; parentOf(parent).add(m); return m;
+  }
+  // cyl(r, h, mat, x, y, z, parent, seg, rb), or Grow Co's order cyl(rt, rb, h, mat, x, y, z, parent, seg): the material in the fourth place tells them apart
+  function cyl(r, h, mat, x, y, z, parent, seg, rb) {
+    if (x && x.isMaterial) return cyl(r, mat, x, y, z, parent, seg, rb === undefined ? 18 : rb, h);
+    var m = new THREE.Mesh(roundCylGeo(r, rb === undefined ? r : rb, h, seg || 12), mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parentOf(parent).add(m); return m;
+  }
+  function sphere(r, mat, x, y, z, parent) { var m = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), mat); m.position.set(x, y, z); m.castShadow = true; parentOf(parent).add(m); return m; }
+  // sprite(mat, x, y, z, sx, sy, parent), or Grow Co's sprite(tex, w, h, x, y, z, parent) with a texture first
+  function sprite(mat, x, y, z, sx, sy, parent) {
+    if (mat && mat.isTexture) return sprite(new THREE.SpriteMaterial({ map: mat, transparent: true, depthWrite: false }), z, sx, sy, x, y, parent);
+    var m = new THREE.Sprite(mat); m.position.set(x, y, z); m.scale.set(sx || 1, sy || sx || 1, 1); parentOf(parent).add(m); return m;
+  }
+  function sign(lines, w, h, x, y, z, ry, opt, parent) {
+    var m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: textTex(lines, opt) })); m.position.set(x, y, z); m.rotation.y = ry || 0; m.userData.sign = { lines: lines, opt: opt }; parentOf(parent).add(m);
+    // an enamelled plate is fixed to something: a sheet of dark metal a little bigger than the print behind it, and on a plate
+    // big enough, four studs through the corners. Hung on the sign's own mesh, so whatever moves the sign moves its plate.
+    if (isPlate(opt) && !(opt && opt.flat)) { var pl = new THREE.Mesh(bevelGeo(w + 0.03, h + 0.03, 0.014, 0.004), MAT.gunmetal); pl.position.z = -0.0085; pl.castShadow = true; m.add(pl); if (w >= 0.5 && h >= 0.12) [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (s) { var st = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.006, 10), MAT.chrome); st.rotation.x = Math.PI / 2; st.position.set(s[0] * (w / 2 - 0.028), s[1] * (h / 2 - 0.028), 0.003); m.add(st); }); }
+    return m;
+  }
+  // a soft dark blob on the ground under anything that stands on it: the contact shadow the sun map cannot give
+  var blobTex = null, blobMat = null;
+  function groundBlob(w, d, x, z, parent, y) {
+    if (!blobMat) { blobTex = tex(128, 128, function (c, w2, h2) { c.clearRect(0, 0, w2, h2); var g = c.createRadialGradient(64, 64, 6, 64, 64, 62); g.addColorStop(0, 'rgba(0,0,0,0.55)'); g.addColorStop(0.55, 'rgba(0,0,0,0.28)'); g.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = g; c.fillRect(0, 0, w2, h2); }); blobMat = new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false, opacity: 1 }); blobMat.userData.noBake = true; }
+    var m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), blobMat); m.rotation.x = -Math.PI / 2; m.position.set(x, (y || 0) + 0.006, z); m.renderOrder = 1; m.receiveShadow = false; m.userData.noBake = true; parentOf(parent).add(m); return m;
+  }
+  // things the player can look at and press E on
+  var inter = [];
+  function addInter(mesh, def) { mesh.userData.it = def; inter.push(mesh); return mesh; }
+  function hitBox(w, h, d, x, y, z, def, parent) { var m = new THREE.Mesh(boxGeo(w, h, d), MAT.hit); m.position.set(x, y, z); parentOf(parent).add(m); return addInter(m, def); }
+  // things the player cannot walk through: axis-aligned boxes in world space
+  var solids = [], dyn = [];
+  function solid(x0, x1, z0, z1, y0, y1) { solids.push({ x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1), y0: y0 === undefined ? -5 : y0, y1: y1 === undefined ? 9 : y1 }); }
+  var _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _m4 = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s1 = new THREE.Vector3(1, 1, 1), _e = new THREE.Euler();
+  // things that move every frame: { update: function (dt) }
+  var animated = [];
+  function animate(fn) { animated.push(fn); }
+  // frees a subtree's GPU buffers. Materials and geometries in KEEP (the palette, the caches, anything shared) are left alone.
+  var KEEP = [];
+  function keepShared(x) { if (KEEP.indexOf(x) < 0) KEEP.push(x); return x; }
+  function disposeTree(root) {
+    root.traverse(function (o) {
+      if (o.geometry && KEEP.indexOf(o.geometry) < 0) { var cached = false; for (var k in geoCache) if (geoCache[k] === o.geometry) { cached = true; break; } if (!cached) o.geometry.dispose(); }
+      var mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+      mats.forEach(function (m) { var shared = KEEP.indexOf(m) >= 0; if (!shared) for (var k2 in MAT) if (MAT[k2] === m) { shared = true; break; } if (!shared && m.map && m.map.userData && m.map.userData.shared) shared = true; if (!shared) m.dispose(); });
+    });
+  }
+  function clearKids(g) { while (g.children.length) { var ch = g.children[0]; g.remove(ch); disposeTree(ch); } }
+  // a short-lived burst of particles: sparks, dust, water, cardboard chips
+  var bursts = [];
+  function burst(x, y, z, col, n, mode) {
+    n = n || 20; var geo = new THREE.BufferGeometry(), pos = new Float32Array(n * 3), vel = [];
+    for (var i = 0; i < n; i++) { pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z; var a = Math.random() * 6.28, s = randf(0.6, 2.2); vel.push({ x: Math.cos(a) * s * (mode === 'up' ? 0.3 : 1), y: mode === 'up' ? randf(1.5, 3) : mode === 'down' ? -randf(0.5, 1.5) : randf(0.5, 2.5), z: Math.sin(a) * s * (mode === 'up' ? 0.3 : 1) }); }
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    var mat = new THREE.PointsMaterial({ color: col, size: mode === 'smoke' ? 0.12 : 0.05, transparent: true, opacity: 0.9, depthWrite: false });
+    var pts = new THREE.Points(geo, mat); scene.add(pts);
+    bursts.push({ pts: pts, vel: vel, t: 0, life: mode === 'smoke' ? 2.4 : 1.1, mode: mode });
+  }
+  function tickBursts(dt) {
+    for (var i = bursts.length - 1; i >= 0; i--) {
+      var b = bursts[i]; b.t += dt; var p = b.pts.geometry.attributes.position.array;
+      for (var k = 0; k < b.vel.length; k++) { var v = b.vel[k]; if (b.mode !== 'smoke') v.y -= 6 * dt; else v.y += 0.4 * dt; p[k * 3] += v.x * dt; p[k * 3 + 1] += v.y * dt; p[k * 3 + 2] += v.z * dt; if (p[k * 3 + 1] < 0.02 && b.mode !== 'smoke') { p[k * 3 + 1] = 0.02; v.y = -v.y * 0.4; v.x *= 0.6; v.z *= 0.6; } }
+      b.pts.geometry.attributes.position.needsUpdate = true; b.pts.material.opacity = 0.9 * (1 - b.t / b.life);
+      if (b.t >= b.life) { scene.remove(b.pts); b.pts.geometry.dispose(); b.pts.material.dispose(); bursts.splice(i, 1); }
+    }
+  }
+
+  // ── Post-processing: the scene renders to a texture, then one full-screen quad applies grading, vignette and grain ──
+  var post = { rt: null, quad: null, mat: null, cam: null, scene: null, on: true, t: 0, calls: 0 };
+  function buildPost() {
+    post.cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1); post.scene = new THREE.Scene();
+    post.mat = new THREE.ShaderMaterial({
+      uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uVignette: { value: 0.42 }, uGrain: { value: 0.035 }, uSat: { value: 1.08 }, uContrast: { value: 1.06 }, uLift: { value: 0.012 }, uFlash: { value: 0 } },
+      vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+      fragmentShader: [
+        'uniform sampler2D tDiffuse; uniform float uTime, uVignette, uGrain, uSat, uContrast, uLift, uFlash; varying vec2 vUv;',
+        'float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }',
+        'void main() {',
+        '  vec2 uv = vUv; vec2 d = uv - 0.5;',
+        '  float ca = 0.0012 * dot(d, d) * 4.0;',
+        '  vec3 c; c.r = texture2D(tDiffuse, uv + d * ca).r; c.g = texture2D(tDiffuse, uv).g; c.b = texture2D(tDiffuse, uv - d * ca).b;',
+        '  float l = dot(c, vec3(0.299, 0.587, 0.114)); c = mix(vec3(l), c, uSat);',
+        '  c = (c - 0.5) * uContrast + 0.5 + uLift;',
+        '  float v = smoothstep(0.95, 0.25, length(d) * 1.15); c *= mix(1.0 - uVignette, 1.0, v);',
+        '  c += (hash(uv * 1000.0 + fract(uTime)) - 0.5) * uGrain * (1.0 - l * 0.6);',
+        '  c += uFlash;',
+        '  gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);',
+        '}'].join('\n'),
+      depthTest: false, depthWrite: false
+    });
+    post.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), post.mat); post.scene.add(post.quad);
+  }
+  function postResize() { var w = Math.floor(window.innerWidth * renderer.getPixelRatio()), h = Math.floor(window.innerHeight * renderer.getPixelRatio()); if (post.rt) post.rt.dispose(); post.rt = new THREE.WebGLRenderTarget(w, h, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat, encoding: THREE.sRGBEncoding }); post.rt.samples = 0; }
+  function lowQuality() { return typeof SET === 'object' && !!SET && SET.quality === 'low'; }
+  function renderFrame(dt) {
+    if (!post.on || !post.mat || lowQuality()) { renderer.setRenderTarget(null); renderer.render(scene, camera); post.calls = renderer.info.render.calls; post.tris = renderer.info.render.triangles; return; }
+    if (!post.rt || post.rt.width !== Math.floor(window.innerWidth * renderer.getPixelRatio())) postResize();
+    post.t += dt; post.mat.uniforms.uTime.value = post.t; post.mat.uniforms.tDiffuse.value = post.rt.texture; post.mat.uniforms.uFlash.value = CO.flash * 0.25;
+    renderer.setRenderTarget(post.rt); renderer.render(scene, camera); post.calls = renderer.info.render.calls; post.tris = renderer.info.render.triangles;   /* the post quad renders after this and resets the counts */
+    renderer.setRenderTarget(null); renderer.render(post.scene, post.cam);
+  }
+
+  // ── Setup ─────────────────────────────────────────────────────────
+  function coSetupThree(cfg) {
+    cfg = cfg || {};
+    canvas = $(cfg.canvas || 'co-canvas');
+    if (!canvas) { canvas = document.createElement('canvas'); canvas.id = cfg.canvas || 'co-canvas'; document.body.appendChild(canvas); }
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, powerPreference: 'high-performance' });
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = cfg.exposure === undefined ? 0.82 : cfg.exposure;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;   // the sun map is redrawn on a timer, not every frame
+    scene = new THREE.Scene();
+    var bg = cfg.background === undefined ? 0x8fb0d4 : cfg.background;
+    if (bg !== null) scene.background = new THREE.Color(bg);
+    var fog = cfg.fog === undefined ? { color: bg === null ? 0x8fb0d4 : bg, near: 70, far: 190 } : cfg.fog;
+    if (fog) scene.fog = new THREE.Fog(fog.color === undefined ? (bg === null ? 0x8fb0d4 : bg) : fog.color, fog.near === undefined ? 70 : fog.near, fog.far === undefined ? 190 : fog.far);
+    camera = new THREE.PerspectiveCamera(cfg.fov || 75, 1, cfg.near || 0.08, cfg.far || 260);
+    window.addEventListener('resize', resize);
+    if (cfg.env !== false) buildEnvStudio();
+    var hc = cfg.hemi || {}; hemi = new THREE.HemisphereLight(hc.sky === undefined ? 0xdfeaff : hc.sky, hc.ground === undefined ? 0x5a4d40 : hc.ground, hc.intensity === undefined ? 0.45 : hc.intensity); scene.add(hemi);
+    // the shadow box covers the whole site; the sun aims at its target, which a game's lighting pass moves with it
+    var sc = cfg.sun || {}, sb = sc.box === undefined ? 70 : sc.box;
+    sun = new THREE.DirectionalLight(sc.color === undefined ? 0xfff0d8 : sc.color, sc.intensity === undefined ? 1.1 : sc.intensity); sun.castShadow = true;
+    var ms = sc.mapSize || 4096; sun.shadow.mapSize.set(ms, ms); sun.shadow.camera.left = -sb; sun.shadow.camera.right = sb; sun.shadow.camera.top = sb; sun.shadow.camera.bottom = -sb; sun.shadow.camera.near = sc.near === undefined ? 1 : sc.near; sun.shadow.camera.far = sc.far === undefined ? 230 : sc.far;
+    var tg = sc.target || [0, 0, -20]; sun.target.position.set(tg[0], tg[1], tg[2]); sun.shadow.bias = sc.bias === undefined ? -0.0006 : sc.bias; sun.shadow.normalBias = sc.normalBias === undefined ? 0.03 : sc.normalBias; sun.shadow.radius = sc.radius === undefined ? 4 : sc.radius;
+    scene.add(sun); scene.add(sun.target);
+    if (cfg.lightBudget) lightBudget.n = cfg.lightBudget;
+    if (cfg.palette !== false) { buildBaseTextures(); buildBaseNormals(); buildBasePalette(); }   // palette false: the game draws every texture and material of its own
+    if (cfg.post !== false) buildPost(); else post.on = false;
+    CO.three = { renderer: renderer, scene: scene, camera: camera, canvas: canvas };
+    return CO.three;
+  }
+  // ── Static bake ───────────────────────────────────────────────────
+  // Thousands of small boxes (bracing, trims, props) each cost a draw call. After the world is built, everything that cannot
+  // move or change is merged into one mesh per material. Anything interactive, animated, glowing, transparent, instanced, or
+  // under a group flagged dynamic is left alone, so doors, trucks, people, lamps and screens behave as before.
+  // A material is kept out of the bake with material.userData.noBake = true (the engine sets it on MAT.hit; a game sets it on
+  // its screens and its lit signs). An object is kept out with object.userData.noBake or an ancestor's userData.dynamic.
+  var baked = { meshes: [], hidden: 0, draws: 0 };
+  function bakeable(o) {
+    if (!o.isMesh || o.isInstancedMesh || o.isSprite || !o.visible) return false;
+    for (var a = o.parent; a; a = a.parent) if (a.visible === false) return false;   /* a removed world item stays out of the bake */
+    var m = o.material; if (!m || Array.isArray(m) || m.userData.glow || m.userData.noBake || m.transparent) return false;
+    if (o.userData.it || o.userData.noBake || inter.indexOf(o) >= 0) return false;
+    if (!(o.geometry && o.geometry.attributes && o.geometry.attributes.position)) return false;
+    for (var p = o; p; p = p.parent) { if (p.userData && p.userData.dynamic) return false; if (!p.visible) return false; if (p === camera) return false; }
+    return true;
+  }
+  function bakeStatic() {
+    scene.updateMatrixWorld(true);
+    var byMat = {}, list = [];
+    scene.traverse(function (o) { if (bakeable(o)) list.push(o); });
+    list.forEach(function (o) { var k = o.material.uuid + (o.castShadow ? 'c' : '') + (o.receiveShadow ? 'r' : ''); (byMat[k] = byMat[k] || { mat: o.material, items: [] }).items.push(o); });
+    Object.keys(byMat).forEach(function (k) {
+      var grp = byMat[k]; if (grp.items.length < 2) return;
+      var pos = [], nor = [], uv = [], hasUv = true;
+      grp.items.forEach(function (o) {
+        var g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+        g.applyMatrix4(o.matrixWorld);
+        var pa = g.attributes.position.array, na = g.attributes.normal ? g.attributes.normal.array : null, ua = g.attributes.uv ? g.attributes.uv.array : null;
+        for (var i = 0; i < pa.length; i++) pos.push(pa[i]);
+        if (na) for (var j = 0; j < na.length; j++) nor.push(na[j]); else for (var j2 = 0; j2 < pa.length; j2++) nor.push(0);
+        if (ua) for (var u = 0; u < ua.length; u++) uv.push(ua[u]); else hasUv = false;
+        g.dispose();
+      });
+      var merged = new THREE.BufferGeometry();
+      merged.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      merged.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+      if (hasUv && uv.length === pos.length / 3 * 2) merged.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      var mesh = new THREE.Mesh(merged, grp.mat); mesh.castShadow = grp.items[0].castShadow; mesh.receiveShadow = grp.items[0].receiveShadow; mesh.frustumCulled = false; mesh.userData.baked = true;
+      scene.add(mesh); baked.meshes.push(mesh);
+      grp.items.forEach(function (o) { o.visible = false; o.userData.bakedAway = true; baked.hidden++; });
+      baked.draws++;
+    });
+    shadowDirty = true;
+  }
+  // everything back the way it was: the merged meshes go, the originals show. A world that changed (a prop moved, a wall grew)
+  // calls unbakeStatic, changes, then bakeStatic again.
+  function unbakeStatic() { baked.meshes.forEach(function (m) { scene.remove(m); m.geometry.dispose(); }); baked.meshes = []; baked.draws = 0; baked.hidden = 0; scene.traverse(function (o) { if (o.userData.bakedAway) { o.visible = true; o.userData.bakedAway = false; } }); }
+  function rebake() { unbakeStatic(); bakeStatic(); }
+  // ── Materials from a layer graph ───────────────────────────────────
+  // A graph: { size, repeat: [rx, ry], layers: [{ type, color, color2, alpha, blend, n, size, gap, angle, dark }], roughness: 0.9 or
+  // { base, amp }, metalness, bump: { amp, strength } or null, emissive, emissiveIntensity, glow, transparent, opacity }. The layers paint
+  // one canvas from the bottom up; the same canvas is the colour map. A game's src/00-materials.js calls CO.material before the boot,
+  // so a build function can say MAT.myBrick; the editor calls it again while running and every mesh on that material follows.
+  var MATGRAPH = {}, MATGRAPH_ORDER = [], MAT_TIME = { value: 0 };
+  animate(function (dt) { MAT_TIME.value += dt; });
+  var MAT_LAYER_TYPES = ['fill', 'grain', 'blotches', 'cracks', 'noise', 'bricks', 'planks', 'tiles', 'stripes', 'checks', 'rings', 'speckle'];
+  function matLayer(ctx, w, h, L, tag, k) {
+    var t = L.type || 'fill', a = L.alpha === undefined ? 1 : +L.alpha, c1 = L.color || '#808080', c2 = L.color2 || '#404040', sz = L.size || 32, gap = L.gap === undefined ? 2 : +L.gap, n = L.n === undefined ? 200 : +L.n, i, j;
+    ctx.save(); ctx.globalAlpha = a; ctx.globalCompositeOperation = L.blend || 'source-over';
+    var rnd1 = function (q, lo, hi) { return seededF(tag + ':' + k, q, lo, hi); };
+    if (t === 'fill') { ctx.fillStyle = c1; ctx.fillRect(0, 0, w, h); }
+    else if (t === 'grain') { for (i = 0; i < n; i++) { var v = Math.floor(rnd1(i, 0, 255)); ctx.fillStyle = L.dark ? 'rgba(0,0,0,' + rnd1(i + 7, 0.05, 0.3) + ')' : 'rgb(' + v + ',' + v + ',' + v + ')'; ctx.globalAlpha = a * (L.dark ? 1 : 0.18); ctx.fillRect(rnd1(i + 1, 0, w), rnd1(i + 2, 0, h), rnd1(i + 3, 1, 3), rnd1(i + 4, 1, 3)); } }
+    else if (t === 'blotches') { for (i = 0; i < n; i++) { var r = rnd1(i, sz * 0.2, sz), x = rnd1(i + 1, 0, w), y = rnd1(i + 2, 0, h), g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, L.dark ? 'rgba(0,0,0,' + a * 0.35 + ')' : c1); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.globalAlpha = L.dark ? 1 : a * 0.5; ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2); } }
+    else if (t === 'cracks') { ctx.strokeStyle = c1; ctx.lineWidth = L.width || 1; for (i = 0; i < Math.min(n, 60); i++) { ctx.beginPath(); var cx = rnd1(i, 0, w), cy = rnd1(i + 1, 0, h); ctx.moveTo(cx, cy); for (j = 0; j < 6; j++) { cx += rnd1(i * 10 + j, -sz / 2, sz / 2); cy += rnd1(i * 10 + j + 5, -sz / 2, sz / 2); ctx.lineTo(cx, cy); } ctx.stroke(); } }
+    else if (t === 'noise') { var amp = L.amp === undefined ? 40 : +L.amp; for (i = 0; i < n; i++) { var nv = Math.floor(128 + rnd1(i, -0.5, 0.5) * amp); ctx.fillStyle = 'rgb(' + nv + ',' + nv + ',' + nv + ')'; ctx.fillRect(rnd1(i + 1, 0, w), rnd1(i + 2, 0, h), rnd1(i + 3, 2, sz / 4), rnd1(i + 4, 2, sz / 4)); } }
+    else if (t === 'bricks') { var bw = L.size || 48, bh = L.size2 || 20; ctx.fillStyle = c2; ctx.fillRect(0, 0, w, h); for (j = 0; j * bh < h; j++) for (i = -1; i * bw < w + bw; i++) { var off = (j % 2) * bw / 2, bx = i * bw + off, by = j * bh; ctx.fillStyle = L.vary ? mixHex(c1, c2, rnd1(i * 97 + j, 0, 0.18)) : c1; ctx.fillRect(bx + gap / 2, by + gap / 2, bw - gap, bh - gap); } }
+    else if (t === 'planks') { var pw = L.size || 40; ctx.fillStyle = c2; ctx.fillRect(0, 0, w, h); for (i = 0; i * pw < w; i++) { ctx.fillStyle = mixHex(c1, c2, rnd1(i, 0, 0.15)); ctx.fillRect(i * pw + gap / 2, 0, pw - gap, h); for (j = 0; j < 30; j++) { ctx.fillStyle = 'rgba(0,0,0,' + rnd1(i * 50 + j, 0.03, 0.12) + ')'; ctx.fillRect(i * pw + rnd1(i * 50 + j + 1, 2, pw - 4), rnd1(i * 50 + j + 2, 0, h), 1, rnd1(i * 50 + j + 3, 8, 60)); } } }
+    else if (t === 'tiles') { ctx.fillStyle = c2; ctx.fillRect(0, 0, w, h); for (j = 0; j * sz < h; j++) for (i = 0; i * sz < w; i++) { ctx.fillStyle = L.vary ? mixHex(c1, c2, rnd1(i * 131 + j, 0, 0.12)) : c1; ctx.fillRect(i * sz + gap / 2, j * sz + gap / 2, sz - gap, sz - gap); } }
+    else if (t === 'stripes') { var ang = (L.angle || 0) * Math.PI / 180, sw = L.size || 16; ctx.translate(w / 2, h / 2); ctx.rotate(ang); ctx.translate(-w, -h); for (i = 0; i * sw < w * 3; i++) { ctx.fillStyle = i % 2 ? c2 : c1; ctx.fillRect(i * sw, 0, sw, h * 3); } }
+    else if (t === 'checks') { for (j = 0; j * sz < h; j++) for (i = 0; i * sz < w; i++) { ctx.fillStyle = (i + j) % 2 ? c2 : c1; ctx.fillRect(i * sz, j * sz, sz, sz); } }
+    else if (t === 'rings') { var rc = L.n === undefined ? 12 : n; for (i = rc; i >= 1; i--) { ctx.fillStyle = i % 2 ? c1 : c2; ctx.beginPath(); ctx.arc(w / 2, h / 2, (i / rc) * Math.max(w, h) * 0.72, 0, Math.PI * 2); ctx.fill(); } }
+    else if (t === 'speckle') { for (i = 0; i < n; i++) { ctx.fillStyle = i % 3 ? c1 : c2; ctx.beginPath(); ctx.arc(rnd1(i, 0, w), rnd1(i + 1, 0, h), rnd1(i + 2, 0.5, sz / 8), 0, Math.PI * 2); ctx.fill(); } }
+    ctx.restore();
+  }
+  function matCanvas(name, g) { var sz = g.size || 256, c = document.createElement('canvas'); c.width = sz; c.height = sz; var ctx = c.getContext('2d'); ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, sz, sz); (g.layers || []).forEach(function (L, k) { if (L && L.on !== false) matLayer(ctx, sz, sz, L, name, k); }); return c; }
+  function matBuild(name, g) {
+    g = JSON.parse(JSON.stringify(g || {})); if (!g.layers) g.layers = [{ type: 'fill', color: g.color || '#8a8f96' }];
+    var sz = g.size || 256, rep = g.repeat || [1, 1], canvas = matCanvas(name, g), map = new THREE.CanvasTexture(canvas);
+    map.wrapS = map.wrapT = THREE.RepeatWrapping; map.repeat.set(rep[0], rep[1]); map.encoding = THREE.sRGBEncoding; map.anisotropy = 8;
+    var rough = typeof g.roughness === 'object' && g.roughness ? g.roughness : null, roughMap = rough ? roughTex(sz, sz, rough.base === undefined ? 0.8 : rough.base, rough.amp === undefined ? 0.2 : rough.amp, rep[0], rep[1]) : null;
+    var normalMap = g.bump ? normalTex(sz, sz, function (c, w, h) { heightNoise(c, w, h, '#808080', g.bump.n || 1500, g.bump.amp || 40); }, g.bump.strength || 1, rep[0], rep[1]) : null;
+    var m = MAT[name] && MAT[name].isMeshStandardMaterial ? MAT[name] : new THREE.MeshStandardMaterial();
+    if (m.map && m.map !== map) m.map.dispose(); if (m.roughnessMap && m.roughnessMap !== roughMap) m.roughnessMap.dispose(); if (m.normalMap && m.normalMap !== normalMap) m.normalMap.dispose();
+    m.map = map; m.roughnessMap = roughMap; m.normalMap = normalMap; m.color.set(g.tint || '#ffffff'); m.roughness = rough ? 1 : (g.roughness === undefined ? 0.9 : +g.roughness); m.metalness = g.metalness || 0;
+    m.emissive.set(g.emissive || '#000000'); m.emissiveIntensity = g.emissiveIntensity === undefined ? 1 : +g.emissiveIntensity; m.transparent = !!g.transparent || (g.opacity !== undefined && g.opacity < 1); m.opacity = g.opacity === undefined ? 1 : +g.opacity;
+    m.userData.glow = !!g.glow; m.userData.graph = true; m.name = name;
+    // a GLSL snippet after the colour map: it may change diffuseColor, with vUv (when the material has a map) and uTime in seconds
+    if (g.glsl) { var src = String(g.glsl); m.onBeforeCompile = function (sh) { sh.uniforms.uTime = MAT_TIME; sh.fragmentShader = 'uniform float uTime;\n' + sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n' + src); }; m.customProgramCacheKey = function () { return 'co-glsl:' + name + ':' + src.length + ':' + src.slice(0, 64); }; } else { m.onBeforeCompile = function () {}; m.customProgramCacheKey = function () { return 'co'; }; }
+    m.needsUpdate = true;
+    MAT[name] = m; if (!MATGRAPH[name]) MATGRAPH_ORDER.push(name); MATGRAPH[name] = g; return m;
+  }
+  CO.material = function (name, graph) { if (!name) return MATGRAPH; return matBuild(String(name), graph); };
+  function matRemove(name) { if (!MATGRAPH[name]) return false; delete MATGRAPH[name]; MATGRAPH_ORDER.splice(MATGRAPH_ORDER.indexOf(name), 1); return true; }
+  function matGraphs() { return { order: MATGRAPH_ORDER.slice(), graphs: JSON.parse(JSON.stringify(MATGRAPH)), types: MAT_LAYER_TYPES.slice(), blends: ['source-over', 'multiply', 'overlay', 'screen', 'soft-light', 'darken', 'lighten'], builtin: Object.keys(MAT).filter(function (k) { return !MATGRAPH[k]; }) }; }
+  // a picture of one material on a sphere and a cube, rendered off screen with the page's own renderer
+  var matPreview = null;
+  function matShot(name, size) {
+    var m = MAT[name]; if (!m || !renderer) return null; size = size || 160;
+    if (!matPreview) { var sc = new THREE.Scene(), cam = new THREE.PerspectiveCamera(32, 1, 0.1, 20); cam.position.set(0, 1.1, 4.2); cam.lookAt(0, 0.1, 0); sc.add(new THREE.HemisphereLight(0xdfe8ff, 0x3a3328, 0.9)); var sun = new THREE.DirectionalLight(0xffffff, 1.4); sun.position.set(2.5, 4, 3); sc.add(sun); var sph = new THREE.Mesh(new THREE.SphereGeometry(0.75, 48, 32), m), cube = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.1, 1.1), m); sph.position.x = -0.95; cube.position.x = 0.95; cube.rotation.y = 0.6; cube.rotation.x = 0.2; sc.add(sph); sc.add(cube); matPreview = { scene: sc, cam: cam, sph: sph, cube: cube, rt: new THREE.WebGLRenderTarget(size, size), size: size, canvas: document.createElement('canvas') }; matPreview.canvas.width = size; matPreview.canvas.height = size; }
+    var P = matPreview; P.sph.material = m; P.cube.material = m; P.scene.background = new THREE.Color(0x0e141b);
+    var was = renderer.getRenderTarget(); renderer.setRenderTarget(P.rt); renderer.render(P.scene, P.cam); var px = new Uint8Array(size * size * 4); renderer.readRenderTargetPixels(P.rt, 0, 0, size, size, px); renderer.setRenderTarget(was);
+    var ctx = P.canvas.getContext('2d'), img = ctx.createImageData(size, size), row = size * 4, y; for (y = 0; y < size; y++) img.data.set(px.subarray(y * row, y * row + row), (size - 1 - y) * row); ctx.putImageData(img, 0, 0);
+    return P.canvas.toDataURL('image/png');
+  }
+  // the part the editor writes
+  function matGraphCode() {
+    if (!MATGRAPH_ORDER.length) return '';
+    var lines = ['//@ the materials the editor saved: each one a layer graph the engine paints into a texture at load. Written by the Co Engine editor; it sorts first in src/ so every build function can say MAT.<name>. Edit them in the editor rather than here.'];
+    MATGRAPH_ORDER.forEach(function (n) { lines.push('  CO.material(' + JSON.stringify(n) + ', ' + JSON.stringify(MATGRAPH[n]) + ');'); });
+    lines.push(''); return lines.join('\n');
+  }
+  // ── The prop system ───────────────────────────────────────────────
+  // A prop is built by defProp(id, { label, x, z, rot, cat, wall, fixed, extra, price, ico, desc, when(), snap(), build(ctx, P, inst), after }).
+  // Its placement is the default from the definition unless S.layout[id] overrides it ({ x, z, rot, h, hidden }). Bought extras
+  // live in S.custom as { id, type, x, z, rot, h }. Rotation is in quarter turns. Each prop builds into its own group, so moving
+  // it is: remove the instance, build it again at the new spot.
+  // The game's hooks on CO.game, all optional: resolveDef(id, def) rewrites a default spot for the world as it stands (a hall that
+  // grew); propAllowed(id, def) says whether a prop stands now (a stage, a level, a licence); groundY(x, z) is the floor a prop
+  // stands on; wallPlanes() lists the faces a wall prop can hang on; editClamp(pt, def) keeps a carried prop inside the site;
+  // canEdit() gates build mode. Hooks on the bus: 'propCtx' (ctx, g, id), 'propBuilt' (id, inst, def), 'propRemoved' (id, inst),
+  // 'propPlaced' (id, inst, def), 'propDeleted' (id, def), 'editBought' (custom record).
+  var PROPS = {}, PROP_ORDER = [], propInst = {};
+  // The layout a game ships: where its props stand (over what the definitions say) and the copies the editor placed. The editor writes it
+  // into src/00-layout.js as CO.layout({ props: { id: { x, z, rot, h, hidden } }, placed: [{ id, type, x, z, rot, h }] }), the first part
+  // in the build so the boot sees it. A player's save still wins over it, as it wins over the definitions.
+  // 0.13.0: one layout a world, as with the world edits (part 26). A game that names the world a page built (GAME.worldVariant) keeps each
+  // world's layout apart, all written into the one src/00-layout.js as CO.layout({ ... }, "stage 5"). CO.layout(L) with no name adds to the
+  // current layout: the "" one while src/ loads, the page's own world once layoutPick (90-boot, before the save and the build) has run.
+  var LAYOUT_SETS = {};
+  function layoutSet(v) { v = v === undefined || v === null ? '' : String(v); return LAYOUT_SETS[v] || (LAYOUT_SETS[v] = { props: {}, placed: [] }); }
+  var LAYOUT = layoutSet('');
+  CO.layout = function (L, variant) { var T = variant === undefined ? LAYOUT : layoutSet(variant); if (!L) return T; if (L.props) for (var k in L.props) T.props[k] = L.props[k]; if (L.placed) L.placed.forEach(function (p) { if (p && p.id && !T.placed.some(function (q) { return q.id === p.id; })) T.placed.push(p); }); return T; };
+  function layoutPick() { LAYOUT = layoutSet(worldVariantOf()); return LAYOUT; }
+  function placedById(id) { for (var i = 0; i < LAYOUT.placed.length; i++) if (LAYOUT.placed[i].id === id) return LAYOUT.placed[i]; return null; }
+  function numOr(v, d) { return typeof v === 'number' ? v : d; }
+  function defProp(id, def) { if (CO.game && CO.game.resolveDef) CO.game.resolveDef(id, def); def.id = id; if (MODEL_OVER[id]) def.build = MODEL_OVER[id]; PROPS[id] = def; PROP_ORDER.push(id); return def; }
+  // a prop whose build is shared (a pack's wrapper, a builder several props use) is reshaped by type: src/00-models.js, written by the
+  // editor's Save, says modelOverride(type, build) and the build lands on that prop whenever it is defined, before or after (0.8.0)
+  var MODEL_OVER = {};
+  function modelOverride(type, build) { MODEL_OVER[type] = build; if (PROPS[type]) PROPS[type].build = build; }
+  function propAllowed(id) { var d = PROPS[id]; if (!d) return true; if (d.extra) return true; if (CO.game && CO.game.propAllowed && !CO.game.propAllowed(id, d)) return false; return true; }
+  function propDef(id) { if (PROPS[id]) return PROPS[id]; var c = customById(id); if (c) return PROPS[c.type]; var p = placedById(id); return p ? PROPS[p.type] : null; }
+  function customById(id) { return (S && S.custom || []).filter(function (c) { return c.id === id; })[0] || null; }
+  // where a prop stands: the save's override, else the shipped layout, else the definition (a custom copy: the save over its own record)
+  function propPlacement(id) {
+    var d = PROPS[id], c = customById(id), p = placedById(id), o = (S && S.layout && S.layout[id]) || {}, L = LAYOUT.props[id] || {};
+    if (c) return { x: numOr(o.x, c.x), z: numOr(o.z, c.z), rot: numOr(o.rot, c.rot || 0), h: numOr(o.h, c.h || 0), hidden: !!o.hidden, custom: true };
+    if (p && !d) return { x: numOr(o.x, p.x), z: numOr(o.z, p.z), rot: numOr(o.rot, p.rot || 0), h: numOr(o.h, p.h || 0), hidden: !!o.hidden, custom: false, placed: true };
+    return { x: numOr(o.x, numOr(L.x, d.x)), z: numOr(o.z, numOr(L.z, d.z)), rot: numOr(o.rot, numOr(L.rot, d.rot || 0)), h: numOr(o.h, L.h || 0), hidden: o.hidden !== undefined ? !!o.hidden : !!L.hidden, custom: false };
+  }
+  // the shipped place of a prop, with no save over it: what the layout file says, else the definition
+  function propDefault(id) { var d = PROPS[id], p = placedById(id), L = LAYOUT.props[id] || {}; if (p && !d) return { x: p.x, z: p.z, rot: p.rot || 0, h: p.h || 0, hidden: false }; return { x: numOr(L.x, d.x), z: numOr(L.z, d.z), rot: numOr(L.rot, d.rot || 0), h: L.h || 0, hidden: !!L.hidden }; }
+  function propLabel(id) { var d = propDef(id); return d ? d.label : id; }
+  function rotAABB(o, rot) {
+    var pts = [[o.x0, o.z0], [o.x1, o.z0], [o.x0, o.z1], [o.x1, o.z1]], a = rot * Math.PI / 2, c = Math.cos(a), s = Math.sin(a), xs = [], zs = [];
+    pts.forEach(function (p) { xs.push(p[0] * c + p[1] * s); zs.push(-p[0] * s + p[1] * c); });
+    return { x0: Math.min.apply(null, xs), x1: Math.max.apply(null, xs), z0: Math.min.apply(null, zs), z1: Math.max.apply(null, zs) };
+  }
+  // what a build function gets: placers that parent into the prop's group, a solid list the prop fills, a hit box helper that
+  // tags the prop id, a point light, and a dynamic sub-group for parts that move (they stay out of the bake)
+  function propCtx(g, id) {
+    var obs = [];
+    var ctx = {
+      group: g, obstacles: obs, id: id,
+      box: function (w, h, d, mat, x, y, z) { return box(w, h, d, mat, x, y, z, g); },
+      cyl: function (r, h, mat, x, y, z, seg, rb) { return cyl(r, h, mat, x, y, z, g, seg, rb); },
+      sphere: function (r, mat, x, y, z) { return sphere(r, mat, x, y, z, g); },
+      plane: function (w, h, mat, x, y, z, rx, ry) { return plane(w, h, mat, x, y, z, rx, ry, g); },
+      sign: function (lines, w, h, x, y, z, ry, opt) { return sign(lines, w, h, x, y, z, ry, opt, g); },
+      hit: function (w, h, d, x, y, z, def) { var m = hitBox(w, h, d, x, y, z, def, g); m.userData.propId = id; return m; },
+      solid: function (x0, x1, z0, z1, y0, y1) { obs.push({ x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1), y0: y0 === undefined ? -1 : y0, y1: y1 === undefined ? 3 : y1 }); },
+      light: function (col, intensity, dist, x, y, z, decay) { var l = new THREE.PointLight(col, intensity, dist, decay === undefined ? 2 : decay); l.position.set(x, y, z); g.add(l); return l; },
+      lane: function (points, opt) { return roadLaneLocal(g, id, points, opt); },
+      dynGroup: function () { var dg = new THREE.Group(); dg.userData.dynamic = true; g.add(dg); return dg; },
+      add: function (m) { g.add(m); return m; }
+    };
+    runHooks('propCtx', ctx, g, id);
+    return ctx;
+  }
+  function removePropInst(id) {
+    var inst = propInst[id]; if (!inst) return;
+    var inGroup = function (o) { for (var p = o; p; p = p.parent) if (p === inst.g) return true; return false; };
+    inst.g.traverse(function (o) { var k = inter.indexOf(o); if (k >= 0) inter.splice(k, 1); });
+    for (var si = screens.length - 1; si >= 0; si--) if (inGroup(screens[si].mesh)) screens.splice(si, 1);
+    scene.remove(inst.g);
+    for (var i = solids.length - 1; i >= 0; i--) if (solids[i].prop === id) solids.splice(i, 1);
+    roadDropProp(id);
+    runHooks('propRemoved', id, inst);
+    delete propInst[id]; NAV.dirty = true;
+  }
+  function propGroundY(x, z) { var g = CO.game && CO.game.groundY ? CO.game.groundY(x, z) : 0; return TERRAIN.on ? Math.max(g, terrainY(x, z)) : g; }
+  function buildProp(id) {
+    removePropInst(id);
+    var def = propDef(id); if (!def) return null; if (!propAllowed(id)) return null;
+    var P = propPlacement(id), g = new THREE.Group(); g.userData.propId = id; g.position.set(P.x, (typeof def.y === 'number' ? def.y : propGroundY(P.x, P.z)) + (def.ownHeight ? 0 : (P.h || 0)), P.z);   /* the height a prop was raised to (the inspector, PageUp, Drop) lifts the whole prop; a def that places its own parts by P.h says ownHeight (0.6.0; before, h was stored and never shown) */ g.rotation.y = P.rot * Math.PI / 2;
+    var ctx = propCtx(g, id), inst = { id: id, g: g, P: P, ctx: ctx, def: def };
+    if (!P.hidden) propInst[id] = inst;   // a removed prop is not on the list: nothing then counts a hidden machine as standing
+    if (!P.hidden) {
+      def.build(ctx, P, inst);
+      g.traverse(function (o) { if (o.isMesh) o.userData.propId = id; });
+      ctx.obstacles.forEach(function (o) { var r = rotAABB(o, P.rot); solids.push({ x0: P.x + r.x0, x1: P.x + r.x1, z0: P.z + r.z0, z1: P.z + r.z1, y0: o.y0, y1: o.y1, prop: id }); });
+      if (def.after) def.after(ctx, P, inst);
+      if (!def.wall && !def.fixed && !def.noBlob && ctx.obstacles.length) { var fx0 = 1e9, fx1 = -1e9, fz0 = 1e9, fz1 = -1e9; ctx.obstacles.forEach(function (o) { fx0 = Math.min(fx0, o.x0); fx1 = Math.max(fx1, o.x1); fz0 = Math.min(fz0, o.z0); fz1 = Math.max(fz1, o.z1); }); groundBlob((fx1 - fx0) * 1.5 + 0.3, (fz1 - fz0) * 1.5 + 0.3, (fx0 + fx1) / 2, (fz0 + fz1) / 2, g, 0); }
+      runHooks('propBuilt', id, inst, def);
+    }
+    scene.add(g); NAV.dirty = true; shadowDirty = true;
+    return inst;
+  }
+  function buildProps() { PROP_ORDER.forEach(function (id) { if (!PROPS[id].extra && propAllowed(id) && (!PROPS[id].when || PROPS[id].when())) buildProp(id); }); LAYOUT.placed.forEach(function (p) { if (PROPS[p.type] && !PROPS[p.id]) buildProp(p.id); }); (S && S.custom || []).forEach(function (c) { if (PROPS[c.type]) buildProp(c.id); }); }
+  function propIdOf(obj) { for (var o = obj; o; o = o.parent) if (o.userData && o.userData.propId) return o.userData.propId; return null; }
+  function propWorld(prop, lx, lz) { var P = propPlacement(prop), a = P.rot * Math.PI / 2; return { x: P.x + lx * Math.cos(a) + lz * Math.sin(a), z: P.z - lx * Math.sin(a) + lz * Math.cos(a), a: a }; }
+
+  // ── Build mode ────────────────────────────────────────────────────
+  var edit = { on: false, grabbed: null, helper: null, snap: true, wallAim: null, snapCycle: 0, grabRot: 0, snapText: '' };   // snapCycle: which snap (or free heading) R has walked to for the carried piece
+  var ray = new THREE.Raycaster(); ray.far = 3.4; var centre = new THREE.Vector2(0, 0);
+  function editAllowed() { return CO.game && CO.game.canEdit ? CO.game.canEdit() : true; }
+  function editToggle() {
+    if (CO.game && CO.game.editMode === false) return;   // the game brings its own build mode
+    if (!edit.on && !editAllowed()) return;
+    if (edit.grabbed) editDrop(true);
+    edit.on = !edit.on;
+    var eb = $('h-edit'); if (eb) { eb.hidden = !edit.on; }
+    if (edit.on) { unbakeStatic(); focus = null; toast('Build mode: aim at a prop and E grabs it · R turns · Backspace puts it back · Del removes · C is the catalogue', ''); }
+    else { if (edit.helper) { scene.remove(edit.helper); edit.helper = null; } bakeStatic(); save(); toast('Layout saved', 'good'); }
+    sfx('click'); hudDirty = true;
+  }
+  function editHelper(obj, col) {
+    if (!obj) { if (edit.helper) edit.helper.visible = false; return; }
+    if (edit.helper && edit.helper.userData.col !== col) { scene.remove(edit.helper); edit.helper = null; }
+    if (!edit.helper) { edit.helper = new THREE.BoxHelper(obj, col); edit.helper.userData.col = col; scene.add(edit.helper); }
+    edit.helper.visible = true; edit.helper.setFromObject(obj);
+  }
+  function wallPlanes() { return CO.game && CO.game.wallPlanes ? CO.game.wallPlanes() : []; }
+  // where the carried prop goes: the point on the floor the player aims at, or 2.6 m ahead; a def's own snap first (a belt piece),
+  // then the nearest wall face for a wall prop, then the game's clamp (inside the site), on a 5 cm grid while snap is on
+  function editAim(def) {
+    ray.setFromCamera(centre, camera);
+    var dir = ray.ray.direction, o = ray.ray.origin, px = player ? player.x : o.x, pz = player ? player.z : o.z, y = floorY(px, pz), pt;
+    var t = (y - o.y) / dir.y;
+    if (dir.y < -0.05 && t > 0 && t < 10) pt = o.clone().add(dir.clone().multiplyScalar(t));
+    else { var flat = dir.clone(); flat.y = 0; flat.normalize(); pt = o.clone().add(flat.multiplyScalar(2.6)); pt.y = y; }
+    var sn = function (v) { return edit.snap ? Math.round(v * 20) / 20 : v; };
+    if (def.snap) { var bs = def.snap(def, pt, edit.grabbed); edit.snapText = bs ? (bs.text || '') : ''; if (bs) return bs; }
+    if (def.wall) {
+      var best = null, bd = 2.5;
+      wallPlanes().forEach(function (w) { var d = w.a === 'x' ? Math.abs(pt.x - w.v) : Math.abs(pt.z - w.v); var within = w.a === 'x' ? (pt.z > w.z0 && pt.z < w.z1) : (pt.x > w.x0 && pt.x < w.x1); if (within && d < bd) { bd = d; best = w; } });
+      if (best) { if (best.a === 'x') return { x: best.v, z: sn(pt.z), rot: best.n > 0 ? 1 : 3, wall: true }; return { x: sn(pt.x), z: best.v, rot: best.n > 0 ? 0 : 2, wall: true }; }
+    }
+    var cl = CO.game && CO.game.editClamp ? CO.game.editClamp(pt, def) : null;
+    return { x: sn(cl ? cl.x : pt.x), z: sn(cl ? cl.z : pt.z), rot: null, wall: false };
+  }
+  function ghostProp(id) { propInst[id].g.traverse(function (o) { if (o.isMesh && o.material && o.material.clone && !o.userData.ghosted) { o.userData.origMat = o.material; o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.5; o.material.depthWrite = false; o.castShadow = false; o.userData.ghosted = true; } }); }
+  function editTick() {
+    if (!edit.on || (CO.game && CO.game.editMode === false)) return;
+    if (edit.grabbed) {
+      var inst = propInst[edit.grabbed]; if (!inst) { edit.grabbed = null; return; }
+      var def = propDef(edit.grabbed), aim = editAim(def);
+      // a piece snapped at another height is rebuilt at that height while it is still being carried
+      if (typeof aim.h === 'number' && Math.abs((inst.P.h || 0) - aim.h) > 0.01) { var cc = customById(edit.grabbed); if (cc) cc.h = aim.h; if (S.layout && S.layout[edit.grabbed]) S.layout[edit.grabbed].h = aim.h; buildProp(edit.grabbed); inst = propInst[edit.grabbed]; inst.P.h = aim.h; for (var si = solids.length - 1; si >= 0; si--) if (solids[si].prop === edit.grabbed) solids.splice(si, 1); ghostProp(edit.grabbed); }
+      inst.g.position.set(aim.x, propGroundY(aim.x, aim.z), aim.z); if (aim.rot !== null && (def.wall || def.snap)) { inst.P.rot = aim.rot; inst.g.rotation.y = aim.rot * Math.PI / 2; }
+      editHelper(inst.g, 0xf5b53d);
+    } else if (focus && focus.editId && propInst[focus.editId]) editHelper(propInst[focus.editId].g, 0x5fd38d);
+    else editHelper(null);
+  }
+  function editGrab(id) {
+    if (edit.grabbed || !propInst[id]) return;
+    var def = propDef(id); if (def.fixed) { toast('That one stays where it is.', 'bad'); return; }
+    edit.grabbed = id; edit.snapText = ''; edit.snapCycle = 0; edit.grabRot = propInst[id].P.rot || 0; for (var i = solids.length - 1; i >= 0; i--) if (solids[i].prop === id) solids.splice(i, 1); NAV.dirty = true;
+    ghostProp(id);
+    sfx('pickup'); toast('Carrying the ' + propLabel(id) + ' · E places · R turns · Esc drops it back', '');
+  }
+  function editDrop(cancel) {
+    var id = edit.grabbed; if (!id) return; edit.grabbed = null; edit.snapText = '';
+    var inst = propInst[id], def = propDef(id);
+    if (!cancel && inst) { if (!S.layout) S.layout = {}; S.layout[id] = { x: Math.round(inst.g.position.x * 100) / 100, z: Math.round(inst.g.position.z * 100) / 100, rot: inst.P.rot, h: inst.P.h || 0 }; sfx('putdown'); }
+    buildProp(id); editHelper(null); save();
+    if (!cancel && inst) { runHooks('propPlaced', id, propInst[id], def); if (!(def && def.quietPlace)) toast('Placed the ' + propLabel(id), 'good'); }
+  }
+  function editRotate(pid) {
+    var id = pid || edit.grabbed || (focus && focus.editId); if (!id || !propInst[id]) return;
+    var inst = propInst[id], def = propDef(id); if (def && def.fixed) { toast('That one stays where it is.', 'bad'); return; } if (def.wall && !edit.grabbed) { toast('Wall pieces face the wall.', ''); return; }
+    if (edit.grabbed && def.snap) { edit.snapCycle++; sfx('click'); return; }   // a carried piece with its own snap: R walks the snaps near the aim, then the free headings; the def's snap applies it
+    inst.P.rot = (inst.P.rot + 1) % 4; inst.g.rotation.y = inst.P.rot * Math.PI / 2; sfx('click');
+    if (!edit.grabbed) { if (!S.layout) S.layout = {}; S.layout[id] = { x: inst.g.position.x, z: inst.g.position.z, rot: inst.P.rot }; buildProp(id); save(); }
+  }
+  function editReset(pid) {
+    var id = pid || edit.grabbed || (focus && focus.editId); if (!id) return; if (propDef(id) && propDef(id).fixed) { toast('That one stays where it is.', 'bad'); return; }
+    if (edit.grabbed) edit.grabbed = null;
+    if (S.layout) delete S.layout[id]; buildProp(id); editHelper(null); sfx('ok'); toast('Put the ' + propLabel(id) + ' back where it started', 'good'); save();
+  }
+  function editRemove(pid) {
+    var id = pid || edit.grabbed || (focus && focus.editId); if (!id) return; var def = propDef(id); if (def && def.fixed) { toast('That one stays where it is.', 'bad'); return; }
+    var c = customById(id);
+    if (edit.grabbed) edit.grabbed = null;
+    if (c) { runHooks('propDeleted', id, def); S.custom.splice(S.custom.indexOf(c), 1); removePropInst(id); if (def && def.price) { pay(Math.round(def.price / 2), 'Sold back: ' + def.label); toast('Sold the ' + def.label + ' back for half', ''); } }
+    else { if (!S.layout) S.layout = {}; S.layout[id] = S.layout[id] || {}; S.layout[id].hidden = true; buildProp(id); toast('Removed the ' + propLabel(id) + ' (the catalogue brings it back)', ''); }
+    editHelper(null); sfx('bad'); save();
+  }
+  function editRestore(id) { if (!S.layout) S.layout = {}; S.layout[id] = S.layout[id] || {}; S.layout[id].hidden = false; buildProp(id); sfx('ok'); toast('The ' + propLabel(id) + ' is back', 'good'); save(); }
+  function editBuy(type) {
+    var def = PROPS[type]; if (!def || !def.extra) return; if (typeof def.lvl === 'number' && S.level !== undefined && S.level < def.lvl) { toast('That comes at level ' + def.lvl + '.', 'bad'); return; }
+    if (def.price && S.bank < def.price) { toast('That costs ' + money(def.price) + ' and you have ' + money(S.bank), 'bad'); return; }
+    if (def.price) pay(-def.price, 'Bought: ' + def.label);
+    if (!S.custom) S.custom = [];
+    var aim = editAim(def), c = { id: uid('cp'), type: type, x: aim.x, z: aim.z, rot: aim.rot || 0, h: aim.h || 0 }; S.custom.push(c);
+    buildProp(c.id); runHooks('editBought', c, def); editGrab(c.id); toast('Carrying the ' + def.label + ' · aim and press E', '');
+    return c;
+  }
+  // the catalogue's data: removed props to bring back, and extras to buy, grouped by category (the game draws it)
+  function catalogueData() {
+    var hidden = PROP_ORDER.filter(function (id) { return !PROPS[id].extra && propPlacement(id).hidden; }).concat(LAYOUT.placed.filter(function (p) { return !PROPS[p.id] && propPlacement(p.id).hidden; }).map(function (p) { return p.id; })), groups = {};
+    PROP_ORDER.forEach(function (id) { var d = PROPS[id]; if (!d.extra || d.shop === false) return; (groups[d.cat || 'other'] = groups[d.cat || 'other'] || []).push(id); });
+    return { hidden: hidden, groups: groups };
+  }
+  // ── Touch screens: a canvas drawn in the world, tapped where the crosshair points ─
+  var screens = [];
+  function touchScreen(o) {
+    var res = o.res || 1, c = document.createElement('canvas'); c.width = o.w * res; c.height = o.h * res; var ctx = c.getContext('2d'); if (res !== 1) ctx.setTransform(res, 0, 0, res, 0, 0);   // res: canvas pixels per logical pixel; the layout and the tap zones stay in logical pixels
+    var t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+    var mesh = new THREE.Mesh(new THREE.PlaneGeometry(o.pw, o.ph), new THREE.MeshBasicMaterial({ map: t })); mesh.material.userData.noBake = true; mesh.position.set(o.x, o.y, o.z); mesh.rotation.y = o.ry || 0; parentOf(o.parent).add(mesh);
+    var glass = new THREE.Mesh(new THREE.PlaneGeometry(o.pw, o.ph), MAT.screenGlass); glass.position.set(0, 0, 0.0015); glass.renderOrder = 2; mesh.add(glass);
+    var sc = { w: o.w, h: o.h, res: res, ctx: ctx, tex: t, mesh: mesh, zones: [], draw: o.draw, cur: null, ripple: 0, title: o.title, dirty: true, autoPage: o.autoPage }; mesh.userData.screen = sc;
+    addInter(mesh, { prompt: function () { var z = screenZone(sc); return z ? z.label : (o.title || 'Screen'); }, use: function () { screenTap(sc); } });
+    screens.push(sc); return sc;
+  }
+  function screenZone(sc) { var h = ray.intersectObject(sc.mesh, false); if (!h.length || !h[0].uv) { sc.cur = null; return null; } var x = h[0].uv.x * sc.w, y = (1 - h[0].uv.y) * sc.h; sc.cur = { x: x, y: y }; for (var i = 0; i < sc.zones.length; i++) { var z = sc.zones[i]; if (x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h) return z; } return null; }
+  function screenZoneAt(sc, x, y) { for (var i = 0; i < sc.zones.length; i++) { var z = sc.zones[i]; if (x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h) return z; } return null; }   // a tap by logical coordinates: the editor and the tests use it
+  function screenTap(sc, zone) { var z = zone || screenZone(sc); sfx('click'); if (z && z.act) { z.act(); sc.ripple = 1; sc.dirty = true; } }
+  function drawScreens(dt) { screens.forEach(function (sc) { if (sc.autoPage) { var pg = Math.floor(worldTime / 6); if (sc.lastAuto !== pg) { sc.lastAuto = pg; sc.dirty = true; } } if (sc.ripple > 0) { sc.ripple -= dt * 3; sc.dirty = true; } if (!sc.dirty) return; sc.dirty = false; sc.zones.length = 0; if (sc.res && sc.res !== 1) sc.ctx.setTransform(sc.res, 0, 0, sc.res, 0, 0); sc.draw(sc.ctx, sc); if (sc.cur && sc.ripple > 0) { sc.ctx.strokeStyle = 'rgba(255,255,255,' + sc.ripple + ')'; sc.ctx.lineWidth = 3; sc.ctx.beginPath(); sc.ctx.arc(sc.cur.x, sc.cur.y, (1 - sc.ripple) * 30 + 4, 0, 6.3); sc.ctx.stroke(); } sc.tex.needsUpdate = true; }); }
+  function screenDirtyAll() { screens.forEach(function (s) { s.dirty = true; }); }
+  // drawing helpers in the house style. The theme is one object a game can repaint.
+  var SCREEN_THEME = { bg: '#0d1216', accent: 'rgba(245,181,61,0.18)', dot: 'rgba(255,255,255,0.04)', title: '#f5b53d', sub: '#a0acb8', rule: 'rgba(245,181,61,0.35)', text: '#eef1f5', btn: '#f5b53d', btnText: '#1a1205', btnOff: 'rgba(255,255,255,0.08)', btnOffText: '#eef1f5', font: 'Bahnschrift, Arial, sans-serif' };
+  function scBg(c, w, h, accent) { c.fillStyle = SCREEN_THEME.bg; c.fillRect(0, 0, w, h); var g = c.createRadialGradient(0, 0, 10, 0, 0, w); g.addColorStop(0, accent || SCREEN_THEME.accent); g.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = g; c.fillRect(0, 0, w, h); c.fillStyle = SCREEN_THEME.dot; for (var y = 8; y < h; y += 16) for (var x = 8; x < w; x += 16) c.fillRect(x, y, 1.5, 1.5); }
+  function scHead(c, w, title, sub) { c.fillStyle = SCREEN_THEME.title; c.font = 'bold 22px ' + SCREEN_THEME.font; c.textAlign = 'left'; c.textBaseline = 'alphabetic'; c.fillText(title, 16, 30); c.fillStyle = SCREEN_THEME.sub; c.font = '14px ' + SCREEN_THEME.font; c.textAlign = 'right'; c.fillText(sub === undefined ? (S && typeof S.time === 'number' ? fmtTime(S.time) : '') : sub, w - 16, 30); c.textAlign = 'left'; c.fillStyle = SCREEN_THEME.rule; c.fillRect(16, 40, w - 32, 2); }
+  function scButton(sc, x, y, w, h, label, on, act, col) { var c = sc.ctx; c.fillStyle = on ? (col || SCREEN_THEME.btn) : SCREEN_THEME.btnOff; c.strokeStyle = on ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.18)'; c.lineWidth = 1.5; c.beginPath(); if (c.roundRect) c.roundRect(x, y, w, h, 8); else c.rect(x, y, w, h); c.fill(); c.stroke(); c.fillStyle = on ? SCREEN_THEME.btnText : SCREEN_THEME.btnOffText; c.font = 'bold 15px ' + SCREEN_THEME.font; var tw = c.measureText(label).width; if (tw > w - 10) c.font = 'bold ' + Math.max(10, Math.floor(15 * (w - 10) / tw)) + 'px ' + SCREEN_THEME.font; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(label, x + w / 2, y + h / 2, w - 8); c.textBaseline = 'alphabetic'; c.textAlign = 'left'; sc.zones.push({ x: x, y: y, w: w, h: h, label: label, act: act }); }
+  function scText(c, x, y, text, col, size) { c.fillStyle = col || SCREEN_THEME.text; c.font = (size || 14) + 'px ' + SCREEN_THEME.font; c.textAlign = 'left'; var sc = c.getTransform ? c.getTransform().a || 1 : 1; c.fillText(text, x, y, Math.max(20, c.canvas.width / sc - x - 8)); }   // never past the right edge of the screen, whatever the resolution
+  function scFit(c, text, maxW) { if (c.measureText(text).width <= maxW) return text; var lo = 0, hi = text.length; while (lo < hi) { var mid = (lo + hi + 1) >> 1; if (c.measureText(text.slice(0, mid) + '…').width <= maxW) lo = mid; else hi = mid - 1; } return text.slice(0, lo) + '…'; }   // trimmed with an ellipsis to fit
+
+  // ── Hinged doors ──────────────────────────────────────────────────
+  // Each door is a leaf on a hinge. E opens or closes it, Shift+E locks or unlocks it (you carry the keys). Walkers with keys
+  // (the game lists them with CO.game.doorOpeners(), as [{ x, z }]) have the door swing open as they come up to it and close
+  // behind them. The state lives in S.hdoors[id] = { open, locked }.
+  var hdoors = [];
+  function hingedDoor(id, x, z, alongX, label, opt) { return worldItem('door', function () {
+    opt = opt || {};
+    var g = new THREE.Group(); g.userData.dynamic = true; g.position.set(x, 0, z); (WORLD_PARENT || scene).add(g);
+    var w = opt.w || 1.0, h = opt.h || 2.15, t = 0.06, hinge = new THREE.Group(); g.add(hinge);
+    var leaf = box(alongX ? w : t, h, alongX ? t : w, opt.mat || MAT.plaster, alongX ? w / 2 : 0, h / 2, alongX ? 0 : w / 2, hinge);
+    if (opt.window) box(alongX ? 0.4 : t + 0.01, 0.5, alongX ? t + 0.01 : 0.4, MAT.glass, alongX ? w / 2 : 0, 1.55, alongX ? 0 : w / 2, hinge);
+    box(alongX ? 0.14 : 0.04, 0.03, alongX ? 0.04 : 0.14, MAT.chrome, alongX ? w - 0.15 : 0.06, 1.05, alongX ? 0.06 : w - 0.15, hinge); box(alongX ? 0.14 : 0.04, 0.03, alongX ? 0.04 : 0.14, MAT.chrome, alongX ? w - 0.15 : -0.06, 1.05, alongX ? -0.06 : w - 0.15, hinge);
+    if (opt.pushbar) box(alongX ? 0.8 : 0.05, 0.05, alongX ? 0.05 : 0.8, MAT.chrome, alongX ? w / 2 : 0.07, 1.0, alongX ? 0.07 : w / 2, hinge);
+    var led = box(0.03, 0.03, 0.03, glowMat(0x39d353, 1.2), alongX ? w - 0.1 : 0.05, 2.0, alongX ? 0.05 : w - 0.1, hinge);
+    // the frame: on a group of its own, so it joins the static bake (the leaf's group is dynamic and the frame never moves)
+    var fg = new THREE.Group(); fg.position.set(x, 0, z); (WORLD_PARENT || scene).add(fg);
+    var fm = opt.frameMat || MAT.steelDark; if (alongX) { box(0.08, h + 0.1, t + 0.06, fm, -0.04, (h + 0.1) / 2, 0, fg); box(0.08, h + 0.1, t + 0.06, fm, w + 0.04, (h + 0.1) / 2, 0, fg); box(w + 0.16, 0.08, t + 0.06, fm, w / 2, h + 0.09, 0, fg); } else { box(t + 0.06, h + 0.1, 0.08, fm, 0, (h + 0.1) / 2, -0.04, fg); box(t + 0.06, h + 0.1, 0.08, fm, 0, (h + 0.1) / 2, w + 0.04, fg); box(t + 0.06, 0.08, w + 0.16, fm, 0, h + 0.09, w / 2, fg); }
+    var d = { id: id, g: g, frame: fg, hinge: hinge, leaf: leaf, led: led, x: x, z: z, alongX: alongX, w: w, h: h, t: 0, label: label, swing: opt.swing || 1 };
+    var hit = hitBox(alongX ? w : 0.4, h, alongX ? 0.4 : w, alongX ? w / 2 : 0, h / 2, alongX ? 0 : w / 2, { prompt: function () { return doorPrompt(d); }, use: function () { doorUse(d); }, alt: function () { doorLock(d); } }, g);
+    d.hit = hit;
+    if (!S.hdoors) S.hdoors = {}; if (!S.hdoors[id]) S.hdoors[id] = { open: !!opt.open, locked: false };
+    d.t = S.hdoors[id].open ? 1 : 0; doorPose(d);
+    hdoors.push(d); return d;
+  }, null); }
+  function hd(id) { return S && S.hdoors && S.hdoors[id] ? S.hdoors[id] : { open: false, locked: false }; }
+  function doorById(id) { for (var i = 0; i < hdoors.length; i++) if (hdoors[i].id === id) return hdoors[i]; return null; }
+  function doorPose(d) { d.hinge.rotation.y = (d.alongX ? -1 : 1) * d.swing * d.t * 1.65; d.led.material.emissive.setHex(hd(d.id).locked ? 0xff3b30 : 0x39d353); }
+  function doorPrompt(d) { var s = hd(d.id); if (s.locked) return d.label + ' · locked · Shift+E unlocks'; return (s.open ? 'Close ' : 'Open ') + d.label + ' · Shift+E locks'; }
+  function doorUse(d) { var s = hd(d.id); if (player && player.keys && (player.keys.ShiftLeft || player.keys.ShiftRight)) { doorLock(d); return; } if (s.locked) { sfx('bad'); toast(d.label + ' is locked.', 'bad'); return; } s.open = !s.open; sfx('door'); }
+  function doorLock(d) { var s = hd(d.id); if (s.open) { s.open = false; } s.locked = !s.locked; sfx(s.locked ? 'lock' : 'unlock'); toast((s.locked ? 'Locked ' : 'Unlocked ') + d.label, s.locked ? '' : 'good'); doorPose(d); screenDirtyAll(); }
+  // a door inside a world item stands where the item stands now: its hinge's place is read from the scene (0.9.1)
+  var DOOR_V = null;
+  function doorSync(d) { var p = d.g.parent; if (!p || p === scene || p === CO.root) return; if (!DOOR_V) DOOR_V = new THREE.Vector3(); d.g.getWorldPosition(DOOR_V); d.x = DOOR_V.x; d.z = DOOR_V.z; }
+  function doorCentre(d) { doorSync(d); return { x: d.alongX ? d.x + d.w / 2 : d.x, z: d.alongX ? d.z : d.z + d.w / 2 }; }
+  function doorsTick(dt) {
+    var walkers = CO.game && CO.game.doorOpeners ? CO.game.doorOpeners() : [];
+    hdoors.forEach(function (d) {
+      var s = hd(d.id), c = doorCentre(d);
+      var near = walkers.some(function (p) { return dist2(p.x, p.z, c.x, c.z) < 1.7; });   // someone with keys: the door opens for them when they are close and closes once they are through
+      var want = s.open || near ? 1 : 0;
+      if (Math.abs(d.t - want) > 0.002) { d.t = lerp(d.t, want, 1 - Math.pow(0.006, dt)); if (Math.abs(d.t - want) < 0.004) d.t = want; doorPose(d); shadowDirty = true; }
+    });
+  }
+  function doorSolids(out) { hdoors.forEach(function (d) { doorSync(d); if (d.t > 0.5) return; if (d.alongX) out.push({ x0: d.x, x1: d.x + d.w, z0: d.z - 0.08, z1: d.z + 0.08, y0: -1, y1: 3 }); else out.push({ x0: d.x - 0.08, x1: d.x + 0.08, z0: d.z, z1: d.z + d.w, y0: -1, y1: 3 }); }); }
+  function lockAll(lock) { hdoors.forEach(function (d) { var s = hd(d.id); if (lock) { s.open = false; s.locked = true; } else s.locked = false; doorPose(d); }); runHooks('lockAll', lock); sfx(lock ? 'lock' : 'unlock'); logEvent(lock ? 'Night mode: every door closed and locked' : 'Doors unlocked for the day'); screenDirtyAll(); }
+  function anyDoorUnlocked() { return hdoors.some(function (d) { return !hd(d.id).locked; }); }
+  // ── The human model ───────────────────────────────────────────────
+  // A rigged person: hip and knee pivots, shoulder and elbow pivots, a torso that rolls with the stride and a head that turns to
+  // look at you. Every limb is an eased cylinder, the shoes have soles and laces, the shirt has a collar, buttons, a pocket and a
+  // belt, the hair is a cap with a fringe, sideburns and a nape (or long, or a bun), and the face is a 256 px decal that blinks.
+  // makeHuman(opt), animateHuman(g, dt, mode, speed, look, carry), setMood(g, mood), say(g, text, col).
+  var SKINS = [0xf1d2b6, 0xe2b48f, 0xd9a98a, 0xb87b5a, 0x8d5a3c, 0x5c3a28];
+  var HAIRS = [0x1d1510, 0x3a2a1c, 0x6b4a2b, 0xa8793f, 0xd9b36a, 0x8a8a8a, 0xb0352a, 0x2b2b35];
+  var SHIRTS = [0x8c949c, 0x3b4b6b, 0x7b3f3f, 0x2f6f4f, 0xd9d9d9, 0x5a4b7b, 0x8a6a3a, 0x335b7b, 0x2a2d33];
+  var PANTS = [0x2e3f63, 0x3a3a3a, 0x5b4b3a, 0x1f2a44, 0x6b6b6b];
+  var EYES = ['#3a5a8a', '#4a3221', '#2a6a3a', '#5a4a2a', '#6a7a8a'];
+  var faceCache = {};
+  // what a face key decides, the same every time that key is drawn: eye colour, brow weight, freckles
+  function faceSpec(key) { var n = 0; for (var i = 0; i < key.length; i++) n = (n * 31 + key.charCodeAt(i)) >>> 0; return { eye: EYES[n % EYES.length], freckles: n % 5 === 0, brow: n % 3 === 0 ? '#1a1008' : '#2a1a10', thin: n % 4 === 1 }; }
+  function faceTex(key, mood, skin, blink) {
+    var k = key + mood + (blink ? 'b' : ''); if (faceCache[k]) return faceCache[k];
+    var sp = faceSpec(key);
+    var t = tex(256, 256, function (ctx, w, h) {
+      ctx.clearRect(0, 0, w, h);
+      var eyeY = 112, iris = sp.eye, closed = blink || mood === 'tired', squint = mood === 'happy' ? 12 : mood === 'angry' ? 12.5 : 15;
+      [84, 172].forEach(function (x, i) {
+        var sd = i ? 1 : -1, px = x + (mood === 'shifty' ? 8 : 0);
+        if (closed) { ctx.strokeStyle = '#3a2a20'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x - 21, eyeY + 1); ctx.quadraticCurveTo(x, eyeY + 9, x + 21, eyeY + 1); ctx.stroke(); return; }
+        ctx.save(); ctx.beginPath(); ctx.ellipse(x, eyeY, 22, squint, 0, 0, Math.PI * 2); ctx.clip();
+        ctx.fillStyle = '#fbf8f2'; ctx.fillRect(x - 24, eyeY - 18, 48, 36);
+        var ig = ctx.createRadialGradient(px, eyeY + 1, 2, px, eyeY + 1, 11); ig.addColorStop(0, iris); ig.addColorStop(0.75, iris); ig.addColorStop(1, 'rgba(10,15,25,.9)'); ctx.fillStyle = ig; ctx.beginPath(); ctx.arc(px, eyeY + 1, 10.5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#0b0b0d'; ctx.beginPath(); ctx.arc(px, eyeY + 1, 4.8, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,.95)'; ctx.beginPath(); ctx.arc(px + 4, eyeY - 4, 3.2, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.arc(px - 4, eyeY + 5, 1.6, 0, Math.PI * 2); ctx.fill();
+        var lid = ctx.createLinearGradient(0, eyeY - squint, 0, eyeY - squint + 12); lid.addColorStop(0, 'rgba(40,20,10,.5)'); lid.addColorStop(1, 'rgba(40,20,10,0)'); ctx.fillStyle = lid; ctx.fillRect(x - 24, eyeY - squint, 48, 12);
+        ctx.restore();
+        ctx.strokeStyle = '#2f2019'; ctx.lineWidth = 3.5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.ellipse(x, eyeY, 22, squint, 0, Math.PI * 1.02, Math.PI * 1.98); ctx.stroke();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(60,35,25,.45)'; ctx.beginPath(); ctx.ellipse(x, eyeY, 22, squint, 0, Math.PI * 0.12, Math.PI * 0.88); ctx.stroke();
+        ctx.lineWidth = 2.5; ctx.strokeStyle = '#2f2019'; ctx.beginPath(); ctx.moveTo(x + sd * 21, eyeY - 3); ctx.lineTo(x + sd * 27, eyeY - 8); ctx.stroke();
+      });
+      ctx.fillStyle = sp.brow; var tilt = mood === 'angry' ? 12 : mood === 'tired' ? -6 : mood === 'happy' ? -3 : 0, bt = sp.thin ? 0.6 : 1;
+      [[58, 110], [198, 146]].forEach(function (b) { ctx.beginPath(); ctx.moveTo(b[0], 84 - tilt + 2); ctx.quadraticCurveTo((b[0] + b[1]) / 2, 72, b[1], 84 + tilt - 4 * bt); ctx.lineTo(b[1], 84 + tilt + 5 * bt); ctx.quadraticCurveTo((b[0] + b[1]) / 2, 80, b[0], 84 - tilt + 4); ctx.closePath(); ctx.fill(); });
+      ctx.fillStyle = 'rgba(70,35,20,.22)'; ctx.beginPath(); ctx.ellipse(128, 166, 17, 5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#8a4536'; ctx.lineCap = 'round'; ctx.lineWidth = 4.5; ctx.beginPath();
+      if (mood === 'happy') { ctx.fillStyle = '#4a1a1a'; ctx.beginPath(); ctx.moveTo(96, 186); ctx.quadraticCurveTo(128, 216, 160, 186); ctx.quadraticCurveTo(128, 194, 96, 186); ctx.fill(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(102, 188.5); ctx.quadraticCurveTo(128, 196, 154, 188.5); ctx.quadraticCurveTo(128, 203, 102, 188.5); ctx.fill(); ctx.beginPath(); ctx.moveTo(96, 186); ctx.quadraticCurveTo(128, 216, 160, 186); ctx.stroke(); }
+      else if (mood === 'tired') { ctx.moveTo(100, 198); ctx.quadraticCurveTo(128, 186, 156, 198); ctx.stroke(); }
+      else if (mood === 'angry') { ctx.moveTo(100, 196); ctx.quadraticCurveTo(128, 186, 156, 192); ctx.stroke(); }
+      else if (mood === 'talk') { ctx.fillStyle = '#3a1a1a'; ctx.beginPath(); ctx.ellipse(128, 194, 16, 12, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#c0605a'; ctx.beginPath(); ctx.ellipse(128, 200, 9, 5, 0, 0, Math.PI * 2); ctx.fill(); }
+      else { ctx.moveTo(104, 192); ctx.quadraticCurveTo(128, 199, 152, 192); ctx.stroke(); }
+      if (mood !== 'talk' && mood !== 'happy') { ctx.strokeStyle = 'rgba(90,40,30,.25)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(114, 205); ctx.quadraticCurveTo(128, 210, 142, 205); ctx.stroke(); }
+      ctx.fillStyle = 'rgba(255,110,110,' + (mood === 'happy' ? 0.26 : 0.12) + ')'; [62, 194].forEach(function (x) { var bl = ctx.createRadialGradient(x, 152, 2, x, 152, 22); bl.addColorStop(0, ctx.fillStyle); bl.addColorStop(1, 'rgba(255,110,110,0)'); ctx.save(); ctx.fillStyle = bl; ctx.beginPath(); ctx.arc(x, 152, 22, 0, Math.PI * 2); ctx.fill(); ctx.restore(); });
+      if (sp.freckles) { ctx.fillStyle = 'rgba(120,70,40,.5)'; for (var f = 0; f < 22; f++) { ctx.beginPath(); ctx.arc(60 + Math.random() * 136, 136 + Math.random() * 30, 1.6, 0, Math.PI * 2); ctx.fill(); } }
+    });
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; faceCache[k] = t; return t;
+  }
+  var HUMAN_GEO = null, HUMAN_SCALE = 0.93, HUMAN_M = null;
+  function humanGeo() {
+    if (HUMAN_GEO) return HUMAN_GEO;
+    var G = HUMAN_GEO = {
+      thigh: roundCylGeo(0.088, 0.068, 0.42, 18), shin: roundCylGeo(0.064, 0.046, 0.4, 18), knee: new THREE.SphereGeometry(0.068, 14, 10),
+      shoe: bevelGeo(0.12, 0.085, 0.27, 0.036, 3), sole: bevelGeo(0.128, 0.03, 0.285, 0.012, 1), lace: bevelGeo(0.1, 0.02, 0.06, 0.006, 1),
+      hips: bevelGeo(0.36, 0.18, 0.22, 0.08, 3), torso: taperGeo(bevelGeo(0.4, 0.5, 0.24, 0.1, 3).clone(), 0.5, 0.86, 0.9), chest: bevelGeo(0.44, 0.26, 0.26, 0.11, 3),
+      belt: bevelGeo(0.38, 0.05, 0.24, 0.012, 1), buckle: bevelGeo(0.05, 0.04, 0.02, 0.005, 1), placket: bevelGeo(0.12, 0.05, 0.03, 0.008, 1), button: roundCylGeo(0.008, 0.008, 0.006, 8), pocket: bevelGeo(0.1, 0.1, 0.005, 0.002, 1),
+      upperArm: roundCylGeo(0.054, 0.044, 0.3, 14), foreArm: roundCylGeo(0.044, 0.034, 0.3, 14), elbow: new THREE.SphereGeometry(0.047, 12, 10), shoulder: new THREE.SphereGeometry(0.072, 14, 10),
+      hand: bevelGeo(0.075, 0.1, 0.036, 0.016, 2), thumb: roundCylGeo(0.012, 0.012, 0.05, 8), cuff: roundCylGeo(0.043, 0.04, 0.035, 14), hem: roundCylGeo(0.058, 0.056, 0.04, 16), collar: bevelGeo(0.085, 0.036, 0.012, 0.004, 1),
+      neck: roundCylGeo(0.05, 0.062, 0.1, 14), head: new THREE.SphereGeometry(0.17, 28, 20), ear: new THREE.SphereGeometry(0.03, 10, 8), nose: new THREE.SphereGeometry(0.021, 12, 10),
+      hairCap: new THREE.SphereGeometry(0.17, 24, 14, 0, Math.PI * 2, 0, Math.PI * 0.5), hairLong: new THREE.SphereGeometry(0.17, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.62),
+      vest: bevelGeo(0.47, 0.5, 0.29, 0.06, 3), band: bevelGeo(0.48, 0.04, 0.3, 0.012, 1), strap: bevelGeo(0.05, 0.28, 0.3, 0.012, 1),
+      peak: bevelGeo(0.2, 0.015, 0.14, 0.005, 1)
+    };
+    G.beard = new THREE.SphereGeometry(0.17, 20, 8, -Math.PI * 0.1, Math.PI * 1.2, Math.PI * 0.7, Math.PI * 0.3); G.beard.scale(1.035, 1.15, 0.985);
+    G.hairFall = new THREE.CylinderGeometry(0.178, 0.205, 0.4, 22, 3, true, Math.PI * 0.42, Math.PI * 1.16);
+    G.ear.scale(0.5, 1.15, 0.85); G.nose.scale(0.82, 1.3, 1.05); G.head.scale(1, 1.12, 0.95);
+    G.hairCap.scale(1.07, 1.2, 1.02); G.hairLong.scale(1.08, 1.21, 1.04);
+    G.fringe = new THREE.SphereGeometry(0.17, 20, 8, Math.PI * 0.15, Math.PI * 0.7, Math.PI * 0.3, Math.PI * 0.2); G.fringe.scale(1.075, 1.205, 1.03);
+    G.sideL = new THREE.SphereGeometry(0.17, 12, 8, Math.PI * 1.88, Math.PI * 0.24, Math.PI * 0.4, Math.PI * 0.22); G.sideL.scale(1.075, 1.205, 1.03);
+    G.sideR = new THREE.SphereGeometry(0.17, 12, 8, Math.PI * 0.88, Math.PI * 0.24, Math.PI * 0.4, Math.PI * 0.22); G.sideR.scale(1.075, 1.205, 1.03);
+    G.nape = new THREE.SphereGeometry(0.17, 16, 8, Math.PI * 1.2, Math.PI * 0.6, Math.PI * 0.4, Math.PI * 0.3); G.nape.scale(1.075, 1.205, 1.03);
+    for (var k in G) keepShared(G[k]);
+    HUMAN_M = { band: std({ color: 0xc9ced3, roughness: 0.3, metalness: 0.4, emissive: 0x666666, emissiveIntensity: 0.25 }), lace: std({ color: 0xf2f2f2, roughness: 0.9 }), belt: std({ color: 0x3a2a1a, roughness: 0.5 }), sole: std({ color: 0xd8d4cc, roughness: 0.9 }) };
+    for (var m in HUMAN_M) keepShared(HUMAN_M[m]);
+    return G;
+  }
+  // opt: skin, hair, style ('short' | 'long' | 'bun' | 'bald' | 'cap'), shirt (a material), vest (a material), name, rolled, mood, cap, capMat, hardhat (a material), noBeard, glasses
+  function makeHuman(opt) {
+    opt = opt || {}; var G = humanGeo(), M = HUMAN_M;
+    var skinCol = opt.skin || pick(SKINS), hairCol = opt.hair || pick(HAIRS), style = opt.style || pick(['short', 'short', 'long', 'bun', 'bald', 'cap']);
+    var skin = std({ color: skinCol, roughness: 0.75 }), shirt = opt.shirt || std({ map: TEX.cloth, color: pick(SHIRTS), roughness: 0.92 }), pants = opt.pants || std({ map: TEX.cloth, color: pick(PANTS), roughness: 0.95 }), hair = std({ color: hairCol, roughness: 0.62 }), hairSide = hair.clone(); hairSide.side = THREE.DoubleSide;
+    var shoeM = std({ color: pick([0x1e1a18, 0x3a2a1a, 0x4a3a2a, 0x2f2f33]), roughness: 0.6 }), shirtDark = shirt.clone(); if (shirtDark.color) shirtDark.color.multiplyScalar(0.85);
+    var rolled = opt.rolled !== undefined ? !!opt.rolled : Math.random() < 0.4;
+    var g = new THREE.Group(), u = g.userData; u.dynamic = true;
+    u.key = opt.key || 'f' + Math.floor(Math.random() * 100000); u.mood = opt.mood || 'neutral'; u.blink = 0; u.blinkIn = randf(2, 6); u.walk = 0; u.idleT = Math.random() * 10; u.lookYaw = 0; u.lookPitch = 0; u.skinKey = skinCol.toString(16); u.phase = Math.random() * 6.28;
+    g.scale.setScalar(HUMAN_SCALE);
+    function mesh(geo, mat, x, y, z, parent) { var m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; (parent || g).add(m); return m; }
+    function leg(side) {
+      var hip = new THREE.Group(); hip.position.set(side * 0.1, 0.86, 0); g.add(hip);
+      mesh(G.thigh, pants, 0, -0.21, 0, hip);
+      var knee = new THREE.Group(); knee.position.set(0, -0.42, 0); hip.add(knee); hip.userData.knee = knee;
+      mesh(G.knee, pants, 0, 0, 0, knee); mesh(G.shin, pants, 0, -0.2, 0, knee);
+      mesh(G.shoe, shoeM, 0, -0.4, 0.05, knee); mesh(G.sole, M.sole, 0, -0.445, 0.05, knee); mesh(G.hem, pants, 0, -0.35, 0, knee); mesh(G.lace, M.lace, 0, -0.36, 0.12, knee);
+      return hip;
+    }
+    u.legs = [leg(-1), leg(1)];
+    var torso = new THREE.Group(); torso.position.y = 0.86; g.add(torso); u.torso = torso;
+    mesh(G.hips, pants, 0, 0.02, 0, torso); mesh(G.belt, M.belt, 0, 0.1, 0, torso); mesh(G.buckle, MAT.chrome, 0, 0.1, 0.125, torso);
+    mesh(G.torso, shirt, 0, 0.36, 0, torso); u.chest = mesh(G.chest, shirt, 0, 0.52, 0, torso);
+    [-1, 1].forEach(function (sd) { var cl = mesh(G.collar, shirt, sd * 0.05, 0.648, 0.118, torso); cl.rotation.set(-0.35, sd * -0.25, sd * -0.62); });
+    mesh(G.placket, shirt, 0, 0.62, 0.13, torso); for (var b = 0; b < 4; b++) mesh(G.button, M.lace, 0, 0.2 + b * 0.11, 0.125, torso).rotation.x = Math.PI / 2; mesh(G.pocket, shirtDark, -0.11, 0.48, 0.125, torso);
+    if (opt.vest) { mesh(G.vest, opt.vest, 0, 0.33, 0, torso); mesh(G.band, M.band, 0, 0.22, 0, torso); mesh(G.band, M.band, 0, 0.38, 0, torso); mesh(G.strap, M.band, -0.15, 0.5, 0, torso); mesh(G.strap, M.band, 0.15, 0.5, 0, torso); }
+    if (opt.name) { var tag = new THREE.Mesh(new THREE.PlaneGeometry(0.14, 0.05), new THREE.MeshBasicMaterial({ map: textTex([opt.name], { w: 128, h: 48, bg: '#fff', fg: '#1b232c' }) })); tag.position.set(0.1, 0.46, opt.vest ? 0.152 : 0.132); torso.add(tag); }
+    function arm(side) {
+      var sh = new THREE.Group(); sh.position.set(side * 0.27, 0.6, 0); torso.add(sh);
+      mesh(G.shoulder, shirt, 0, 0, 0, sh); mesh(G.upperArm, shirt, 0, -0.16, 0, sh);
+      var el = new THREE.Group(); el.position.set(0, -0.31, 0); sh.add(el); sh.userData.elbow = el;
+      mesh(G.elbow, shirt, 0, 0, 0, el); mesh(G.foreArm, rolled ? skin : shirt, 0, -0.15, 0, el);
+      if (!rolled) mesh(G.cuff, shirt, 0, -0.285, 0, el); else mesh(G.cuff, shirt, 0, -0.03, 0, el);
+      var hand = mesh(G.hand, skin, 0, -0.35, 0, el); el.userData.hand = hand; var th = mesh(G.thumb, skin, side * 0.04, -0.33, 0.01, el); th.rotation.z = side * 0.6;
+      return sh;
+    }
+    u.arms = [arm(-1), arm(1)];
+    var head = new THREE.Group(); head.position.set(0, 0.66, 0); torso.add(head); u.head = head;
+    mesh(G.neck, skin, 0, 0.04, 0, head); mesh(G.head, skin, 0, 0.24, 0, head); mesh(G.nose, skin, 0, 0.222, 0.164, head);
+    [-1, 1].forEach(function (s) { mesh(G.ear, skin, s * 0.165, 0.24, -0.01, head); });
+    var hy = 0.24, capOn = style === 'cap' || !!opt.cap;
+    if (style !== 'bald') {
+      if (style === 'long') { mesh(G.hairLong, hair, 0, hy, 0, head); mesh(G.hairFall, hairSide, 0, hy - 0.16, -0.012, head); }
+      else { mesh(G.hairCap, hair, 0, hy, 0, head); mesh(G.nape, hair, 0, hy, 0, head); }
+      if (style === 'bun') mesh(new THREE.SphereGeometry(0.075, 12, 10), hair, 0, hy + 0.14, -0.14, head);
+      mesh(G.fringe, hair, 0, hy, 0, head); mesh(G.sideL, hair, 0, hy, 0, head); mesh(G.sideR, hair, 0, hy, 0, head);
+    }
+    if ((opt.beard === true || (opt.beard === undefined && Math.random() < 0.3)) && !opt.noBeard) mesh(G.beard, hairSide, 0, hy, 0, head);
+    var face = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.28), new THREE.MeshBasicMaterial({ map: faceTex(u.key, u.mood, u.skinKey), transparent: true, depthWrite: false })); face.position.set(0, 0.245, 0.17); head.add(face); u.face = face;
+    if (opt.glasses === true || (opt.glasses === undefined && Math.random() < 0.22)) { var fr = std({ color: 0x222222, roughness: 0.4, metalness: 0.5 }); [-0.06, 0.06].forEach(function (x) { mesh(new THREE.TorusGeometry(0.038, 0.006, 6, 16), fr, x, 0.255, 0.178, head); }); mesh(bevelGeo(0.03, 0.006, 0.006, 0.002, 1), fr, 0, 0.26, 0.178, head); [-1, 1].forEach(function (s) { mesh(bevelGeo(0.006, 0.006, 0.16, 0.002, 1), fr, s * 0.1, 0.255, 0.085, head); }); }
+    // hats sit on the brows (the eye line is at 0.26 in the head's frame, the brows at 0.29), never over the eyes
+    if (capOn && !opt.hardhat) { var capM = opt.capMat || MAT.blue; mesh(new THREE.SphereGeometry(0.184, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), capM, 0, 0.29, 0, head); var peak = mesh(G.peak, capM, 0, 0.3, 0.2, head); peak.rotation.x = 0.15; mesh(new THREE.SphereGeometry(0.02, 8, 6), capM, 0, 0.47, 0, head); }
+    if (opt.hardhat) { mesh(new THREE.SphereGeometry(0.19, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.5), opt.hardhat, 0, 0.3, 0, head); mesh(roundCylGeo(0.212, 0.212, 0.016, 24), opt.hardhat, 0, 0.3, 0.0, head); var pk = mesh(bevelGeo(0.16, 0.012, 0.08, 0.004, 1), opt.hardhat, 0, 0.3, 0.245, head); pk.rotation.x = 0.12; }
+    groundBlob(0.9, 0.9, 0, 0, g, 0.002);
+    runHooks('humanMade', g, opt);
+    return g;
+  }
+  function setMood(g, mood) { var u = g.userData; if (u.mood === mood) return; u.mood = mood; u.face.material.map = faceTex(u.key, mood, u.skinKey, u.blink > 0); }
+  // mode: 'walk' | 'idle' | 'wait' | 'work' | 'sit'. look: a world point the head turns to, within reason. carry: true holds a box out
+  // in front; 'push' puts both hands down on a grip pushed ahead; 'tow' trails one arm back to something pulled behind; a function
+  // (la, ra, le, re, s, sw) poses the arms itself. The feet stay planted: the torso rises and falls with the stride and rolls a little.
+  function animateHuman(g, dt, mode, speed, look, carry) {
+    var u = g.userData; if (!u.legs) return;
+    u.idleT += dt;
+    if (mode === 'walk') u.walk += dt * (6 + speed * 1.5); else { var ph = u.walk % Math.PI; u.walk += (ph < Math.PI / 2 ? -ph : Math.PI - ph) * Math.min(1, 10 * dt); }
+    var t = u.walk, sw = mode === 'walk' ? 0.55 : 0, s = Math.sin(t), L = u.legs[0], R = u.legs[1], lk = L.userData.knee, rk = R.userData.knee, la = u.arms[0], ra = u.arms[1], le = la.userData.elbow, re = ra.userData.elbow, T = u.torso;
+    if (mode === 'sit') {
+      L.rotation.x = -1.45; R.rotation.x = -1.45; lk.rotation.x = 1.45; rk.rotation.x = 1.45; R.position.y = 0.86; la.rotation.x = -0.5; ra.rotation.x = -0.5; le.rotation.x = -0.15; re.rotation.x = -0.15; la.rotation.z = 0.18; ra.rotation.z = -0.18; T.position.set(0, 0.86, 0); T.rotation.set(0, 0, 0); u.head.rotation.z = 0;
+    } else {
+    L.rotation.x = s * sw; R.rotation.x = -s * sw;
+    lk.rotation.x = Math.max(0, -Math.sin(t - 0.6)) * 1.0 * (sw ? 1 : 0); rk.rotation.x = Math.max(0, Math.sin(t - 0.6)) * 1.0 * (sw ? 1 : 0);
+    if (typeof carry === 'function') carry(la, ra, le, re, s, sw);
+    else if (carry === 'push' || carry === 'jack') { la.rotation.x = -0.8; ra.rotation.x = -0.8; le.rotation.x = -0.25; re.rotation.x = -0.25; la.rotation.z = 0.12; ra.rotation.z = -0.12; }
+    else if (carry === 'tow') { ra.rotation.x = 0.56; re.rotation.x = 0; ra.rotation.z = -0.15; la.rotation.x = -s * sw * 0.8; le.rotation.x = -Math.max(0, s) * sw * 0.6 - 0.15; la.rotation.z = 0.08; }
+    else if (carry) { la.rotation.x = -0.9; ra.rotation.x = -0.9; le.rotation.x = -0.9; re.rotation.x = -0.9; la.rotation.z = 0.25; ra.rotation.z = -0.25; }
+    else if (mode === 'work') { la.rotation.x = -0.6 + Math.sin(u.idleT * 6) * 0.25; ra.rotation.x = -0.6 - Math.sin(u.idleT * 6) * 0.25; le.rotation.x = -0.8; re.rotation.x = -0.8; la.rotation.z = 0.1; ra.rotation.z = -0.1; }
+    else { var drift = Math.sin(u.idleT * 1.1) * 0.05; la.rotation.x = -s * sw * 0.8 + drift; ra.rotation.x = s * sw * 0.8 - drift; le.rotation.x = -Math.max(0, s) * sw * 0.6 - 0.15; re.rotation.x = -Math.max(0, -s) * sw * 0.6 - 0.15; la.rotation.z = 0.08 + Math.sin(u.idleT * 0.7) * 0.03; ra.rotation.z = -0.08 - Math.sin(u.idleT * 0.7) * 0.03; }
+    if (mode === 'wait') { R.position.y = 0.86 + Math.max(0, Math.sin(u.idleT * 2.4)) * 0.04; } else R.position.y = 0.86;
+    if (mode === 'walk') { T.position.y = 0.86 + Math.abs(Math.cos(t)) * 0.03; T.position.x = 0; T.rotation.z = s * 0.03; T.rotation.y = s * 0.06; u.head.rotation.z = -s * 0.025; }
+    else { T.position.y = 0.86 + Math.sin(u.idleT * 0.31) * 0.006; T.position.x = Math.sin(u.idleT * 0.31) * 0.007; T.rotation.z = Math.sin(u.idleT * 0.31) * 0.014; T.rotation.y = mode === 'wait' ? Math.sin(u.idleT * 0.35) * 0.12 : lerp(T.rotation.y, 0, Math.min(1, 4 * dt)); u.head.rotation.z = 0; }
+    }
+    if (u.chest) u.chest.scale.z = 1 + Math.sin(worldTime * 1.6 + u.phase) * 0.018;
+    g.position.y = u.baseY || 0;
+    var wantYaw = 0, wantPitch = 0;
+    if (look) { var dx = look.x - g.position.x, dz = look.z - g.position.z, d = Math.sqrt(dx * dx + dz * dz); if (d < 9) { var a = Math.atan2(dx, dz) - g.rotation.y; while (a > Math.PI) a -= 6.283; while (a < -Math.PI) a += 6.283; wantYaw = clamp(a, -1.3, 1.3); wantPitch = clamp(Math.atan2((look.y || 1.6) - 1.6, d), -0.3, 0.3); } }
+    else wantYaw = Math.sin(u.idleT * 0.4) * 0.15;
+    u.lookYaw += (wantYaw - u.lookYaw) * Math.min(1, 6 * dt); u.lookPitch += (wantPitch - u.lookPitch) * Math.min(1, 6 * dt);
+    u.head.rotation.y = u.lookYaw - (mode === 'walk' ? T.rotation.y : 0); u.head.rotation.x = -u.lookPitch;
+    u.blinkIn -= dt; if (u.blinkIn <= 0 && u.blink <= 0) { u.blink = 0.12; u.face.material.map = faceTex(u.key, u.mood, u.skinKey, true); } if (u.blink > 0) { u.blink -= dt; if (u.blink <= 0) { u.blinkIn = randf(2, 6.5); u.face.material.map = faceTex(u.key, u.mood, u.skinKey, false); } }
+    if (u.bubble) { u.bubble.t -= dt; if (u.bubble.t <= 0) { g.remove(u.bubble.sp); u.bubble = null; } }
+  }
+  // a line of speech above the head, for a few seconds
+  function say(g, text, col) {
+    var u = g.userData; if (!u || !u.head) return;
+    if (u.bubble) { g.remove(u.bubble.sp); u.bubble = null; }
+    var t = tex(512, 160, function (c, w, h) {
+      c.clearRect(0, 0, w, h); c.font = '500 30px "Segoe UI", Arial, sans-serif'; var words = text.split(' '), lines = [], cur = '';
+      words.forEach(function (wd) { var tr = cur ? cur + ' ' + wd : wd; if (c.measureText(tr).width > w - 60) { lines.push(cur); cur = wd; } else cur = tr; }); if (cur) lines.push(cur); lines = lines.slice(0, 3);
+      var bw = Math.min(w - 20, Math.max.apply(null, lines.map(function (l) { return c.measureText(l).width; })) + 50), bh = lines.length * 36 + 26, bx = (w - bw) / 2, by = h - bh - 18;
+      c.fillStyle = 'rgba(16,22,30,0.92)'; c.strokeStyle = col || '#f5b53d'; c.lineWidth = 3; c.beginPath(); c.moveTo(bx + 14, by); c.lineTo(bx + bw - 14, by); c.quadraticCurveTo(bx + bw, by, bx + bw, by + 14); c.lineTo(bx + bw, by + bh - 14); c.quadraticCurveTo(bx + bw, by + bh, bx + bw - 14, by + bh); c.lineTo(w / 2 + 12, by + bh); c.lineTo(w / 2, h - 2); c.lineTo(w / 2 - 12, by + bh); c.lineTo(bx + 14, by + bh); c.quadraticCurveTo(bx, by + bh, bx, by + bh - 14); c.lineTo(bx, by + 14); c.quadraticCurveTo(bx, by, bx + 14, by); c.closePath(); c.fill(); c.stroke();
+      c.fillStyle = '#eef1f5'; c.textAlign = 'center'; c.textBaseline = 'middle'; lines.forEach(function (l, i) { c.fillText(l, w / 2, by + 20 + i * 36 + 4); });
+    });
+    var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthTest: false })); sp.scale.set(1.9, 0.6, 1); sp.position.set(0, 2.15, 0); sp.renderOrder = 5; g.add(sp);
+    u.bubble = { sp: sp, t: 2.6 + text.length * 0.03 };
+    setMood(g, 'talk'); setTimeout(function () { if (u.mood === 'talk') setMood(g, 'neutral'); }, 900);
+  }
+  // a walker record on the grid: { x, z, yaw, path, speed } moved along its route; returns true at the end of it
+  function walkerStep(rec, dt) { if (!rec.path || !rec.path.length) return true; return walkAlong(rec, rec.path, rec.speed || 1.6, dt); }
+  function walkerGo(rec, x, z) { rec.path = route({ x: rec.x, z: rec.z }, { x: x, z: z }); return rec.path; }
+  // ── The terrain ───────────────────────────────────────────────────
+  // CO.terrain({ w, d, cell, x0, z0, heights, paint, palette, maxH }) stores the data (a game's src/00-terrain.js calls it before the
+  // boot); terrainBuild() makes the mesh when the world builds. heights has (w + 1) * (d + 1) corners, row by row from z0; paint has
+  // w * d cells, each an index into palette. The flat world outside the terrain stays at 0.
+  var TERRAIN = { on: false, w: 0, d: 0, cell: 1, x0: 0, z0: 0, heights: null, paint: null, palette: ['grass', 'dirt', 'gravel', 'sand', 'road'], maxH: 8, mesh: null, geo: null, canvas: null, ctx: null, texture: null, px: 16 };
+  // the painters for the ground: a base colour and a scatter of dots, per name; a game adds its own with CO.terrainPaint(name, spec)
+  var TERRAIN_PAINT = {
+    grass: { base: '#4d7a39', dots: ['#5b8c45', '#3f682e', '#6a9a4f'], n: 26, r: [1, 2.6] },
+    dirt: { base: '#6b5239', dots: ['#7a5f44', '#5a432e', '#86684b'], n: 22, r: [1, 3] },
+    gravel: { base: '#7b7d80', dots: ['#8f9195', '#65676b', '#a3a5a8'], n: 40, r: [0.8, 2] },
+    sand: { base: '#c9b07a', dots: ['#d6bf8c', '#b89d6a', '#e0cb9c'], n: 18, r: [1, 2.4] },
+    road: { base: '#3b3e43', dots: ['#45484d', '#33363a', '#505358'], n: 30, r: [0.6, 1.6] },
+    snow: { base: '#e6ecf1', dots: ['#f3f6f9', '#d5dde4'], n: 10, r: [1, 3] },
+    water: { base: '#2f6f9a', dots: ['#3a7fae', '#28618a'], n: 14, r: [1.5, 3.5] }
+  };
+  CO.terrainPaint = function (name, spec) { TERRAIN_PAINT[name] = spec; return spec; };
+  CO.terrain = function (cfg) {
+    if (!cfg) return TERRAIN;
+    var w = Math.max(1, Math.round(cfg.w || 32)), d = Math.max(1, Math.round(cfg.d || 32));
+    TERRAIN.on = true; TERRAIN.w = w; TERRAIN.d = d; TERRAIN.cell = cfg.cell || 1; TERRAIN.x0 = typeof cfg.x0 === 'number' ? cfg.x0 : -w * TERRAIN.cell / 2; TERRAIN.z0 = typeof cfg.z0 === 'number' ? cfg.z0 : -d * TERRAIN.cell / 2;
+    if (cfg.palette) TERRAIN.palette = cfg.palette.slice(); if (cfg.maxH) TERRAIN.maxH = cfg.maxH;
+    var nC = (w + 1) * (d + 1), nP = w * d; TERRAIN.heights = new Float32Array(nC); TERRAIN.paint = new Uint8Array(nP);
+    if (cfg.heights) for (var i = 0; i < nC && i < cfg.heights.length; i++) TERRAIN.heights[i] = +cfg.heights[i] || 0;
+    if (cfg.paint) for (var j = 0; j < nP && j < cfg.paint.length; j++) TERRAIN.paint[j] = cfg.paint[j] | 0;
+    if (TERRAIN.mesh) terrainRebuild();   // called again while running (the editor makes a new one): the mesh follows
+    return TERRAIN;
+  };
+  // the ground height at a world point: bilinear between the four corners of the cell; 0 off the terrain
+  function terrainY(x, z) {
+    var T = TERRAIN; if (!T.on) return 0;
+    var u = (x - T.x0) / T.cell, v = (z - T.z0) / T.cell; if (u < 0 || v < 0 || u > T.w || v > T.d) return 0;
+    var i = Math.min(T.w - 1, Math.floor(u)), j = Math.min(T.d - 1, Math.floor(v)), fu = u - i, fv = v - j, W = T.w + 1, H = T.heights;
+    var h00 = H[j * W + i], h10 = H[j * W + i + 1], h01 = H[(j + 1) * W + i], h11 = H[(j + 1) * W + i + 1];
+    return (h00 * (1 - fu) + h10 * fu) * (1 - fv) + (h01 * (1 - fu) + h11 * fu) * fv;
+  }
+  function terrainPaintAt(x, z) { var T = TERRAIN; if (!T.on) return null; var i = Math.floor((x - T.x0) / T.cell), j = Math.floor((z - T.z0) / T.cell); if (i < 0 || j < 0 || i >= T.w || j >= T.d) return null; return T.palette[T.paint[j * T.w + i]] || null; }
+  function terrainPaintCell(i, j) {
+    var T = TERRAIN, spec = TERRAIN_PAINT[T.palette[T.paint[j * T.w + i]]] || TERRAIN_PAINT.dirt, c = T.ctx, px = T.px, x = i * px, y = j * px, k;
+    c.fillStyle = spec.base; c.fillRect(x, y, px, px);
+    for (k = 0; k < spec.n; k++) { var r = seededF('t' + i + ',' + j, k, spec.r[0], spec.r[1]) * px / 16; c.fillStyle = spec.dots[seededI('tc' + i + ',' + j, k, 0, spec.dots.length - 1)]; c.beginPath(); c.arc(x + seededF('tx' + i + ',' + j, k, 0, px), y + seededF('tz' + i + ',' + j, k, 0, px), r, 0, Math.PI * 2); c.fill(); }
+    // the neighbours' paints feather in over the edges, so two paints meet in a soft seam rather than a hard line
+    var own = T.paint[j * T.w + i], f = Math.max(2, Math.round(px * 0.45)), nb = [[i - 1, j, 'l'], [i + 1, j, 'r'], [i, j - 1, 't'], [i, j + 1, 'b']];
+    for (k = 0; k < 4; k++) { var ni = nb[k][0], nj = nb[k][1]; if (ni < 0 || nj < 0 || ni >= T.w || nj >= T.d) continue; var np = T.paint[nj * T.w + ni]; if (np === own) continue; var ns = TERRAIN_PAINT[T.palette[np]] || TERRAIN_PAINT.dirt, side = nb[k][2], g = side === 'l' ? c.createLinearGradient(x, 0, x + f, 0) : side === 'r' ? c.createLinearGradient(x + px, 0, x + px - f, 0) : side === 't' ? c.createLinearGradient(0, y, 0, y + f) : c.createLinearGradient(0, y + px, 0, y + px - f); g.addColorStop(0, ns.base); g.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = g; c.globalAlpha = 0.75; if (side === 'l') c.fillRect(x, y, f, px); else if (side === 'r') c.fillRect(x + px - f, y, f, px); else if (side === 't') c.fillRect(x, y, px, f); else c.fillRect(x, y + px - f, px, f); c.globalAlpha = 1; }
+  }
+  function terrainBuild() {
+    var T = TERRAIN; if (!T.on || T.mesh) return T.mesh;
+    var W = T.w + 1, D = T.d + 1, pos = new Float32Array(W * D * 3), uv = new Float32Array(W * D * 2), idx = [], i, j;
+    for (j = 0; j < D; j++) for (i = 0; i < W; i++) { var k = j * W + i; pos[k * 3] = T.x0 + i * T.cell; pos[k * 3 + 1] = T.heights[k]; pos[k * 3 + 2] = T.z0 + j * T.cell; uv[k * 2] = i / T.w; uv[k * 2 + 1] = 1 - j / T.d; }
+    for (j = 0; j < T.d; j++) for (i = 0; i < T.w; i++) { var a = j * W + i, b = a + 1, c2 = a + W, d2 = c2 + 1; idx.push(a, c2, b, b, c2, d2); }
+    var geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals();
+    T.canvas = document.createElement('canvas'); T.canvas.width = T.w * T.px; T.canvas.height = T.d * T.px; T.ctx = T.canvas.getContext('2d');
+    for (j = 0; j < T.d; j++) for (i = 0; i < T.w; i++) terrainPaintCell(i, j);
+    T.texture = new THREE.CanvasTexture(T.canvas); T.texture.encoding = THREE.sRGBEncoding; T.texture.anisotropy = 8;
+    var mat = new THREE.MeshStandardMaterial({ map: T.texture, roughness: 0.96, metalness: 0 }); mat.userData.noBake = true;
+    T.geo = geo; T.mesh = new THREE.Mesh(geo, mat); T.mesh.name = 'terrain'; T.mesh.receiveShadow = true; T.mesh.userData.noBake = true; T.mesh.userData.terrain = true;
+    (CO.root || scene).add(T.mesh); shadowDirty = true; return T.mesh;
+  }
+  function terrainRebuild() { var T = TERRAIN; if (T.mesh) { if (T.mesh.parent) T.mesh.parent.remove(T.mesh); T.geo.dispose(); T.mesh.material.dispose(); T.texture.dispose(); T.mesh = null; } terrainBuild(); NAV.dirty = true; }
+  // the corners in a rectangle moved: the mesh follows, the normals and the shadows too; the cells in it are painted again
+  function terrainUpdate(i0, j0, i1, j1) {
+    var T = TERRAIN; if (!T.mesh) return; var W = T.w + 1, p = T.geo.attributes.position.array, i, j;
+    for (j = Math.max(0, j0); j <= Math.min(T.d, j1); j++) for (i = Math.max(0, i0); i <= Math.min(T.w, i1); i++) p[(j * W + i) * 3 + 1] = T.heights[j * W + i];
+    T.geo.attributes.position.needsUpdate = true; T.geo.computeVertexNormals(); T.geo.computeBoundingSphere();
+    for (j = Math.max(0, j0); j < Math.min(T.d, j1 + 1); j++) for (i = Math.max(0, i0); i < Math.min(T.w, i1 + 1); i++) terrainPaintCell(i, j);
+    T.texture.needsUpdate = true; shadowDirty = true; NAV.dirty = true;
+  }
+  // a brush at a world point: raise, lower, smooth or flatten the corners within the radius (a soft falloff), or paint the cells
+  function terrainBrush(x, z, mode, radius, strength, texIndex) {
+    var T = TERRAIN; if (!T.on) return { changed: 0, error: 'no terrain: make one first' };
+    radius = Math.max(0.3, +radius || 2); strength = Math.max(0, +strength || 0.5); var W = T.w + 1, H = T.heights, n = 0;
+    var ci = (x - T.x0) / T.cell, cj = (z - T.z0) / T.cell, rc = radius / T.cell, i0 = Math.floor(ci - rc), i1 = Math.ceil(ci + rc), j0 = Math.floor(cj - rc), j1 = Math.ceil(cj + rc), i, j;
+    if (mode === 'road') {   /* a road: the strip flattens to the height under the brush and takes the road paint */
+      var rh = terrainY(x, z), W2 = T.w + 1, ri = T.palette.indexOf('road'), nR = 0; if (ri < 0) { T.palette.push('road'); ri = T.palette.length - 1; }
+      for (j = Math.max(0, j0); j <= Math.min(T.d, j1); j++) for (i = Math.max(0, i0); i <= Math.min(T.w, i1); i++) { var rdx = i - ci, rdz = j - cj; if (rdx * rdx + rdz * rdz <= rc * rc) { var ra = j * W2 + i; if (H[ra] !== rh) { H[ra] = rh; nR++; } } }
+      for (j = Math.max(0, j0); j < Math.min(T.d, j1 + 1); j++) for (i = Math.max(0, i0); i < Math.min(T.w, i1 + 1); i++) { var pdx = (i + 0.5) - ci, pdz = (j + 0.5) - cj; if (pdx * pdx + pdz * pdz <= (rc * 0.8) * (rc * 0.8) && T.paint[j * T.w + i] !== ri) { T.paint[j * T.w + i] = ri; nR++; } }
+      if (nR) terrainUpdate(i0, j0, i1, j1); return { changed: nR };
+    }
+    if (mode === 'paint') {
+      var tex = Math.max(0, Math.min(T.palette.length - 1, texIndex | 0));
+      for (j = Math.max(0, j0); j < Math.min(T.d, j1 + 1); j++) for (i = Math.max(0, i0); i < Math.min(T.w, i1 + 1); i++) { var dx = (i + 0.5) - ci, dz = (j + 0.5) - cj; if (dx * dx + dz * dz <= rc * rc && T.paint[j * T.w + i] !== tex) { T.paint[j * T.w + i] = tex; n++; } }
+      if (n) terrainUpdate(i0, j0, i1, j1); return { changed: n };
+    }
+    var centre = terrainY(x, z), hs = [];
+    for (j = Math.max(0, j0); j <= Math.min(T.d, j1); j++) for (i = Math.max(0, i0); i <= Math.min(T.w, i1); i++) {
+      var ddx = i - ci, ddz = j - cj, dist = Math.sqrt(ddx * ddx + ddz * ddz) / rc; if (dist > 1) continue;
+      var k = (1 - dist) * (1 - dist), at = j * W + i, h = H[at], nh = h;
+      if (mode === 'raise') nh = h + strength * k; else if (mode === 'lower') nh = h - strength * k;
+      else if (mode === 'flatten') nh = h + (centre - h) * Math.min(1, strength * k * 2);
+      else if (mode === 'smooth') { var sum = 0, cnt = 0, di, dj; for (dj = -1; dj <= 1; dj++) for (di = -1; di <= 1; di++) { var ii = i + di, jj = j + dj; if (ii < 0 || jj < 0 || ii > T.w || jj > T.d) continue; sum += H[jj * W + ii]; cnt++; } nh = h + (sum / cnt - h) * Math.min(1, strength * k * 2); }
+      nh = Math.max(-T.maxH, Math.min(T.maxH, nh)); if (nh !== h) { hs.push([at, nh]); n++; }
+    }
+    hs.forEach(function (e) { H[e[0]] = e[1]; });
+    if (n) terrainUpdate(i0, j0, i1, j1); return { changed: n };
+  }
+  // the terrain point under a viewport position, for the editor's brushes
+  function terrainPick(nx, ny) { var T = TERRAIN; if (!T.mesh) return null; eRay.setFromCamera({ x: nx || 0, y: ny || 0 }, camera); eRay.far = 400; var hits = eRay.intersectObject(T.mesh, false); return hits.length ? { x: rnd(hits[0].point.x), y: rnd(hits[0].point.y), z: rnd(hits[0].point.z), paint: terrainPaintAt(hits[0].point.x, hits[0].point.z) } : null; }
+  // flora and props scattered over the ground: copies of a definition on the cells painted with one name (or anywhere), seeded, placed through the shipped layout
+  function terrainScatter(type, count, onPaint, seed) {
+    var T = TERRAIN; if (!T.on) return { error: 'no terrain' }; if (!PROPS[type]) return { error: 'no prop definition ' + type };
+    var cells = [], i, j; for (j = 0; j < T.d; j++) for (i = 0; i < T.w; i++) if (onPaint == null || onPaint === '' || T.palette[T.paint[j * T.w + i]] === onPaint) cells.push([i, j]);
+    if (!cells.length) return { error: 'no cells painted ' + onPaint };
+    var placed = [], n = Math.max(1, Math.min(500, count | 0)), tag = String(seed || Date.now()), k;
+    for (k = 0; k < n; k++) { var c = cells[seededI(tag, k, 0, cells.length - 1)], id = 'sc' + tag.slice(-4) + '-' + k; placed.push({ id: id, type: type, x: Math.round((T.x0 + (c[0] + seededF(tag, k + 1000, 0.15, 0.85)) * T.cell) * 20) / 20, z: Math.round((T.z0 + (c[1] + seededF(tag, k + 2000, 0.15, 0.85)) * T.cell) * 20) / 20, rot: seededI(tag, k + 3000, 0, 3), h: 0 }); }
+    CO.layout({ placed: placed }); placed.forEach(function (p) { buildProp(p.id); });
+    return { placed: placed.map(function (p) { return p.id; }), count: placed.length };
+  }
+  function terrainState() { var T = TERRAIN; return { on: T.on, w: T.w, d: T.d, cell: T.cell, x0: T.x0, z0: T.z0, palette: T.palette.slice(), paints: Object.keys(TERRAIN_PAINT), maxH: T.maxH, cells: T.w * T.d }; }
+  // the part the editor writes: the whole terrain as data, the heights to two decimals, a row per line so a diff reads
+  function terrainCode() {
+    var T = TERRAIN; if (!T.on) return '';
+    var W = T.w + 1, lines = ['//@ the terrain the editor saved: the ground as a grid of heights and a paint per cell. Written by the Co Engine editor; it sorts first in src/ so the boot sees it. Sculpt and paint in the editor rather than here.', '  CO.terrain({', '    w: ' + T.w + ', d: ' + T.d + ', cell: ' + T.cell + ', x0: ' + T.x0 + ', z0: ' + T.z0 + ', maxH: ' + T.maxH + ',', '    palette: ' + JSON.stringify(T.palette) + ',', '    heights: ['], j, i, row;
+    for (j = 0; j < T.d + 1; j++) { row = []; for (i = 0; i < W; i++) row.push(Math.round(T.heights[j * W + i] * 100) / 100); lines.push('      ' + row.join(',') + ','); }
+    lines.push('    ],', '    paint: [');
+    for (j = 0; j < T.d; j++) { row = []; for (i = 0; i < T.w; i++) row.push(T.paint[j * T.w + i]); lines.push('      ' + row.join(',') + ','); }
+    lines.push('    ]', '  });', '');
+    return lines.join('\n');
+  }
+  // ── Floors and walkable ground ────────────────────────────────────
+  // Where the player stands. A game answers CO.game.floorY(x, z, y) with decks, ramps and trailers; the default is a flat 0.
+  // insideWalk(x, z) says whether a point is ground the crew may walk on; CO.game.insideWalk overrides it, the default is everywhere.
+  function floorY(x, z, y) { var g = CO.game && CO.game.floorY ? CO.game.floorY(x, z, y) : 0; return TERRAIN.on ? Math.max(g, terrainY(x, z)) : g; }
+  function insideWalk(x, z) { return CO.game && CO.game.insideWalk ? CO.game.insideWalk(x, z) : true; }
+  var lampMeshes = [];   // every lens that goes dark with the power: the troffers, the high bays, whatever a game adds
+  // take the openings out of a 1D span: [[a0, a1]] minus every [o0, o1] (and an optional o2, the opening's height, left to the caller)
+  function spanCut(a0, a1, openings) {
+    var segs = [[a0, a1]];
+    (openings || []).forEach(function (o) { var out = []; segs.forEach(function (s) { if (o[1] <= s[0] || o[0] >= s[1]) { out.push(s); return; } if (o[0] > s[0]) out.push([s[0], o[0]]); if (o[1] < s[1]) out.push([o[1], s[1]]); }); segs = out; });
+    return segs;
+  }
+  // a painted lining on a room's outer walls: a plane just inside the cladding, skirting along the floor, a dado rail, with openings
+  // left for doors. axis 'x': the wall runs along z at x = at; 'z': along x at z = at. inward is +1 or -1, the side the room is on.
+  function lineWall(axis, at, a0, a1, h, mat, openings, inward, opt) { return worldItem('wall', function () {
+    opt = opt || {};
+    var segs = spanCut(a0, a1, openings);
+    var off = at + inward * (opt.inset === undefined ? 0.17 : opt.inset), ry = axis === 'x' ? (inward > 0 ? Math.PI / 2 : -Math.PI / 2) : (inward > 0 ? 0 : Math.PI), trim = opt.trim || MAT.trim;
+    function strip(w, hh, y, mid, m) { if (axis === 'x') { plane(w, hh, m, off, y, mid, 0, ry); } else { plane(w, hh, m, mid, y, off, 0, ry); } }
+    segs.forEach(function (s) { var w = s[1] - s[0], mid = (s[0] + s[1]) / 2; strip(w, h, h / 2, mid, mat); if (opt.skirting !== false) { var sk = axis === 'x' ? box(0.03, 0.12, w, trim, off + inward * 0.012, 0.06, mid) : box(w, 0.12, 0.03, trim, mid, 0.06, off + inward * 0.012); sk.receiveShadow = true; } if (opt.dado !== false) { if (axis === 'x') box(0.025, 0.05, w, trim, off + inward * 0.01, 0.95, mid); else box(w, 0.05, 0.025, trim, mid, 0.95, off + inward * 0.01); } });
+    (openings || []).forEach(function (o) { if (o[2] && o[2] < h) { var w = o[1] - o[0], mid = (o[0] + o[1]) / 2; strip(w, h - o[2], o[2] + (h - o[2]) / 2, mid, mat); } });
+    return segs;
+  }, null); }
+  // a room's own floor laid over the slab: the texture repeats in metres so a carpet tile is half a metre wherever it is
+  function roomFloor(mat, x0, x1, z0, z1, per, y) { return worldItem('floor', function () {
+    var m = mat.clone(); m.map = mat.map.clone(); m.map.needsUpdate = true; m.map.repeat.set((x1 - x0) / per, (z1 - z0) / per);
+    if (mat.normalMap) { m.normalMap = mat.normalMap.clone(); m.normalMap.needsUpdate = true; m.normalMap.repeat.set((x1 - x0) / per, (z1 - z0) / per); }
+    var p = plane(x1 - x0, z1 - z0, m, (x0 + x1) / 2, (y === undefined ? 0 : y) + 0.012, (z0 + z1) / 2, -Math.PI / 2); p.receiveShadow = true; return p;
+  }, null); }
+  // a recessed troffer in a room's ceiling: a white frame and a prismatic lens that dims when the power is off
+  function troffer(x, y, z, w, d) { return worldItem('ceiling light', function () { box(w || 1.2, 0.05, d || 0.6, MAT.trim, x, y - 0.025, z).castShadow = false; var lens = box((w || 1.2) - 0.1, 0.02, (d || 0.6) - 0.1, MAT.lamp, x, y - 0.045, z); lens.castShadow = false; lampMeshes.push(lens); return lens; }, null); }
+  // a high bay hung from a roof at roofH: the conduit drop, the ballast box, the reflector and the lens
+  var HIGHBAY_REFL = null;
+  function highBay(x, y, z, roofH) { return worldItem('high bay lamp', function () {
+    if (!HIGHBAY_REFL) HIGHBAY_REFL = std({ color: 0x9aa3ad, roughness: 0.35, metalness: 0.7, side: THREE.DoubleSide });   // one reflector material for every lamp: thirty of them bake into one draw instead of thirty
+    roofH = roofH === undefined ? y + 1.2 : roofH;
+    cyl(0.025, roofH - y - 0.22, MAT.steelDark, x, (roofH + y + 0.22) / 2, z, null, 6);
+    box(0.34, 0.22, 0.26, MAT.steelDark, x, y + 0.11, z); box(0.1, 0.06, 0.06, MAT.black, x + 0.2, y + 0.12, z);
+    var refl = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.14, 0.42, 20, 1, true), HIGHBAY_REFL); refl.position.set(x, y - 0.21, z); parentOf(null).add(refl);
+    var lens = cyl(0.42, 0.03, MAT.lamp, x, y - 0.41, z, null, 20); lens.castShadow = false; lampMeshes.push(lens); return lens;
+  }, null); }
+  // ── The yard kit ──────────────────────────────────────────────────
+  var FENCE = null;
+  function fenceMats() { if (!FENCE) FENCE = { post: std({ color: 0x2f5d3a, roughness: 0.5, metalness: 0.5 }), mesh: std({ map: TEX.vmesh, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.5, metalness: 0.6, color: 0x3d6b48 }), conc: std({ map: TEX.plaster, color: 0x9a9890, roughness: 0.95 }), wire: std({ color: 0x8e949a, roughness: 0.4, metalness: 0.8 }) }; return FENCE; }
+  // a run of fence from (x0, z0) to (x1, z1): posts every 3 m with concrete feet, mesh panels, two folds and a top rail, three
+  // strands of barbed wire on angled arms, and a solid the length of the run. opt: { y: ground height, wires: false, solid: false }
+  function fenceRun(x0, z0, x1, z1, opt) { return worldItem('fence', function () {
+    opt = opt || {}; var F = fenceMats(), Y = opt.y || 0;
+    // ang turns a y-axis cylinder laid along z onto the run (the wires); rot turns an x-long box or plane onto it (panels, rails, boards)
+    var dx = x1 - x0, dz = z1 - z0, len = Math.sqrt(dx * dx + dz * dz), n = Math.max(1, Math.round(len / 3)), ang = Math.atan2(dx, dz), ux = dx / len, uz = dz / len, nx = uz, nz = -ux, rot = Math.atan2(-uz, ux);
+    for (var i = 0; i <= n; i++) {
+      var t = i / n, px = x0 + dx * t, pz = z0 + dz * t;
+      box(0.08, 2.5, 0.08, F.post, px, Y + 1.25, pz); box(0.3, 0.25, 0.3, F.conc, px, Y + 0.12, pz); box(0.12, 0.03, 0.12, F.post, px, Y + 2.52, pz);
+      if (opt.wires !== false) { var arm = box(0.04, 0.6, 0.04, F.post, px + nx * 0.2, Y + 2.72, pz + nz * 0.2); arm.rotation.set(0, ang, -0.7, 'YXZ'); arm.position.y += 0.1; }
+      if (i < n) {
+        var mx = x0 + dx * (t + 0.5 / n), mz = z0 + dz * (t + 0.5 / n), seg = len / n;
+        var mp = plane(seg - 0.1, 2.2, F.mesh, mx, Y + 1.35, mz, 0, rot); mp.receiveShadow = false;
+        [0.75, 1.65].forEach(function (vy) { var fold = box(seg - 0.1, 0.06, 0.03, F.post, mx, Y + vy, mz); fold.rotation.y = rot; });
+        var gb = box(seg, 0.3, 0.05, F.conc, mx, Y + 0.15, mz); gb.rotation.y = rot; var tr = box(seg, 0.03, 0.03, F.post, mx, Y + 2.46, mz); tr.rotation.y = rot; var br = box(seg, 0.03, 0.03, F.post, mx, Y + 0.32, mz); br.rotation.y = rot;
+      }
+    }
+    if (opt.solid !== false) solid(Math.min(x0, x1) - 0.06, Math.max(x0, x1) + 0.06, Math.min(z0, z1) - 0.06, Math.max(z0, z1) + 0.06, Y, Y + 2.6);   // the fence is a fence: nobody walks through it
+    if (opt.wires !== false) [0, 1, 2].forEach(function (k) { var wy = Y + 2.62 + k * 0.17, wo = 0.22 + k * 0.14; var wire = cyl(0.006, len, F.wire, (x0 + x1) / 2 + nx * wo, wy, (z0 + z1) / 2 + nz * wo, null, 4); wire.rotation.x = Math.PI / 2; wire.rotation.z = 0; wire.rotation.order = 'YXZ'; wire.rotation.y = ang; });
+  }, opt && opt.parent); }
+  // a tree: a tapered trunk and four lumpy crowns, scaled by s, standing on y
+  var TREE_MATS = null;
+  function tree(x, z, s, y, parent) { return worldItem('tree', function () {
+    s = s || 1; y = y || 0;
+    if (!TREE_MATS) TREE_MATS = { trunk: std({ color: 0x5b4634, roughness: 1 }), crowns: [0x3f6f2e, 0x5c8f44, 0x45752f, 0x6f9a4a].map(function (c) { return std({ color: c, roughness: 1 }); }) };
+    cyl(0.12 * s, 2.6 * s, TREE_MATS.trunk, x, y + 1.3 * s, z, parent, 8, 0.18 * s);
+    [[0, 3.2, 0, 1.3], [0.7, 2.7, 0.4, 0.9], [-0.6, 2.9, -0.5, 1.0], [0.1, 4.0, 0.2, 0.8]].forEach(function (b, i) { sphere(b[3] * s, TREE_MATS.crowns[i], x + b[0] * s, y + b[1] * s, z + b[2] * s, parent); });
+  }, parent); }
+  // a street or yard lamp: a post, an arm and a glowing head; the lens goes on the lamp list
+  function lampPost(x, z, y, h, parent) { return worldItem('lamp post', function () { h = h || 5; y = y || 0; cyl(0.06, h, MAT.steelDark, x, y + h / 2, z, parent, 8, 0.09); box(0.9, 0.06, 0.06, MAT.steelDark, x + 0.45, y + h - 0.05, z, parent); var lens = box(0.36, 0.14, 0.3, glowMat(0xfff2c0, 0.6), x + 0.9, y + h - 0.12, z, parent); lampMeshes.push(lens); return lens; }, parent); }
+  // point-in-rectangle helpers used all over a site
+  function inRect(x, z, x0, x1, z0, z1) { return x > x0 && x < x1 && z > z0 && z < z1; }
+  function rectsOverlap(a, b) { return a.x0 < b.x1 && a.x1 > b.x0 && a.z0 < b.z1 && a.z1 > b.z0; }
+  // ── The route finder ──────────────────────────────────────────────
+  // A grid of NAV.cell metres over the site. A cell is blocked by any static solid (walls, racks, furniture) under head height,
+  // or, outside the walkable ground (insideWalk), unless the game lets a walker through there (CO.game.navPass(x, z): a docked
+  // trailer, a staff door). Hinged doors never block a walker with keys. navSetup names the area; NAV.dirty rebuilds the grid.
+  var NAV = { cell: 0.4, x0: -40, z0: -40, w: 200, h: 200, grid: null, dirty: true, pad: 0.3, headroom: 1.6, steps: 20000 };
+  function navSetup(o) { o = o || {}; if (o.cell) NAV.cell = o.cell; if (typeof o.x0 === 'number') NAV.x0 = o.x0; if (typeof o.z0 === 'number') NAV.z0 = o.z0; if (o.width) NAV.w = Math.round(o.width / NAV.cell); if (o.depth) NAV.h = Math.round(o.depth / NAV.cell); if (typeof o.w === 'number') NAV.w = o.w; if (typeof o.h === 'number') NAV.h = o.h; if (typeof o.pad === 'number') NAV.pad = o.pad; NAV.grid = null; NAV.dirty = true; return NAV; }
+  function navBuild() {
+    var g = new Uint8Array(NAV.w * NAV.h), c = NAV.cell, pad = NAV.pad;
+    for (var j = 0; j < NAV.h; j++) for (var i = 0; i < NAV.w; i++) {
+      var x = NAV.x0 + (i + 0.5) * c, z = NAV.z0 + (j + 0.5) * c, blocked = 0;
+      if (!insideWalk(x, z)) blocked = 2;   // outside the ground you walk: open only where the game says so
+      else for (var k = 0; k < solids.length; k++) { var s = solids[k]; if (s.y0 > NAV.headroom) continue; if (x > s.x0 - pad && x < s.x1 + pad && z > s.z0 - pad && z < s.z1 + pad) { blocked = 1; break; } }
+      g[j * NAV.w + i] = blocked;
+    }
+    NAV.grid = g; NAV.dirty = false;
+  }
+  function navOpen(i, j) {
+    if (i < 0 || j < 0 || i >= NAV.w || j >= NAV.h) return false;
+    var b = NAV.grid[j * NAV.w + i]; if (b === 0) return true; if (b === 1) return false;
+    if (CO.game && CO.game.navPass) return !!CO.game.navPass(NAV.x0 + (i + 0.5) * NAV.cell, NAV.z0 + (j + 0.5) * NAV.cell);
+    return false;
+  }
+  function navCell(p) { return { i: clamp(Math.floor((p.x - NAV.x0) / NAV.cell), 0, NAV.w - 1), j: clamp(Math.floor((p.z - NAV.z0) / NAV.cell), 0, NAV.h - 1) }; }
+  function navNearestOpen(cl) { if (navOpen(cl.i, cl.j)) return cl; for (var r = 1; r < 8; r++) for (var dj = -r; dj <= r; dj++) for (var di = -r; di <= r; di++) if (Math.abs(di) === r || Math.abs(dj) === r) if (navOpen(cl.i + di, cl.j + dj)) return { i: cl.i + di, j: cl.j + dj }; return cl; }
+  function navFreeAt(x, z) { if (NAV.dirty || !NAV.grid) navBuild(); var cl = navCell({ x: x, z: z }); return navOpen(cl.i, cl.j); }
+  function navLine(a, b) { var dx = b.x - a.x, dz = b.z - a.z, n = Math.ceil(Math.sqrt(dx * dx + dz * dz) / (NAV.cell * 0.5)) + 1, prev = null; for (var k = 0; k <= n; k++) { var cl = navCell({ x: a.x + dx * k / n, z: a.z + dz * k / n }); if (!navOpen(cl.i, cl.j)) return false; if (prev && cl.i !== prev.i && cl.j !== prev.j && (!navOpen(cl.i, prev.j) || !navOpen(prev.i, cl.j))) return false; prev = cl; } return true; }   // no corner cutting on the string-pulled runs either
+  function route(a, b) {
+    if (NAV.dirty || !NAV.grid) navBuild();
+    var sc = navNearestOpen(navCell(a)), gc = navNearestOpen(navCell(b));
+    if (sc.i === gc.i && sc.j === gc.j) return [b];
+    var W = NAV.w, open = [], came = {}, gs = {}, key = function (c) { return c.j * W + c.i; }, h = function (c) { return Math.abs(c.i - gc.i) + Math.abs(c.j - gc.j); };
+    var sk = key(sc); gs[sk] = 0; open.push({ c: sc, f: h(sc) }); var closed = {}, found = null, steps = 0;
+    while (open.length && steps++ < NAV.steps) {
+      var bi = 0; for (var q = 1; q < open.length; q++) if (open[q].f < open[bi].f) bi = q;
+      var cur = open.splice(bi, 1)[0], ck = key(cur.c); if (closed[ck]) continue; closed[ck] = 1;
+      if (cur.c.i === gc.i && cur.c.j === gc.j) { found = cur.c; break; }
+      for (var dj = -1; dj <= 1; dj++) for (var di = -1; di <= 1; di++) {
+        if (!di && !dj) continue; var ni = cur.c.i + di, nj = cur.c.j + dj; if (!navOpen(ni, nj)) continue;
+        if (di && dj && (!navOpen(cur.c.i + di, cur.c.j) || !navOpen(cur.c.i, cur.c.j + dj))) continue;   // no corner cutting
+        var nk = nj * W + ni, ng = gs[ck] + (di && dj ? 1.414 : 1);
+        if (gs[nk] !== undefined && gs[nk] <= ng) continue;
+        gs[nk] = ng; came[nk] = ck; open.push({ c: { i: ni, j: nj }, f: ng + h({ i: ni, j: nj }) });
+      }
+    }
+    if (!found) return [b];
+    var cells = [], k2 = key(found); while (k2 !== undefined && k2 !== sk) { cells.push({ x: NAV.x0 + ((k2 % W) + 0.5) * NAV.cell, z: NAV.z0 + (Math.floor(k2 / W) + 0.5) * NAV.cell }); k2 = came[k2]; }
+    cells.reverse(); cells.push(b);
+    // string-pulling
+    var out = [], from = a, idx = 0;
+    while (idx < cells.length) { var far = idx; for (var m = cells.length - 1; m > idx; m--) if (navLine(from, cells[m])) { far = m; break; } out.push(cells[far]); from = cells[far]; idx = far + 1; }
+    return out;
+  }
+  // turn the short way round
+  function yawWrap(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
+  function easeYaw(cur, target, k) { return cur + yawWrap(target - cur) * k; }
+  // walk a record { x, z, yaw } along a list of waypoints at speed, easing the heading; returns true when the last one is reached
+  function walkAlong(rec, path, speed, dt) {
+    if (!path || !path.length) return true;
+    var p = path[0], dx = p.x - rec.x, dz = p.z - rec.z, dist = Math.sqrt(dx * dx + dz * dz), step = speed * dt;
+    if (dist <= step) { rec.x = p.x; rec.z = p.z; path.shift(); return path.length === 0; }
+    rec.x += dx / dist * step; rec.z += dz / dist * step; rec.yaw = easeYaw(rec.yaw || 0, Math.atan2(dx, dz), Math.min(1, dt * 8));
+    return false;
+  }
+  // ── The clock ─────────────────────────────────────────────────────
+  // S.day and S.time (hours, 0 to 24) are the game's; the engine reads them. A week is CAL.week days, a season CAL.season days.
+  var CAL = { week: 7, season: 7, seasons: ['spring', 'summer', 'autumn', 'winter'], dayStart: 6 };
+  function nowAbs() { return (S ? (S.day || 1) * 24 + (S.time || 0) : 0); }
+  function season() { return Math.floor((((S && S.day || 1) - 1) % (CAL.season * CAL.seasons.length)) / CAL.season); }
+  function seasonName() { return CAL.seasons[season()]; }
+  function weekday() { return ((S && S.day || 1) - 1) % CAL.week; }
+  function isSunday() { return (S && S.day || 1) % CAL.week === 0; }
+  // ── Weather ───────────────────────────────────────────────────────
+  // S.weather = { kind, wet, snow, wind, until }. The table per season says how likely each kind is; a game may replace it on
+  // WEATHER_TABLE. tickWeatherState(dt) rolls the weather on, wets and snows the ground, and flashes and thunders in a storm.
+  var WEATHER_TABLE = {
+    winter: [['snow', 0.32], ['overcast', 0.3], ['clear', 0.28], ['rain', 0.1]],
+    summer: [['clear', 0.6], ['overcast', 0.18], ['rain', 0.12], ['storm', 0.1]],
+    other: [['clear', 0.42], ['overcast', 0.26], ['rain', 0.22], ['storm', 0.1]]
+  };
+  var WEATHER_WORDS = { rain: 'Rain on the roof.', storm: 'A storm is rolling in.', snow: 'Snow. It will be slow outside.', overcast: 'Clouds have come over.', clear: 'The sky has cleared.' };
+  var weatherFlash = 0;
+  function pickWeather(first) {
+    var table = WEATHER_TABLE[seasonName()] || WEATHER_TABLE.other, r = Math.random(), acc = 0, kind = table[table.length - 1][0];
+    for (var i = 0; i < table.length; i++) { acc += table[i][1]; if (r < acc) { kind = table[i][0]; break; } }
+    var prev = S.weather ? S.weather.kind : null;
+    S.weather = { kind: kind, wet: S.weather ? S.weather.wet : 0, snow: S.weather ? S.weather.snow : 0, wind: kind === 'storm' ? randf(0.8, 1.2) : kind === 'clear' ? randf(0.1, 0.4) : randf(0.3, 0.7), until: nowAbs() + randf(2.5, 8) };
+    if (!first && prev !== kind) logEvent(WEATHER_WORDS[kind] || kind, kind === 'storm' ? 'bad' : '');
+    runHooks('weather', kind, prev);
+  }
+  function indoors(x, z) { return CO.game && CO.game.indoors ? CO.game.indoors(x, z) : false; }
+  function tickWeatherState(dt) {
+    if (!S.weather) pickWeather(true);
+    var W = S.weather;
+    if (nowAbs() > W.until) pickWeather(false);
+    var raining = W.kind === 'rain' || W.kind === 'storm';
+    W.wet = clamp(W.wet + (raining ? dt / 50 : -dt / 260), 0, 1);
+    W.snow = clamp(W.snow + (W.kind === 'snow' ? dt / 90 : seasonName() === 'winter' ? -dt / 1200 : -dt / 200), 0, 1);
+    if (W.kind === 'storm' && Math.random() < dt * 0.06) { weatherFlash = 1; var delay = randf(300, 1800); setTimeout(function () { sfx('thunder'); }, delay); }
+    weatherFlash *= Math.max(0, 1 - 6 * dt); CO.flash = weatherFlash;
+    var inside = player ? indoors(player.x, player.z) : true;
+    ambience(raining ? (inside ? 0.05 : 0.14) * (W.kind === 'storm' ? 1.4 : 1) : 0);
+  }
+  // a looping band of filtered noise is the rain; its level follows whether you are under a roof
+  var amb = { gain: null, src: null, want: 0 };
+  function ambience(level) {
+    amb.want = level;
+    if (!AC) return;
+    if (!amb.src) { var len = AC.sampleRate * 2, buf = AC.createBuffer(1, len, AC.sampleRate), d = buf.getChannelData(0); for (var i = 0; i < len; i++) d[i] = Math.random() * 2 - 1; var src = AC.createBufferSource(); src.buffer = buf; src.loop = true; var f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1400; var g = AC.createGain(); g.gain.value = 0; src.connect(f); f.connect(g); g.connect(sfxBus); src.start(); amb.src = src; amb.gain = g; }
+    amb.gain.gain.setTargetAtTime(SET && SET.sound !== false ? level : 0, AC.currentTime, 0.4);
+  }
+  // ── The sky ───────────────────────────────────────────────────────
+  // a dome with a zenith-to-horizon gradient, a sun and a moon that ride opposite each other, clouds that drift with the wind,
+  // and the rain and snow as point clouds round the camera. buildSky(opt) makes them; tickSky(dt) moves them.
+  var sky = { dome: null, mat: null, sunDisc: null, moon: null, clouds: [], rain: null, snow: null, windT: 0, y: 0, rainN: 7000, snowN: 3000 };
+  function cloudTex() { return tex(256, 128, function (c, w, h) { c.clearRect(0, 0, w, h); for (var i = 0; i < 14; i++) { var r = randf(18, 42), x = randf(r, w - r), y = randf(r * 0.6, h - r * 0.6); var g = c.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, 'rgba(255,255,255,0.9)'); g.addColorStop(0.6, 'rgba(255,255,255,0.45)'); g.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = g; c.fillRect(x - r, y - r, 2 * r, 2 * r); } }); }
+  function discTex(col) { return tex(128, 128, function (c, w, h) { c.clearRect(0, 0, w, h); var g = c.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, col); g.addColorStop(0.45, col); g.addColorStop(0.6, 'rgba(255,240,200,0.35)'); g.addColorStop(1, 'rgba(255,240,200,0)'); c.fillStyle = g; c.fillRect(0, 0, w, h); }); }
+  function buildSky(opt) {
+    opt = opt || {}; sky.y = opt.y || 0;
+    var skyMat = new THREE.ShaderMaterial({ uniforms: { top: { value: new THREE.Color(0x4f7fb8) }, mid: { value: new THREE.Color(0x8fb0d4) }, bot: { value: new THREE.Color(0xd6e2ec) } }, side: THREE.BackSide, depthWrite: false, fog: false,
+      vertexShader: 'varying vec3 vW; void main() { vW = normalize((modelMatrix * vec4(position, 1.0)).xyz); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'uniform vec3 top, mid, bot; varying vec3 vW; void main() { float h = clamp(vW.y, -0.05, 1.0); vec3 c = h < 0.12 ? mix(bot, mid, smoothstep(-0.05, 0.12, h)) : mix(mid, top, pow(smoothstep(0.12, 1.0, h), 0.6)); gl_FragColor = vec4(c, 1.0); }' });
+    var dome = new THREE.Mesh(new THREE.SphereGeometry(opt.radius || 230, 32, 16), skyMat); dome.position.y = sky.y; dome.renderOrder = -10; dome.userData.noBake = true; dome.frustumCulled = false; scene.add(dome); sky.dome = dome; sky.mat = skyMat;
+    var sunSp = new THREE.Sprite(new THREE.SpriteMaterial({ map: discTex('rgba(255,244,214,1)'), transparent: true, depthWrite: false, fog: false })); sunSp.scale.set(26, 26, 1); scene.add(sunSp); sky.sunDisc = sunSp;
+    var moonSp = new THREE.Sprite(new THREE.SpriteMaterial({ map: discTex('rgba(225,230,240,0.9)'), transparent: true, depthWrite: false, fog: false })); moonSp.scale.set(12, 12, 1); scene.add(moonSp); sky.moon = moonSp;
+    var ct = cloudTex();
+    for (var k = 0; k < (opt.clouds === undefined ? 10 : opt.clouds); k++) { var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: ct, transparent: true, depthWrite: false, opacity: 0.85, fog: false })); var s = randf(50, 90); sp.scale.set(s, s * 0.5, 1); sp.position.set(randf(-150, 150), randf(70, 100), randf(-150, 150)); scene.add(sp); sky.clouds.push({ sp: sp, v: randf(0.6, 1.4) }); }
+    if (opt.precipitation !== false) {
+      var streak = tex(16, 64, function (c, w, h) { c.clearRect(0, 0, w, h); var g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(210,225,240,0)'); g.addColorStop(0.5, 'rgba(210,225,240,0.9)'); g.addColorStop(1, 'rgba(210,225,240,0)'); c.fillStyle = g; c.fillRect(6, 0, 4, h); });
+      var flake = tex(32, 32, function (c, w, h) { c.clearRect(0, 0, w, h); var g = c.createRadialGradient(16, 16, 0, 16, 16, 16); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.5, 'rgba(255,255,255,0.8)'); g.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = g; c.fillRect(0, 0, w, h); });
+      var mkPoints = function (n, size, map, range) { var geo = new THREE.BufferGeometry(), pos = new Float32Array(n * 3); for (var i = 0; i < n; i++) { pos[i * 3] = randf(-range, range); pos[i * 3 + 1] = randf(0, 16); pos[i * 3 + 2] = randf(-range, range); } geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); var pts = new THREE.Points(geo, new THREE.PointsMaterial({ map: map, size: size, transparent: true, opacity: 0.85, depthWrite: false, alphaTest: 0.05 })); pts.visible = false; pts.frustumCulled = false; scene.add(pts); return pts; };
+      sky.rainN = opt.rainN || 7000; sky.snowN = opt.snowN || 3000;
+      sky.rain = mkPoints(sky.rainN, 0.26, streak, 24); sky.rain.material.opacity = 0.5; sky.rain.material.color.setHex(0xc7d3de); sky.snow = mkPoints(sky.snowN, 0.22, flake, 30);
+    }
+    return sky;
+  }
+  // the height of whatever is over a point: 0 outdoors, a roof height under a roof. The game answers CO.game.roofAt(x, z).
+  function roofAt(x, z) { return CO.game && CO.game.roofAt ? CO.game.roofAt(x, z) : 0; }
+  function tickSky(dt) {
+    sky.windT += dt;
+    var W = S && S.weather || { kind: 'clear', wet: 0, snow: 0, wind: 0.4 }, t = S ? S.time || 12 : 12;
+    if (sky.dome) { sky.dome.position.x = camera.position.x; sky.dome.position.z = camera.position.z; }
+    sky.clouds.forEach(function (c) { c.sp.position.x += c.v * dt * (0.5 + W.wind); if (c.sp.position.x > camera.position.x + 150) c.sp.position.x = camera.position.x - 150; });
+    if (sky.sunDisc && sun) { _v.copy(sun.position).sub(sun.target.position).normalize(); var elv = Math.sin(Math.PI * clamp((t - 6) / 16, 0, 1)); sky.sunDisc.position.copy(_v).multiplyScalar(200).add(camera.position); sky.sunDisc.material.opacity = clamp(elv * 4, 0, 1); sky.moon.position.copy(_v).multiplyScalar(-200).add(camera.position); sky.moon.position.y = Math.abs(sky.moon.position.y - camera.position.y) + camera.position.y + 20; sky.moon.material.opacity = clamp(0.9 - elv * 4, 0, 0.9); }
+    var raining = W.kind === 'rain' || W.kind === 'storm', snowing = W.kind === 'snow', px = player ? player.x : camera.position.x, pz = player ? player.z : camera.position.z;
+    if (sky.rain) {
+      sky.rain.visible = raining; sky.snow.visible = snowing;
+      if (raining) { var p = sky.rain.geometry.attributes.position.array, pn = Math.min(p.length, (CO.rainN || sky.rainN) * 3); for (var r = 0; r < pn; r += 3) { p[r + 1] -= (9 + (W.kind === 'storm' ? 4 : 0)) * dt; var roofY = roofAt(p[r], p[r + 2]); if (p[r + 1] < roofY + sky.y || Math.abs(p[r] - px) > 26 || Math.abs(p[r + 2] - pz) > 26) { p[r] = px + randf(-24, 24); p[r + 2] = pz + randf(-24, 24); var rf = roofAt(p[r], p[r + 2]); p[r + 1] = randf(rf ? rf + 0.6 : 6, 16); } } sky.rain.geometry.attributes.position.needsUpdate = true; }
+      if (snowing) { var q = sky.snow.geometry.attributes.position.array, qn = Math.min(q.length, (CO.snowN || sky.snowN) * 3); for (var s = 0; s < qn; s += 3) { q[s + 1] -= 1.3 * dt; q[s] += Math.sin(sky.windT + s) * 0.4 * dt; var ry = roofAt(q[s], q[s + 2]); if (q[s + 1] < ry + sky.y || Math.abs(q[s] - px) > 32 || Math.abs(q[s + 2] - pz) > 32) { q[s] = px + randf(-30, 30); q[s + 2] = pz + randf(-30, 30); var sf = roofAt(q[s], q[s + 2]); q[s + 1] = randf(sf ? sf + 0.6 : 6, 16); } } sky.snow.geometry.attributes.position.needsUpdate = true; }
+    }
+    var overcast = raining ? 0.75 : snowing ? 0.6 : W.kind === 'overcast' ? 0.5 : 0;
+    var cday = 0.12 + 0.88 * Math.sin(Math.PI * clamp((t - 6) / 16, 0, 1)); sky.clouds.forEach(function (c) { c.sp.material.color.setScalar((1 - overcast * 0.55) * cday); c.sp.material.opacity = 0.5 + overcast * 0.5; });
+    runHooks('sky', W, dt);
+  }
+  // ── Light by the hour ─────────────────────────────────────────────
+  // the sun's angle, colour and strength, the sky bounce, the sky and fog colours, and the lamp materials follow S.time and the
+  // weather. The game lights its own lamps in the 'lighting' hook, which gets (day, dawn, overcast, power) each tick.
+  var skyNight = new THREE.Color(0x0b1020), skyDawn = new THREE.Color(0xd9916b), skyDay = new THREE.Color(0x8fb0d4), skyOvercast = new THREE.Color(0x6b7482), skyTmp = new THREE.Color(), lightT = 0;
+  function powered() { return CO.game && CO.game.powered ? CO.game.powered() : true; }
+  function lighting(dt) {
+    lightT += dt; if (lightT < 0.1) return; lightT = 0;
+    var t = S ? S.time || 12 : 12, day = clamp((t - 5.5) / 1.5, 0, 1) * clamp((21.5 - t) / 1.5, 0, 1), dawn = Math.max(0, 1 - Math.abs(t - 6.5) / 1.5) + Math.max(0, 1 - Math.abs(t - 20.5) / 1.5);
+    var az = Math.PI * (t - 6) / 16, elev = Math.sin(Math.PI * clamp((t - 6) / 16, 0, 1));
+    var W = S && S.weather || { kind: 'clear' }, overcast = W.kind === 'overcast' ? 0.45 : W.kind === 'rain' ? 0.65 : W.kind === 'storm' ? 0.85 : W.kind === 'snow' ? 0.55 : 0;
+    sun.position.set(Math.cos(az) * 60, 8 + elev * 80, 30 + Math.sin(az) * 20); sun.position.add(sun.target.position); sun.intensity = Math.max(0, elev) * 1.15 * (0.6 + 0.4 * day) * (1 - overcast * 0.8) + weatherFlash * 2.5;
+    sun.color.setHSL(0.09, dawn * 0.6 * (1 - overcast), 0.95 - dawn * 0.15);
+    skyTmp.copy(skyNight).lerp(skyDay, day); if (dawn > 0) skyTmp.lerp(skyDawn, dawn * 0.5 * (1 - day * 0.3));
+    if (overcast) skyTmp.lerp(skyOvercast, overcast * day * 0.8); if (weatherFlash > 0.05) skyTmp.lerp(new THREE.Color(0xffffff), weatherFlash * 0.7);
+    if (scene.background && scene.background.isColor) scene.background.copy(skyTmp); if (scene.fog) { scene.fog.color.copy(skyTmp); scene.fog.near = 70 - overcast * 30; scene.fog.far = 190 - overcast * 90; }
+    if (sky.mat) { sky.mat.uniforms.top.value.copy(skyTmp).multiplyScalar(0.62 + overcast * 0.25); sky.mat.uniforms.mid.value.copy(skyTmp); sky.mat.uniforms.bot.value.copy(skyTmp).lerp(new THREE.Color(0xffffff), 0.4 * day * (1 - overcast * 0.5)); }
+    hemi.intensity = 0.12 + day * 0.35 * (1 - overcast * 0.5) + weatherFlash;
+    var power = powered();
+    MAT.lamp.color.setHex(power ? 0xfff6e4 : 0x3a3a3a); MAT.skylight.color.setHex(0xffffff); MAT.skylight.color.multiplyScalar(0.04 + day * 0.96);
+    runHooks('lighting', day, dawn, overcast, power);
+  }
+  // The sun's shadow map is a second full pass over every caster, so it is not redrawn every frame. It is redrawn four times a
+  // second, at once when something flagged it dirty, and every frame while the game says something big is moving (CO.game.shadowLive()).
+  function shadowTick(dt) {
+    if (!renderer.shadowMap.enabled) return;
+    shadowT += dt;
+    var live = CO.game && CO.game.shadowLive ? CO.game.shadowLive() : false;
+    if (shadowDirty || live || shadowT > 0.25) { renderer.shadowMap.needsUpdate = true; shadowDirty = false; shadowT = 0; }
+  }
+  // ── World items ───────────────────────────────────────────────────
+  // A key names an item by what it is and where the game built it ("lamp post@12,6", "mesh plane 34x19.2@0,13.6"), so it survives a
+  // reload and most changes to the game's code. An edit is { x, y, z, ry (degrees), sx, sy, sz, hidden }, every field optional.
+  // 0.13.0: a game that builds more than one world (Depot's six building stages, each a page load of its own) names the one a page built
+  // in GAME.worldVariant (a string, or a function asked once the save is loaded and again after the build). Each world keeps its own edits and copies, and the editor writes
+  // every world's set into the one src/00-world.js as CO.world({ ... }, "stage 5"). A game that names none has one world, the "" set.
+  var WORLD_SETS = {}, WORLD_VARIANT = '', WORLD_ITEMS = [], WORLD_PARENT = null;
+  function worldSet(v) { v = v === undefined || v === null ? '' : String(v); return WORLD_SETS[v] || (WORLD_SETS[v] = { edits: {}, copies: [] }); }
+  var WORLD_EDITS = worldSet('').edits, WORLD_COPIES = worldSet('').copies;   // the set of the world this page built: worldEditsApply points them at it
+  // copies of world items (0.9.4): { id, of (the original's key), x, y, z, ry (degrees), sx, sy, sz }, kept in src/00-world.js
+  CO.worldCopies = function (list, variant) { var set = worldSet(variant); (list || []).forEach(function (c) { if (c && c.id && c.of && !set.copies.some(function (k) { return k.id === c.id; })) set.copies.push(c); }); return set.copies; };
+  CO.world = function (edits, variant) { var set = worldSet(variant); if (edits && typeof edits === 'object') for (var k in edits) set.edits[k] = edits[k]; return set.edits; };
+  function worldVariantOf() { var g = CO.game || {}, v = typeof g.worldVariant === 'function' ? g.worldVariant() : g.worldVariant; return v === undefined || v === null ? '' : String(v); }
+  // a kit call builds into a group of its own, centred on what it built and standing on the ground, so it turns and resizes about itself
+  // a game marks an item movesOnly (o.userData.movesOnly = true) when its rules follow where it stands but not a turn or a new size
+  function worldItem(kind, fn, parent) {
+    if (parent || WORLD_PARENT) return fn();
+    var root = CO.root || scene, g = new THREE.Group(); g.name = kind; g.userData.worldItem = kind; root.add(g);
+    var n0 = solids.length, out; WORLD_PARENT = g;
+    try { out = fn(); } finally { WORLD_PARENT = null; }
+    g.userData.solids = solids.slice(n0);
+    g.updateMatrixWorld(true); var b = new THREE.Box3().setFromObject(g);
+    if (!b.isEmpty()) { var cx = (b.min.x + b.max.x) / 2, cz = (b.min.z + b.max.z) / 2; g.children.forEach(function (c) { c.position.x -= cx; c.position.z -= cz; }); g.position.set(cx, 0, cz); g.updateMatrixWorld(true); }
+    return out;
+  }
+  function worldRound(v) { return Math.round(v * 100) / 100; }
+  // the things at the top of the world that count as items: not props, people, doors, cars, lights, helpers, the sky or the bake
+  function worldCandidate(o) {
+    if (!o || o === CO.root || o.userData.editor || o.userData.baked || o.userData.dynamic || o.userData.legs || o.userData.person || o.userData.propId) return false;
+    if (o.isLight || o.isPoints || o.isSprite || o.isCamera || o.userData.it || o.material === MAT.hit) return false;   /* a use box is the thing it belongs to, not a thing of its own */
+    if (o.userData.worldItem) return true;
+    if (hdoors.some(function (d) { return d.g === o; })) return false;
+    if (typeof traffic !== 'undefined' && traffic && traffic.cars && traffic.cars.some(function (c) { return c.g === o; })) return false;
+    if (o.name === 'terrain' || (typeof TERRAIN === 'object' && TERRAIN && TERRAIN.mesh === o)) return false;
+    if (o.isMesh) { var m = Array.isArray(o.material) ? o.material[0] : o.material, P = o.geometry && o.geometry.parameters || {}; if (m && m.side === THREE.BackSide) return false; if (P.radius > 100) return false; return !!o.geometry; }
+    return !!o.isGroup && o.children.length > 0;
+  }
+  function worldKind(o) {
+    if (o.userData.worldItem) return o.userData.worldItem;
+    if (o.isMesh) { var P = o.geometry.parameters || {}, t = (o.geometry.type || 'mesh').replace(/Geometry$/, '').toLowerCase(); var dims = ['width', 'height', 'depth', 'radius', 'radiusTop'].filter(function (k) { return typeof P[k] === 'number'; }).map(function (k) { return worldRound(P[k]); }).join('x'); return 'mesh ' + t + (dims ? ' ' + dims : ''); }
+    return o.name || 'group';
+  }
+  function worldName(o) { var k = worldKind(o); return /^mesh /.test(k) ? k.replace(/^mesh (\w+).*/, '$1') + (o.material && matName(o.material) ? ' · ' + matName(o.material) : '') : k; }
+  // after the build: every item gets its key and remembers where the game put it and the solids it came with
+  // a plain box mesh and a solid laid on exactly its footprint are one wall: the solid travels with the box
+  function worldClaimSolids(o, claimed) {
+    if (!o.geometry || o.geometry.type !== 'BoxGeometry') return;
+    o.updateMatrixWorld(true); var b = new THREE.Box3().setFromObject(o), mine = [], near = function (a, c) { return Math.abs(a - c) < 0.05; };
+    solids.forEach(function (s) { if (claimed.indexOf(s) < 0 && near(s.x0, b.min.x) && near(s.x1, b.max.x) && near(s.z0, b.min.z) && near(s.z1, b.max.z)) mine.push(s); });
+    if (mine.length) { o.userData.solids = mine; mine.forEach(function (s) { claimed.push(s); }); }
+  }
+  function worldScan() {
+    WORLD_ITEMS = []; var seen = {}, claimed = [];
+    (CO.root && CO.root !== scene ? [scene, CO.root] : [scene]).forEach(function (r) { r.children.forEach(function (o) { (o.userData.solids || []).forEach(function (s) { claimed.push(s); }); }); });   /* a kit item's own solids are not up for claiming */
+    (CO.root && CO.root !== scene ? [scene, CO.root] : [scene]).forEach(function (r) { r.children.slice().forEach(function (o) {
+      if (!worldCandidate(o) || o.userData.worldKey) { if (o.userData.worldKey) WORLD_ITEMS.push(o); return; }
+      var base = worldKind(o) + '@' + worldRound(o.position.x) + ',' + worldRound(o.position.z) + (Math.abs(o.position.y) > 0.005 ? ',' + worldRound(o.position.y) : ''), key = base, n = 1;
+      while (seen[key]) key = base + '#' + (++n); seen[key] = true;
+      if (!o.userData.worldItem && o.isMesh && !o.userData.solids) worldClaimSolids(o, claimed);   /* a wall drawn as a plain box takes the solid laid on its footprint */
+      o.userData.worldKey = key; o.userData.worldBase = { x: o.position.x, y: o.position.y, z: o.position.z, ry: o.rotation.y, sx: o.scale.x, sy: o.scale.y, sz: o.scale.z };
+      o.userData.worldSolidsBase = (o.userData.solids || []).map(function (s) { return { x0: s.x0, x1: s.x1, z0: s.z0, z1: s.z1, y0: s.y0, y1: s.y1 }; });
+      WORLD_ITEMS.push(o);
+    }); });
+    return WORLD_ITEMS;
+  }
+  function worldItemOf(o) { for (var a = o; a; a = a.parent) if (a.userData && a.userData.worldKey) return a; return null; }
+  function worldByKey(key) { for (var i = 0; i < WORLD_ITEMS.length; i++) if (WORLD_ITEMS[i].userData.worldKey === key) return WORLD_ITEMS[i]; return null; }
+  // the solids an item came with follow it: turned, resized and moved with it, and gone while it is hidden
+  function worldSolids(o) {
+    var ss = o.userData.solids || [], B = o.userData.worldSolidsBase || [], b0 = o.userData.worldBase; if (!ss.length || !b0) return;
+    var c0 = Math.cos(b0.ry), s0 = Math.sin(b0.ry), a = o.rotation.y, c = Math.cos(a), s = Math.sin(a), hidden = !o.visible;
+    ss.forEach(function (sol, i) {
+      var q = B[i]; if (!q) return; if (hidden) { sol.x0 = sol.x1 = sol.z0 = sol.z1 = 1e6; return; }
+      var xs = [], zs = [];
+      [[q.x0, q.z0], [q.x1, q.z0], [q.x0, q.z1], [q.x1, q.z1]].forEach(function (p) {
+        var dx = p[0] - b0.x, dz = p[1] - b0.z, lx = (dx * c0 - dz * s0) / b0.sx, lz = (dx * s0 + dz * c0) / b0.sz;   /* into the item's own frame at build */
+        lx *= o.scale.x; lz *= o.scale.z; xs.push(o.position.x + lx * c + lz * s); zs.push(o.position.z - lx * s + lz * c);
+      });
+      sol.x0 = Math.min.apply(null, xs); sol.x1 = Math.max.apply(null, xs); sol.z0 = Math.min.apply(null, zs); sol.z1 = Math.max.apply(null, zs);
+      var ky = o.scale.y / b0.sy; sol.y0 = o.position.y + (q.y0 - b0.y) * ky; sol.y1 = o.position.y + (q.y1 - b0.y) * ky;
+    });
+    if (typeof NAV === 'object' && NAV) NAV.dirty = true;
+  }
+  function worldLay(o, e) {
+    var b0 = o.userData.worldBase; if (!b0 || !e) return;
+    o.position.set(typeof e.x === 'number' ? e.x : b0.x, typeof e.y === 'number' ? e.y : b0.y, typeof e.z === 'number' ? e.z : b0.z);
+    o.rotation.y = typeof e.ry === 'number' ? e.ry * Math.PI / 180 : b0.ry;
+    o.scale.set(typeof e.sx === 'number' ? e.sx : b0.sx, typeof e.sy === 'number' ? e.sy : b0.sy, typeof e.sz === 'number' ? e.sz : b0.sz);
+    o.visible = !e.hidden; o.updateMatrixWorld(true); worldSolids(o); shadowDirty = true;
+  }
+  // after the build and before the bake: the saved edits laid on the world, then the copies built
+  function worldEditsApply() { WORLD_VARIANT = worldVariantOf(); var set = worldSet(WORLD_VARIANT); WORLD_EDITS = set.edits; WORLD_COPIES = set.copies; worldScan(); WORLD_ITEMS.forEach(function (o) { var e = WORLD_EDITS[o.userData.worldKey]; if (e) worldLay(o, e); }); WORLD_COPIES.forEach(function (c) { worldCopyBuild(c); }); }
+  // a copy: the original's meshes cloned (they share its geometry and materials, so a copy costs little), its solids cloned and laid where
+  // the copy stands. What the original does (a door that opens, a prompt) stays with the original: a copy is its look and its solids
+  function worldCopyBuild(c) {
+    var src = worldByKey(c.of); if (!src) return null;
+    var keep = [], vis = []; src.traverse(function (o) { keep.push(o.userData); vis.push(o.userData && o.userData.bakedAway ? true : o.visible); o.userData = {}; });
+    var g; try { g = src.clone(true); } finally { var i0 = 0; src.traverse(function (o) { o.userData = keep[i0++]; }); }
+    var i1 = 0; g.traverse(function (o) { o.visible = vis[i1++]; });
+    g.visible = true; g.name = src.name; g.userData = { worldItem: src.userData.worldItem || null, worldKey: c.id, worldCopy: c, worldBase: src.userData.worldBase, worldSolidsBase: src.userData.worldSolidsBase || [] };
+    g.userData.solids = g.userData.worldSolidsBase.map(function (q) { var s = { x0: q.x0, x1: q.x1, z0: q.z0, z1: q.z1, y0: q.y0, y1: q.y1 }; solids.push(s); return s; });
+    (CO.root || scene).add(g); worldCopyLay(g); WORLD_ITEMS.push(g); return g;
+  }
+  function worldCopyLay(g) { var c = g.userData.worldCopy, b = g.userData.worldBase || { x: 0, y: 0, z: 0, ry: 0, sx: 1, sy: 1, sz: 1 }; g.position.set(num(c.x, b.x), num(c.y, b.y), num(c.z, b.z)); g.rotation.y = typeof c.ry === 'number' ? c.ry * Math.PI / 180 : b.ry; g.scale.set(num(c.sx, b.sx), num(c.sy, b.sy), num(c.sz, b.sz)); g.updateMatrixWorld(true); worldSolids(g); shadowDirty = true; }
+  function num(v, d) { return typeof v === 'number' ? v : d; }
+  // a copy removed: out of the scene, its solids gone, its record dropped
+  function worldCopyRemove(g) { var c = g.userData.worldCopy; if (g.parent) g.parent.remove(g); (g.userData.solids || []).forEach(function (s) { var k = solids.indexOf(s); if (k >= 0) solids.splice(k, 1); }); var a = WORLD_COPIES.indexOf(c); if (a >= 0) WORLD_COPIES.splice(a, 1); var b = WORLD_ITEMS.indexOf(g); if (b >= 0) WORLD_ITEMS.splice(b, 1); if (typeof NAV === 'object' && NAV) NAV.dirty = true; shadowDirty = true; }
+  // what the editor keeps: the item as it stands now against where the game built it
+  function worldRecord(o) {
+    if (o.userData.worldCopy) { var c = o.userData.worldCopy; c.x = worldRound(o.position.x); c.y = worldRound(o.position.y); c.z = worldRound(o.position.z); c.ry = Math.round(o.rotation.y * 180 / Math.PI * 10) / 10; c.sx = worldRound(o.scale.x); c.sy = worldRound(o.scale.y); c.sz = worldRound(o.scale.z); worldSolids(o); return c; }
+    var b0 = o.userData.worldBase, key = o.userData.worldKey; if (!b0 || !key) return null;
+    var e = {}, near = function (a, b) { return Math.abs(a - b) < 0.0005; };
+    if (!near(o.position.x, b0.x)) e.x = worldRound(o.position.x); if (!near(o.position.y, b0.y)) e.y = worldRound(o.position.y); if (!near(o.position.z, b0.z)) e.z = worldRound(o.position.z);
+    if (!near(o.rotation.y, b0.ry)) e.ry = Math.round(o.rotation.y * 180 / Math.PI * 10) / 10;
+    if (!near(o.scale.x, b0.sx)) e.sx = worldRound(o.scale.x); if (!near(o.scale.y, b0.sy)) e.sy = worldRound(o.scale.y); if (!near(o.scale.z, b0.sz)) e.sz = worldRound(o.scale.z);
+    if (!o.visible) e.hidden = true;
+    if (Object.keys(e).length) WORLD_EDITS[key] = e; else delete WORLD_EDITS[key];
+    worldSolids(o); return e;
+  }
+  // the part the editor writes: src/00-world.js, or nothing when the world stands as the game builds it. Every world's set is written,
+  // not only the one this page built, so editing one stage never drops what another stage keeps. The "" set comes first, as before 0.13
+  function worldCode() {
+    var obj = function (o) { return JSON.stringify(o).replace(/"(\w+)":/g, '$1: ').replace(/,(?=\w+: )/g, ', ').replace(/^\{/, '{ ').replace(/\}$/, ' }'); };
+    var lines = ['//@ the world the editor changed: what was moved, turned, resized, removed or copied of what the game builds straight into its world. Written by the Co Engine editor; it sorts first in src/ and is laid on the world as it is built. A key is the thing and where the game built it; delete a line to put that thing back, or to take a copy away.'];
+    Object.keys(WORLD_SETS).sort().forEach(function (v) {
+      var set = WORLD_SETS[v], keys = Object.keys(set.edits).sort(), tail = v ? ', ' + JSON.stringify(v) + ');' : ');';
+      if (keys.length) { lines.push('  CO.world({'); keys.forEach(function (k) { lines.push('    ' + JSON.stringify(k) + ': ' + obj(set.edits[k]) + ','); }); lines.push('  }' + tail); }
+      if (set.copies.length) { lines.push('  CO.worldCopies(['); set.copies.forEach(function (c) { lines.push('    ' + obj(c) + ','); }); lines.push('  ]' + tail); }
+    });
+    return lines.length > 1 ? lines.join('\n') + '\n' : '';
+  }
+  // ── Meshes ────────────────────────────────────────────────────────
+  var CAR_COLS = [0xb8322a, 0x2c5f9e, 0xd8dbdf, 0x2a2d33, 0x7a8691, 0xe0a02a, 0x4f6a3a];
+  // a tyre with rings, a rim and a hub, laid along z at (x, y, z) in parent g
+  function truckWheel(g, x, y, z, r, w) { var ty = cyl(r, w, MAT.rubber, x, y, z, g, 20); ty.rotation.x = Math.PI / 2; for (var k = 0; k < 3; k++) { var ring = new THREE.Mesh(new THREE.TorusGeometry(r - 0.04, 0.012, 6, 24), MAT.black); ring.position.set(x, y, z + (k - 1) * w * 0.3); g.add(ring); } cyl(r * 0.58, w + 0.02, MAT.chrome, x, y, z, g, 14).rotation.x = Math.PI / 2; cyl(r * 0.2, w + 0.06, MAT.steelDark, x, y, z, g, 10).rotation.x = Math.PI / 2; return ty; }
+  // a bevelled box straight into a group: the one-line closure every vehicle builder used to write for itself
+  function rbx(g, w, h, d, r, mat, x, y, z) { var m = new THREE.Mesh(bevelGeo(w, h, d, r), mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; g.add(m); return m; }
+  // a hatchback: bevelled body, glass, wheels with arches, lamps, plates, a roof rack bar. opt: { col, plate, seed }
+  function carMesh(opt) {
+    opt = typeof opt === 'number' ? { col: opt } : (opt || {});
+    var g = new THREE.Group(), col = opt.col === undefined ? pick(CAR_COLS) : opt.col, paint = new THREE.MeshPhysicalMaterial({ color: col, roughness: 0.35, metalness: 0.4, clearcoat: 0.9, clearcoatRoughness: 0.15 }), glass = std({ color: 0x2a3340, roughness: 0.05, metalness: 0.4, transparent: true, opacity: 0.85 });
+    rbx(g, 4.3, 0.52, 1.82, 0.08, paint, 0, 0.6, 0); rbx(g, 2.4, 0.56, 1.66, 0.1, paint, -0.25, 1.12, 0); rbx(g, 1.0, 0.3, 1.6, 0.05, paint, 1.6, 0.9, 0);
+    /* the windscreen leans back from the bonnet to the roof's front edge, the rear window forward from the boot to its back edge */ var ws = rbx(g, 0.06, 0.46, 1.5, 0.02, glass, 1.075, 1.21, 0); ws.rotation.z = 0.58; var rw = rbx(g, 0.06, 0.63, 1.5, 0.02, glass, -1.625, 1.14, 0); rw.rotation.z = -0.59; rbx(g, 2.1, 0.44, 0.04, 0.01, glass, -0.25, 1.12, 0.84); rbx(g, 2.1, 0.44, 0.04, 0.01, glass, -0.25, 1.12, -0.84);
+    [-1, 1].forEach(function (s) { box(0.02, 0.4, 0.02, MAT.black, -0.25, 1.12, s * 0.86, g); box(0.02, 0.4, 0.02, MAT.black, 0.5, 1.1, s * 0.86, g); box(0.14, 0.02, 0.03, MAT.chrome, -0.6, 0.78, s * 0.92, g); box(0.14, 0.02, 0.03, MAT.chrome, 0.3, 0.78, s * 0.92, g); box(0.12, 0.1, 0.16, paint, 0.6, 1.2, s * 1.0, g); });
+    g.userData.wheels = [];
+    // each wheel is one group at the axle (tyre, rim, spokes, hub) so a game spins it with wheel.rotation.z, around the axle across the car;
+    // the spokes lie flat on the outer face and the arch stands in the car's side plane over the tyre
+    [[1.4, 0.95], [1.4, -0.95], [-1.4, 0.95], [-1.4, -0.95]].forEach(function (p) {
+      var s = p[1] > 0 ? 1 : -1, w = new THREE.Group(); w.position.set(p[0], 0.33, p[1]); w.userData.wheel = true; g.add(w);
+      cyl(0.33, 0.22, MAT.rubber, 0, 0, 0, w, 20).rotation.x = Math.PI / 2; cyl(0.2, 0.225, MAT.chrome, 0, 0, 0, w, 16).rotation.x = Math.PI / 2;
+      for (var sp = 0; sp < 3; sp++) box(0.34, 0.035, 0.02, MAT.steelDark, 0, 0, s * 0.118, w).rotation.z = sp * Math.PI / 3;
+      cyl(0.055, 0.03, MAT.steelDark, 0, 0, s * 0.125, w, 10).rotation.x = Math.PI / 2;
+      var arch = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.05, 6, 14, Math.PI), paint); arch.position.set(p[0], 0.35, s * 0.92); g.add(arch); g.userData.wheels.push(w);
+    });
+    rbx(g, 0.12, 0.2, 1.9, 0.03, MAT.plastic, 2.14, 0.42, 0); rbx(g, 0.12, 0.2, 1.9, 0.03, MAT.plastic, -2.14, 0.42, 0);
+    g.userData.lamps = [box(0.06, 0.16, 0.34, glowMat(0xfff2c0, 0.4), 2.16, 0.68, 0.62, g), box(0.06, 0.16, 0.34, glowMat(0xfff2c0, 0.4), 2.16, 0.68, -0.62, g)]; box(0.06, 0.14, 0.34, glowMat(0xff2a1a, 0.5), -2.16, 0.68, 0.62, g); box(0.06, 0.14, 0.34, glowMat(0xff2a1a, 0.5), -2.16, 0.68, -0.62, g);
+    var plate = opt.plate || ('CO ' + randi(10, 99) + ' ' + pick(['AB', 'KH', 'NL', 'XY']) + randi(100, 999));
+    sign([plate], 0.44, 0.11, 2.2, 0.46, 0, Math.PI / 2, { w: 256, h: 64, bg: '#f5f1e6', fg: '#1b232c' }, g); sign([plate.slice(0, 5)], 0.44, 0.11, -2.2, 0.46, 0, -Math.PI / 2, { w: 256, h: 64, bg: '#f5f1e6', fg: '#1b232c' }, g);
+    box(0.5, 0.06, 1.0, MAT.black, -0.2, 1.42, 0, g); cyl(0.015, 0.3, MAT.black, -0.9, 1.5, 0.4, g, 4); box(0.3, 0.015, 0.02, MAT.black, 1.0, 1.0, -0.3, g).rotation.z = -0.55;
+    g.userData.paint = paint; g.userData.dynamic = true;
+    return g;
+  }
+  // ── Lane traffic ──────────────────────────────────────────────────
+  // cars that drive along x in lanes and wrap at the edge: traffic.add(z, dir, speed, mesh) and tickTraffic(dt). The player
+  // and the game's own vehicles are not in it; it is the road's life.
+  var traffic = { cars: [], x0: -130, x1: 130 };
+  function trafficAdd(z, dir, v, mesh, y) { var g = mesh || carMesh(); g.position.set(randf(traffic.x0, traffic.x1), y || 0, z); g.rotation.y = dir > 0 ? Math.PI / 2 : -Math.PI / 2; g.rotation.y = dir > 0 ? 0 : Math.PI; scene.add(g); var c = { g: g, dir: dir, v: v || randf(6, 11), z: z }; traffic.cars.push(c); return c; }
+  function tickTraffic(dt) { if (!traffic || !traffic.cars) return; roadTick(dt); traffic.cars.forEach(function (c) { if (c.road) return; c.g.position.x += c.dir * c.v * dt; if (c.g.position.x > traffic.x1) c.g.position.x = traffic.x0; if (c.g.position.x < traffic.x0) c.g.position.x = traffic.x1; var ws = c.g.userData.wheels; if (ws) ws.forEach(function (w) { w.rotation.z -= c.dir * c.v * dt / 0.33; }); }); }
+  // ── Road network ─────────────────────────────────────────────────
+  // Lanes are directed polylines of [x, z] points. A road piece adds its own from its build with c.lane(points, opt), local to
+  // the prop, so they move and turn with it; a game adds one in world space with roadLane(points, opt). Lane ends that meet
+  // (within 1.2 m, heading within 60 degrees) join into one network, rebuilt when a road piece is placed, moved or removed.
+  // roadTraffic({ cars }) keeps that many cars driving it: a car picks its next lane at random at each lane end, keeps its
+  // distance to the car ahead, waits while another approach crosses a junction (lanes with the same opt.box), gives way to a
+  // lane of higher opt.prio it merges into (a roundabout's ring) and slows for a tight curve (opt.r, its radius). A lane end
+  // that leads nowhere sends the car back to a lane nothing leads into, so an open road behaves like the wrapping lanes above.
+  // The cars sit in traffic.cars beside the lane cars, flagged road: true. The dev command 'lanes' draws the network.
+  var ROADNET = { src: [], net: null, sig: '', checkT: 0, want: 0, cars: [], dbg: null, seq: 0 };
+  function roadLane(points, opt) { var s = { pts: points.map(function (p) { return [p[0], p[1]]; }), opt: opt || {}, g: null, prop: null, n: ++ROADNET.seq }; ROADNET.src.push(s); ROADNET.sig = ''; return s; }
+  function roadLaneLocal(g, prop, points, opt) { var s = roadLane(points, opt); s.g = g; s.prop = prop; return s; }
+  function roadDropProp(prop) { var n = ROADNET.src.length; ROADNET.src = ROADNET.src.filter(function (s) { return s.prop !== prop; }); if (ROADNET.src.length !== n) ROADNET.sig = ''; }
+  function roadLive(g) { for (var o = g; o; o = o.parent) { if (o === scene) return true; } return false; }
+  function roadSig() { var parts = [ROADNET.src.length]; ROADNET.src.forEach(function (s) { if (!s.g) return; var p = s.g.position; parts.push(s.n, Math.round(p.x * 20), Math.round(p.z * 20), Math.round(s.g.rotation.y * 100), roadLive(s.g) ? 1 : 0); }); return parts.join(','); }
+  function roadNet() {
+    var v = new THREE.Vector3(), lanes = [];
+    ROADNET.src = ROADNET.src.filter(function (s) { return !s.g || roadLive(s.g); });
+    ROADNET.src.forEach(function (s) {
+      if (s.g) s.g.updateMatrixWorld(true);
+      var pts = s.pts.map(function (p) { if (s.g) { v.set(p[0], 0, p[1]).applyMatrix4(s.g.matrixWorld); return [v.x, v.y, v.z]; } return [p[0], s.opt.y || 0, p[1]]; });
+      if (pts.length < 2) return;
+      var cum = [0]; for (var i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][2] - pts[i - 1][2]));
+      lanes.push({ pts: pts, cum: cum, len: cum[cum.length - 1], src: s, next: [], prev: [], box: s.opt.box ? (s.prop || 'world') + ':' + s.opt.box : null, from: s.opt.from === undefined ? null : s.opt.from, prio: s.opt.prio || 0, vmax: s.opt.vmax || (s.opt.r ? Math.max(2.5, Math.sqrt(2.4 * s.opt.r)) : 11) });
+    });
+    var head = function (a, b) { var dx = b[0] - a[0], dz = b[2] - a[2], l = Math.hypot(dx, dz) || 1; return [dx / l, dz / l]; };
+    lanes.forEach(function (a) {
+      var e = a.pts[a.pts.length - 1], ha = head(a.pts[a.pts.length - 2], e);
+      lanes.forEach(function (b) {
+        if (b === a) return; var s0 = b.pts[0]; if (Math.hypot(s0[0] - e[0], s0[2] - e[2]) > 1.2) return;
+        var hb = head(s0, b.pts[1]); if (ha[0] * hb[0] + ha[1] * hb[1] < 0.5) return;
+        a.next.push(b); b.prev.push(a);
+      });
+    });
+    // a loop of priority lanes (a roundabout's ring) takes a car per 10 m of it; a car waits to join a full one, so it cannot lock up
+    lanes.forEach(function (l) { if (!l.prio || l.comp) return; var comp = { len: 0, cap: 1 }, todo = [l]; l.comp = comp; while (todo.length) { var q = todo.pop(); comp.len += q.len; q.next.concat(q.prev).forEach(function (o) { if (o.prio && !o.comp) { o.comp = comp; todo.push(o); } }); } comp.cap = Math.max(1, Math.floor(comp.len / 10)); });
+    var entries = lanes.filter(function (l) { return !l.prev.length && !l.box; });
+    return { lanes: lanes, entries: entries.length ? entries : lanes.filter(function (l) { return !l.box; }), joins: lanes.reduce(function (n, l) { return n + l.next.length; }, 0) };
+  }
+  function lanePoint(L, s, out) {
+    var p = L.pts, c = L.cum, i = 1; while (i < p.length - 1 && c[i] < s) i++;
+    var a = p[i - 1], b = p[i], t = clamp((s - c[i - 1]) / Math.max(1e-6, c[i] - c[i - 1]), 0, 1);
+    out.x = a[0] + (b[0] - a[0]) * t; out.y = a[1] + (b[1] - a[1]) * t; out.z = a[2] + (b[2] - a[2]) * t; out.yaw = Math.atan2(-(b[2] - a[2]), b[0] - a[0]); return out;
+  }
+  function roadPick(L) { return L.next.length ? L.next[Math.floor(Math.random() * L.next.length)] : null; }
+  function roadFree(L, s, skip) { var p = lanePoint(L, s, {}); for (var i = 0; i < ROADNET.cars.length; i++) { var d = ROADNET.cars[i]; if (d === skip || d.parked) continue; if (d.lane === L && Math.abs(d.s - s) < 9) return false; if (Math.hypot(d.g.position.x - p.x, d.g.position.z - p.z) < 7) return false; } return true; }
+  function roadPlace(c, L, s) { c.lane = L; c.src = L.src; c.s = s; c.next = roadPick(L); c.wait = 0; c.parked = false; c.g.visible = true; var p = lanePoint(L, s, {}); c.g.position.set(p.x, p.y, p.z); c.yaw = p.yaw; c.g.rotation.y = p.yaw; }
+  function roadPark(c) { c.parked = true; c.lane = null; c.next = null; c.v = 0; c.g.visible = false; }
+  function roadSeat(c, anywhere) {
+    var net = ROADNET.net; if (!net || !net.lanes.length) { roadPark(c); return false; }
+    var pool = anywhere ? net.lanes.filter(function (l) { return !l.box && l.len > 4; }) : net.entries; if (!pool.length) pool = net.lanes;
+    for (var k = 0; k < 8; k++) { var L = pool[Math.floor(Math.random() * pool.length)], s = anywhere ? Math.random() * L.len : 0; if (roadFree(L, s, c)) { roadPlace(c, L, s); c.v = anywhere ? c.vmax * 0.6 : Math.min(c.vmax, L.vmax) * 0.7; return true; } }
+    roadPark(c); return false;
+  }
+  function roadReseat() {
+    var byNode = new Map(); ROADNET.net.lanes.forEach(function (l) { byNode.set(l.src, l); });
+    ROADNET.cars.forEach(function (c) { if (c.parked) return; var L = byNode.get(c.src); if (L) { c.lane = L; c.s = Math.min(c.s, L.len); if (!c.next || L.next.indexOf(c.next) < 0) { var nn = c.next && byNode.get(c.next.src); c.next = nn && L.next.indexOf(nn) >= 0 ? nn : roadPick(L); } } else roadSeat(c, true); });
+  }
+  // how far ahead the nearest car is: on this lane, on the lane it goes to next, or any car close in front heading its way.
+  // Two cars that each have the other in front (side by side at a merge or in a junction) do not both wait: the one on the
+  // lower priority lane does, or on equal lanes the later car, so one always goes and they cannot lock each other
+  function roadGap(c, me) {
+    var best = 1e9, rem = c.lane.len - c.s;
+    for (var i = 0; i < ROADNET.cars.length; i++) {
+      var d = ROADNET.cars[i]; if (d === c || d.parked) continue;
+      if (d.lane === c.lane && d.s > c.s) best = Math.min(best, d.s - c.s);
+      else if (d.lane === c.next) best = Math.min(best, rem + d.s);
+      else { var dx = d.g.position.x - me.x, dz = d.g.position.z - me.z, dist = Math.hypot(dx, dz); if (dist < 7) { var hx = Math.cos(c.yaw), hz = -Math.sin(c.yaw), fwd = dx * hx + dz * hz, side = Math.abs(dx * hz - dz * hx); if (fwd > 0 && side < 1.7 && Math.cos(d.yaw - c.yaw) > -0.3) { var gx = Math.cos(d.yaw), gz = -Math.sin(d.yaw), mutual = (-dx * gx - dz * gz) > 0 && Math.abs(-dx * gz + dz * gx) < 1.7; if (!mutual || d.lane.prio > c.lane.prio || (d.lane.prio === c.lane.prio && d.id < c.id)) best = Math.min(best, fwd); } } }
+    }
+    return best;
+  }
+  // is any car within limit metres of the end of lane L, counting back through the lanes that feed it (acc is the way already counted)
+  function roadComing(L, acc, limit, skip, seen) {
+    seen = seen || []; if (seen.indexOf(L) >= 0) return false; seen.push(L);
+    for (var i = 0; i < ROADNET.cars.length; i++) { var d = ROADNET.cars[i]; if (d !== skip && !d.parked && d.lane === L && L.len - d.s + acc < limit) return true; }
+    for (var k = 0; k < L.prev.length; k++) if (acc + L.len < limit && roadComing(L.prev[k], acc + L.len, limit, skip, seen)) return true;
+    return false;
+  }
+  // may the car leave its lane for the next one: no other approach inside the junction, nobody with priority about to arrive
+  function roadMayEnter(c) {
+    var ok = roadMayEnter0(c), B = c.next;
+    if (ok && B && B.box) { c.res = B.box; c.resFrom = B.from; } else if (!ok) c.res = null;   // a car that goes reserves the junction, so two cannot decide together
+    return ok;
+  }
+  function roadMayEnter0(c) {
+    var B = c.next; c.capHold = false; c.boxHold = false; if (!B) return true;
+    if (c.lane.src.opt.merge) return true;   // a car already merging has given way at the line: it carries on
+    // into a junction only with room on the far side, so nobody stops in the box and locks the other approaches out
+    if (B.box) { if (!c.after || B.next.indexOf(c.after) < 0) c.after = roadPick(B); if (c.after) for (var ai = 0; ai < ROADNET.cars.length; ai++) { var da = ROADNET.cars[ai]; if (da !== c && !da.parked && da.lane === c.after && da.s < 8) { c.boxHold = true; return false; } } }
+    var loopL = B.comp ? B : (B.src.opt.merge && B.next.length ? B.next[0] : null);
+    if (loopL && loopL.comp && c.lane.comp !== loopL.comp) { B = loopL; var inLoop = 0; for (var ci = 0; ci < ROADNET.cars.length; ci++) { var dc = ROADNET.cars[ci]; if (dc !== c && !dc.parked && dc.lane && dc.lane.comp === B.comp) inLoop++; } if (inLoop >= B.comp.cap) { c.capHold = true; return false; } B = c.next; }
+    for (var i = 0; i < ROADNET.cars.length; i++) {
+      var d = ROADNET.cars[i]; if (d === c || d.parked || !d.lane) continue;
+      if (B.box && ((d.lane.box === B.box && d.lane.from !== B.from) || (d.res === B.box && d.resFrom !== B.from))) { c.boxHold = true; return false; }
+      if (d.lane === B && d.s < 6) return false;
+    }
+    // a merge lane (a roundabout entry) joins the lane after it: give way to anyone coming round on that lane's feeders
+    if (B.src.opt.merge && B.next.length) { var T = B.next[0]; for (var ti = 0; ti < T.prev.length; ti++) if (T.prev[ti] !== B && roadComing(T.prev[ti], 0, 22, c)) return false; }
+    var near = function (F, extra) { for (var j = 0; j < ROADNET.cars.length; j++) { var e = ROADNET.cars[j]; if (e !== c && !e.parked && e.lane === F && F.len - e.s + extra < 12) return true; } return false; };
+    for (var k = 0; k < B.prev.length; k++) { var F = B.prev[k]; if (F === c.lane || F.prio <= c.lane.prio) continue; if (near(F, 0)) return false; for (var m = 0; m < F.prev.length; m++) if (F.prev[m].prio > c.lane.prio && near(F.prev[m], F.len)) return false; }
+    return true;
+  }
+  function roadTick(dt) {
+    ROADNET.checkT -= dt;
+    if (ROADNET.checkT <= 0 || !ROADNET.sig) { ROADNET.checkT = 0.5; var sig = roadSig(); if (sig !== ROADNET.sig) { ROADNET.sig = sig; ROADNET.net = roadNet(); roadReseat(); if (ROADNET.dbg) roadDebugDraw(); } }
+    var net = ROADNET.net; if (!ROADNET.cars.length || !net) return;
+    var me = new THREE.Vector3(), p = {};
+    ROADNET.cars.forEach(function (c) { if (c.parked) { if (Math.random() < dt) roadSeat(c, false); return; }
+      var L = c.lane, rem = L.len - c.s, target = Math.min(c.vmax, L.vmax);
+      if (c.next && rem < 18) target = Math.min(target, c.next.vmax + rem * 0.5);
+      me.copy(c.g.position); var gap = roadGap(c, me); if (gap < 40) target = Math.min(target, Math.max(0, (gap - 6) * 0.9));
+      c.hold = !!(c.next && rem < 3 && !roadMayEnter(c));
+      if (c.hold) { c.wait += dt; var force = c.wait > 9 && !c.capHold && !c.boxHold; target = force ? 1.5 : 0; if (force) c.hold = false; } else if (rem >= 3) c.wait = 0;
+      c.v = clamp(c.v + clamp(target - c.v, -8 * dt, 3 * dt), 0, 30);
+    });
+    ROADNET.cars.forEach(function (c) {
+      if (c.parked) return;
+      c.s += c.v * dt;
+      if (c.hold && c.s > c.lane.len - 0.4) { c.s = c.lane.len - 0.4; c.v = 0; }
+      while (c.s >= c.lane.len) { var over = c.s - c.lane.len; if (c.next) { c.lane = c.next; c.src = c.lane.src; c.s = over; c.next = c.after && c.lane.next.indexOf(c.after) >= 0 ? c.after : roadPick(c.lane); c.after = null; c.wait = 0; if (!c.lane.box) c.res = null; } else { roadSeat(c, false); break; } }
+      if (c.parked) return;
+      lanePoint(c.lane, c.s, p); c.g.position.set(p.x, p.y, p.z);
+      var dy = Math.atan2(Math.sin(p.yaw - c.yaw), Math.cos(p.yaw - c.yaw)); c.yaw += dy * Math.min(1, dt * 7); c.g.rotation.y = c.yaw;
+      var ws = c.g.userData.wheels; if (ws) ws.forEach(function (w) { w.rotation.z -= c.v * dt / 0.33; });
+    });
+  }
+  // keep n cars on the road network (0 takes them all off); opt.speed is the top speed in m/s, opt.colours a list to pick from
+  function roadTraffic(opt) {
+    opt = typeof opt === 'number' ? { cars: opt } : (opt || {}); ROADNET.want = Math.max(0, opt.cars | 0);
+    while (ROADNET.cars.length > ROADNET.want) { var c0 = ROADNET.cars.pop(); scene.remove(c0.g); var k = traffic.cars.indexOf(c0); if (k >= 0) traffic.cars.splice(k, 1); }
+    if (!ROADNET.sig) { ROADNET.sig = roadSig(); ROADNET.net = roadNet(); }
+    while (ROADNET.cars.length < ROADNET.want) {
+      var g = carMesh(opt.colours ? pick(opt.colours) : undefined); g.userData.dynamic = true; scene.add(g);
+      var c = { id: ++ROADNET.seq, g: g, road: true, dir: 1, z: 0, v: 0, vmax: (opt.speed || 9) * randf(0.85, 1.1), s: 0, lane: null, next: null, wait: 0, yaw: 0 };
+      ROADNET.cars.push(c); traffic.cars.push(c); roadSeat(c, true);
+    }
+    return ROADNET.cars.length;
+  }
+  function roadDebugDraw() {
+    if (ROADNET.dbg) { scene.remove(ROADNET.dbg); ROADNET.dbg.traverse(function (o) { if (o.geometry) o.geometry.dispose(); }); }
+    var g = new THREE.Group(); g.userData.dynamic = true; g.userData.noBake = true;
+    var mats = [new THREE.LineBasicMaterial({ color: 0x2fd0ff }), new THREE.LineBasicMaterial({ color: 0xffb020 }), new THREE.LineBasicMaterial({ color: 0xff3a6a })];
+    (ROADNET.net ? ROADNET.net.lanes : []).forEach(function (L) {
+      var m = L.next.length ? (L.prio ? mats[1] : mats[0]) : mats[2], pts = L.pts.map(function (q) { return new THREE.Vector3(q[0], q[1] + 0.15, q[2]); });
+      g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), m));
+      var p = lanePoint(L, L.len * 0.5, {}), a = p.yaw, hx = Math.cos(a), hz = -Math.sin(a), tip = new THREE.Vector3(p.x + hx * 0.5, p.y + 0.15, p.z + hz * 0.5);
+      g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(p.x - hx * 0.3 - hz * 0.35, p.y + 0.15, p.z - hz * 0.3 + hx * 0.35), tip, new THREE.Vector3(p.x - hx * 0.3 + hz * 0.35, p.y + 0.15, p.z - hz * 0.3 - hx * 0.35)]), m));
+    });
+    scene.add(g); ROADNET.dbg = g;
+  }
+  // the dev command 'lanes': draw the network (blue lanes, amber priority lanes, red ends that lead nowhere) or hide it
+  function roadDebug(on) {
+    if (on === undefined) on = !ROADNET.dbg;
+    if (!on) { if (ROADNET.dbg) { scene.remove(ROADNET.dbg); ROADNET.dbg = null; } return 'lanes hidden'; }
+    if (!ROADNET.net || !ROADNET.sig) { ROADNET.sig = roadSig(); ROADNET.net = roadNet(); }
+    roadDebugDraw(); return ROADNET.net.lanes.length + ' lanes, ' + ROADNET.net.joins + ' joins, ' + ROADNET.cars.length + ' cars';
+  }
+  // ── A vehicle you drive ───────────────────────────────────────────
+  // The record is the game's ({ x, z, yaw, speed, gear }); driveStep moves it from the keys with an acceleration, a top speed per
+  // gear, drag, steering that scales with speed and a collision test the game supplies (vehicleBlocked(x, z, v)). Returns the
+  // speed. vehicleCamera puts the camera at the driving seat with a look offset the mouse turns.
+  var DRIVE = { accel: 3.2, top: 4.2, reverse: 2.6, drag: 3, steer: 1.6, gears: [0.6, 1.0, 1.5] };
+  function driveStep(v, keys, dt, opt) {
+    opt = opt || {}; var D = opt.spec || DRIVE, throttle = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), steer = (keys.KeyA ? 1 : 0) - (keys.KeyD ? 1 : 0), gm = D.gears[(v.gear || 1) - 1] || 1, cap = opt.cap === undefined ? 1 : opt.cap;
+    v.speed = v.speed || 0;
+    if (throttle) v.speed = clamp(v.speed + throttle * D.accel * gm * dt, -D.reverse * cap, D.top * gm * cap); else v.speed *= Math.max(0, 1 - D.drag * dt);
+    if (Math.abs(v.speed) > 0.05) v.yaw += steer * D.steer * dt * (v.speed > 0 ? 1 : -1) * Math.min(1, Math.abs(v.speed) / 1.5);
+    var nx = v.x + Math.sin(v.yaw) * v.speed * dt, nz = v.z + Math.cos(v.yaw) * v.speed * dt;
+    var blocked = opt.blocked ? opt.blocked(nx, nz, v) : false;
+    if (!blocked) { v.x = nx; v.z = nz; } else v.speed = -v.speed * 0.2;
+    return v.speed;
+  }
+  // an obstacle the vehicle is already inside cannot block it, so it can always back out; r is the vehicle's half width
+  function vehicleBlocked(v, x, z, r, list) {
+    var cx = v.x, cz = v.z, all = list || solids.concat(dyn);
+    for (var i = 0; i < all.length; i++) { var s = all[i]; if (s.vehicle === v) continue; if (s.y0 > 2.5) continue; if (x > s.x0 - r && x < s.x1 + r && z > s.z0 - r && z < s.z1 + r) { var already = cx > s.x0 - r && cx < s.x1 + r && cz > s.z0 - r && cz < s.z1 + r; if (!already) return true; var dxn = Math.max(s.x0 - x, 0, x - s.x1), dzn = Math.max(s.z0 - z, 0, z - s.z1), dxc = Math.max(s.x0 - cx, 0, cx - s.x1), dzc = Math.max(s.z0 - cz, 0, cz - s.z1); if (dxn + dzn < dxc + dzc - 0.001) return true; } }
+    return false;
+  }
+  function vehicleCamera(v, look, eye, back) { var y = floorY(v.x, v.z) + (eye || 1.78), b = back === undefined ? 0.45 : back; camera.position.set(v.x - Math.sin(v.yaw) * b, y, v.z - Math.cos(v.yaw) * b); camera.rotation.set(look ? look.pitch : 0, v.yaw + Math.PI + (look ? look.yaw : 0), 0, 'YXZ'); }
+  // ── Physics ───────────────────────────────────────────────────────
+  // body(obj, { mass, shape: 'box' | 'sphere', size: [w, h, d] or r, restitution, friction, kinematic }) makes an object a body; its position is
+  // the body's centre. removeBody(obj) takes it out. impulse(obj, vx, vy, vz) kicks it. Bodies rest on floorY (so on the terrain too),
+  // on the engine's solids and on each other; a body that is still for a while sleeps until something touches it.
+  var PHYS = { on: true, g: -9.81, bodies: [], sleepT: 0.6, maxStep: 1 / 50, iterations: 3, stepped: 0 };
+  function bodyOf(obj) { for (var i = 0; i < PHYS.bodies.length; i++) if (PHYS.bodies[i].obj === obj) return PHYS.bodies[i]; return null; }
+  function bodyBounds(obj) { var b = new THREE.Box3().setFromObject(obj), s = b.getSize(new THREE.Vector3()), c = b.getCenter(new THREE.Vector3()); return { size: [Math.max(0.05, s.x), Math.max(0.05, s.y), Math.max(0.05, s.z)], off: [c.x - obj.position.x, c.y - obj.position.y, c.z - obj.position.z] }; }
+  function body(obj, opt) {
+    opt = opt || {}; var B = bodyOf(obj); if (B) removeBody(obj);
+    var bb = bodyBounds(obj), size = opt.size ? (typeof opt.size === 'number' ? [opt.size * 2, opt.size * 2, opt.size * 2] : opt.size.slice()) : bb.size;
+    B = { obj: obj, mass: opt.mass === undefined ? 1 : +opt.mass, shape: opt.shape || 'box', hx: size[0] / 2, hy: size[1] / 2, hz: size[2] / 2, off: opt.size ? [0, 0, 0] : bb.off, vel: new THREE.Vector3(), restitution: opt.restitution === undefined ? 0.15 : +opt.restitution, friction: opt.friction === undefined ? 0.6 : +opt.friction, kinematic: !!opt.kinematic, asleep: false, still: 0, onGround: false, id: obj.userData && (obj.userData.propId || obj.userData.eid) || obj.name || ('b' + PHYS.bodies.length) };
+    PHYS.bodies.push(B); obj.userData.body = B; return B;
+  }
+  function removeBody(obj) { var i = PHYS.bodies.findIndex(function (b) { return b.obj === obj; }); if (i >= 0) PHYS.bodies.splice(i, 1); if (obj.userData) delete obj.userData.body; return i >= 0; }
+  function impulse(obj, vx, vy, vz) { var B = bodyOf(obj); if (!B) return false; B.vel.x += vx || 0; B.vel.y += vy || 0; B.vel.z += vz || 0; B.asleep = false; B.still = 0; return true; }
+  function wake(B) { B.asleep = false; B.still = 0; }
+  // the box a body fills now, in world space
+  function bodyBox(B) { var p = B.obj.position; return { x0: p.x + B.off[0] - B.hx, x1: p.x + B.off[0] + B.hx, y0: p.y + B.off[1] - B.hy, y1: p.y + B.off[1] + B.hy, z0: p.z + B.off[2] - B.hz, z1: p.z + B.off[2] + B.hz }; }
+  function overlap(a, b) { var dx = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0), dy = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0), dz = Math.min(a.z1, b.z1) - Math.max(a.z0, b.z0); if (dx <= 0 || dy <= 0 || dz <= 0) return null; return { dx: dx, dy: dy, dz: dz }; }
+  // push a body out of a box along the smallest overlap, and take the velocity along that axis away (with the bounce and the friction)
+  function resolve(B, box, other) {
+    var ov = overlap(bodyBox(B), box); if (!ov) return false; var p = B.obj.position, cx = p.x + B.off[0], cy = p.y + B.off[1], cz = p.z + B.off[2], bcx = (box.x0 + box.x1) / 2, bcy = (box.y0 + box.y1) / 2, bcz = (box.z0 + box.z1) / 2;
+    if (ov.dy <= ov.dx && ov.dy <= ov.dz) { var up = cy >= bcy; p.y += up ? ov.dy : -ov.dy; if ((up && B.vel.y < 0) || (!up && B.vel.y > 0)) B.vel.y = -B.vel.y * B.restitution; if (up) { B.onGround = true; B.vel.x *= 1 - Math.min(1, B.friction * 0.2); B.vel.z *= 1 - Math.min(1, B.friction * 0.2); if (other && other.vel) { B.vel.x += (other.vel.x - B.vel.x) * 0.5; B.vel.z += (other.vel.z - B.vel.z) * 0.5; } } }
+    else if (ov.dx <= ov.dz) { var right = cx >= bcx; p.x += right ? ov.dx : -ov.dx; if ((right && B.vel.x < 0) || (!right && B.vel.x > 0)) B.vel.x = -B.vel.x * B.restitution; }
+    else { var front = cz >= bcz; p.z += front ? ov.dz : -ov.dz; if ((front && B.vel.z < 0) || (!front && B.vel.z > 0)) B.vel.z = -B.vel.z * B.restitution; }
+    if (other && other.asleep) wake(other); return true;
+  }
+  // a hinge: the object swings from a pivot on an axis like a pendulum, with damping; a sign on a bracket, a lamp on a chain
+  var HINGES = [];
+  function hinge(obj, opt) { removeHinge(obj); opt = opt || {}; var p = opt.pivot || [obj.position.x, obj.position.y + (opt.length || 1), obj.position.z], H = { obj: obj, pivot: p, length: opt.length || 1, axis: opt.axis === 'x' ? 'x' : 'z', angle: opt.angle || 0, omega: opt.omega || 0, damping: opt.damping === undefined ? 0.4 : +opt.damping }; HINGES.push(H); obj.userData.hinge = H; return H; }
+  function removeHinge(obj) { var i = HINGES.findIndex(function (h) { return h.obj === obj; }); if (i >= 0) HINGES.splice(i, 1); if (obj.userData) delete obj.userData.hinge; return i >= 0; }
+  function swing(obj, omega) { var H = obj.userData && obj.userData.hinge; if (!H) return false; H.omega += omega; return true; }
+  function hingeStep(dt) { HINGES.forEach(function (H) { H.omega += (PHYS.g / H.length) * Math.sin(H.angle) * dt - H.omega * H.damping * dt; H.angle += H.omega * dt; var o = H.obj; if (H.axis === 'z') { o.position.set(H.pivot[0] + Math.sin(H.angle) * H.length, H.pivot[1] - Math.cos(H.angle) * H.length, H.pivot[2]); o.rotation.z = H.angle; } else { o.position.set(H.pivot[0], H.pivot[1] - Math.cos(H.angle) * H.length, H.pivot[2] + Math.sin(H.angle) * H.length); o.rotation.x = -H.angle; } }); }
+  // a spring: a body pulled towards an anchor point with stiffness k and damping, around a rest length; a punch bag, a hanging sign that bounces
+  var SPRINGS = [];
+  function spring(obj, opt) { opt = opt || {}; var B = bodyOf(obj) || body(obj, { mass: opt.mass || 1 }); unspring(obj); var S2 = { B: B, anchor: opt.anchor || [obj.position.x, obj.position.y + 1, obj.position.z], k: opt.k === undefined ? 20 : +opt.k, damping: opt.damping === undefined ? 2 : +opt.damping, rest: opt.rest || 0 }; SPRINGS.push(S2); wake(B); return S2; }
+  function unspring(obj) { var i = SPRINGS.findIndex(function (s) { return s.B.obj === obj; }); if (i >= 0) SPRINGS.splice(i, 1); return i >= 0; }
+  function springStep(dt) { SPRINGS.forEach(function (S2) { var B = S2.B, p = B.obj.position, dx = S2.anchor[0] - p.x, dy = S2.anchor[1] - p.y, dz = S2.anchor[2] - p.z, len = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1e-6, f = S2.k * (len - S2.rest) / B.mass; B.vel.x += (dx / len * f - B.vel.x * S2.damping) * dt; B.vel.y += (dy / len * f - B.vel.y * S2.damping - PHYS.g * 0) * dt; B.vel.z += (dz / len * f - B.vel.z * S2.damping) * dt; wake(B); }); }
+  function physicsStep(dt) {
+    var bodies = PHYS.bodies, i, j, k;
+    hingeStep(dt); springStep(dt);
+    for (i = 0; i < bodies.length; i++) {
+      var B = bodies[i]; if (B.kinematic || B.asleep) continue; var p = B.obj.position;
+      B.vel.y += PHYS.g * dt; p.x += B.vel.x * dt; p.y += B.vel.y * dt; p.z += B.vel.z * dt; B.onGround = false;
+      // the ground under the body's centre
+      var gy = floorY(p.x + B.off[0], p.z + B.off[2]), bottom = p.y + B.off[1] - B.hy; if (bottom < gy) { p.y += gy - bottom; if (B.vel.y < 0) B.vel.y = -B.vel.y * B.restitution; if (Math.abs(B.vel.y) < 0.5) B.vel.y = 0; B.onGround = true; B.vel.x *= 1 - Math.min(1, B.friction * 0.25); B.vel.z *= 1 - Math.min(1, B.friction * 0.25); }
+      // the engine's solids (walls, machines, the props' obstacles) near the body
+      for (k = 0; k < PHYS.iterations; k++) { var hit = false; for (j = 0; j < solids.length; j++) { var s = solids[j]; if (s.prop && (s.prop === B.id || s.prop === B.ignoreOwn)) continue; var box = { x0: s.x0, x1: s.x1, y0: s.y0 === undefined ? -5 : s.y0, y1: s.y1 === undefined ? 3 : s.y1, z0: s.z0, z1: s.z1 }; if (resolve(B, box, null)) hit = true; } if (!hit) break; }
+    }
+    // bodies against bodies: the lighter one moves, both wake
+    for (i = 0; i < bodies.length; i++) for (j = i + 1; j < bodies.length; j++) {
+      var A = bodies[i], C = bodies[j]; if ((A.asleep && C.asleep) || (A.kinematic && C.kinematic)) continue;
+      var mover = A.kinematic ? C : C.kinematic ? A : (A.mass <= C.mass ? A : C), fixed = mover === A ? C : A; if (resolve(mover, bodyBox(fixed), fixed)) { wake(mover); if (!fixed.kinematic) wake(fixed); }
+    }
+    // spheres roll: the mesh turns with the ground speed
+    for (i = 0; i < bodies.length; i++) { var R = bodies[i]; if (R.shape !== 'sphere' || R.asleep) continue; var sp = Math.sqrt(R.vel.x * R.vel.x + R.vel.z * R.vel.z); if (sp > 0.01) { var ax = new THREE.Vector3(R.vel.z, 0, -R.vel.x).normalize(); R.obj.rotateOnWorldAxis(ax, sp * dt / Math.max(0.05, R.hx)); } }
+    // sleep when still
+    for (i = 0; i < bodies.length; i++) { var D = bodies[i]; if (D.kinematic || D.asleep || SPRINGS.some(function (s) { return s.B === D; })) continue; if (D.onGround && D.vel.lengthSq() < 0.0025) { D.still += dt; if (D.still > PHYS.sleepT) { D.asleep = true; D.vel.set(0, 0, 0); } } else D.still = 0; }
+    PHYS.stepped++;
+  }
+  function physicsTick(dt) {
+    if (!PHYS.on || (!PHYS.bodies.length && !HINGES.length) || (CO.game && CO.game.physics === false)) return;
+    if (CO.physicsSolver && CO.physicsSolver.step) { CO.physicsSolver.step(PHYS.bodies, dt, PHYS); return; }
+    var left = Math.min(dt, 0.1); while (left > 0) { var h = Math.min(PHYS.maxStep, left); physicsStep(h); left -= h; }
+    PHYS.bodies.forEach(function (B) { if (B.obj.userData && B.obj.userData.dynamic === undefined) shadowDirty = true; });
+  }
+  animate(physicsTick);
+  function physicsState() { return { on: PHYS.on && !(CO.game && CO.game.physics === false), g: PHYS.g, springs: SPRINGS.length, hinges: HINGES.map(function (H) { return { id: H.obj.userData && (H.obj.userData.propId || H.obj.userData.eid) || H.obj.name || null, angle: rnd(H.angle), length: H.length, axis: H.axis }; }), bodies: PHYS.bodies.map(function (B) { return { id: B.id, mass: B.mass, asleep: B.asleep, onGround: B.onGround, x: rnd(B.obj.position.x), y: rnd(B.obj.position.y), z: rnd(B.obj.position.z), vy: rnd(B.vel.y) }; }), stepped: PHYS.stepped, solver: CO.physicsSolver ? 'plugged' : 'built in' }; }
+  // ── Clips ─────────────────────────────────────────────────────────
+  // A clip: { duration, loop, tracks: [{ path, keys: [[t, value, ease]] }], events: [[t, name]] }. A path names a node and a field:
+  // 'rotation.x' on the object itself, 'child.2.position.y' the third child, 'name.lamp.rotation.z' a named descendant, and on a
+  // person 'leg.0', 'knee.1', 'arm.0', 'elbow.1', 'torso', 'head' (the rig's parts). Values are numbers; ease is 'linear', 'smooth',
+  // 'in', 'out' or 'step'. Times are seconds.
+  var CLIPS = {}, CLIP_ORDER = [], playing = [];
+  CO.clip = function (name, clip) { if (!name) return CLIPS; if (clip === null) { delete CLIPS[name]; CLIP_ORDER.splice(CLIP_ORDER.indexOf(name), 1); return null; } clip = JSON.parse(JSON.stringify(clip || {})); clip.duration = clip.duration || clipLength(clip); if (!clip.tracks) clip.tracks = []; if (!CLIPS[name]) CLIP_ORDER.push(name); CLIPS[name] = clip; return clip; };
+  function clipLength(c) { var d = 0; (c.tracks || []).forEach(function (t) { (t.keys || []).forEach(function (k) { d = Math.max(d, k[0]); }); }); (c.events || []).forEach(function (e) { d = Math.max(d, e[0]); }); return d || 1; }
+  function easeV(k, f) { if (k === 'step') return 0; if (k === 'in') return f * f; if (k === 'out') return 1 - (1 - f) * (1 - f); if (k === 'linear') return f; return f * f * (3 - 2 * f); }
+  function trackValue(keys, t) {
+    if (!keys || !keys.length) return undefined; if (t <= keys[0][0]) return keys[0][1]; var last = keys[keys.length - 1]; if (t >= last[0]) return last[1];
+    for (var i = 0; i < keys.length - 1; i++) { var a = keys[i], b = keys[i + 1]; if (t >= a[0] && t <= b[0]) { var f = b[0] === a[0] ? 1 : (t - a[0]) / (b[0] - a[0]); return a[1] + (b[1] - a[1]) * easeV(b[2] || 'smooth', f); } }
+    return last[1];
+  }
+  // the node and field a path names, on an object (a person's parts come from the rig's userData)
+  function clipTarget(obj, path) {
+    var p = String(path).split('.'), node = obj, u = obj.userData || {}, i = 0;
+    if (p[0] === 'child') { node = obj.children[+p[1]]; i = 2; }
+    else if (p[0] === 'name') { node = obj.getObjectByName(p[1]); i = 2; }
+    else if (p[0] === 'leg' && u.legs) { node = u.legs[+p[1]]; i = 2; }
+    else if (p[0] === 'knee' && u.legs) { node = u.legs[+p[1]] && u.legs[+p[1]].userData.knee; i = 2; }
+    else if (p[0] === 'arm' && u.arms) { node = u.arms[+p[1]]; i = 2; }
+    else if (p[0] === 'elbow' && u.arms) { node = u.arms[+p[1]] && u.arms[+p[1]].userData.elbow; i = 2; }
+    else if (p[0] === 'torso' && u.torso) { node = u.torso; i = 1; }
+    else if (p[0] === 'head' && u.head) { node = u.head; i = 1; }
+    if (!node) return null; var prop = p[i], axis = p[i + 1];
+    if (prop === 'material') { var mm = node.material || (function () { var f = null; node.traverse(function (o) { if (!f && o.isMesh && o.material && !o.material.userData.shared) f = o.material; }); return f; })(); if (!mm) return null; if (axis === 'color' || axis === 'emissive') { var ch = p[i + 2]; if (!mm[axis] || 'rgb'.indexOf(ch) < 0) return null; return { node: node, set: function (v) { mm[axis][ch] = v; }, get: function () { return mm[axis][ch]; } }; } if (typeof mm[axis] !== 'number') return null; return { node: node, set: function (v) { mm[axis] = v; if (axis === 'opacity') mm.transparent = v < 1; }, get: function () { return mm[axis]; } }; }
+    if (prop === 'visible' || prop === 'intensity' || prop === 'opacity') return { node: node, set: function (v) { if (prop === 'opacity' && node.material) { node.material.opacity = v; node.material.transparent = v < 1; } else node[prop] = prop === 'visible' ? v >= 0.5 : v; }, get: function () { return prop === 'opacity' && node.material ? node.material.opacity : (prop === 'visible' ? (node.visible ? 1 : 0) : node[prop]); } };
+    if (!node[prop] || axis === undefined) return null;
+    return { node: node, set: function (v) { node[prop][axis] = v; }, get: function () { return node[prop][axis]; } };
+  }
+  // play a clip on an object: it joins the playing list and the frame drives it; a second play on the same object replaces the first
+  function playClip(obj, name, opt) {
+    var clip = CLIPS[name]; if (!clip || !obj) return null; opt = opt || {};
+    stopClip(obj);
+    var tracks = clip.tracks.map(function (t) { var tg = clipTarget(obj, t.path); return tg ? { keys: t.keys, tg: tg, from: tg.get() } : null; }).filter(Boolean);
+    var P = { obj: obj, name: name, clip: clip, t: 0, speed: opt.speed || 1, loop: opt.loop !== undefined ? !!opt.loop : !!clip.loop, blend: opt.blend === undefined ? 0.2 : +opt.blend, tracks: tracks, fired: {}, done: false, onDone: opt.onDone || null, hold: opt.hold !== false };
+    playing.push(P); if (obj.userData) obj.userData.clip = P; return P;
+  }
+  function stopClip(obj) { for (var i = playing.length - 1; i >= 0; i--) if (playing[i].obj === obj) { playing[i].done = true; playing.splice(i, 1); } if (obj && obj.userData) obj.userData.clip = null; }
+  function clipTick(dt) {
+    for (var i = playing.length - 1; i >= 0; i--) {
+      var P = playing[i], c = P.clip; P.t += dt * P.speed; var t = P.t, over = t >= c.duration;
+      if (over) { if (P.loop) { t = P.t = c.duration ? P.t % c.duration : 0; P.fired = {}; } else t = c.duration; }
+      var w = P.blend > 0 ? Math.min(1, P.t / P.blend) : 1;
+      P.tracks.forEach(function (tr) { var v = trackValue(tr.keys, t); if (v === undefined) return; tr.tg.set(w < 1 ? tr.from + (v - tr.from) * w : v); });
+      (c.events || []).forEach(function (e) { if (!P.fired[e[0] + ':' + e[1]] && t >= e[0]) { P.fired[e[0] + ':' + e[1]] = true; runHooks('clipEvent', P.obj, e[1], P); } });
+      if (over && !P.loop) { P.done = true; playing.splice(i, 1); if (P.obj.userData) P.obj.userData.clip = null; if (!P.hold) P.tracks.forEach(function (tr) { tr.tg.set(tr.from); }); if (P.onDone) P.onDone(P); }
+    }
+  }
+  animate(clipTick);
+  // what the editor reads and writes
+  function clipList() { return { order: CLIP_ORDER.slice(), clips: JSON.parse(JSON.stringify(CLIPS)), playing: playing.map(function (P) { return { name: P.name, t: Math.round(P.t * 100) / 100, loop: P.loop, obj: P.obj.userData && (P.obj.userData.propId || P.obj.userData.eid) || P.obj.name || null }; }) }; }
+  function clipCode() {
+    if (!CLIP_ORDER.length) return '';
+    var lines = ['//@ the clips the editor saved: animation as data, played by the engine. Written by the Co Engine editor; it sorts first in src/ so a game can play them from its first frame. Edit them in the editor rather than here.'];
+    CLIP_ORDER.forEach(function (n) { if (BUILTIN_CLIPS[n] && JSON.stringify(BUILTIN_CLIPS[n]) === JSON.stringify(CLIPS[n])) return; lines.push('  CO.clip(' + JSON.stringify(n) + ', ' + JSON.stringify(CLIPS[n]) + ');'); });
+    if (lines.length === 1) return ''; lines.push(''); return lines.join('\n');
+  }
+  // a pose from the current transforms of the paths a clip names: a key at time t for every track
+  function clipKeyPose(obj, name, t, ease) { var c = CLIPS[name]; if (!c) return null; var n = 0; c.tracks.forEach(function (tr) { var tg = clipTarget(obj, tr.path); if (!tg) return; var v = Math.round(tg.get() * 1000) / 1000, keys = tr.keys || (tr.keys = []), at = keys.findIndex(function (k) { return Math.abs(k[0] - t) < 1e-6; }); if (at >= 0) keys[at] = [t, v, ease || keys[at][2]]; else { keys.push([t, v, ease || 'smooth']); keys.sort(function (a, b) { return a[0] - b[0]; }); } n++; }); c.duration = Math.max(c.duration || 0, t); return n; }
+  // the clips every game starts with: a person's gestures, and a few for props
+  var BUILTIN_CLIPS = {
+    wave: { duration: 1.6, loop: false, tracks: [{ path: 'arm.1.rotation.x', keys: [[0, -0.2], [0.3, -2.6], [1.3, -2.6], [1.6, -0.2]] }, { path: 'elbow.1.rotation.x', keys: [[0, -0.15], [0.3, -0.6], [0.55, -1.2], [0.8, -0.5], [1.05, -1.2], [1.3, -0.6], [1.6, -0.15]] }, { path: 'arm.1.rotation.z', keys: [[0, -0.1], [0.3, -0.5], [1.3, -0.5], [1.6, -0.1]] }] },
+    nod: { duration: 0.9, loop: false, tracks: [{ path: 'head.rotation.x', keys: [[0, 0], [0.25, 0.35], [0.5, -0.05], [0.7, 0.3], [0.9, 0]] }] },
+    cheer: { duration: 1.4, loop: false, tracks: [{ path: 'arm.0.rotation.x', keys: [[0, -0.2], [0.35, -2.9], [1.0, -2.9], [1.4, -0.2]] }, { path: 'arm.1.rotation.x', keys: [[0, -0.2], [0.35, -2.9], [1.0, -2.9], [1.4, -0.2]] }, { path: 'torso.position.y', keys: [[0, 0.86], [0.35, 0.92], [0.5, 0.86], [0.7, 0.92], [0.9, 0.86]] }] },
+    point: { duration: 1.2, loop: false, tracks: [{ path: 'arm.1.rotation.x', keys: [[0, -0.2], [0.3, -1.5], [1.0, -1.5], [1.2, -0.2]] }, { path: 'elbow.1.rotation.x', keys: [[0, -0.15], [0.3, -0.05], [1.0, -0.05], [1.2, -0.15]] }, { path: 'head.rotation.y', keys: [[0, 0], [0.3, -0.3], [1.0, -0.3], [1.2, 0]] }] },
+    lift: { duration: 1.6, loop: false, tracks: [{ path: 'torso.position.y', keys: [[0, 0.86], [0.5, 0.62], [1.1, 0.62], [1.6, 0.86]] }, { path: 'knee.0.rotation.x', keys: [[0, 0], [0.5, 1.2], [1.1, 1.2], [1.6, 0]] }, { path: 'knee.1.rotation.x', keys: [[0, 0], [0.5, 1.2], [1.1, 1.2], [1.6, 0]] }, { path: 'leg.0.rotation.x', keys: [[0, 0], [0.5, -1.0], [1.1, -1.0], [1.6, 0]] }, { path: 'leg.1.rotation.x', keys: [[0, 0], [0.5, -1.0], [1.1, -1.0], [1.6, 0]] }, { path: 'arm.0.rotation.x', keys: [[0, -0.2], [0.5, -0.9], [1.1, -0.9], [1.6, -0.2]] }, { path: 'arm.1.rotation.x', keys: [[0, -0.2], [0.5, -0.9], [1.1, -0.9], [1.6, -0.2]] }], events: [[1.1, 'lifted']] },
+    spin: { duration: 2, loop: true, tracks: [{ path: 'rotation.y', keys: [[0, 0, 'linear'], [2, 6.2832, 'linear']] }] },
+    bob: { duration: 1.5, loop: true, tracks: [{ path: 'position.y', keys: [[0, 0], [0.75, 0.25], [1.5, 0]] }] },
+    swing: { duration: 2.4, loop: true, tracks: [{ path: 'rotation.z', keys: [[0, -0.35], [1.2, 0.35], [2.4, -0.35]] }] },
+    blink: { duration: 0.8, loop: true, tracks: [{ path: 'visible', keys: [[0, 1, 'step'], [0.4, 0, 'step'], [0.8, 1, 'step']] }] }
+  };
+  Object.keys(BUILTIN_CLIPS).forEach(function (n) { CO.clip(n, BUILTIN_CLIPS[n]); });
+  // ── Log / toast ───────────────────────────────────────────────────
+  function logEvent(msg, kind) {
+    if (S && S.log) { S.log.unshift({ day: S.day, t: fmtTime(S.time || 0), msg: msg, kind: kind || '' }); if (S.log.length > 60) S.log.pop(); }
+    feedPush(msg, kind);
+  }
+  function feedPush(msg, kind) {
+    var feed = $('h-feed'); if (!feed) return;
+    var d = document.createElement('div'); d.className = kind || '';
+    d.innerHTML = '<span class="t">' + fmtTime(S && S.time || 0) + '</span>' + msg;
+    feed.appendChild(d);
+    while (feed.children.length > 6) feed.removeChild(feed.firstChild);
+    setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 14000);
+  }
+  var TOAST_MS = 2600;
+  function toast(msg, kind) {
+    var box = $('h-toasts');
+    if (box) { var d = document.createElement('div'); d.className = kind || ''; d.innerHTML = msg; box.appendChild(d); while (box.children.length > 3) box.removeChild(box.firstChild); setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, TOAST_MS); }
+    if (kind === 'bad') sfx('bad'); else if (kind === 'rare') sfx('rare'); else sfx('ok');
+  }
+  // ── Sound ─────────────────────────────────────────────────────────
+  var AC = null, sfxBus = null;
+  function audio() { if (!AC) { AC = new (window.AudioContext || window.webkitAudioContext)(); sfxBus = AC.createGain(); sfxBus.gain.value = SET && typeof SET.vol === 'number' ? SET.vol : 0.8; sfxBus.connect(AC.destination); } if (AC.state === 'suspended') AC.resume(); return AC; }
+  // small synth helpers
+  function sTone(type, f0, t, dur, gain, opts) { opts = opts || {}; var o = AC.createOscillator(), gn = AC.createGain(); o.type = type; o.frequency.setValueAtTime(f0, t); if (opts.f1) o.frequency.exponentialRampToValueAtTime(opts.f1, t + dur); gn.gain.setValueAtTime(0.0001, t); gn.gain.linearRampToValueAtTime(gain, t + (opts.attack || 0.008)); gn.gain.exponentialRampToValueAtTime(0.0001, t + dur); var dest = opts.dest || sfxBus; if (opts.lp) { var f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = opts.lp; gn.connect(f); f.connect(dest); } else gn.connect(dest); o.connect(gn); o.start(t); o.stop(t + dur + 0.05); }
+  function sNoise(t, dur, gain, opts) { opts = opts || {}; var len = Math.floor(AC.sampleRate * dur); var buf = AC.createBuffer(1, len, AC.sampleRate); var d = buf.getChannelData(0); for (var i = 0; i < len; i++) { var env = opts.shape === 'swell' ? Math.sin(i / len * Math.PI) : opts.shape === 'flat' ? 1 : (1 - i / len); d[i] = (Math.random() * 2 - 1) * env; } var src = AC.createBufferSource(); src.buffer = buf; var f = AC.createBiquadFilter(); f.type = opts.type || 'highpass'; f.frequency.value = opts.freq || 4000; if (opts.q) f.Q.value = opts.q; var gn = AC.createGain(); gn.gain.setValueAtTime(gain, t); if (opts.fade) gn.gain.exponentialRampToValueAtTime(0.0001, t + dur); src.connect(f); f.connect(gn); gn.connect(opts.dest || sfxBus); src.start(t); }
+  function sThud(t, f, gain, dur) { sTone('sine', f, t, dur || 0.12, gain, { f1: f * 0.5 }); sNoise(t, 0.05, gain * 0.5, { type: 'lowpass', freq: 600 }); }
+  function sBeep(t, f, dur, gain) { sTone('square', f, t, dur || 0.08, gain || 0.05, { lp: 3000 }); }
+  // the base voices every game has; a game adds its own to SFX by assignment
+  var SFX = {
+    ok:      function (t) { sTone('sine', 520, t, 0.07, 0.07); sTone('sine', 780, t + 0.07, 0.1, 0.07); },
+    bad:     function (t) { sTone('sawtooth', 220, t, 0.14, 0.05, { lp: 1200 }); sTone('sawtooth', 160, t + 0.12, 0.16, 0.05, { lp: 1000 }); },
+    rare:    function (t) { [660, 880, 1320, 1760].forEach(function (f, i) { sTone('sine', f, t + i * 0.07, 0.16, 0.07); }); },
+    click:   function (t) { sTone('sine', 900, t, 0.03, 0.06); sNoise(t, 0.02, 0.05, { freq: 5000 }); },
+    cash:    function (t) { [1175, 1568, 2093, 2637].forEach(function (f, i) { sTone('sine', f, t + i * 0.045, 0.14, 0.06); }); sNoise(t, 0.12, 0.08, { freq: 7000, fade: true }); },
+    pickup:  function (t) { sNoise(t, 0.05, 0.08, { type: 'lowpass', freq: 1800 }); sTone('sine', 300, t, 0.08, 0.05, { f1: 200 }); },
+    putdown: function (t) { sThud(t, 180, 0.09, 0.12); sNoise(t, 0.04, 0.05, { type: 'lowpass', freq: 1500 }); },
+    crate:   function (t) { sThud(t, 120, 0.14, 0.18); sNoise(t + 0.02, 0.1, 0.08, { type: 'lowpass', freq: 900, fade: true }); },
+    step:    function (t, o) { var f = o === 'steel' ? 200 : o === 'outside' ? 110 : 130; sThud(t, f, 0.035, 0.07); if (o === 'steel') sNoise(t, 0.03, 0.03, { freq: 3000 }); if (o === 'outside') sNoise(t, 0.06, 0.04, { type: 'bandpass', freq: 1200, q: 0.5 }); },
+    roller:  function (t) { for (var i = 0; i < 14; i++) { sNoise(t + i * 0.085, 0.07, 0.07, { type: 'lowpass', freq: 500 + (i % 2) * 300 }); sTone('square', 60 + (i % 3) * 8, t + i * 0.085, 0.08, 0.02, { lp: 300 }); } sThud(t + 1.25, 90, 0.1, 0.15); },
+    door:    function (t) { sTone('sawtooth', 180, t, 0.35, 0.02, { f1: 260, lp: 700 }); sThud(t + 0.38, 220, 0.07, 0.08); sNoise(t + 0.38, 0.03, 0.06, { freq: 3000 }); },
+    bell:    function (t) { sTone('sine', 2093, t, 0.6, 0.06); sTone('sine', 2637, t + 0.005, 0.5, 0.04); sTone('sine', 3136, t + 0.01, 0.4, 0.02); },
+    chime:   function (t) { [523, 659, 784, 1047].forEach(function (f, i) { sTone('sine', f, t + i * 0.16, 0.6, 0.05); }); },
+    lock:    function (t) { sThud(t, 400, 0.06, 0.05); sNoise(t + 0.05, 0.04, 0.08, { freq: 3500 }); sTone('sine', 1800, t + 0.1, 0.08, 0.03); },
+    unlock:  function (t) { sNoise(t, 0.05, 0.08, { freq: 3000 }); sThud(t + 0.08, 300, 0.07, 0.06); },
+    beep:    function (t) { sBeep(t, 2200, 0.06, 0.04); },
+    levelup: function (t) { [523, 659, 784, 1047, 1319].forEach(function (f, i) { sTone('triangle', f, t + i * 0.1, 0.4, 0.06); }); sNoise(t + 0.5, 0.4, 0.05, { freq: 6000, fade: true }); },
+    fanfare: function (t) { [523, 659, 784, 1047, 784, 1047].forEach(function (f, i) { sTone('triangle', f, t + i * 0.12, 0.3, 0.06); }); },
+    sleep:   function (t) { [440, 392, 349, 330].forEach(function (f, i) { sTone('sine', f, t + i * 0.3, 0.5, 0.04); }); },
+    glass:   function (t) { for (var i = 0; i < 8; i++) sTone('sine', 2400 + Math.random() * 2400, t + i * 0.03, 0.08, 0.03); sNoise(t, 0.2, 0.1, { freq: 5000, fade: true }); },
+    thunder: function (t) { sNoise(t, 2.6, 0.5, { type: 'lowpass', freq: 220, shape: 'swell', fade: true }); sTone('sine', 45, t + 0.1, 2.0, 0.12, { f1: 28 }); sNoise(t + 0.6, 1.4, 0.2, { type: 'lowpass', freq: 400, fade: true }); }
+  };
+  var sfxCount = 0;
+  function sfx(kind, opt) {
+    if (SET && SET.sound === false) return;
+    try { audio(); if (sfxBus && SET && typeof SET.vol === 'number') sfxBus.gain.value = SET.vol; var fn = SFX[kind] || SFX.click; fn(AC.currentTime, opt); sfxCount++; } catch (e) {}
+  }
+  // ── Settings (not part of the save: they belong to the machine) ───
+  var SET_DEFAULTS = { sens: 1, invertY: false, quality: 'high', sound: true, vol: 0.8, fps: false, fov: 75, film: true, bob: true };
+  function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(SET)); } catch (e) {} }
+  function loadSettings() { try { var ss = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null'); if (ss) for (var sk in ss) if (sk in SET) SET[sk] = ss[sk]; } catch (e) {} return SET; }
+  // ── The slot and the raw peek ─────────────────────────────────────
+  // cfg.save is the save key prefix ('depotco'): the slot number lives at <prefix>-slot, the save at <prefix>-slot<n>, the
+  // settings at <prefix>-settings unless cfg.settingsKey says otherwise. BOOT_SAVE is the raw save before anything is laid out,
+  // so a game can size its world from it (a building stage) before it builds.
+  function coSetupState(cfg) {
+    var prefix = cfg.save || 'co-game';
+    BOOT_SLOT = (function () { try { var q = /[?&]slot=(\d)/.exec(location.search); var sl = q ? +q[1] : +(localStorage.getItem(prefix + '-slot') || 1); return sl >= 1 && sl <= (cfg.slots || 3) ? sl : 1; } catch (e) { return 1; } })();
+    var named = /[?&]save=([A-Za-z0-9_-]+)/.exec(location.search);   // ?save=<name>: a save of its own beside the slots, for development and for a reporter's file
+    SAVE = named ? prefix + '-' + named[1] : prefix + '-slot' + BOOT_SLOT; SETTINGS_KEY = cfg.settingsKey || prefix + '-settings';
+    BOOT_SAVE = (function () { try { var raw = localStorage.getItem(SAVE), s = raw ? JSON.parse(raw) : null; return s && typeof s === 'object' ? s : null; } catch (e) { return null; } })();
+    SET = {}; for (var k in SET_DEFAULTS) SET[k] = SET_DEFAULTS[k]; if (cfg.settings) for (var k2 in cfg.settings) SET[k2] = cfg.settings[k2];
+    menusSettingDefaults();   // part 46: the menu maker's own settings, so the saved values of them load too
+    loadSettings();
+    CO.save = { prefix: prefix, key: SAVE, slot: BOOT_SLOT, named: named ? named[1] : null };
+  }
+  function setSlot(n) { try { localStorage.setItem(CO.save.prefix + '-slot', String(n)); } catch (e) {} }
+  // ── Load and save ─────────────────────────────────────────────────
+  // loadSave(fresh, migrate): S becomes the slot's save, with every top-level key the fresh state has and the save lacks filled in,
+  // then the game's migrate(s, fresh, missing) run on it (missing[key] is true for each key that was filled in, so a migration can
+  // tell an old save from a new field); or the fresh state when there is no save or it will not parse (the broken copy is kept
+  // beside the slot). Returns true when a save was loaded.
+  function loadSave(fresh, migrate) {
+    var f = fresh(); S = f;
+    try {
+      var raw = localStorage.getItem(SAVE); if (!raw) return false;
+      var s = JSON.parse(raw); if (!s || typeof s !== 'object') return false;
+      var missing = {}; for (var k in f) if (!(k in s)) { s[k] = f[k]; missing[k] = true; }
+      if (migrate) { var m = migrate(s, f, missing); if (m && typeof m === 'object') s = m; }
+      S = s; return true;
+    } catch (e) {
+      try { if (typeof console !== 'undefined') console.error('co-engine: the save in ' + SAVE + ' could not be loaded', e); var brokenRaw = localStorage.getItem(SAVE); if (brokenRaw) localStorage.setItem(SAVE + '-broken', brokenRaw); } catch (e2) {}
+      S = fresh(); return false;
+    }
+  }
+  // save() writes the slot, or with cfg.saveDebounce (ms) schedules one write for a burst of calls; saveNow() writes at once (the unload)
+  var saveT = 0, wiped = false, saveTimer = null;
+  function writeSave() {
+    if (wiped || !S) return;
+    try { S.savedAt = now(); localStorage.setItem(SAVE, JSON.stringify(S)); saveT = now(); save.failed = false; }
+    catch (e) { if (!save.failed) { save.failed = true; toast('The save could not be written: the browser refused the storage. Export it from the pause menu.', 'bad'); if (typeof console !== 'undefined') console.error('co-engine: save failed', e); } }   // said once, not at every autosave
+  }
+  function save() { var ms = CO.cfg && CO.cfg.saveDebounce; if (!ms) { writeSave(); return; } if (saveTimer) return; saveTimer = setTimeout(function () { saveTimer = null; writeSave(); }, ms); }
+  function saveNow() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; } writeSave(); }
+  function wipe() { wiped = true; try { localStorage.removeItem(SAVE); } catch (e) {} }
+  function exportSave() { return JSON.stringify(S); }
+  // ── The ledger ────────────────────────────────────────────────────
+  function pay(n, why) { S.bank = (S.bank || 0) + n; if (S.stats) { if (n >= 0) S.stats.earned = (S.stats.earned || 0) + n; else S.stats.spent = (S.stats.spent || 0) + -n; } if (S.ledger) { S.ledger.unshift({ day: S.day, t: fmtTime(S.time || 0), n: n, why: why }); if (S.ledger.length > 80) S.ledger.pop(); } hudDirty = true; }
+  // ── The page contract ─────────────────────────────────────────────
+  // The engine reads these elements when they exist and does nothing when they do not: dc-start, dc-start-btn, dc-start-stats,
+  // dc-start-note (the start screen); dc-hud (the HUD box) with h-prompt, h-toasts, h-feed, h-fps, h-devlink, h-edit inside it;
+  // dc-panel with dc-panel-title, dc-panel-tabs, dc-panel-body, dc-panel-close; dc-menu with .dc-menu-btns, dc-menu-body,
+  // dc-menu-sub and buttons carrying data-menu; and any card element a game names in showCard.
+  var ui = { started: false, menuOpen: false, panelOpen: false, scanOpen: false, rebuilding: false, testing: false, rebuildPending: false, suppressMenu: false,
+    blocked: function () { return ui.menuOpen || ui.panelOpen || ui.rebuilding || !!(CO.game && CO.game.blocked && CO.game.blocked()); } };
+  // ── HUD ───────────────────────────────────────────────────────────
+  // the HUD redraws when something set hudDirty, or every quarter second; the game fills its own fields in CO.game.hud() and the 'hud' hooks
+  var hudT = 0;
+  // the aiming point: a dot with a dark ring in the middle of the view, made by the engine when the page has none of its own (Depot Co
+  // draws a .dc-crosshair itself), shown while the player plays and hidden behind a panel, the menu or the scene camera
+  var crossEl = null, crossShown = null;
+  function crosshair() {
+    if (crossEl === null) { crossEl = document.querySelector('[class*="crosshair"], #crosshair') ? false : null;   /* Depot's .dc-crosshair, Grow's .g3-crosshair: a page with its own keeps it */ if (crossEl === null) { var host = $('dc-hud') || document.body, d = document.createElement('div'); d.id = 'h-cross'; d.style.cssText = 'position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:rgba(255,255,255,0.9);box-shadow:0 0 0 1.5px rgba(0,0,0,0.6),0 0 6px rgba(0,0,0,0.5);pointer-events:none;z-index:5'; host.appendChild(d); crossEl = d; } }
+    if (!crossEl) return; var want = !!(ui.started && !ui.blocked() && !(photo.on && CO.game.photo !== false) && !(CO.game && CO.game.crosshair === false)); if (want !== crossShown) { crossShown = want; crossEl.style.display = want ? '' : 'none'; }
+  }
+  function updateHud(dt) {
+    crosshair();
+    hudT += dt; if (!hudDirty && hudT < 0.25) return; hudT = 0; hudDirty = false;
+    if (S && !(CO.game && CO.game.hudFields === false)) { var d = $('h-day'); if (d && S.day !== undefined) d.textContent = 'Day ' + S.day + (isSunday() ? ' · Sunday' : ''); var c = $('h-clock'); if (c && S.time !== undefined) c.textContent = fmtTime(S.time); var b = $('h-cash'); if (b && S.bank !== undefined) { b.textContent = money(S.bank); b.style.color = S.bank < 0 ? 'var(--red)' : ''; } }
+    if (CO.game && CO.game.hud) CO.game.hud(); uiHudFill(); runHooks('hud');
+  }
+  function updatePrompt() {
+    var p = $('h-prompt'); if (!p) return;
+    if (!focusText || (CO.game && CO.game.promptHidden && CO.game.promptHidden())) { p.hidden = true; return; }
+    p.hidden = false; p.innerHTML = '<b>E</b>' + esc(focusText);
+  }
+  // ── Panels ────────────────────────────────────────────────────────
+  // openPanel(kind, tab) shows the panel element; the game describes a kind in CO.game.panel(kind, tab) as { title, tabs: [[id, label]], body }.
+  // The catalogue kind is the engine's. Buttons in a panel carry data-act and data-arg; the engine takes the catalogue's restore
+  // and buy, the game takes the rest in CO.game.panelAct(act, arg). Tabs carry data-tab.
+  var panel = { kind: null, tab: null };
+  function openPanel(kind, tab) {
+    panel.kind = kind; panel.tab = tab || null; ui.panelOpen = true; var el = $('dc-panel'); if (el) el.hidden = false; if (ui.scanOpen && CO.game && CO.game.scanToggle) CO.game.scanToggle(false);
+    ui.suppressMenu = true; try { document.exitPointerLock(); } catch (e) {}
+    renderPanel(); sfx('click');
+  }
+  function closePanel() { if (!ui.panelOpen) return; ui.panelOpen = false; var el = $('dc-panel'); if (el) el.hidden = true; panel.kind = null; hudDirty = true; lockPointer(); }
+  function renderPanel() {
+    if (!ui.panelOpen) return;
+    var spec = panel.kind === 'catalogue' ? { title: 'Catalogue · build mode', tabs: [], body: catalogueHtml() } : (CO.game && CO.game.panel ? CO.game.panel(panel.kind, panel.tab) : null);
+    if (!spec && panel.kind === 'npc') spec = npcPanelSpec();   /* part 47: an NPC's words and choices */
+    if (!spec) spec = uiPanelSpec(panel.kind);   /* a panel the editor's UI tab described */
+    if (!spec) spec = { title: panel.kind || '', tabs: [], body: '' };
+    if (spec.tab && spec.tab !== panel.tab) panel.tab = spec.tab;
+    var t = $('dc-panel-title'); if (t) t.textContent = spec.title || '';
+    var tb = $('dc-panel-tabs'); if (tb) tb.innerHTML = (spec.tabs || []).map(function (tab) { return '<button class="' + (tab[0] === panel.tab ? 'on' : '') + '" data-tab="' + tab[0] + '">' + tab[1] + '</button>'; }).join('');
+    var body = $('dc-panel-body'); if (body) body.innerHTML = spec.body || '';
+  }
+  function btn(act, arg, label, cls, disabled) { return '<button class="dc-btn small ' + (cls || '') + '" data-act="' + act + '" data-arg="' + esc(arg == null ? '' : arg) + '"' + (disabled ? ' disabled' : '') + '>' + label + '</button>'; }
+  function panelAct(act, arg) {
+    if (panel.kind === 'catalogue' && act === 'restore') { editRestore(arg); renderPanel(); return true; }
+    if (panel.kind === 'catalogue' && act === 'buy') { closePanel(); editBuy(arg); return true; }   // only the catalogue's: a game's shop has a buy of its own
+    if (act === 'ui') return uiPanelAct(arg);
+    if (act === 'npc') return npcChoice(arg);
+    if (CO.game && CO.game.panelAct && CO.game.panelAct(act, arg)) return true;
+    runHooks('panelAct', act, arg); return false;
+  }
+  // the catalogue (C in build mode): removed props to bring back, and extras to buy, grouped as CO.game.catalogueGroups lists them
+  function catalogueHtml() {
+    var h = '<p>Build mode. Press <kbd>E</kbd> on a prop to carry it, <kbd>R</kbd> to turn it, <kbd>Backspace</kbd> to put it back where it started, <kbd>Del</kbd> to remove it. Bought extras sell back for half.</p>';
+    var data = catalogueData(), where = function (id) { return CO.game && CO.game.propWhere ? CO.game.propWhere(id) : ''; }, open = function (d) { return CO.game && CO.game.propOpen ? CO.game.propOpen(d) : !(typeof d.lvl === 'number' && S && S.level !== undefined && S.level < d.lvl); };
+    if (data.hidden.length) h += '<h3>Removed</h3><div class="dc-grid">' + data.hidden.map(function (id) { return '<div class="dc-card"><div class="body"><b>' + esc(PROPS[id].label) + '</b><small>' + esc(where(id)) + '</small></div>' + btn('restore', id, 'Bring back', 'primary') + '</div>'; }).join('') + '</div>';
+    var groups = CO.game && CO.game.catalogueGroups ? CO.game.catalogueGroups : Object.keys(data.groups).map(function (k) { return [k, k.charAt(0).toUpperCase() + k.slice(1)]; });
+    groups.forEach(function (gr) {
+      var all = data.groups[gr[0]] || [], items = all.filter(function (id) { return open(PROPS[id]); });
+      if (!items.length) { var lk = all.map(function (id) { return PROPS[id].lvl || 1; }); if (lk.length) h += '<h3>' + gr[1] + ' <small style="color:var(--muted);font-weight:normal">from level ' + Math.min.apply(null, lk) + '</small></h3>'; return; }
+      h += '<h3>' + gr[1] + (gr[2] ? ' <small style="color:var(--muted);font-weight:normal">' + esc(typeof gr[2] === 'function' ? gr[2]() : gr[2]) + '</small>' : '') + '</h3><div class="dc-grid">' + items.map(function (id) { var d = PROPS[id]; return '<div class="dc-card"><div class="body"><b>' + (d.ico || '') + ' ' + esc(d.label) + '</b><small>' + esc(d.desc || '') + '</small></div><div style="text-align:right"><div class="price">' + (d.price ? money(d.price) : 'free') + '</div>' + btn('buy', id, 'Add', 'primary', !!(d.price && S && S.bank < d.price)) + '</div></div>'; }).join('') + '</div>';
+    });
+    return h;
+  }
+  // ── Pause menu ────────────────────────────────────────────────────
+  function sessionFlag(name, v) { try { sessionStorage.setItem(CO.save.prefix + '-' + name, v || '1'); } catch (e) {} }
+  function openMenu() {
+    if (ui.menuOpen) return; ui.menuOpen = true; var m = $('dc-menu'); if (!m) return; m.hidden = false;
+    var dl = $('dc-m-devlink'); if (dl) dl.textContent = devLink.on ? 'Unlink the editor' : 'Link the editor';
+    var body = $('dc-menu-body'); if (body) body.hidden = true; var btns = m.querySelector('.dc-menu-btns'); if (btns) btns.hidden = false;
+    if (ui.scanOpen && CO.game && CO.game.scanToggle) CO.game.scanToggle(false); ui.suppressMenu = true; try { document.exitPointerLock(); } catch (e) {}
+    save(); var ms = $('dc-menu-sub'); if (ms) ms.textContent = (CO.game && CO.game.menuLine ? CO.game.menuLine() : (UI.menuLine ? uiEval(UI.menuLine) : 'The game waits until you come back.')) + ' ' + (saveT && !save.failed ? 'Saved at ' + new Date(saveT).toLocaleTimeString() + ', slot ' + BOOT_SLOT + '.' : 'The save could not be written: export it below.');
+    runHooks('menuOpen');
+  }
+  function closeMenu() { if (!ui.menuOpen) return; ui.menuOpen = false; var m = $('dc-menu'); if (m) m.hidden = true; lockPointer(); }
+  function menuBody(html) { var b = $('dc-menu-body'); if (!b) return; b.hidden = false; b.innerHTML = '<div class="dc-menu-row" style="margin:0 0 10px"><button data-menu="back" class="primary">← Back</button></div>' + html; var btns = $('dc-menu').querySelector('.dc-menu-btns'); if (btns) btns.hidden = true; }
+  function menuAct(k, b) {
+    sfx('click');
+    if (k === 'resume') closeMenu();
+    else if (k === 'back') { $('dc-menu-body').hidden = true; var btns = $('dc-menu').querySelector('.dc-menu-btns'); if (btns) btns.hidden = false; }
+    else if (k === 'edit') { closeMenu(); if (!edit.on) editToggle(); }
+    else if (k === 'devlink') { closeMenu(); devLinkToggle(); }
+    else if (k === 'settings') menuBody(settingsHtml());
+    else if (k === 'guide') menuBody('<div class="dc-how">' + (CO.game && CO.game.guideHtml ? CO.game.guideHtml() : (UI.guide ? uiTextHtml(UI.guide) : '<p>No guide yet.</p>')) + '</div>');
+    else if (k === 'stats') menuBody(CO.game && CO.game.statsHtml ? CO.game.statsHtml() : '<p>No stats yet.</p>');
+    else if (k === 'saves') menuBody('<p style="color:var(--muted)">This save as text. Copy it somewhere safe, or paste one in and load it.</p><textarea class="dc-ta" id="dc-save-ta">' + esc(JSON.stringify(S)) + '</textarea><div class="dc-menu-row"><button data-menu="download">⬇ Download .json</button><button data-menu="import" class="primary">Load what is pasted</button></div>');
+    else if (k === 'download') { var blob = new Blob([JSON.stringify(S)], { type: 'application/json' }); var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = CO.save.prefix + '-slot' + BOOT_SLOT + (S.day !== undefined ? '-day' + S.day : '') + '.json'; a.click(); }
+    else if (k === 'import') { try { var s = JSON.parse($('dc-save-ta').value); if (!s || typeof s !== 'object' || (CO.game && CO.game.saveLooksRight && !CO.game.saveLooksRight(s))) throw new Error('not a save'); wiped = true; localStorage.setItem(SAVE, JSON.stringify(s)); sessionFlag('skip-splash'); sessionFlag('autoplay'); location.reload(); } catch (err) { toast('That is not a save of this game.', 'bad'); } }   // wiped: the unload autosave must not write the old game back over the import
+    else if (k === 'reset') { if (b && b.getAttribute('data-sure') !== '1') { b.setAttribute('data-sure', '1'); b.textContent = 'Really reset slot ' + BOOT_SLOT + '? Click again'; setTimeout(function () { b.removeAttribute('data-sure'); b.textContent = '⟲ Reset this save'; }, 3000); return; } wipe(); sessionFlag('skip-splash'); location.reload(); }
+    else if (k === 'quit') { save(); sessionFlag('skip-splash'); location.reload(); }
+    else if (k.indexOf('page:') === 0) menuBody(menusPageHtml(k.slice(5)));
+    else if (k.indexOf('mm:') === 0) menusPauseAct(+k.slice(3), b);
+    else if (CO.game && CO.game.menu) CO.game.menu(k, b);
+  }
+  // ── Settings ──────────────────────────────────────────────────────
+  function settingsHtml() {
+    if (MENUS.settings) return '<div class="dc-form">' + menusSettingRows() + (CO.game && CO.game.settingsHtml ? CO.game.settingsHtml() : '') + '</div>';   // part 46: the settings the menu maker chose
+    return '<div class="dc-form">' +
+      '<label><span>Mouse sensitivity</span><input type="range" min="0.3" max="2.5" step="0.1" value="' + SET.sens + '" data-set="sens"></label>' +
+      '<label><span>Invert Y</span><input type="checkbox" ' + (SET.invertY ? 'checked' : '') + ' data-set="invertY"></label>' +
+      '<label><span>Field of view</span><input type="range" min="60" max="100" step="1" value="' + SET.fov + '" data-set="fov"></label>' +
+      '<label><span>Head bob while walking</span><input type="checkbox" ' + (SET.bob !== false ? 'checked' : '') + ' data-set="bob"></label>' +
+      '<label><span>Quality</span><select data-set="quality"><option value="high"' + (SET.quality === 'high' ? ' selected' : '') + '>High</option><option value="medium"' + (SET.quality === 'medium' ? ' selected' : '') + '>Medium</option><option value="low"' + (SET.quality === 'low' ? ' selected' : '') + '>Low (no shadows)</option></select></label>' +
+      '<label><span>Sound</span><input type="checkbox" ' + (SET.sound ? 'checked' : '') + ' data-set="sound"></label>' +
+      '<label><span>Volume</span><input type="range" min="0" max="1" step="0.05" value="' + SET.vol + '" data-set="vol"></label>' +
+      '<label><span>Film look (vignette, grain)</span><input type="checkbox" ' + (SET.film !== false ? 'checked' : '') + ' data-set="film"></label>' +
+      '<label><span>Show FPS (F3)</span><input type="checkbox" ' + (SET.fps ? 'checked' : '') + ' data-set="fps"></label>' +
+      (CO.game && CO.game.settingsHtml ? CO.game.settingsHtml() : '') +
+      '</div>';
+  }
+  function settingInput(el) {
+    var k = el.getAttribute('data-set'); if (!k) return;
+    var v = el.type === 'checkbox' ? el.checked : el.tagName === 'SELECT' ? el.value : +el.value;
+    if (!(k in SET)) { if (CO.game && CO.game.setting) CO.game.setting(k, v); hudDirty = true; return; }
+    SET[k] = v; saveSettings(); applySettings(); if (menusCustomKey(k) && CO.game && CO.game.setting) CO.game.setting(k, v);
+  }
+  function applySettings() {
+    if (!renderer) return;
+    camera.fov = SET.fov; camera.updateProjectionMatrix(); post.on = SET.film !== false;
+    var pr = SET.quality === 'high' ? Math.min(window.devicePixelRatio || 1, 2) : SET.quality === 'medium' ? 1 : 0.75;
+    renderer.setPixelRatio(pr); renderer.shadowMap.enabled = SET.quality !== 'low'; if (sun) sun.castShadow = SET.quality !== 'low'; lightBudget.n = SET.quality === 'high' ? (CO.cfg.lightBudget || 16) : SET.quality === 'medium' ? 10 : 6;
+    var big = CO.cfg && CO.cfg.sun && CO.cfg.sun.mapSize || 4096, sm = SET.quality === 'high' ? big : Math.min(big, 2048); if (sun && sun.shadow.mapSize.x !== sm) { sun.shadow.mapSize.set(sm, sm); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
+    if (sky.rain) { var rn = SET.quality === 'high' ? sky.rainN : SET.quality === 'medium' ? Math.round(sky.rainN * 0.64) : Math.round(sky.rainN * 0.36), snn = SET.quality === 'high' ? sky.snowN : SET.quality === 'medium' ? Math.round(sky.snowN * 0.66) : Math.round(sky.snowN * 0.4); CO.rainN = rn; CO.snowN = snn; sky.rain.geometry.setDrawRange(0, rn); sky.snow.geometry.setDrawRange(0, snn); }
+    if (applySettings.q !== SET.quality) { applySettings.q = SET.quality; scene.traverse(function (o) { if (o.material && o.material.needsUpdate !== undefined) o.material.needsUpdate = true; }); }   // only a quality change recompiles the shaders
+    shadowDirty = true; var f = $('h-fps'); if (f) f.hidden = !SET.fps; if (sfxBus) sfxBus.gain.value = SET.vol;
+    runHooks('settings', SET);
+  }
+  function screenshot() {
+    try { renderFrame(0.016); canvas.toBlob(function (b) { if (!b) return; var a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = (CO.save ? CO.save.prefix : 'co') + '-' + Date.now() + '.png'; a.click(); toast('Screenshot saved' + (/Electron/.test(navigator.userAgent) ? ' to Pictures' : ''), 'good'); }, 'image/png'); } catch (e) {}
+  }
+  // ── Cards: a timed overlay any key dismisses (a level card, a day report) ──
+  var cards = {};
+  function showCard(id, html, seconds) { var el = $(id); if (!el) return; el.innerHTML = html; el.hidden = false; cards[id] = seconds || 12; }
+  function hideCard(id) { var el = $(id); if (el && !el.hidden) el.hidden = true; delete cards[id]; }
+  function hideCards() { for (var id in cards) hideCard(id); }
+  function tickCards(dt) { for (var id in cards) { cards[id] -= dt; if (cards[id] <= 0) hideCard(id); } }
+  // ── Binding the page ──────────────────────────────────────────────
+  function coSetupShell() {
+    menusPageReady();   // part 46
+    var pc = $('dc-panel-close'); if (pc) pc.addEventListener('click', closePanel);
+    var pn = $('dc-panel'); if (pn) pn.addEventListener('click', function (e) { var tb = e.target.closest('[data-tab]'); if (tb) { panel.tab = tb.getAttribute('data-tab'); renderPanel(); sfx('click'); return; } var b = e.target.closest('[data-act]'); if (!b || b.disabled) return; panelAct(b.getAttribute('data-act'), b.getAttribute('data-arg')); });
+    var mn = $('dc-menu'); if (mn) mn.addEventListener('click', function (e) { var b = e.target.closest('[data-menu]'); if (!b) return; menuAct(b.getAttribute('data-menu'), b); });
+    var mb = $('dc-menu-body'); if (mb) mb.addEventListener('input', function (e) { settingInput(e.target); });
+  }
+  // ── Player ────────────────────────────────────────────────────────
+  // player is the record the whole engine reads: x, y, z, yaw, pitch, the keys held, the tool carried. The game's hooks on CO.game:
+  // playerOverride(dt) takes the frame (a vehicle, a seat) and returns true; speedMul() scales the walk; stepSurface(x, z) names the
+  // step sound; collides(x, z) adds the game's own blockers; hitObjects() adds meshes to look at; hitDef(hit) resolves one of them;
+  // useFallback() runs when E hits nothing; putDown() is G with nothing focused; mouseLook(e, sx, iy) takes the mouse; key(e)
+  // takes a key before the engine's own bindings; escape() takes Esc first; wheel(dir) takes the wheel.
+  var focusText = '';
+  function coSetupPlayer(cfg) {
+    var sp = cfg.spawn || { x: 0, z: 0 };
+    player = { x: sp.x || 0, y: 0, z: sp.z || 0, yaw: sp.yaw === undefined ? 0 : sp.yaw, pitch: 0, vy: 0, grounded: true, keys: {}, locked: false, tool: null, stepT: 0, bob: 0, jumped: false };
+    player.y = floorY(player.x, player.z);
+    if (cfg.input === false) return player;   // the game binds its own keys, mouse and pointer lock
+    canvas.addEventListener('click', function () { if (CO.editor && CO.editor.on) return; if (ui.started && !ui.blocked() && !player.locked) lockPointer(); });   // in the editor's viewport a click selects (60-editor)
+    document.addEventListener('pointerlockchange', function () { player.locked = document.pointerLockElement === canvas; if (!player.locked) { player.keys = {}; if (ui.started && !ui.blocked() && !ui.suppressMenu && !ui.testing && !(CO.editor && CO.editor.on)) openMenu(); } ui.suppressMenu = false; });
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', function (e) { player.keys[e.code] = false; });
+    document.addEventListener('wheel', onWheel, { passive: true });
+    window.addEventListener('blur', function () { player.keys = {}; });
+    return player;
+  }
+  function collides(x, z, opt) {
+    var r = 0.32, y0 = player.y, y1 = player.y + 1.7;
+    if (floorY(x, z, player.y) - player.y > 0.5) return true;
+    for (var i = 0; i < solids.length; i++) { var s = solids[i]; if (x > s.x0 - r && x < s.x1 + r && z > s.z0 - r && z < s.z1 + r && y0 < s.y1 && y1 > s.y0) return true; }
+    for (var k = 0; k < dyn.length; k++) { var d = dyn[k]; if (d.skip && (opt === d.skip || (CO.game && CO.game.skipDyn && CO.game.skipDyn(d)))) continue; if (x > d.x0 - r && x < d.x1 + r && z > d.z0 - r && z < d.z1 + r && y0 < d.y1 && y1 > d.y0) return true; }
+    if (CO.game && CO.game.collides && CO.game.collides(x, z, opt)) return true;
+    return false;
+  }
+  function updatePlayer(dt) {
+    if (CO.game && CO.game.playerOverride && CO.game.playerOverride(dt)) return;
+    var k = player.keys, run = k.ShiftLeft || k.ShiftRight;
+    var speed = 4.0 * (run ? 1.55 : 1) * (CO.game && CO.game.speedMul ? CO.game.speedMul() : 1);
+    var fwd = (k.KeyW ? 1 : 0) - (k.KeyS ? 1 : 0), side = (k.KeyD ? 1 : 0) - (k.KeyA ? 1 : 0);
+    var mx = 0, mz = 0;
+    if (fwd || side) {
+      var fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw), rx = Math.cos(player.yaw), rz = -Math.sin(player.yaw);
+      mx = fx * fwd + rx * side; mz = fz * fwd + rz * side; var l = Math.sqrt(mx * mx + mz * mz); mx /= l; mz /= l;
+      var nx = player.x + mx * speed * dt, nz = player.z + mz * speed * dt;
+      if (!collides(nx, player.z)) player.x = nx;
+      if (!collides(player.x, nz)) player.z = nz;
+      player.stepT += speed * dt; player.bob += dt * (run ? 11 : 8);
+      if (player.stepT > 2.1) { player.stepT = 0; sfx('step', CO.game && CO.game.stepSurface ? CO.game.stepSurface(player.x, player.z, player.y) : 'floor'); }
+    } else player.bob *= Math.max(0, 1 - 8 * dt);
+    var fy = floorY(player.x, player.z, player.y);
+    if (k.Space && player.grounded && !player.jumped) { player.vy = 6.0; player.grounded = false; player.jumped = true; }
+    if (!k.Space) player.jumped = false;
+    player.vy -= 16 * dt; player.y += player.vy * dt;
+    if (player.y <= fy) { if (!player.grounded && player.vy < -6) sfx('putdown'); player.y = fy; player.vy = 0; player.grounded = true; } else player.grounded = false;
+    var bobY = SET.bob !== false && (fwd || side) && player.grounded ? Math.sin(player.bob) * 0.03 : 0;
+    camera.position.set(player.x, player.y + 1.62 + bobY, player.z);
+    camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
+  }
+  // ── Looking at things ─────────────────────────────────────────────
+  function updateFocus() {
+    if (CO.game && CO.game.focusOff && CO.game.focusOff()) return;   // the game keeps its own focus (Grow Co): leave it alone; clearing it here wiped the shop's aim every frame, so E and clicks found nothing
+    focus = null; focusText = '';
+    if (!ui.started || ui.blocked() || photo.on) return;
+    ray.setFromCamera(centre, camera);
+    if (edit.on && !(CO.game && CO.game.editMode === false)) {
+      if (edit.grabbed) { if (edit.snapText) { focus = { prompt: function () { return edit.snapText; }, use: function () {} }; focusText = edit.snapText; } return; }
+      ray.far = 7; var ph = ray.intersectObjects(scene.children, true); ray.far = 3.4;
+      for (var q = 0; q < ph.length; q++) { var pid = propIdOf(ph[q].object); if (!pid) continue; if (ph[q].object.userData.baked || !ph[q].object.visible) continue; var pdef = propDef(pid); if (!pdef || pdef.fixed) continue; focus = { editId: pid, prompt: function () { return ''; }, use: function () {} }; focusText = 'Grab the ' + pdef.label + '  ·  R turn · Backspace put back · Del remove'; return; }
+      return;
+    }
+    var extra = CO.game && CO.game.hitObjects ? CO.game.hitObjects() : [];
+    var hits = ray.intersectObjects(extra.length ? inter.concat(extra) : inter, false);
+    // a touch screen sits a few centimetres proud of its cabinet, whose hit box can reach past it: within 0.5 m the screen wins,
+    // and the hit box of the screen's own prop never beats it at any range; the game may name other winners in hitPriority
+    for (var si = 1; si < hits.length; si++) {
+      var hs = hits[si], win = false;
+      if (hs.object.userData.screen) { win = true; var spid = propIdOf(hs.object); for (var sj = 0; sj < si; sj++) { var ho = hits[sj].object; if (!(hs.distance - hits[sj].distance < 0.5 || (spid && ho.material === MAT.hit && propIdOf(ho) === spid))) { win = false; break; } } }
+      else if (CO.game && CO.game.hitPriority && CO.game.hitPriority(hs, hits[0])) win = true;
+      if (win) { hits.unshift(hits.splice(si, 1)[0]); break; }
+    }
+    for (var i = 0; i < hits.length; i++) {
+      var h = hits[i], def = h.object.userData.it || (CO.game && CO.game.hitDef ? CO.game.hitDef(h) : null);
+      if (!def) continue;
+      if (def.prop === undefined) def.prop = propIdOf(h.object) || null;
+      var txt = def.prompt(); if (!txt) continue;
+      focus = def; focusText = txt; break;
+    }
+  }
+  function useFocus() {
+    if (edit.on && !(CO.game && CO.game.editMode === false)) { if (edit.grabbed) editDrop(false); else if (focus && focus.editId) editGrab(focus.editId); return; }
+    if (CO.game && CO.game.useOverride && CO.game.useOverride()) return;
+    if (focus) { focus.use(); sfx('click'); updateFocus(); } else if (CO.game && CO.game.useFallback) CO.game.useFallback();
+  }
+  // ── Input ─────────────────────────────────────────────────────────
+  function lockPointer() { if (!ui.started || ui.blocked() || ui.testing || (CO.editor && CO.editor.on)) return; try { var r = canvas.requestPointerLock(); if (r && r.catch) r.catch(function () {}); } catch (e) {} }
+  function onMouseMove(e) {
+    if (!(player.locked || (CO.editor && CO.editor.drag)) || ui.blocked()) return;
+    var sx = 0.0022 * SET.sens, iy = SET.invertY ? -1 : 1;
+    if (photo.on) { photo.yaw -= e.movementX * sx; photo.pitch = clamp(photo.pitch - e.movementY * sx * iy, -1.5, 1.5); return; }
+    if (CO.game && CO.game.mouseLook && CO.game.mouseLook(e, sx, iy)) return;
+    player.yaw -= e.movementX * sx; player.pitch = clamp(player.pitch - e.movementY * sx * iy, -1.5, 1.5);
+  }
+  function onKeyDown(e) {
+    if (e.code === 'F12') { e.preventDefault(); if (ui.started) screenshot(); return; }
+    if (e.code === 'KeyD' && e.ctrlKey && e.shiftKey) { e.preventDefault(); devLinkToggle(); return; }
+    if (e.code === 'F3') { e.preventDefault(); SET.fps = !SET.fps; var f = $('h-fps'); if (f) f.hidden = !SET.fps; saveSettings(); return; }
+    var typing = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT');
+    if (typing && e.code !== 'Escape') return;
+    if (!ui.started) return;
+    hideCards();
+    if (e.code === 'F9') { e.preventDefault(); photoToggle(); return; }
+    if (e.code === 'Escape') { e.preventDefault(); if (photo.on) { photoToggle(false); return; } if (CO.game && CO.game.escape && CO.game.escape()) return; if (edit.on && edit.grabbed) { editDrop(true); return; } if (ui.panelOpen) closePanel(); else if (ui.scanOpen && CO.game && CO.game.scanToggle) CO.game.scanToggle(false); else if (ui.menuOpen) closeMenu(); else openMenu(); return; }
+    if (ui.blocked()) return;
+    if (photo.on) { player.keys[e.code] = true; return; }
+    if (e.code === 'F2') { e.preventDefault(); if (editAllowed() && !(CO.game && CO.game.editBlocked && CO.game.editBlocked())) editToggle(); return; }
+    if (edit.on && !(CO.game && CO.game.editMode === false)) {
+      if (e.code === 'KeyR') { editRotate(); return; }
+      if (e.code === 'Backspace') { e.preventDefault(); editReset(); return; }
+      if (e.code === 'Delete') { editRemove(); return; }
+      if (e.code === 'KeyC') { openPanel('catalogue'); return; }
+      if (e.code === 'KeyE' && !e.repeat) { if (edit.grabbed) editDrop(false); else if (focus && focus.editId) editGrab(focus.editId); return; }
+      if (e.code === 'KeyG' && !e.repeat) { if (edit.grabbed) editDrop(true); return; }
+    }
+    if (CO.game && CO.game.key && CO.game.key(e)) return;
+    player.keys[e.code] = true;
+    if (e.repeat) return;
+    if (e.code === 'KeyE') useFocus();
+    else if (e.code === 'KeyG') { if (focus && focus.alt) focus.alt(); else if (CO.game && CO.game.putDown) CO.game.putDown(); }
+  }
+  function screenUnderCrosshair() { for (var i = 0; i < screens.length; i++) { if (!screens[i].mesh.visible) continue; if (ray.intersectObject(screens[i].mesh, false).length) return screens[i]; } return null; }
+  function onWheel(e) {
+    var dir = e.deltaY > 0 ? 1 : -1;
+    if (photo.on && ui.started && !ui.blocked()) { photoZoom(dir); return; }
+    if (CO.game && CO.game.wheel && CO.game.wheel(dir, e)) return;
+    if (ui.started && !ui.blocked()) { var ssc = screenUnderCrosshair(); if (ssc && ssc.scrollable) { ssc.scroll = clamp((ssc.scroll || 0) + dir, 0, ssc.scrollMax || 0); ssc.userScrollAt = worldTime; ssc.dirty = true; } }
+  }
+  // ── Photo mode ────────────────────────────────────────────────────
+  // F9 lets go of the player: the camera flies free (WASD, Space up, C down, Shift fast, the mouse looks), the HUD goes, the world
+  // holds still, and F12 takes the picture. F9 or Esc puts you back where you were standing.
+  var photo = { on: false, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, speed: 6, fov: 75 };
+  function photoToggle(on) {
+    if (CO.game && CO.game.photo === false) return;   // the game has a photo mode of its own
+    if (on === undefined) on = !photo.on; if (on === photo.on) return;
+    if (on) {
+      if (!ui.started || ui.blocked() || edit.on || (CO.game && CO.game.photoBlocked && CO.game.photoBlocked())) return;
+      photo.on = true; photo.x = camera.position.x; photo.y = camera.position.y; photo.z = camera.position.z; photo.yaw = player.yaw; photo.pitch = player.pitch; photo.fov = SET.fov;
+      if (ui.scanOpen && CO.game && CO.game.scanToggle) CO.game.scanToggle(false); var hud = $('dc-hud'); if (hud) hud.hidden = true; player.keys = {}; sfx('beep'); runHooks('photo', true);
+    } else { photo.on = false; var hud2 = $('dc-hud'); if (hud2) hud2.hidden = false; hudDirty = true; player.keys = {}; sfx('click'); camera.fov = SET.fov; camera.updateProjectionMatrix(); runHooks('photo', false); }
+  }
+  function photoZoom(dir) { if (!photo.on) return; photo.fov = clamp(photo.fov + dir * 4, 20, 110); camera.fov = photo.fov; camera.updateProjectionMatrix(); }
+  function photoTick(dt) {
+    var k = player.keys, sp = photo.speed * (k.ShiftLeft || k.ShiftRight ? 3 : 1) * dt;
+    var cp = Math.cos(photo.pitch), fx = -Math.sin(photo.yaw) * cp, fy = Math.sin(photo.pitch), fz = -Math.cos(photo.yaw) * cp, rx = Math.cos(photo.yaw), rz = -Math.sin(photo.yaw);
+    var f = (k.KeyW ? 1 : 0) - (k.KeyS ? 1 : 0), r = (k.KeyD ? 1 : 0) - (k.KeyA ? 1 : 0), u = (k.Space ? 1 : 0) - (k.KeyC || (k.ControlLeft && !(CO.editor && CO.editor.on)) ? 1 : 0);   /* in the editor Ctrl selects and drags; C flies down */
+    photo.x += (fx * f + rx * r) * sp; photo.y = clamp(photo.y + (fy * f + u) * sp, -1.0, 70); photo.z += (fz * f + rz * r) * sp;
+    camera.position.set(photo.x, photo.y, photo.z); camera.rotation.set(photo.pitch, photo.yaw, 0, 'YXZ');
+  }
+  // ── Seeded random ─────────────────────────────────────────────────
+  // a thing's own dice: the same throw every time it is built, so a bought picture keeps its print and a tree its size through
+  // every move, turn and reload. FNV-1a over the id and the throw number, mapped to [0, 1).
+  function propSeed(id, k) { var s = String(id) + ':' + (k || 0), n = 2166136261; for (var i = 0; i < s.length; i++) { n ^= s.charCodeAt(i); n = Math.imul(n, 16777619) >>> 0; } return (n % 100000) / 100000; }
+  function seededF(id, k, a, b) { return a + propSeed(id, k) * (b - a); }
+  function seededI(id, k, a, b) { return a + Math.floor(propSeed(id, k) * (b - a + 1)); }
+  function seededPick(id, k, arr) { return arr[Math.floor(propSeed(id, k) * arr.length) % arr.length]; }
+  // a small linear congruential stream for a run of throws from one seed (a tree's branches, a crowd's faces)
+  function seededStream(seed) { var s = (typeof seed === 'number' ? seed : Math.floor(propSeed(seed, 0) * 2147483647)) >>> 0 || 1; return function () { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; }; }
+  // succeeds if any of n tries at probability p does
+  function unitRoll(p, n) { return 1 - Math.pow(1 - p, n || 1) > Math.random(); }
+  // ── Colours ───────────────────────────────────────────────────────
+  function mixHex(a, b, t) { var ar = a >> 16 & 255, ag = a >> 8 & 255, ab = a & 255, br = b >> 16 & 255, bg = b >> 8 & 255, bb = b & 255; return (Math.round(ar + (br - ar) * t) << 16) | (Math.round(ag + (bg - ag) * t) << 8) | Math.round(ab + (bb - ab) * t); }
+  function hexCss(n) { return '#' + ('000000' + (n & 0xffffff).toString(16)).slice(-6); }
+  // ── Data ──────────────────────────────────────────────────────────
+  // merge a list by id: replace the entry whose id matches, else append. For a pack or a DLC that adds to a game's tables.
+  function mergeById(list, extra) { extra.forEach(function (e) { var i = -1; for (var k = 0; k < list.length; k++) if (list[k].id === e.id) { i = k; break; } if (i >= 0) list[i] = e; else list.push(e); }); return list; }
+  function fmtKg(n) { return (n < 10 ? Math.round(n * 10) / 10 : Math.round(n)) + ' kg'; }
+  function fmtAgo(sec) { return sec < 60 ? Math.round(sec) + 's ago' : sec < 3600 ? Math.round(sec / 60) + 'm ago' : Math.round(sec / 3600) + 'h ago'; }
+  function fmtLeft(sec) { return sec >= 60 ? Math.ceil(sec / 60) + ' min' : Math.ceil(sec) + ' s'; }
+  // ── UI as data ────────────────────────────────────────────────────
+  // hud: [{ label, value, color }]           chips in a row of their own under the engine's (value is an expression: 'S.day', 'money(S.bank)')
+  // panels: { kind: { title, text, buttons: [{ label, action, primary }] } }   openPanel(kind) shows it; text is paragraphs and '- ' lists; an action is a dev command ('cash 500') or an expression
+  // start: ['expression', ...]               the start screen's chips    menuLine: 'expression'    guide: 'text'
+  var UI = { hud: [], panels: {}, start: [], menuLine: '', guide: '' }, uiFns = {};
+  CO.ui = function (data) { if (!data) return UI; if (data.hud) UI.hud = data.hud.slice(); if (data.panels) { UI.panels = {}; for (var k in data.panels) UI.panels[k] = data.panels[k]; } if (data.start) UI.start = data.start.slice(); if (data.menuLine !== undefined) UI.menuLine = data.menuLine; if (data.guide !== undefined) UI.guide = data.guide; uiFns = {}; hudDirty = true; uiHudBuild(); return UI; };
+  function uiEval(expr) {
+    if (expr === undefined || expr === null || expr === '') return '';
+    var fn = uiFns[expr]; if (!fn) { try { fn = uiFns[expr] = new Function('K', 'with (K) { return (' + expr + '\n); }'); } catch (e) { return '?'; } }
+    try { var v = fn(editorKit()); return v === undefined || v === null ? '' : String(v); } catch (e2) { return '?'; }
+  }
+  function uiAction(action) {
+    if (!action) return false; var sp = String(action).indexOf(' '), name = sp < 0 ? action : action.slice(0, sp), arg = sp < 0 ? undefined : action.slice(sp + 1).trim();
+    if (devCommandList().indexOf(name) >= 0) { if (arg !== undefined && arg !== '' && !isNaN(arg)) arg = +arg; var r = devCommand(name, arg); hudDirty = true; return r; }   /* the engine's dev commands and the game's */
+    try { new Function('K', 'with (K) { ' + action + '\n }')(editorKit()); hudDirty = true; save(); return true; } catch (e) { toast('The button failed: ' + e.message, 'bad'); return false; }
+  }
+  // the HUD chips: a row of their own under the engine's top row, made once and filled on every HUD refresh
+  function uiHudBuild() {
+    var hud = $('dc-hud'); if (!hud) return null; var row = $('h-ui');
+    if (!row) { row = document.createElement('div'); row.id = 'h-ui'; row.style.cssText = 'position:absolute;top:52px;left:12px;display:flex;gap:8px;flex-wrap:wrap;max-width:60vw;pointer-events:none;font:13px/1.3 inherit'; hud.appendChild(row); }
+    row.innerHTML = UI.hud.map(function (f, i) { return '<span data-ui="' + i + '" style="background:rgba(5,8,12,0.6);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:5px 10px' + (f.color ? ';color:' + f.color : '') + '"><span style="opacity:.6;font-size:11px;letter-spacing:.06em;text-transform:uppercase;margin-right:6px">' + esc(f.label || '') + '</span><b></b></span>'; }).join('');
+    return row;
+  }
+  function uiHudFill() { if (!UI.hud.length) return; var row = $('h-ui') || uiHudBuild(); if (!row) return; var bs = row.querySelectorAll('b'); UI.hud.forEach(function (f, i) { if (bs[i]) bs[i].textContent = uiEval(f.value); }); }
+  function uiTextHtml(text) { return String(text || '').split(/\n\s*\n/).map(function (para) { var lines = para.split('\n'); if (lines.every(function (l) { return /^\s*-\s/.test(l); })) return '<ul>' + lines.map(function (l) { return '<li>' + esc(l.replace(/^\s*-\s/, '')) + '</li>'; }).join('') + '</ul>'; return '<p>' + esc(para).replace(/\n/g, '<br>') + '</p>'; }).join(''); }
+  function uiPanelSpec(kind) { var p = UI.panels[kind]; if (!p) return null; return { title: uiEval(p.titleExpr) || p.title || kind, tabs: [], body: '<div class="dc-how">' + uiTextHtml(p.text) + '</div>' + (p.buttons && p.buttons.length ? '<div class="dc-menu-row" style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">' + p.buttons.map(function (b, i) { return '<button class="dc-btn ' + (b.primary ? 'primary' : '') + '" data-act="ui" data-arg="' + esc(kind + ':' + i) + '">' + esc(b.label || 'Button') + '</button>'; }).join('') + '</div>' : '') }; }
+  function uiPanelAct(arg) { var at = String(arg || '').lastIndexOf(':'), kind = arg.slice(0, at), i = +arg.slice(at + 1), p = UI.panels[kind], b = p && p.buttons && p.buttons[i]; if (!b) return false; var r = uiAction(b.action); if (b.close) closePanel(); else renderPanel(); if (typeof r === 'string') toast(r, ''); return true; }
+  function uiStartChips() { return UI.start.map(uiEval).filter(Boolean); }
+  function uiData() { return JSON.parse(JSON.stringify(UI)); }
+  function uiCode() {
+    var empty = !UI.hud.length && !Object.keys(UI.panels).length && !UI.start.length && !UI.menuLine && !UI.guide; if (empty) return '';
+    return '//@ the UI the editor saved: HUD chips, panels, the start screen chips, the pause line and the guide, as data over the kit. Written by the Co Engine editor; it sorts first in src/. Edit it in the editor rather than here.\n  CO.ui(' + JSON.stringify(UI, null, 2).replace(/\n/g, '\n  ') + ');\n';
+  }
+  // ── Tuning tables ─────────────────────────────────────────────────
+  var TABLES = {}, TABLE_ORDER = [], TUNE = {};
+  function pathGet(o, p) { var k = String(p).split('.'); for (var i = 0; i < k.length; i++) { if (o == null) return undefined; o = o[k[i]]; } return o; }
+  function pathSet(o, p, v) { var k = String(p).split('.'); for (var i = 0; i < k.length - 1; i++) { if (o[k[i]] == null) return false; o = o[k[i]]; } o[k[k.length - 1]] = v; return true; }
+  // the leaves of a table worth editing: numbers, strings and booleans, by path, at most 400 of them
+  function tableLeaves(obj) { var out = []; (function walk(o, pre, depth) { if (out.length >= 400 || depth > 5) return; Object.keys(o).forEach(function (k) { var v = o[k], p = pre ? pre + '.' + k : k; if (typeof v === 'number' || typeof v === 'string' || typeof v === 'boolean') out.push({ path: p, value: v, type: typeof v }); else if (v && typeof v === 'object' && !v.isObject3D && !v.isMaterial && typeof v !== 'function') walk(v, p, depth + 1); }); })(obj, '', 0); return out; }
+  CO.table = function (name, obj, desc) {
+    if (!name) return TABLES; if (!obj || typeof obj !== 'object') return obj;
+    if (!TABLES[name]) TABLE_ORDER.push(name);
+    var defaults = {}; tableLeaves(obj).forEach(function (l) { defaults[l.path] = l.value; });
+    TABLES[name] = { obj: obj, desc: desc || '', defaults: defaults };
+    var t = TUNE[name]; if (t) for (var p in t) pathSet(obj, p, t[p]);
+    return obj;
+  };
+  CO.tune = function (overrides) { for (var n in overrides) { TUNE[n] = TUNE[n] || {}; for (var p in overrides[n]) { TUNE[n][p] = overrides[n][p]; if (TABLES[n]) pathSet(TABLES[n].obj, p, overrides[n][p]); } } return TUNE; };
+  function tablesList() { return TABLE_ORDER.map(function (n) { var T = TABLES[n]; return { name: n, desc: T.desc, fields: tableLeaves(T.obj).map(function (l) { return { path: l.path, value: l.value, type: l.type, changed: T.defaults[l.path] !== undefined && T.defaults[l.path] !== l.value, was: T.defaults[l.path] }; }) }; }); }
+  function tableSet(name, path, value) {
+    var T = TABLES[name]; if (!T) return { error: 'no table ' + name }; var was = pathGet(T.obj, path); if (was === undefined) return { error: 'no field ' + path + ' in ' + name };
+    var v = typeof was === 'number' ? +value : typeof was === 'boolean' ? (value === true || value === 'true') : String(value); if (typeof was === 'number' && isNaN(v)) return { error: 'a number, please' };
+    pathSet(T.obj, path, v); TUNE[name] = TUNE[name] || {}; if (T.defaults[path] === v) delete TUNE[name][path]; else TUNE[name][path] = v;
+    hudDirty = true; screenDirtyAll();
+    histPush(name + '.' + path, function () { pathSet(T.obj, path, was); if (T.defaults[path] === was) delete TUNE[name][path]; else TUNE[name][path] = was; hudDirty = true; screenDirtyAll(); }, function () { pathSet(T.obj, path, v); if (T.defaults[path] === v) delete TUNE[name][path]; else TUNE[name][path] = v; hudDirty = true; screenDirtyAll(); });
+    return { ok: true, value: v };
+  }
+  function tablesCode() {
+    var out = {}, any = false; for (var n in TUNE) { var keys = Object.keys(TUNE[n]); if (keys.length) { out[n] = TUNE[n]; any = true; } }
+    if (!any) return '';
+    return '//@ the tuning the editor saved: changes to the game\'s tables (prices, the economy, the ladder) over what the code says. Written by the Co Engine editor\'s Settings tab; it sorts first in src/ and applies as each table registers.\n  CO.tune(' + JSON.stringify(out, null, 2).replace(/\n/g, '\n  ') + ');\n';
+  }
+  // ── Menus as data ─────────────────────────────────────────────────
+  // theme:    { accent, panel, text, muted, font, radius, dim, align: 'center' | 'left', width, layout: 'stack' | 'row', image }
+  // start:    { title, subtitle, logo, chips, note, keepPage, buttons: [{ label, action, primary }] }   image (in theme) is the backdrop;
+  //           keepPage (on unless false) keeps what else the page's start card held under the buttons: a disclaimer, support links
+  // pause:    { title, line, buttons: [{ label, action, primary }] }
+  // settings: { hide: ['fov', ...], custom: [{ key, label, type: 'toggle' | 'slider' | 'select', min, max, step, options, value }] }
+  // pages:    { name: { title, text } }                                   text is paragraphs and '- ' lists, as in the UI tab
+  // An action is one of the engine's: on the start screen play, new, settings, guide, slots, quit; in the pause menu resume,
+  // settings, guide, stats, saves, edit, devlink, reset, quit; on both 'page <name>'. Anything else is a dev command or an
+  // expression over the kit, as a UI panel button's is. A custom setting lives in SET with the engine's (SET.difficulty), is
+  // kept with them, and reaches GAME.setting(key, value) and the 'settings' hook when it changes; setting(key) reads one.
+  var MENUS = { theme: {}, start: null, pause: null, settings: null, pages: {} }, menusPageExtra = null;
+  var MENU_THEME = { accent: '#f5b53d', panel: '#121a24', text: '#eef1f5', muted: '#a0acb8', font: 'Bahnschrift, "Segoe UI", Arial, sans-serif', radius: 12, dim: 0.72, align: 'center', width: 440, layout: 'stack', image: '' };
+  var MENU_SETTINGS = [['sens', 'Mouse sensitivity'], ['invertY', 'Invert Y'], ['fov', 'Field of view'], ['bob', 'Head bob while walking'], ['quality', 'Quality'], ['sound', 'Sound'], ['vol', 'Volume'], ['film', 'Film look (vignette, grain)'], ['fps', 'Show FPS (F3)']];
+  var MENU_ACTIONS = { start: ['play', 'new', 'settings', 'guide', 'slots', 'quit'], pause: ['resume', 'settings', 'guide', 'stats', 'saves', 'edit', 'devlink', 'reset', 'quit'] };
+  CO.menus = function (data) {
+    if (data === undefined) return menusData();
+    data = JSON.parse(JSON.stringify(data || {}));
+    MENUS = { theme: data.theme || {}, start: data.start || null, pause: data.pause || null, settings: data.settings || null, pages: data.pages || {} };
+    if (SET) menusSettingDefaults();
+    menusRender(); return menusData();
+  };
+  function menusOn() { return !!(MENUS.start || MENUS.pause || MENUS.settings); }
+  function menusData() { return JSON.parse(JSON.stringify(MENUS)); }
+  function setting(key) { return SET ? SET[key] : undefined; }
+  function menusTheme() { var t = {}, k; for (k in MENU_THEME) t[k] = MENU_THEME[k]; for (k in MENUS.theme || {}) if (MENUS.theme[k] !== '' && MENUS.theme[k] !== null && MENUS.theme[k] !== undefined) t[k] = MENUS.theme[k]; return t; }
+  // a custom setting's starting value, put in SET before the saved settings load so they keep it
+  function menusSettingDefaults() { ((MENUS.settings && MENUS.settings.custom) || []).forEach(function (c) { if (!c || !c.key || (c.key in SET)) return; SET[c.key] = c.value !== undefined ? c.value : c.type === 'toggle' ? false : c.type === 'slider' ? (c.min || 0) : (c.options && c.options[0]) || ''; }); }
+  function menusRgba(hex, a) { var m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '')); if (!m) return 'rgba(245,181,61,' + a + ')'; var n = parseInt(m[1], 16); return 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',' + a + ')'; }
+  function menusStyle() {
+    var t = menusTheme(), el = $('co-mm-style'); if (!el) { el = document.createElement('style'); el.id = 'co-mm-style'; document.head.appendChild(el); }
+    var r = Math.max(0, +t.radius || 0), br = Math.max(0, r - 4), dim = 'rgba(5,8,12,' + (+t.dim) + ')', left = t.align === 'left';
+    el.textContent = '.co-mm { --panel: ' + t.panel + '; --text: ' + t.text + '; --muted: ' + t.muted + '; --amber: ' + t.accent + '; --line: rgba(255,255,255,0.1); font-family: ' + t.font + '; color: var(--text); }' +
+      '#dc-start.co-mm { background: ' + (t.image ? 'linear-gradient(' + dim + ',' + dim + '), url("' + String(t.image).replace(/"/g, '') + '") center / cover no-repeat' : dim) + '; justify-content: ' + (left ? 'flex-start' : 'center') + '; ' + (left ? 'padding-left: 7vw;' : '') + ' }' +
+      '#dc-menu.co-mm { background: ' + dim + '; justify-content: ' + (left ? 'flex-start' : 'center') + '; ' + (left ? 'padding-left: 7vw;' : '') + ' }' +
+      '.co-mm .co-mm-card { background: var(--panel); border: 1px solid var(--line); border-radius: ' + r + 'px; padding: 26px 30px; width: min(' + (+t.width || 440) + 'px, 92vw); max-width: none; min-width: 0; max-height: 88vh; overflow: auto; box-sizing: border-box; text-align: ' + (left ? 'left' : 'center') + '; box-shadow: 0 18px 60px rgba(0,0,0,0.45); }' +
+      '.co-mm .co-mm-logo { max-width: 60%; max-height: 120px; margin: 0 0 10px; }' +
+      '.co-mm h1.co-mm-title { margin: 0 0 4px; font-size: 32px; letter-spacing: 0.02em; } .co-mm h2.co-mm-title { margin: 0 0 4px; font-size: 22px; }' +
+      '.co-mm .co-mm-subtitle { margin: 0 0 6px; color: var(--muted); font-size: 15px; }' +
+      '.co-mm #dc-start-stats { display: flex; gap: 6px; flex-wrap: wrap; justify-content: ' + (left ? 'flex-start' : 'center') + '; margin: 10px 0 0; } .co-mm #dc-start-stats span { background: rgba(255,255,255,0.06); border: 1px solid var(--line); border-radius: ' + br + 'px; padding: 3px 9px; font-size: 12.5px; }' +
+      '.co-mm .co-mm-btns { display: flex; flex-direction: ' + (t.layout === 'row' ? 'row' : 'column') + '; flex-wrap: wrap; gap: 8px; margin-top: 16px; justify-content: ' + (left ? 'flex-start' : 'center') + '; }' +
+      '.co-mm .co-mm-btns button, .co-mm .co-mm-body button { padding: 10px 16px; margin: 0; border: 1px solid var(--line); border-radius: ' + br + 'px; background: rgba(255,255,255,0.06); color: var(--text); font: inherit; font-size: 15px; cursor: pointer; text-align: inherit; }' +
+      '.co-mm .co-mm-btns button:hover, .co-mm .co-mm-body button:hover { border-color: ' + menusRgba(t.accent, 0.7) + '; }' +
+      '.co-mm button.primary { background: ' + menusRgba(t.accent, 0.16) + '; border-color: ' + menusRgba(t.accent, 0.5) + '; color: var(--amber); }' +
+      '.co-mm .co-mm-body { margin-top: 14px; text-align: left; } .co-mm .co-mm-body .dc-form label { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }' +
+      '.co-mm .co-mm-extra { margin-top: 16px; text-align: left; }' +
+      '.co-mm .co-mm-slot { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; box-sizing: border-box; } .co-mm .co-mm-slot small { color: var(--muted); }';
+  }
+  function menusButtons(list, attr) { return (list || []).map(function (b, i) { return '<button ' + attr + '="' + i + '"' + (b.primary ? ' class="primary"' : '') + '>' + esc(b.label || 'Button') + '</button>'; }).join(''); }
+  function menusRender() {
+    if (typeof document === 'undefined' || !document.body) return;
+    menusStyle();
+    var st = $('dc-start');
+    if (MENUS.start) {
+      if (!st) { st = document.createElement('div'); st.id = 'dc-start'; st.className = 'dc-overlay'; document.body.appendChild(st); }
+      if (menusPageExtra === null) menusPageExtra = menusExtraOf(st);   // once, from the page's own card, before it is drawn over
+      var s = MENUS.start, keepStats = $('dc-start-stats'), keepNote = $('dc-start-note'), stats = keepStats ? keepStats.innerHTML : '', note = keepNote ? keepNote.textContent : '';
+      st.classList.add('co-mm'); st.classList.remove('dim');
+      st.innerHTML = '<div class="co-mm-card">' + (s.logo ? '<img class="co-mm-logo" src="' + esc(s.logo) + '" alt="">' : '') + '<h1 class="co-mm-title">' + esc(s.title || document.title || 'A new game') + '</h1>' + (s.subtitle ? '<p class="co-mm-subtitle">' + esc(s.subtitle) + '</p>' : '') +
+        '<p id="dc-start-stats"' + (s.chips === false ? ' hidden' : '') + '>' + stats + '</p><p id="dc-start-note" class="dc-sub"' + (s.note === false ? ' hidden' : '') + '>' + esc(note) + '</p>' +
+        '<div class="co-mm-btns" id="co-mm-start-btns">' + menusButtons(s.buttons, 'data-start') + '</div><div class="co-mm-body" id="co-mm-start-body" hidden></div>' + (s.keepPage !== false && menusPageExtra ? '<div class="co-mm-extra">' + menusPageExtra + '</div>' : '') + '</div>';
+      if (st.hasAttribute('data-co-menus')) st.style.visibility = '';
+      if (!st.coMenusBound) { st.coMenusBound = true; st.addEventListener('click', menusStartClick); st.addEventListener('input', function (e) { settingInput(e.target); }); }
+    } else if (st) st.classList.remove('co-mm');
+    var mn = $('dc-menu');
+    if (MENUS.pause && mn) {
+      var p = MENUS.pause, line = $('dc-menu-sub');
+      mn.classList.add('co-mm'); mn.classList.remove('dim');
+      mn.innerHTML = '<div class="dc-menu-card co-mm-card"><h2 class="co-mm-title">' + esc(p.title || 'Paused') + '</h2><p class="dc-sub" id="dc-menu-sub"' + (p.line === false ? ' hidden' : '') + '>' + (line ? esc(line.textContent) : '') + '</p>' +
+        '<div class="dc-menu-btns co-mm-btns">' + (p.buttons || []).map(function (b, i) { var a = String(b.action || '').trim(), key = MENU_ACTIONS.pause.indexOf(a) >= 0 ? a : /^page\s+\S/.test(a) ? 'page:' + a.slice(5).trim() : 'mm:' + i; return '<button data-menu="' + esc(key) + '"' + (key === 'devlink' ? ' id="dc-m-devlink"' : '') + (b.primary ? ' class="primary"' : '') + '>' + esc(b.label || 'Button') + '</button>'; }).join('') + '</div>' +
+        '<div id="dc-menu-body" class="co-mm-body" hidden></div></div>';
+      var body = $('dc-menu-body'); if (body && !body.coMenusBound) { body.coMenusBound = true; body.addEventListener('input', function (e) { settingInput(e.target); }); }
+    } else if (mn) mn.classList.remove('co-mm');
+  }
+  // what the page's start card holds besides its title, subtitle, chips, note and start button: kept under the made start screen
+  function menusExtraOf(st) {
+    var card = st.querySelector('.card') || st.firstElementChild; if (!card || card.classList.contains('co-mm-card')) return '';
+    var out = ''; Array.prototype.forEach.call(card.children, function (el, i) { if (/^H[12]$/.test(el.tagName) || el.id === 'dc-start-stats' || el.id === 'dc-start-note' || el.id === 'dc-start-btn' || el.querySelector('#dc-start-btn') || (i < 3 && el.classList.contains('dc-sub') && !el.id)) return; out += el.outerHTML; }); return out;
+  }
+  // the page's start card was told to wait for the made one (data-co-menus); with no start screen made, it shows itself
+  function menusPageReady() { var st = $('dc-start'); if (st && st.hasAttribute('data-co-menus') && !MENUS.start) st.style.visibility = ''; }
+  // the editor's menu-first: the game waits at its start screen as a player sees it
+  function menusAtMenu() { var st = $('dc-start'); if (st) { st.hidden = false; if (st.hasAttribute('data-co-menus')) st.style.visibility = ''; } return !ui.started; }
+  // the start screen's own body: settings, a page, the guide or the slots, with a way back to the buttons
+  function menusStartBody(html) { var b = $('co-mm-start-body'), bs = $('co-mm-start-btns'); if (!b) return; if (html === null) { b.hidden = true; if (bs) bs.hidden = false; return; } b.innerHTML = '<div style="margin:0 0 10px"><button data-start-back="1" class="primary">← Back</button></div>' + html; b.hidden = false; if (bs) bs.hidden = true; }
+  function menusPageHtml(name) { var pg = MENUS.pages && MENUS.pages[name]; return pg ? (pg.title ? '<h3 style="margin:0 0 8px">' + esc(pg.title) + '</h3>' : '') + '<div class="dc-how">' + uiTextHtml(pg.text) + '</div>' : '<p>No page called ' + esc(name) + '.</p>'; }
+  function menusSlotsHtml() {
+    var n = (CO.cfg && CO.cfg.slots) || 3, h = '<p class="dc-sub" style="margin:0 0 8px">Each slot is a game of its own.</p>';
+    for (var i = 1; i <= n; i++) { var info = 'empty'; try { var raw = localStorage.getItem(CO.save.prefix + '-slot' + i), sv = raw ? JSON.parse(raw) : null; if (sv) info = (sv.day !== undefined ? 'Day ' + sv.day : 'saved') + (sv.savedAt ? ' · ' + new Date(sv.savedAt).toLocaleDateString() : ''); } catch (e) {} h += '<div style="margin:0 0 6px"><button class="co-mm-slot' + (i === BOOT_SLOT ? ' primary' : '') + '" data-start-slot="' + i + '"><b>Slot ' + i + (i === BOOT_SLOT ? ' (this one)' : '') + '</b><small>' + esc(info) + '</small></button></div>'; }
+    return h;
+  }
+  function menusStartClick(e) {
+    var back = e.target.closest('[data-start-back]'), slot = e.target.closest('[data-start-slot]'), b = e.target.closest('[data-start]');
+    if (back) { sfx('click'); menusStartBody(null); return; }
+    if (slot) { var n = +slot.getAttribute('data-start-slot'); sfx('click'); if (n === BOOT_SLOT) { menusStartBody(null); return; } if (ui.started) save(); setSlot(n); sessionFlag('skip-splash'); location.reload(); return; }
+    if (!b || !MENUS.start) return; var btn = (MENUS.start.buttons || [])[+b.getAttribute('data-start')]; if (!btn) return;
+    menusStartAct(String(btn.action || '').trim(), b);
+  }
+  function menusStartAct(a, el) {
+    sfx('click');
+    if (a === 'play' || a === '') { if (ui.started) { var st = $('dc-start'); if (st) st.hidden = true; return; } enter(); return; }
+    if (a === 'new') { if (el && el.getAttribute('data-sure') !== '1') { var was = el.textContent; el.setAttribute('data-sure', '1'); el.textContent = 'Start over in slot ' + BOOT_SLOT + '? Click again'; setTimeout(function () { el.removeAttribute('data-sure'); el.textContent = was; }, 3000); return; } wipe(); sessionFlag('skip-splash'); sessionFlag('autoplay'); location.reload(); return; }
+    if (a === 'settings') { menusStartBody(settingsHtml()); return; }
+    if (a === 'guide') { menusStartBody('<div class="dc-how">' + (CO.game && CO.game.guideHtml ? CO.game.guideHtml() : (UI.guide ? uiTextHtml(UI.guide) : '<p>No guide yet.</p>')) + '</div>'); return; }
+    if (a === 'slots') { menusStartBody(menusSlotsHtml()); return; }
+    if (a === 'quit') { try { window.close(); } catch (e) {} return; }
+    if (/^page\s+\S/.test(a)) { menusStartBody(menusPageHtml(a.slice(5).trim())); return; }
+    var r = uiAction(a); if (typeof r === 'string') toast(r, '');
+  }
+  // a pause button that is not one of the engine's: a page, or a dev command or expression
+  function menusPauseAct(i, el) { var btn = MENUS.pause && (MENUS.pause.buttons || [])[i]; if (!btn) return; var r = uiAction(String(btn.action || '').trim()); if (typeof r === 'string') toast(r, ''); }
+  function menusSettingRows() {
+    var hide = (MENUS.settings && MENUS.settings.hide) || [], rows = '';
+    MENU_SETTINGS.forEach(function (s) {
+      var k = s[0]; if (hide.indexOf(k) >= 0) return; var v = SET[k];
+      if (k === 'sens') rows += '<label><span>' + s[1] + '</span><input type="range" min="0.3" max="2.5" step="0.1" value="' + v + '" data-set="sens"></label>';
+      else if (k === 'fov') rows += '<label><span>' + s[1] + '</span><input type="range" min="60" max="100" step="1" value="' + v + '" data-set="fov"></label>';
+      else if (k === 'vol') rows += '<label><span>' + s[1] + '</span><input type="range" min="0" max="1" step="0.05" value="' + v + '" data-set="vol"></label>';
+      else if (k === 'quality') rows += '<label><span>' + s[1] + '</span><select data-set="quality">' + [['high', 'High'], ['medium', 'Medium'], ['low', 'Low (no shadows)']].map(function (o) { return '<option value="' + o[0] + '"' + (v === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label>';
+      else rows += '<label><span>' + s[1] + '</span><input type="checkbox" ' + ((k === 'bob' || k === 'film') ? (v !== false ? 'checked' : '') : (v ? 'checked' : '')) + ' data-set="' + k + '"></label>';
+    });
+    ((MENUS.settings && MENUS.settings.custom) || []).forEach(function (c) {
+      if (!c || !c.key) return; var v = SET[c.key], label = esc(c.label || c.key);
+      if (c.type === 'slider') rows += '<label><span>' + label + '</span><input type="range" min="' + (c.min !== undefined ? c.min : 0) + '" max="' + (c.max !== undefined ? c.max : 1) + '" step="' + (c.step || 0.1) + '" value="' + v + '" data-set="' + esc(c.key) + '"></label>';
+      else if (c.type === 'select') rows += '<label><span>' + label + '</span><select data-set="' + esc(c.key) + '">' + (c.options || []).map(function (o) { return '<option' + (String(v) === String(o) ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select></label>';
+      else rows += '<label><span>' + label + '</span><input type="checkbox" ' + (v ? 'checked' : '') + ' data-set="' + esc(c.key) + '"></label>';
+    });
+    return rows;
+  }
+  function menusCustomKey(k) { return ((MENUS.settings && MENUS.settings.custom) || []).some(function (c) { return c && c.key === k; }); }
+  function menusCode() {
+    if (!menusOn() && !Object.keys(MENUS.pages || {}).length) return '';
+    var out = {}; ['theme', 'start', 'pause', 'settings', 'pages'].forEach(function (k) { var v = MENUS[k]; if (v && (typeof v !== 'object' || Object.keys(v).length)) out[k] = v; });
+    return '//@ the menus the editor saved: the start screen, the pause menu, the settings and their pages, as data. Written by the Co Engine editor; it sorts first in src/. Edit it in the editor rather than here.\n  CO.menus(' + JSON.stringify(out, null, 2).replace(/\n/g, '\n  ') + ');\n';
+  }
+  // what the page has now, as menu data: the Menus tab starts a game that has none from it
+  function menusSeed() {
+    var cs = getComputedStyle(document.documentElement), css = function (n, d) { var v = cs.getPropertyValue(n).trim(); return v || d; };
+    var h1 = document.querySelector('#dc-start h1'), h2 = document.querySelector('#dc-menu h2'), btns = [];
+    document.querySelectorAll('#dc-menu .dc-menu-btns [data-menu]').forEach(function (b) { var k = b.getAttribute('data-menu'); if (MENU_ACTIONS.pause.indexOf(k) >= 0) btns.push({ label: b.textContent.trim() || k, action: k, primary: b.classList.contains('primary') || undefined }); });
+    if (!btns.length) btns = [{ label: 'Resume', action: 'resume', primary: true }, { label: 'Settings', action: 'settings' }, { label: 'How to play', action: 'guide' }, { label: 'Quit to the start screen', action: 'quit' }];
+    var startBtns = [{ label: 'Play', action: 'play', primary: true }, { label: 'Settings', action: 'settings' }, { label: 'How to play', action: 'guide' }];
+    if (((CO.cfg && CO.cfg.slots) || 3) > 1) startBtns.push({ label: 'Save slots', action: 'slots' });
+    startBtns.push({ label: 'Quit', action: 'quit' });
+    return { theme: { accent: css('--amber', MENU_THEME.accent), panel: css('--panel', MENU_THEME.panel), text: css('--text', MENU_THEME.text), muted: css('--muted', MENU_THEME.muted) },
+      start: { title: h1 ? h1.textContent.trim() : document.title, subtitle: (document.querySelector('#dc-start .card > .dc-sub:not([id])') || { textContent: '' }).textContent.trim(), buttons: startBtns },
+      pause: { title: h2 ? h2.textContent.trim() : 'Paused', buttons: btns.map(function (b) { var o = { label: b.label, action: b.action }; if (b.primary) o.primary = true; return o; }) },
+      settings: { hide: [], custom: [] }, pages: {} };
+  }
+  // the editor's preview: the start screen over the running game, the pause menu, or its settings; null puts it all away
+  function menusPreview(which) {
+    var st = $('dc-start');
+    if (which === 'start') { if (ui.menuOpen) closeMenu(); if (st) { st.hidden = false; menusStartBody(null); } return !!st; }
+    if (st && ui.started) st.hidden = true;
+    if (which === 'pause' || which === 'settings') { if (!ui.menuOpen) openMenu(); else menuAct('back'); if (which === 'settings') menuAct('settings'); return true; }
+    if (ui.menuOpen) closeMenu(); return true;
+  }
+  // ── NPCs as data ──────────────────────────────────────────────────
+  // characters: { id: { names: ['Sam', 'Alex'], look: { shirt, pants, skin, hair, style }, speed, car, steps: [...] } }
+  // spawners:   [{ id, character, x, z, every, max, hours: [from, to], park: [x, z], on }]    car: arrives at x, z and parks at park
+  // workers:    [{ id, character, x, z, ry, home: [x, z], hours: [from, to] }]                  stands at x, z through the hours
+  // spots:      { name: { x, z, ry } }                                                         places the steps go to
+  // A step is { do, ... }:
+  //   walk { to }        to a spot's name, 'x, z', 'player', 'home' (where it came from), 'car' or 'post' (a worker's place)
+  //   say { text, wait } a speech bubble ({name} is the NPC's name); wait is how long it stands for it (it reads its length)
+  //   wait { seconds }   wander { radius, seconds }   face { to }   mood { mood: happy, sad, angry, talk, neutral }
+  //   talk { prompt, text, choices: [{ label, say, run, then }] }   waits for the player to press E on it, then offers the
+  //                      choices in a panel; then is next (the default), stay, leave, repeat or 'step 3'
+  //   until { test, every }   waits for an expression over the kit to come true (npc is the NPC: npc.data, npc.name)
+  //   run { code }       a dev command (cash 50) or code over the kit, with npc
+  //   event { name }     tells the game: runHooks('npc', name, npc) and GAME.npcEvent(name, npc)
+  //   leave              back to the car or the way it came, and gone        repeat   from the first step again   goto { step }
+  // A worker runs its character's steps over and over while its hours last, then goes home. An NPC is not saved: spawners and
+  // workers make them again from the data when the game loads.
+  var NPCS = { characters: {}, spawners: [], workers: [], spots: {} }, npcList = [], npcSeq = 0, npcTimers = {};
+  var NPC_COLS = { shirt: 0x3f6a9e, pants: 0x2f3440 };
+  CO.npcs = function (data) {
+    if (data === undefined) return npcData();
+    data = JSON.parse(JSON.stringify(data || {}));
+    NPCS = { characters: data.characters || {}, spawners: data.spawners || [], workers: data.workers || [], spots: data.spots || {} };
+    npcClear(); npcTimers = {}; return npcData();
+  };
+  function npcData() { return JSON.parse(JSON.stringify(NPCS)); }
+  function npcCode() {
+    if (!Object.keys(NPCS.characters).length && !NPCS.spawners.length && !NPCS.workers.length && !Object.keys(NPCS.spots).length) return '';
+    return '//@ the NPCs the editor saved: characters and what they do, their spawners, the workers and the spots they go to, as data. Written by the Co Engine editor; it sorts first in src/. Edit it in the editor rather than here.\n  CO.npcs(' + JSON.stringify(NPCS, null, 2).replace(/\n/g, '\n  ') + ');\n';
+  }
+  function npcClear() { npcList.slice().forEach(function (n) { npcRemove(n); }); npcList = []; }
+  function npcHex(v, d) { if (typeof v === 'number') return v; var m = /^#?([0-9a-f]{6})$/i.exec(String(v || '')); return m ? parseInt(m[1], 16) : d; }
+  function npcHour() { return S && typeof S.time === 'number' ? S.time : null; }
+  function npcInHours(h) { if (!h || h.length !== 2) return true; var t = npcHour(); if (t === null) return true; return h[0] <= h[1] ? t >= h[0] && t < h[1] : t >= h[0] || t < h[1]; }
+  function npcPoint(n, to) {
+    to = String(to === undefined ? '' : to).trim();
+    if (to === 'player' && player) return { x: player.x, z: player.z };
+    if (to === 'home') return { x: n.home.x, z: n.home.z };
+    if (to === 'post' && n.post) return { x: n.post.x, z: n.post.z, ry: n.post.ry };
+    if (to === 'car' && n.car) return { x: n.carDoor.x, z: n.carDoor.z };
+    var sp = NPCS.spots[to]; if (sp) return { x: +sp.x || 0, z: +sp.z || 0, ry: sp.ry };
+    var m = /^(-?[\d.]+)\s*[, ]\s*(-?[\d.]+)$/.exec(to); if (m) return { x: +m[1], z: +m[2] };
+    if (to.indexOf('prop:') === 0 && typeof propPlacement === 'function') { var pp = propPlacement(to.slice(5)); if (pp) { var w = propWorld(to.slice(5), 0, 1.2); return { x: w.x, z: w.z }; } }
+    return null;
+  }
+  function npcSay(n, text) { var t = String(text || '').replace(/\{name\}/g, n.name); say(n.g, t); runHooks('npcSay', n.pub, t); return t; }
+  function npcRun(n, code) {
+    code = String(code || '').trim(); if (!code) return;
+    var sp = code.indexOf(' '), name = sp < 0 ? code : code.slice(0, sp), arg = sp < 0 ? undefined : code.slice(sp + 1).trim();
+    if (devCommandList().indexOf(name) >= 0) { if (arg !== undefined && arg !== '' && !isNaN(arg)) arg = +arg; var r = devCommand(name, arg); hudDirty = true; return r; }
+    try { new Function('K', 'npc', 'with (K) { ' + code + '\n }')(editorKit(), n.pub); hudDirty = true; } catch (e) { toast(n.name + ': ' + e.message, 'bad'); }
+  }
+  function npcTest(n, expr) { try { return !!new Function('K', 'npc', 'with (K) { return (' + expr + '\n); }')(editorKit(), n.pub); } catch (e) { return false; } }
+  // a person in the world with its own record: where it is, the step it is on, what it waits for
+  function npcMake(charId, at, opt) {
+    var ch = NPCS.characters[charId]; if (!ch) return null; opt = opt || {};
+    var look = ch.look || {}, names = (ch.names && ch.names.length ? ch.names : [charId]), name = opt.name || names[Math.floor(Math.random() * names.length)];
+    var hopt = { key: charId + ':' + name + ':' + (++npcSeq) };
+    if (look.skin) hopt.skin = npcHex(look.skin); if (look.hair) hopt.hair = npcHex(look.hair); if (look.style) hopt.style = look.style;
+    if (look.shirt) hopt.shirt = std({ map: TEX.cloth, color: npcHex(look.shirt, NPC_COLS.shirt), roughness: 0.92 }); if (look.pants) hopt.pants = std({ map: TEX.cloth, color: npcHex(look.pants, NPC_COLS.pants), roughness: 0.95 });
+    var g = makeHuman(hopt); g.userData.dynamic = true; g.userData.npc = true; scene.add(g);
+    var n = { id: 'npc' + npcSeq, ch: ch, charId: charId, name: name, g: g, x: at.x, z: at.z, yaw: at.ry || 0, path: null, speed: ch.speed || 1.4, step: 0, t: 0, state: 'start', talkOpen: false, home: { x: at.x, z: at.z }, data: {}, spawner: opt.spawner || null, worker: opt.worker || null, post: opt.post || null, car: null, carDoor: null, gone: false };
+    n.pub = { id: n.id, name: name, character: charId, data: n.data, get x() { return n.x; }, get z() { return n.z; }, get step() { return n.step; }, say: function (t) { return npcSay(n, t); }, leave: function () { npcSendOff(n); }, go: function (i) { npcGoto(n, i); }, next: function () { npcNext(n); } };
+    n.hit = hitBox(0.8, 1.9, 0.8, 0, 0.95, 0, { prompt: function () { var st = npcStepNow(n); return st && st.do === 'talk' && n.state === 'talk' ? String(st.prompt || 'Talk to {name}').replace(/\{name\}/g, n.name) : ''; }, use: function () { npcTalk(n); } }, g);
+    npcList.push(n); npcPlace(n); runHooks('npcSpawn', n.pub); return n;
+  }
+  function npcPlace(n) { n.g.position.set(n.x, floorY(n.x, n.z), n.z); n.g.rotation.y = n.yaw; }
+  function npcRemove(n) {
+    n.gone = true; if (n.talkOpen && ui.panelOpen && panel.kind === 'npc') closePanel();
+    var k = inter.indexOf(n.hit); if (k >= 0) inter.splice(k, 1); scene.remove(n.g);
+    if (n.car) { scene.remove(n.car.g); var tk = traffic.cars.indexOf(n.car.rec); if (tk >= 0) traffic.cars.splice(tk, 1); }
+    var i = npcList.indexOf(n); if (i >= 0) npcList.splice(i, 1); runHooks('npcGone', n.pub);
+  }
+  function npcStepNow(n) { var steps = n.ch.steps || []; return steps[n.step] || null; }
+  function npcNext(n) { n.step++; n.state = 'start'; n.t = 0; n.path = null; }
+  function npcGoto(n, i) { n.step = Math.max(0, i | 0); n.state = 'start'; n.t = 0; n.path = null; }
+  function npcSendOff(n) { n.leaving = true; n.state = 'start'; n.path = null; n.t = 0; }
+  // the route finder where its grid covers both ends; outside it a straight walk; either way the walk ends on the point itself
+  function npcOnGrid(q) { if (NAV.dirty || !NAV.grid) navBuild(); return !!NAV.grid && q.x >= NAV.x0 && q.z >= NAV.z0 && q.x < NAV.x0 + NAV.w * NAV.cell && q.z < NAV.z0 + NAV.h * NAV.cell; }
+  function npcWalkTo(n, p) { var path = npcOnGrid(n) && npcOnGrid(p) ? route({ x: n.x, z: n.z }, { x: p.x, z: p.z }) : null; if (!path || !path.length) path = [{ x: p.x, z: p.z }]; else { var last = path[path.length - 1]; if (Math.hypot(last.x - p.x, last.z - p.z) > 0.5) path.push({ x: p.x, z: p.z }); } n.path = path; n.faceTo = p.ry; }
+  // the player pressed E on an NPC at a talk step: its words and the choices, in a panel
+  function npcTalk(n) { var st = npcStepNow(n); if (!st || st.do !== 'talk') return; n.talkOpen = true; NPC_PANEL.n = n; n.yaw = Math.atan2(player.x - n.x, player.z - n.z); setMood(n.g, 'talk'); openPanel('npc'); }
+  var NPC_PANEL = { n: null };
+  function npcPanelSpec() {
+    var n = NPC_PANEL.n, st = n && npcStepNow(n); if (!n || !st) return { title: '', tabs: [], body: '' };
+    var choices = st.choices && st.choices.length ? st.choices : [{ label: 'OK' }];
+    return { title: n.name, tabs: [], body: '<div class="dc-how">' + uiTextHtml(String(st.text || '').replace(/\{name\}/g, n.name)) + '</div><div class="dc-menu-row" style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">' + choices.map(function (c, i) { return '<button class="dc-btn' + (i === 0 ? ' primary' : '') + '" data-act="npc" data-arg="' + i + '">' + esc(c.label || 'OK') + '</button>'; }).join('') + '</div>' };
+  }
+  function npcChoice(i) {
+    var n = NPC_PANEL.n, st = n && npcStepNow(n); if (!n || !st) { closePanel(); return true; }
+    var c = (st.choices && st.choices[+i]) || {}; n.talkOpen = false; NPC_PANEL.n = null; closePanel();
+    if (c.say) npcSay(n, c.say); if (c.run) npcRun(n, c.run);
+    runHooks('npc', 'choice', n.pub, c.label); if (CO.game && CO.game.npcEvent) CO.game.npcEvent('choice', n.pub, c.label);
+    var then = String(c.then || 'next').trim();
+    if (then === 'stay') n.state = 'talk'; else if (then === 'leave') npcSendOff(n); else if (then === 'repeat') npcGoto(n, 0); else if (/^step\s+\d+$/.test(then)) npcGoto(n, +then.slice(5) - 1); else npcNext(n);
+    return true;
+  }
+  // one NPC, one frame: its car, its walk, the step it is on
+  function npcTick(n, dt) {
+    if (n.car && n.car.moving) { npcCarTick(n, dt); return; }
+    var moving = false;
+    if (n.path && n.path.length) { var done = walkAlong(n, n.path, n.speed, dt); moving = !done; if (done) { n.path = null; if (typeof n.faceTo === 'number') n.yaw = n.faceTo; } }
+    npcPlace(n); animateHuman(n.g, dt, moving ? 'walk' : 'idle', n.speed);
+    if (moving) return;
+    if (n.leaving) { npcLeaveTick(n, dt); return; }
+    var st = npcStepNow(n);
+    if (!st) { if (n.worker) { npcGoto(n, 0); return; } npcSendOff(n); return; }
+    if (n.worker && !npcInHours(n.worker.hours) && st.do !== 'talk') { npcSendOff(n); return; }
+    var first = n.state === 'start'; if (first) { n.state = 'run'; n.t = 0; } n.t += dt;
+    switch (st.do) {
+      case 'walk': if (first) { var p = npcPoint(n, st.to); if (p) npcWalkTo(n, p); else npcNext(n); } else npcNext(n); break;
+      case 'say': if (first) { var t = npcSay(n, st.text); n.wait = st.wait !== undefined ? +st.wait : 1.2 + t.length * 0.05; } else if (n.t >= n.wait) npcNext(n); break;
+      case 'wait': if (n.t >= (+st.seconds || 1)) npcNext(n); break;
+      case 'wander': if (first) { n.wanderAt = { x: n.x, z: n.z }; n.wanderT = 0; } if (n.t >= (+st.seconds || 10)) { npcNext(n); break; } n.wanderT -= dt; if (n.wanderT <= 0) { var r = +st.radius || 3, a = Math.random() * Math.PI * 2, d = Math.random() * r; npcWalkTo(n, { x: n.wanderAt.x + Math.cos(a) * d, z: n.wanderAt.z + Math.sin(a) * d }); n.wanderT = randf(2, 5); } break;
+      case 'face': var fp = npcPoint(n, st.to); if (fp) n.yaw = Math.atan2(fp.x - n.x, fp.z - n.z); else if (typeof st.ry === 'number') n.yaw = st.ry; npcNext(n); break;
+      case 'mood': setMood(n.g, st.mood || 'neutral'); npcNext(n); break;
+      case 'talk': if (first) n.state = 'talk'; else n.state = 'talk'; break;
+      case 'until': if (!n.untilT || n.untilT <= 0) { n.untilT = +st.every || 0.5; if (npcTest(n, st.test || 'true')) npcNext(n); } else n.untilT -= dt; break;
+      case 'run': npcRun(n, st.code); npcNext(n); break;
+      case 'event': runHooks('npc', st.name || 'event', n.pub); if (CO.game && CO.game.npcEvent) CO.game.npcEvent(st.name || 'event', n.pub); npcNext(n); break;
+      case 'leave': npcSendOff(n); break;
+      case 'repeat': npcGoto(n, 0); break;
+      case 'goto': npcGoto(n, (+st.step || 1) - 1); break;
+      default: npcNext(n);
+    }
+  }
+  // leaving: walk back to the car and drive off, or walk back the way it came, and go
+  function npcLeaveTick(n, dt) {
+    if (n.state === 'start') { n.state = 'walking'; var p = n.car ? n.carDoor : n.home; npcWalkTo(n, p); return; }
+    if (n.car) { n.g.visible = false; n.car.moving = true; n.car.back = true; n.car.i = n.car.path.length - 1; return; }
+    npcRemove(n);
+  }
+  // a car that brings its NPC: from the spawner along to its parking place, then the NPC gets out; leaving reverses it
+  function npcCarStart(n, sp) {
+    var path = [{ x: +sp.x, z: +sp.z }].concat((sp.via || []).map(function (q) { return { x: +q[0], z: +q[1] }; })).concat([{ x: +sp.park[0], z: +sp.park[1] }]);
+    var g = carMesh(); g.userData.dynamic = true; scene.add(g); var rec = { g: g, npc: true, road: true, dir: 1, z: 0, v: 0 }; traffic.cars.push(rec);
+    var c = { g: g, rec: rec, path: path, i: 0, x: path[0].x, z: path[0].z, yaw: 0, v: 0, moving: true, back: false };
+    var a = path[path.length - 2] || path[0], b = path[path.length - 1], yaw = Math.atan2(-(b.z - a.z), b.x - a.x);
+    n.car = c; n.carDoor = { x: b.x - Math.sin(yaw) * 1.6, z: b.z - Math.cos(yaw) * 1.6 };   // the driver's side: to the left of the way the car faces
+    n.g.visible = false; npcCarPlace(c);
+  }
+  function npcCarPlace(c) { c.g.position.set(c.x, floorY(c.x, c.z), c.z); c.g.rotation.y = c.yaw; }
+  function npcCarTick(n, dt) {
+    var c = n.car, tgt = c.back ? c.path[c.i - 1] : c.path[c.i + 1];
+    if (!tgt) { c.moving = false; if (c.back) { npcRemove(n); return; } n.x = n.carDoor.x; n.z = n.carDoor.z; n.g.visible = true; npcPlace(n); return; }
+    var dx = tgt.x - c.x, dz = tgt.z - c.z, d = Math.hypot(dx, dz), last = c.back ? c.i - 1 === 0 : c.i + 1 === c.path.length - 1, want = last && !c.back ? Math.min(7, Math.max(1.2, d * 0.9)) : 7;
+    c.v += clamp(want - c.v, -6 * dt, 3 * dt); var step = c.v * dt;
+    var yaw = Math.atan2(-dz, dx); c.yaw = c.yaw + Math.atan2(Math.sin(yaw - c.yaw), Math.cos(yaw - c.yaw)) * Math.min(1, dt * 4);   // leaving, it turns round as it pulls away
+    if (d <= step) { c.x = tgt.x; c.z = tgt.z; c.i += c.back ? -1 : 1; } else { c.x += dx / d * step; c.z += dz / d * step; }
+    npcCarPlace(c); var ws = c.g.userData.wheels; if (ws) ws.forEach(function (w) { w.rotation.z -= c.v * dt / 0.33; });
+  }
+  function npcSpawn(sp) {
+    var at = { x: +sp.x || 0, z: +sp.z || 0, ry: sp.ry || 0 }, ch = NPCS.characters[sp.character]; if (!ch) return null;
+    var n = npcMake(sp.character, at, { spawner: sp }); if (!n) return null;
+    if (ch.car && sp.park) npcCarStart(n, sp);
+    return n;
+  }
+  function npcWorkerStart(w) {
+    var home = w.home ? { x: +w.home[0], z: +w.home[1] } : { x: +w.x, z: +w.z }, inside = !w.hours;
+    var n = npcMake(w.character, inside ? { x: +w.x, z: +w.z, ry: w.ry || 0 } : { x: home.x, z: home.z }, { worker: w, post: { x: +w.x, z: +w.z, ry: w.ry || 0 }, name: w.name });
+    if (!n) return null; n.home = home; if (!inside) npcWalkTo(n, n.post); return n;
+  }
+  // the frame: spawners make NPCs on their clock and inside their hours, workers come and go with theirs, every NPC steps
+  function npcsTick(dt) {
+    if (!ui.started) return;
+    NPCS.spawners.forEach(function (sp, i) {
+      if (sp.on === false) return; var key = sp.id || 'sp' + i, mine = npcList.filter(function (n) { return n.spawner === sp; }).length;
+      if (!npcInHours(sp.hours) || mine >= (sp.max === undefined ? 1 : +sp.max)) return;
+      npcTimers[key] = (npcTimers[key] === undefined ? Math.min(3, +sp.every || 30) : npcTimers[key]) - dt;
+      if (npcTimers[key] <= 0) { npcTimers[key] = Math.max(1, +sp.every || 30); npcSpawn(sp); }
+    });
+    NPCS.workers.forEach(function (w) { var have = npcList.some(function (n) { return n.worker === w; }); if (!have && npcInHours(w.hours) && !w.off) npcWorkerStart(w); });
+    npcList.slice().forEach(function (n) { if (!n.gone) npcTick(n, dt); });
+  }
+  // the editor's way to look: one NPC now from a spawner, a character at a point, or what each NPC is doing
+  function npcSpawnNow(ref) {
+    if (typeof ref === 'string' && /^\d+$/.test(ref)) ref = +ref;
+    var sp = typeof ref === 'number' ? NPCS.spawners[ref] : NPCS.spawners.filter(function (s) { return s.id === ref; })[0];
+    if (sp) { var n = npcSpawn(sp); return n ? n.pub.id : null; }
+    if (NPCS.characters[ref]) { var a = aheadPoint(4); var m = npcMake(ref, { x: a.x, z: a.z }); return m ? m.pub.id : null; }
+    return null;
+  }
+  function npcInfo() { return npcList.map(function (n) { var st = npcStepNow(n); return { id: n.id, name: n.name, character: n.charId, x: Math.round(n.x * 10) / 10, z: Math.round(n.z * 10) / 10, step: n.step + 1, doing: n.leaving ? 'leave' : n.car && n.car.moving ? 'drive' : st ? st.do : 'done', state: n.state, worker: !!n.worker }; }); }
+  function npcAim() { var a = aheadPoint(6); return { x: Math.round(a.x * 10) / 10, z: Math.round(a.z * 10) / 10, ry: Math.round(camera.rotation.y * 100) / 100 }; }
+  // ── The dev link ──────────────────────────────────────────────────
+  // The editor (and the dev console) run a local server on 127.0.0.1:8432. The game links to it with Ctrl+Shift+D, when started
+  // with ?dev=1, or, in the desktop app, by itself: every five seconds while unlinked it asks the port once and links when
+  // something answers. While linked it posts a readout once a second and takes commands over a server-sent event stream; every
+  // command goes through devCommand, the same code the tests call. The HUD element h-devlink shows LINKED.
+  var DEV_PORT = 8432, devLink = { on: false, es: null, t: 0, sent: 0, got: 0, fails: 0, last: '', manualOff: false, probeT: 0 };
+  var DEV_AUTO = /Electron/i.test(navigator.userAgent);
+  function devProbe() {
+    try { var opt = { mode: 'cors', cache: 'no-store' }; if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) opt.signal = AbortSignal.timeout(800);
+      fetch('http://127.0.0.1:' + DEV_PORT + '/state', opt).then(function (r) { if (r.ok && !devLink.on && !devLink.manualOff) devLinkToggle(); }).catch(function () {}); } catch (e) {}
+  }
+  // the readout: the engine's fields, then whatever the game adds in CO.game.devState()
+  function devState() {
+    var st = { version: CO.gameVersion || 'dev', engine: CO.version, day: S && S.day, time: S ? Math.round((S.time || 0) * 100) / 100 : 0, clock: fmtTime(S && S.time || 0), bank: S && S.bank, level: S && S.level, weather: S && S.weather ? S.weather.kind : 'clear', player: player ? { x: Math.round(player.x * 10) / 10, z: Math.round(player.z * 10) / 10 } : null, commands: devCommandList() };
+    if (CO.game && CO.game.devState) { var extra = CO.game.devState(); for (var k in extra) st[k] = extra[k]; }
+    return st;
+  }
+  // the commands: the engine's base set, and the game's in CO.game.commands as { name: function (arg) { return 'what happened'; } }
+  var DEV_COMMANDS = {
+    cash: function (n) { pay(typeof n === 'number' ? n : 1000, 'Dev console'); return 'bank ' + money(S.bank); },
+    setTime: function (h) { if (typeof h === 'number') { S.time = ((h % 24) + 24) % 24; hudDirty = true; return 'time ' + fmtTime(S.time); } return 'setTime needs an hour'; },
+    saveNow: function () { save(); return 'saved to ' + SAVE; },
+    reload: function () { save(); setTimeout(function () { location.reload(); }, 200); return 'reloading'; },
+    tp: function (arg) { if (!player) return 'no player'; var m = /^(-?[\d.]+)[ ,]+(-?[\d.]+)$/.exec(String(arg || '')); if (!m) return 'tp needs "x, z"'; player.x = +m[1]; player.z = +m[2]; player.y = floorY(player.x, player.z); return 'at ' + player.x + ', ' + player.z; },
+    lanes: function (arg) { return roadDebug(arg === 'on' ? true : arg === 'off' ? false : undefined); },
+    weather: function (kind) { if (!S.weather) S.weather = { wet: 0, snow: 0, wind: 0.4 }; S.weather.kind = kind || 'clear'; S.weather.until = nowAbs() + 6; return 'weather ' + S.weather.kind; }
+  };
+  function devCommandList() { var out = Object.keys(DEV_COMMANDS); if (CO.game && CO.game.commands) for (var k in CO.game.commands) if (out.indexOf(k) < 0) out.push(k); return out; }
+  function devCommand(name, arg) {
+    var fn = (CO.game && CO.game.commands && CO.game.commands[name]) || DEV_COMMANDS[name];
+    if (!fn) return 'unknown command ' + name;
+    try { var r = fn(arg); hudDirty = true; return r === undefined ? 'ok' : String(r); } catch (e) { return 'error: ' + (e && e.message || e); }
+  }
+  function devLinkBadge() { var b = $('h-devlink'); if (!b) return; b.hidden = !devLink.on; b.textContent = devLink.on ? (devLink.es && devLink.es.readyState === 1 ? 'LINKED · editor' : 'LINKING...') : ''; }
+  function devLinkToggle() {
+    if (devLink.on) { devLink.manualOff = true; devLinkStop('Editor unlinked. Ctrl+Shift+D links again.'); return; }
+    devLink.manualOff = false;
+    if (typeof EventSource === 'undefined') { toast('No EventSource in this browser: the editor cannot link.', 'bad'); return; }
+    devLink.on = true; devLink.fails = 0;
+    try { var es = new EventSource('http://127.0.0.1:' + DEV_PORT + '/events'); devLink.es = es;
+      es.onopen = function () { devLink.fails = 0; devLinkBadge(); toast('Editor linked', 'good'); };
+      es.onmessage = function (ev) { var cmd; try { cmd = JSON.parse(ev.data); } catch (e) { return; } if (!cmd || !cmd.name) return; devLink.got++; var res = devCommand(cmd.name, cmd.arg); devLink.last = cmd.name + ': ' + res; devPost('/result', { id: cmd.id, name: cmd.name, result: res }); };
+      es.onerror = function () { devLink.fails++; devLinkBadge(); if (devLink.fails === 1) toast('Nothing answering on 127.0.0.1:' + DEV_PORT + '. Open the editor; the game keeps trying.', ''); if (devLink.fails > 30) devLinkStop('Editor link: gave up after 30 tries'); };
+    } catch (e) { devLinkStop('Editor link: could not open'); return; }
+    devLinkBadge(); logEvent('Editor link opened. Ctrl+Shift+D unlinks.');
+  }
+  function devLinkStop(why) { if (devLink.es) { try { devLink.es.close(); } catch (e) {} } devLink.es = null; devLink.on = false; devLinkBadge(); if (why) toast(why, ''); }
+  function devPost(path, body) { try { fetch('http://127.0.0.1:' + DEV_PORT + path, { method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), keepalive: true }).then(function () { devLink.sent++; }).catch(function () {}); } catch (e) {} }
+  function tickDevLink(dt) {
+    if (!devLink.on) { if (!DEV_AUTO || devLink.manualOff || ui.testing) return; devLink.probeT += dt; if (devLink.probeT < 5) return; devLink.probeT = 0; devProbe(); return; }
+    devLink.t += dt; if (devLink.t < 1) return; devLink.t = 0; if (devLink.es && devLink.es.readyState === 1) devPost('/state', devState());
+  }
+  // ── The editor bridge ─────────────────────────────────────────────
+  // The editor shows the running game in its viewport and talks to it through this object (executeJavaScript into the page, or the
+  // dev link). Everything here reads or writes the live scene and the save; nothing runs unless the editor asks. Objects are named
+  // by id: a prop by its prop id, anything else by an editor id stamped on userData the first time it is listed.
+  var EOBJ = {}, eidN = 0, editorSel = null, editorHelper = null, eRay = new THREE.Raycaster(), editorMulti = [], editorHelpers2 = [], groupDrag = null, pendingOff = null;   // editorSel is the last of editorMulti, the things selected together
+  // a game that builds its props itself (Grow Co) names its builder in GAME.buildProp; the bridge rebuilds through it
+  function rebuildProp(id) { return CO.game && CO.game.buildProp ? CO.game.buildProp(id) : buildProp(id); }
+  function eid(o) { if (!o.userData.eid) o.userData.eid = 'e' + (++eidN); EOBJ[o.userData.eid] = o; return o.userData.eid; }
+  function isPropRoot(o) { return !!(o.userData.propId && propInst[o.userData.propId] && propInst[o.userData.propId].g === o); }
+  function eobj(id) {
+    if (propInst[id]) return propInst[id].g;
+    var o = EOBJ[id]; if (o && o.parent) return o;
+    var found = null; scene.traverse(function (x) { if (!found && x.userData && x.userData.eid === id) found = x; }); if (found) EOBJ[id] = found; return found;
+  }
+  function matName(m) { if (!m) return ''; for (var k in MAT) if (MAT[k] === m) return k; return m.name || ''; }
+  function eName(o) {
+    if (isPropRoot(o)) return propLabel(o.userData.propId);
+    if (o.name) return o.name;
+    if (o.isDirectionalLight) return 'sun'; if (o.isHemisphereLight) return 'sky bounce'; if (o.isSpotLight) return 'spot light'; if (o.isPointLight) return 'point light';
+    if (o.userData.legs) return 'person' + (o.userData.name ? ' · ' + o.userData.name : '');
+    if (o.userData.screen) return 'screen' + (o.userData.screen.title ? ' · ' + o.userData.screen.title : '');
+    if (o.isSprite) return 'sprite'; if (o.isPoints) return 'points';
+    if (o.isMesh) { var mn = matName(o.material); return mn ? 'mesh · ' + mn : 'mesh'; }
+    if (o.isGroup) return o.userData.dynamic ? 'group (dynamic)' : 'group';
+    return o.type;
+  }
+  function eType(o) { return isPropRoot(o) ? 'prop' : o.isLight ? 'light' : o.isMesh ? 'mesh' : o.isSprite ? 'sprite' : o.isPoints ? 'points' : o.isGroup ? 'group' : o.type; }
+  function eNode(o) { return { id: isPropRoot(o) ? o.userData.propId : eid(o), name: eName(o), type: eType(o), n: o.children.length, vis: o.visible !== false }; }
+  function rnd(v) { return Math.round(v * 1000) / 1000; }
+  // the scene as the hierarchy panel shows it: the props by category, the lights, the people, the doors, the screens, the vehicles,
+  // whatever else stands at the top, and the static world as a count. A game adds its own branches in CO.game.editorTree(eid).
+  function editorTree() {
+    var props = {}, lights = [], people = [], screensL = [], doors = [], vehicles = [], other = [], baked = 0, statics = 0;
+    for (var id in propInst) { var d = propInst[id].def || propDef(id) || {}; (props[d.cat || 'other'] = props[d.cat || 'other'] || []).push({ id: id, name: propLabel(id), type: 'prop', custom: !!customById(id), n: propInst[id].g.children.length, from: customById(id) ? 'save' : placedById(id) && !PROPS[id] ? 'layout' : (LAYOUT.props[id] ? 'definition, moved in the layout' : 'definition'), pack: !!(d.id && /^pk[A-Z]/.test(d.id)) }); }
+    var roots = CO.root && CO.root !== scene ? [scene, CO.root] : [scene];
+    roots.forEach(function (r) { r.children.forEach(function (o) {
+      if (o === CO.root || o.userData.editor || isPropRoot(o) || o.userData.worldKey) return;
+      if (o.isLight) { lights.push(eNode(o)); return; }
+      if (o.userData.legs || o.userData.person) { people.push(eNode(o)); return; }
+      if (o.userData.baked) { baked++; return; }
+      if (o.isMesh && !o.userData.dynamic) { statics++; return; }
+      if (o === editorHelper) return;
+      other.push(eNode(o));
+    }); });
+    hdoors.forEach(function (d) { var s = hd(d.id); doors.push({ id: eid(d.g), name: d.label || d.id, type: 'door', open: !!s.open, locked: !!s.locked }); });
+    screens.forEach(function (sc) { screensL.push({ id: eid(sc.mesh), name: sc.title || 'screen', type: 'screen' }); });
+    if (traffic && traffic.cars) traffic.cars.forEach(function (c, i) { vehicles.push({ id: eid(c.g), name: 'car ' + (i + 1), type: 'vehicle' }); });
+    var extra = null; try { extra = CO.game && CO.game.editorTree ? CO.game.editorTree(eid) : null; } catch (e) { extra = { error: String(e && e.message || e) }; }
+    var worldL = WORLD_ITEMS.filter(function (o) { return o.parent; }).map(function (o) { return { id: eid(o), name: worldName(o), type: 'world', n: o.children.length, vis: o.visible !== false, edited: !!WORLD_EDITS[o.userData.worldKey] }; });
+    return { props: props, lights: lights, people: people, doors: doors, screens: screensL, vehicles: vehicles, other: other, world: worldL, selection: editorMulti.slice(), counts: { baked: baked, statics: statics, inter: inter.length, solids: solids.length, dyn: dyn.length }, extra: extra, time: S ? { day: S.day, time: S.time } : null, selected: editorSel, paused: !!CO.paused, scene: !!photo.on, started: !!ui.started, engine: CO.version, game: CO.gameVersion };
+  }
+  function editorChildren(id) { var o = eobj(id); if (!o) return []; return o.children.filter(function (c) { return !c.userData.editor; }).map(eNode); }
+  // the inspector record: the transform, the material or the light, the prop's definition and placement, and what the game adds
+  function editorInspect(id) {
+    var o = eobj(id); if (!o) return null;
+    var w = new THREE.Vector3(); o.getWorldPosition(w);
+    var r = { id: id, name: eName(o), type: eType(o), position: [rnd(o.position.x), rnd(o.position.y), rnd(o.position.z)], rotation: [rnd(o.rotation.x * 180 / Math.PI), rnd(o.rotation.y * 180 / Math.PI), rnd(o.rotation.z * 180 / Math.PI)], scale: [rnd(o.scale.x), rnd(o.scale.y), rnd(o.scale.z)], world: [rnd(w.x), rnd(w.y), rnd(w.z)], visible: o.visible !== false, children: o.children.length, parent: o.parent && o.parent !== scene && o.parent !== CO.root ? eName(o.parent) : null, dynamic: !!o.userData.dynamic, baked: !!o.userData.baked };
+    if (o.isMesh && o.material && !Array.isArray(o.material)) { var m = o.material; r.material = { key: matName(m), type: m.type, color: m.color ? '#' + m.color.getHexString() : null, emissive: m.emissive ? '#' + m.emissive.getHexString() : null, emissiveIntensity: m.emissiveIntensity === undefined ? null : rnd(m.emissiveIntensity), roughness: m.roughness === undefined ? null : rnd(m.roughness), metalness: m.metalness === undefined ? null : rnd(m.metalness), opacity: rnd(m.opacity), transparent: !!m.transparent, map: !!m.map, shared: !!matName(m) }; }
+    if (o.isMesh && o.geometry && o.geometry.parameters) r.geometry = { type: o.geometry.type, params: o.geometry.parameters };
+    if (o.isLight) r.light = { type: o.type, color: '#' + o.color.getHexString(), intensity: rnd(o.intensity), distance: o.distance === undefined ? null : o.distance, decay: o.decay === undefined ? null : o.decay, shadow: !!o.castShadow };
+    if (propInst[id]) { var inst = propInst[id], def = inst.def || propDef(id) || {}, P = propPlacement(id), c = customById(id); r.prop = { id: id, type: c ? c.type : (placedById(id) ? placedById(id).type : id), label: def.label, cat: def.cat || null, custom: !!c, fixed: !!def.fixed, wall: !!def.wall, extra: !!def.extra, price: def.price || 0, lvl: def.lvl || null, desc: def.desc || '', x: rnd(P.x), z: rnd(P.z), rot: P.rot, h: rnd(P.h || 0), hidden: !!P.hidden, moved: !!(S && S.layout && S.layout[id]), obstacles: inst.ctx.obstacles.length }; }
+    if (o.userData.worldKey) { r.worldItem = { key: o.userData.worldKey, kind: worldKind(o), edited: !!WORLD_EDITS[o.userData.worldKey], solids: (o.userData.solids || []).length, world: WORLD_VARIANT }; r.name = worldName(o); r.type = 'world'; }
+    if (editorMulti.length > 1 && editorMulti.indexOf(id) >= 0) r.together = editorMulti.length;
+    if (o.userData.screen) r.screen = { title: o.userData.screen.title || '', w: o.userData.screen.w, h: o.userData.screen.h, zones: o.userData.screen.zones.length };
+    try { var g = CO.game && CO.game.editorInspect ? CO.game.editorInspect(id, o) : null; if (g) r.game = g; } catch (e) { r.game = { error: String(e && e.message || e) }; }
+    return r;
+  }
+  // a live edit: a prop's placement (kept in the save, rebuilt), or an object's transform, visibility, material or light (not kept)
+  function editorApply(id, path, value) {
+    var p = String(path).split('.'), v = value;
+    if (p[0] === 'prop') {
+      if (!PROPS[id] && !customById(id) && !placedById(id)) return id + ' is not a prop';   /* a copy the layout ships counts too */
+      var P = propPlacement(id); if (!S.layout) S.layout = {}; var L = S.layout[id] = S.layout[id] || { x: P.x, z: P.z, rot: P.rot, h: P.h || 0 };
+      if (p[1] === 'hidden') { L.hidden = !!(v && v !== 'false'); } else if (p[1] === 'reset') { delete S.layout[id]; } else if (p[1] === 'rot') L.rot = ((Math.round(+v) % 4) + 4) % 4; else if (p[1] === 'xz') { L.x = +v[0]; L.z = +v[1]; } else L[p[1]] = +v;
+      rebuildProp(id); save(); editorSelect(propInst[id] ? id : null); return 'ok';
+    }
+    var o = eobj(id); if (!o) return 'no such object ' + id;
+    var isWorld = !!(o.userData && o.userData.worldKey);
+    if (isWorld && o.userData.movesOnly && (p[0] === 'rotation' || p[0] === 'scale')) return worldName(o) + ' moves but does not turn or resize: the rules of the game are built around its shape'; if (isWorld && (p[0] === 'position' || p[0] === 'rotation' || p[0] === 'scale' || p[0] === 'visible' || p[0] === 'world') && baked.meshes.length) unbakeStatic();
+    if (p[0] === 'world' && p[1] === 'reset' && isWorld) { var b0 = o.userData.worldBase; o.position.set(b0.x, b0.y, b0.z); o.rotation.y = b0.ry; o.scale.set(b0.sx, b0.sy, b0.sz); o.visible = true; o.updateMatrixWorld(true); worldRecord(o); shadowDirty = true; if (editorHelper) editorHelper.update(); return 'ok'; }
+    if (p[0] === 'position' || p[0] === 'rotation' || p[0] === 'scale') { o[p[0]][p[1]] = p[0] === 'rotation' ? (+v) * Math.PI / 180 : +v; o.updateMatrixWorld(true); if (isWorld) worldRecord(o); shadowDirty = true; if (editorHelper) editorHelper.update(); return 'ok'; }
+    if (p[0] === 'visible') { o.visible = !!v && v !== 'false'; if (isWorld) worldRecord(o); shadowDirty = true; return 'ok'; }
+    if (p[0] === 'material') { var m = o.material; if (!m) return 'no material'; if (p[1] === 'color' || p[1] === 'emissive') { if (!m[p[1]]) return 'no ' + p[1]; m[p[1]].set(String(v)); } else m[p[1]] = +v; m.needsUpdate = true; return 'ok'; }
+    if (p[0] === 'light') { if (!o.isLight) return 'not a light'; if (p[1] === 'color') o.color.set(String(v)); else o[p[1]] = +v; return 'ok'; }
+    if (p[0] === 'name') { o.name = String(v); return 'ok'; }
+    return 'unknown path ' + path;
+  }
+  function editorSelect(id, add) {
+    var o = id ? eobj(id) : null, nid = o ? (propInst[id] ? id : eid(o)) : null;
+    if (add && nid) { var at = editorMulti.indexOf(nid); if (at >= 0) { editorMulti.splice(at, 1); nid = null; } else editorMulti.push(nid); }
+    else editorMulti = nid ? [nid] : [];
+    editorMulti = editorMulti.filter(function (k) { return !!eobj(k); });
+    editorSel = nid || editorMulti[editorMulti.length - 1] || null;
+    editorHelpersShow();
+    return editorSel ? editorInspect(editorSel) : null;
+  }
+  function editorHelpersShow() {
+    if (editorHelper) { scene.remove(editorHelper); editorHelper.geometry.dispose(); editorHelper = null; }
+    editorHelpers2.forEach(function (h) { scene.remove(h); h.geometry.dispose(); }); editorHelpers2 = [];
+    editorMulti.forEach(function (k) { var o = eobj(k); if (!o) return; var hb = new THREE.BoxHelper(o, k === editorSel ? 0xf5b53d : 0x5aa9ff); hb.userData.editor = true; hb.userData.noBake = true; hb.material.depthTest = false; hb.renderOrder = 9; scene.add(hb); if (k === editorSel) editorHelper = hb; else editorHelpers2.push(hb); });
+  }
+  function editorHelpersUpdate() { if (editorHelper) editorHelper.update(); editorHelpers2.forEach(function (h) { h.update(); }); }
+  // what can be dragged: a prop that is not fixed, a world item
+  // ── the selection box ──
+  var boxSel = null;
+  function boxSelStart(e) {
+    var el = document.createElement('div'); el.style.cssText = 'position:fixed;z-index:50;border:1px dashed #f5b53d;background:rgba(245,181,61,0.08);pointer-events:none;left:' + e.clientX + 'px;top:' + e.clientY + 'px;width:0;height:0';
+    document.body.appendChild(el); boxSel = { x0: e.clientX, y0: e.clientY, x1: e.clientX, y1: e.clientY, add: e.ctrlKey || e.metaKey, el: el };
+  }
+  function boxSelMove(e) { var B = boxSel; B.x1 = e.clientX; B.y1 = e.clientY; var l = Math.min(B.x0, B.x1), t = Math.min(B.y0, B.y1); B.el.style.left = l + 'px'; B.el.style.top = t + 'px'; B.el.style.width = Math.abs(B.x1 - B.x0) + 'px'; B.el.style.height = Math.abs(B.y1 - B.y0) + 'px'; }
+  // what stands inside the box on the screen: the four corners of its footprint on the ground project into it (a roof or a sign that
+  // leans out in the picture does not count against it; the ground and the road, far bigger than any box, never fit)
+  function boxSelEnd(e) {
+    var B = boxSel; boxSel = null; if (B.el.parentNode) B.el.parentNode.removeChild(B.el);
+    var l = Math.min(B.x0, e.clientX), r = Math.max(B.x0, e.clientX), t = Math.min(B.y0, e.clientY), b = Math.max(B.y0, e.clientY);
+    if (r - l < 4 && b - t < 4) { if (!B.add) editorSelect(null); return; }
+    var rc = canvas.getBoundingClientRect(), v = new THREE.Vector3(), bb = new THREE.Box3(), found = [];
+    scene.updateMatrixWorld(true);
+    var inside = function (o) { bb.setFromObject(o); if (bb.isEmpty()) return false; for (var k = 0; k < 4; k++) { v.set(k & 1 ? bb.max.x : bb.min.x, bb.min.y, k & 2 ? bb.max.z : bb.min.z).project(camera); if (v.z > 1) return false; var sx = rc.left + (v.x + 1) / 2 * rc.width, sy = rc.top + (1 - v.y) / 2 * rc.height; if (sx < l || sx > r || sy < t || sy > b) return false; } return true; };
+    for (var id in propInst) if (propInst[id].g.visible !== false && inside(propInst[id].g)) found.push(id);
+    WORLD_ITEMS.forEach(function (o) { if (o.parent && o.visible && inside(o)) found.push(eid(o)); });
+    if (!B.add) editorMulti = []; found.forEach(function (k) { if (editorMulti.indexOf(k) < 0) editorMulti.push(k); });
+    editorSel = editorMulti[editorMulti.length - 1] || null; editorHelpersShow();
+    console.log('[co-editor] ' + JSON.stringify({ select: editorSel, selection: editorMulti.slice(), boxed: found.length }));
+  }
+  function editorMovable(id) { if (propInst[id]) { var d = propDef(id); return !(d && d.fixed); } var o = eobj(id); return !!(o && o.userData.worldKey); }
+  // a drag starts on a selected thing: one thing drags the way it always did (walls snap), several move together by the same step
+  function editorDragStart(e, hq) {
+    var ids = editorMulti.filter(editorMovable); if (ids.indexOf(hq.id) < 0) return false;
+    if (ids.some(function (k) { return !propInst[k]; }) && baked.meshes.length) unbakeStatic();
+    if (ids.length === 1) {
+      var id = ids[0], g1 = eobj(id), p1 = pointOnPlane(e, g1.position.y); if (!p1) return false;
+      propDrag = propInst[id] ? { id: id, g: g1, y: g1.position.y, off: p1.clone().sub(g1.position), before: layoutSnap(id), moved: false } : { id: id, g: g1, y: g1.position.y, off: p1.clone().sub(g1.position), world: true, before: { x: g1.position.x, z: g1.position.z }, moved: false };
+      return true;
+    }
+    var hg = eobj(hq.id), p0 = pointOnPlane(e, hg.position.y); if (!p0) return false;
+    groupDrag = { y: hg.position.y, p0: p0.clone(), moved: false, items: ids.map(function (k) { var g = eobj(k); return { id: k, g: g, prop: !!propInst[k], x0: g.position.x, z0: g.position.z, before: propInst[k] ? layoutSnap(k) : { x: g.position.x, z: g.position.z } }; }) };
+    return true;
+  }
+  // several things moved: each kept where it now stands (a prop in the layout, a world item in src/00-world.js), one undo step for all
+  function editorGroupCommit(GD) {
+    var after = GD.items.map(function (it) { return { x: Math.round(it.g.position.x * 100) / 100, z: Math.round(it.g.position.z * 100) / 100 }; });
+    var put = function (which) {
+      GD.items.forEach(function (it, i) {
+        if (it.prop) { if (which === 'before') layoutRestore(it.id, it.before); else { var P = propPlacement(it.id); if (!S.layout) S.layout = {}; var Lz = S.layout[it.id] = S.layout[it.id] || { x: P.x, z: P.z, rot: P.rot, h: P.h || 0 }; Lz.x = after[i].x; Lz.z = after[i].z; rebuildProp(it.id); } }
+        else { var g = eobj(it.id), q = which === 'before' ? it.before : after[i]; g.position.x = q.x; g.position.z = q.z; g.updateMatrixWorld(true); worldRecord(g); }
+      });
+      save(); shadowDirty = true; editorHelpersShow();
+    };
+    put('after'); histPush('move ' + GD.items.length + ' things', function () { put('before'); }, function () { put('after'); });
+    console.log('[co-editor] ' + JSON.stringify({ movedTogether: GD.items.map(function (it) { return it.id; }) }));
+    return GD.items.length;
+  }
+  function editorMoveSel(dx, dz) {
+    var ids = editorMulti.filter(editorMovable); if (!ids.length) return 'nothing selected that moves';
+    if (ids.some(function (k) { return !propInst[k]; }) && baked.meshes.length) unbakeStatic();
+    var GD = { items: ids.map(function (k) { var g = eobj(k); return { id: k, g: g, prop: !!propInst[k], before: propInst[k] ? layoutSnap(k) : { x: g.position.x, z: g.position.z } }; }) };
+    GD.items.forEach(function (it) { it.g.position.x += +dx || 0; it.g.position.z += +dz || 0; });
+    return 'moved ' + editorGroupCommit(GD);
+  }
+  // ── duplicate, copy, paste (0.9.4) ──
+  // Duplicate makes a copy of every selected prop and world item, 1.5 m along, and selects the copies; Paste does the same at the point
+  // the camera looks at, keeping the group's arrangement. A prop copy is a placed copy (the layout keeps it); a world item's copy is a
+  // world copy (src/00-world.js keeps it). One undo step takes them all away.
+  var editorClip = [];
+  function editorDuplicate(ids, at) {
+    ids = (ids && ids.length ? ids : editorMulti).filter(function (k) { return !!eobj(k); }); if (!ids.length) return { error: 'nothing selected to duplicate' };
+    var spots = ids.map(function (k) { if (propInst[k]) { var P = propPlacement(k); return { x: P.x, z: P.z }; } var o = eobj(k); return { x: o.position.x, z: o.position.z }; });
+    var cx = spots.reduce(function (s, p) { return s + p.x; }, 0) / spots.length, cz = spots.reduce(function (s, p) { return s + p.z; }, 0) / spots.length;
+    var dx = at ? at.x - cx : 1.5, dz = at ? at.z - cz : 1.5, made = [], refused = [], snap = function (v) { return Math.round(v * 20) / 20; };
+    if (!S.custom) S.custom = [];
+    ids.forEach(function (k, i) {
+      if (propInst[k]) { var src = customById(k) || placedById(k), type = src ? src.type : (PROPS[k] ? k : null), P = propPlacement(k); if (!type) return; var c = { id: uid('cp'), type: type, x: snap(spots[i].x + dx), z: snap(spots[i].z + dz), rot: P.rot || 0, h: P.h || 0 }; S.custom.push(c); buildProp(c.id); made.push({ prop: c, id: c.id }); return; }
+      var o = eobj(k); if (!o || !o.userData.worldKey) return; if (o.userData.movesOnly) { refused.push(worldName(o)); return; }
+      var rec = { id: uid('wc'), of: o.userData.worldCopy ? o.userData.worldCopy.of : o.userData.worldKey, x: worldRound(o.position.x + dx), y: worldRound(o.position.y), z: worldRound(o.position.z + dz), ry: Math.round(o.rotation.y * 180 / Math.PI * 10) / 10, sx: worldRound(o.scale.x), sy: worldRound(o.scale.y), sz: worldRound(o.scale.z) };
+      WORLD_COPIES.push(rec); var g = worldCopyBuild(rec); if (g) made.push({ world: rec, id: eid(g) }); else { WORLD_COPIES.splice(WORLD_COPIES.indexOf(rec), 1); refused.push(worldName(o)); }
+    });
+    if (!made.length) return { error: refused.length ? refused.join(', ') + ' cannot be copied (it moves only)' : 'nothing to copy' };
+    save();
+    var undo = function () { made.forEach(function (m) { if (m.prop) { var a = S.custom.indexOf(m.prop); if (a >= 0) S.custom.splice(a, 1); removePropInst(m.prop.id); } else { var g = worldByKey(m.world.id); if (g) worldCopyRemove(g); } }); editorSelect(null); save(); };
+    var redo = function () { made.forEach(function (m) { if (m.prop) { S.custom.push(m.prop); buildProp(m.prop.id); } else { WORLD_COPIES.push(m.world); var g = worldCopyBuild(m.world); if (g) m.id = eid(g); } }); save(); };
+    histPush((at ? 'paste ' : 'duplicate ') + made.length + (made.length === 1 ? ' thing' : ' things'), undo, redo);
+    editorMulti = made.map(function (m) { return m.id; }); editorSel = editorMulti[editorMulti.length - 1]; editorHelpersShow();
+    console.log('[co-editor] ' + JSON.stringify({ select: editorSel, selection: editorMulti.slice(), duplicated: made.length }));
+    return { ok: true, made: editorMulti.slice(), refused: refused };
+  }
+  function editorCopy(ids) { editorClip = (ids && ids.length ? ids : editorMulti).filter(function (k) { return !!eobj(k); }); return { ok: true, copied: editorClip.length }; }
+  function editorPaste() { if (!editorClip.length) return { error: 'nothing copied: select something and press Ctrl+C first' }; var a = aheadPoint(6); return editorDuplicate(editorClip, { x: a.x, z: a.z }); }
+  function editorRemoveSel() { var ids = editorMulti.slice(), out = ids.map(function (k) { return editorRemove(k); }); editorSelect(null); return out; }
+  // what the crosshair or a click is on: the nearest visible mesh, named as its prop when it belongs to one
+  function editorPick(nx, ny) {
+    scene.updateMatrixWorld(true);   /* a prop rebuilt this tick has no world matrix until the next frame */
+    eRay.setFromCamera({ x: nx === undefined ? 0 : nx, y: ny === undefined ? 0 : ny }, camera); eRay.far = 120;
+    var hits = eRay.intersectObjects(scene.children, true);
+    // a baked merge is skipped and the hidden original behind it counts: it is the thing the player would name
+    for (var i = 0; i < hits.length; i++) { var h = hits[i].object; if (h.userData.baked || h.userData.editor || h.material === MAT.hit || h === editorHelper || h.isPoints || h.userData.noBake || (!h.visible && !h.userData.bakedAway) || (h.material && h.material.transparent && h.material.opacity < 0.9 && !h.userData.screen)) continue;   /* not a blob, a helper or a glass pane */ var pid = propIdOf(h), isProp = !!(pid && propInst[pid]), wi = isProp ? null : worldItemOf(h); return { id: isProp ? pid : wi ? eid(wi) : eid(h), prop: isProp, world: !!wi, distance: rnd(hits[i].distance), point: [rnd(hits[i].point.x), rnd(hits[i].point.y), rnd(hits[i].point.z)] }; }
+    return null;
+  }
+  function aheadPoint(dist) { var d = new THREE.Vector3(); camera.getWorldDirection(d); var p = camera.position.clone().add(d.multiplyScalar(dist || 3)); return { x: p.x, z: p.z, y: floorY(p.x, p.z) }; }
+  // a new copy of a prop definition, free, where the camera looks (or at x, z): kept in the save as a bought extra would be
+  function editorSpawn(type, x, z) {
+    var def = PROPS[type]; if (!def) return 'no prop definition ' + type;
+    if (x === undefined || z === undefined) { var a = aheadPoint(3); x = a.x; z = a.z; }
+    if (!S.custom) S.custom = []; var c = { id: uid('cp'), type: type, x: Math.round(x * 20) / 20, z: Math.round(z * 20) / 20, rot: 0, h: 0 }; S.custom.push(c);
+    buildProp(c.id); save(); editorSelect(c.id);
+    histPush('place ' + type, function () { var i = S.custom.indexOf(c); if (i >= 0) S.custom.splice(i, 1); removePropInst(c.id); if (editorSel === c.id) editorSelect(null); save(); }, function () { S.custom.push(c); buildProp(c.id); save(); });
+    return c.id;
+  }
+  function editorRemove(id) {
+    var c = customById(id);
+    if (c) { var at = S.custom.indexOf(c); S.custom.splice(at, 1); removePropInst(id); save(); if (editorSel === id) editorSelect(null); histPush('remove ' + c.type, function () { S.custom.splice(Math.min(at, S.custom.length), 0, c); buildProp(c.id); save(); }, function () { var i = S.custom.indexOf(c); if (i >= 0) S.custom.splice(i, 1); removePropInst(c.id); if (editorSel === c.id) editorSelect(null); save(); }); return 'removed ' + id; }
+    if (propInst[id]) { var before = layoutSnap(id); if (!S.layout) S.layout = {}; S.layout[id] = S.layout[id] || {}; S.layout[id].hidden = true; buildProp(id); save(); if (editorSel === id) editorSelect(null); var after = layoutSnap(id); histPush('hide ' + id, function () { layoutRestore(id, before); }, function () { layoutRestore(id, after); }); return 'hidden ' + id + ' (the catalogue brings it back)'; }
+    var wc = eobj(id); if (wc && wc.userData.worldCopy) { var rec = wc.userData.worldCopy; worldCopyRemove(wc); if (editorSel === id) editorSelect(null); histPush('remove a copy of ' + worldName(wc), function () { WORLD_COPIES.push(rec); worldCopyBuild(rec); }, function () { var g = worldByKey(rec.id); if (g) worldCopyRemove(g); }); return 'removed a copy of ' + worldName(wc); }
+    var wo = eobj(id); if (wo && wo.userData.worldKey) { if (baked.meshes.length) unbakeStatic(); wo.visible = false; worldRecord(wo); if (editorSel === id) editorSelect(null); shadowDirty = true; histPush('remove ' + worldName(wo), function () { wo.visible = true; worldRecord(wo); shadowDirty = true; }, function () { wo.visible = false; worldRecord(wo); shadowDirty = true; }); return 'removed ' + worldName(wo) + ' (kept in src/00-world.js; Put it back in the inspector or Ctrl+Z brings it back)'; }
+    var o = eobj(id); if (!o) return 'no such object ' + id; var par = o.parent; if (par) par.remove(o); if (editorSel === id) editorSelect(null); shadowDirty = true;
+    histPush('remove ' + eName(o), function () { if (par) { par.add(o); shadowDirty = true; } }, function () { if (o.parent) o.parent.remove(o); if (editorSel === id) editorSelect(null); shadowDirty = true; });
+    return 'removed ' + id + ' until the next reload';
+  }
+  // the scene view is the engine's free camera: the world holds still, the camera flies. frame(id) brings the camera to a thing.
+  function editorEnter() { if (ui.started) return true; if (CO.game && CO.game.editorEnter) CO.game.editorEnter(); else enter(); return ui.started; }
+  function editorMode(m) {
+    if (m === 'top') { editorMode('scene'); photo.y = Math.max(photo.y, 22); photo.pitch = -1.5; camera.position.set(photo.x, photo.y, photo.z); camera.rotation.set(photo.pitch, photo.yaw, 0, 'YXZ'); return photo.on ? 'top' : 'game'; }
+    if (m === 'scene') { editorEnter(); if (ui.menuOpen) closeMenu(); if (ui.panelOpen) closePanel(); if (!photo.on) photoToggle(true); return photo.on ? 'scene' : 'game'; }
+    if (photo.on) photoToggle(false); return 'game';
+  }
+  // how far the scene camera can back away from a point along one yaw before a wall (or any solid thing that is not the object itself) is in the way
+  function frameClear(c, yaw, d, o) {
+    var dir = new THREE.Vector3(Math.sin(yaw), 0.45, Math.cos(yaw)).normalize(), rc = new THREE.Raycaster(c, dir, 0.05, d); rc.camera = camera;   /* sprites need it */ var hits = rc.intersectObjects(scene.children, true);
+    for (var i = 0; i < hits.length; i++) {
+      var h = hits[i].object, own = false, p = h; while (p) { if (p === o) { own = true; break; } p = p.parent; }
+      if (own || h.userData.editor || h === editorHelper || h.material === MAT.hit || h.isPoints || !h.visible || (h.material && h.material.transparent && h.material.opacity < 0.9)) continue;
+      return Math.max(1.2, hits[i].distance - 0.5);
+    }
+    return d;
+  }
+  // the scene camera flies to one object: back along its current yaw when there is room, else to the side with the most room, so it never ends up behind a wall
+  function editorFrame(id) {
+    var o = eobj(id); if (!o) return 'no such object ' + id;
+    var box3 = new THREE.Box3().setFromObject(o), c = box3.getCenter(new THREE.Vector3()), s = box3.getSize(new THREE.Vector3()), d = Math.max(2.2, Math.max(s.x, s.y, s.z) * 1.6 + 1.2);
+    if (editorMode('scene') !== 'scene') return 'the scene view did not open';
+    var yaw = photo.yaw, best = yaw, bestD = frameClear(c, yaw, d, o), k, cand, cd;
+    if (bestD < d * 0.8) for (k = 1; k < 4; k++) { cand = yaw + k * Math.PI / 2; cd = frameClear(c, cand, d, o); if (cd > bestD + 0.3) { best = cand; bestD = cd; } }
+    yaw = best; d = bestD;
+    var px = c.x + Math.sin(yaw) * d, pz = c.z + Math.cos(yaw) * d, py = c.y + d * 0.45;
+    photo.yaw = yaw; photo.x = px; photo.y = py; photo.z = pz; photo.pitch = -Math.atan2(py - c.y, Math.sqrt((px - c.x) * (px - c.x) + (pz - c.z) * (pz - c.z)));
+    camera.position.set(px, py, pz); camera.rotation.set(photo.pitch, photo.yaw, 0, 'YXZ');
+    return 'framed ' + id;
+  }
+  // the assets panel: every prop definition, the palette, the textures, the voices, the people presets
+  function editorAssets() {
+    return {
+      props: PROP_ORDER.map(function (id) { var d = PROPS[id]; return { id: id, label: d.label, cat: d.cat || 'other', ico: d.ico || '', price: d.price || 0, extra: !!d.extra, lvl: d.lvl || null, wall: !!d.wall, fixed: !!d.fixed, desc: d.desc || '', standing: !!propInst[id] }; }),
+      materials: Object.keys(MAT).map(function (k) { var m = MAT[k]; return { key: k, type: m.type, color: m.color ? '#' + m.color.getHexString() : null, map: !!m.map, emissive: m.emissive && m.emissive.getHex() ? '#' + m.emissive.getHexString() : null }; }),
+      textures: Object.keys(TEX).filter(function (k) { return !!TEX[k]; }), normals: Object.keys(NRM), sounds: Object.keys(SFX),
+      people: { skins: SKINS.map(function (c) { return '#' + c.toString(16).padStart(6, '0'); }), hairs: HAIRS.map(function (c) { return '#' + c.toString(16).padStart(6, '0'); }), styles: ['short', 'long', 'bun', 'bald', 'cap'] },
+      catalogue: CO.game && CO.game.catalogueGroups ? CO.game.catalogueGroups.map(function (g) { return [g[0], g[1]]; }) : null
+    };
+  }
+  function editorShot(quality) { renderFrame(0.016); try { return canvas.toDataURL('image/jpeg', quality || 0.8); } catch (e) { return null; } }
+  // in the editor's viewport there is no pointer lock (a locked pointer in an embedded page is not safe): a left click selects what it
+  // is on, and the look follows the mouse while the right button is held, in the scene camera and in the game alike
+  var editorTool = { mode: null, radius: 3, strength: 0.5, tex: 0 }, toolDown = false;
+  function editorSetTool(t) { if (!t || !t.mode) { editorTool.mode = null; editorTool.type = null; return editorTool; } editorTool.mode = t.mode; editorTool.type = t.type || null; if (t.radius) editorTool.radius = +t.radius; if (t.strength !== undefined) editorTool.strength = +t.strength; if (t.tex !== undefined) editorTool.tex = t.tex | 0; return editorTool; }
+  function toolApply(e) { var r = canvas.getBoundingClientRect(), nx = ((e.clientX - r.left) / r.width) * 2 - 1, ny = -((e.clientY - r.top) / r.height) * 2 + 1, pt = terrainPick(nx, ny); if (!pt) return; var res = terrainBrush(pt.x, pt.z, editorTool.mode, editorTool.radius, editorTool.mode === 'paint' ? 1 : editorTool.strength * 0.25, editorTool.tex); if (res && res.changed) console.log('[co-editor] ' + JSON.stringify({ terrain: res.changed })); }
+  var dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), dragPt = new THREE.Vector3(), propDrag = null, partDrag = null, dragT = 0, toolStroke = null;
+  function terrainRestore(h, p) { if (!TERRAIN.on || TERRAIN.heights.length !== h.length) return; TERRAIN.heights.set(h); TERRAIN.paint.set(p); terrainUpdate(0, 0, TERRAIN.w, TERRAIN.d); }
+  // the nearest wall face within 2.5 m, the way build mode snaps a wall prop: the point on it and the quarter turn that faces out
+  function wallSnap(pt, s) { var best = null, bd = 2.5; wallPlanes().forEach(function (w) { var d = w.a === 'x' ? Math.abs(pt.x - w.v) : Math.abs(pt.z - w.v); var within = w.a === 'x' ? (pt.z > w.z0 && pt.z < w.z1) : (pt.x > w.x0 && pt.x < w.x1); if (within && d < bd) { bd = d; best = w; } }); if (!best) return null; return best.a === 'x' ? { x: best.v, z: snapTo(pt.z, s || 0.05), rot: best.n > 0 ? 1 : 3 } : { x: snapTo(pt.x, s || 0.05), z: best.v, rot: best.n > 0 ? 0 : 2 }; }
+  function pointOnPlane(e, y) { var r = canvas.getBoundingClientRect(), nx = ((e.clientX - r.left) / r.width) * 2 - 1, ny = -((e.clientY - r.top) / r.height) * 2 + 1; eRay.setFromCamera({ x: nx, y: ny }, camera); dragPlane.constant = -y; return eRay.ray.intersectPlane(dragPlane, dragPt) ? dragPt : null; }
+  function snapTo(v, s) { return Math.round(v / s) * s; }
+  // the vertex of a mesh part nearest the pointer on screen, within 14 px
+  function nearestVertex(mesh, e) { var r = canvas.getBoundingClientRect(), pos = mesh.geometry.attributes.position, best = null, v = new THREE.Vector3(); mesh.updateMatrixWorld(true); for (var i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i); var w = v.clone().applyMatrix4(mesh.matrixWorld), sp = w.clone().project(camera), sx = (sp.x + 1) / 2 * r.width + r.left, sy = (1 - sp.y) / 2 * r.height + r.top, d = Math.hypot(sx - e.clientX, sy - e.clientY); if (d < 14 && (!best || d < best.d)) best = { i: mesh.userData.vertMap ? mesh.userData.vertMap[i] : i, d: d, w: w }; } return best; }
+  function editorBind() {
+    canvas.addEventListener('mousedown', function (e) {
+      if (!CO.editor.on || !ui.started) return;
+      if (e.button === 0 && editorTool.mode === 'model' && editorTool.type) { var r0 = canvas.getBoundingClientRect(), mx = ((e.clientX - r0.left) / r0.width) * 2 - 1, my = -((e.clientY - r0.top) / r0.height) * 2 + 1, pk = modelPick(editorTool.type, mx, my); if (pk) { var inst0 = propInst[pk.id]; inst0.g.updateMatrixWorld(true); var partObj = null; inst0.g.traverse(function (o) { if (!partObj && o.userData && o.userData.part === pk.part) partObj = o; }); var wp = partObj ? partObj.getWorldPosition(new THREE.Vector3()) : inst0.g.position.clone(); var vh = partObj && partObj.userData.vertexEdit ? nearestVertex(partObj, e) : null; if (vh) { partDrag = { type: editorTool.type, id: pk.id, part: pk.part, g: inst0.g, mesh: partObj, vert: vh.i, y: vh.w.y }; console.log('[co-editor] ' + JSON.stringify({ partPick: pk.part, vert: vh.i, type: editorTool.type })); e.preventDefault(); return; } var p0 = pointOnPlane(e, wp.y); if (p0) { partDrag = { type: editorTool.type, id: pk.id, part: pk.part, g: inst0.g, y: wp.y, off: p0.clone().sub(wp) }; console.log('[co-editor] ' + JSON.stringify({ partPick: pk.part, type: editorTool.type })); e.preventDefault(); return; } } }
+      if (e.button === 0 && editorTool.mode && editorTool.mode !== 'model' && TERRAIN.on) { toolDown = true; toolStroke = { mode: editorTool.mode, h: Float32Array.from(TERRAIN.heights), p: Uint8Array.from(TERRAIN.paint) }; toolApply(e); e.preventDefault(); return; }
+      // Shift and the left button in the scene camera draw a selection box (Ctrl and Shift add to what is selected)
+      if (e.button === 0 && e.shiftKey && photo.on) { boxSelStart(e); e.preventDefault(); return; }
+      // the left button: a click selects, Ctrl and a click adds to the selection or takes away; a drag on a selected thing moves it and
+      // everything selected with it, with Ctrl in the game view and without in the scene camera
+      if (e.button === 0) {
+        var rq = canvas.getBoundingClientRect(), qx = ((e.clientX - rq.left) / rq.width) * 2 - 1, qy = -((e.clientY - rq.top) / rq.height) * 2 + 1, hq = editorPick(qx, qy), add = e.ctrlKey || e.metaKey;
+        pendingOff = null;
+        if (add) { if (hq) { if (editorMulti.indexOf(hq.id) >= 0) pendingOff = hq.id; else editorSelect(hq.id, true); } }
+        else if (!hq || editorMulti.indexOf(hq.id) < 0) editorSelect(hq ? hq.id : null);
+        else { editorSel = hq.id; editorHelpersShow(); }
+        console.log('[co-editor] ' + JSON.stringify({ select: editorSel, selection: editorMulti.slice(), point: hq ? hq.point : null, nx: qx, ny: qy }));
+        if (hq && (add || photo.on) && editorMulti.indexOf(hq.id) >= 0 && editorDragStart(e, hq)) { e.preventDefault(); return; }
+      }
+      if (e.button === 2) { CO.editor.drag = true; e.preventDefault(); }
+    });
+    document.addEventListener('mouseup', function (e) {
+      if (e.button === 2) CO.editor.drag = false; if (e.button === 0) toolDown = false;
+      if (e.button === 0 && boxSel) { boxSelEnd(e); return; }
+      var moved0 = (groupDrag && groupDrag.moved) || (propDrag && propDrag.moved);
+      if (e.button === 0 && pendingOff) { var po = pendingOff; pendingOff = null; if (!moved0) { editorSelect(po, true); console.log('[co-editor] ' + JSON.stringify({ select: editorSel, selection: editorMulti.slice() })); } }
+      if (e.button === 0 && groupDrag) { var GD0 = groupDrag; groupDrag = null; if (GD0.moved) editorGroupCommit(GD0); return; }
+      if (e.button === 0 && toolStroke) { var TS = toolStroke; toolStroke = null; var afterH = Float32Array.from(TERRAIN.heights), afterP = Uint8Array.from(TERRAIN.paint); histPush('terrain ' + TS.mode, function () { terrainRestore(TS.h, TS.p); }, function () { terrainRestore(afterH, afterP); }); }
+      if (e.button === 0 && propDrag && propDrag.world) { var DW = propDrag; propDrag = null; if (DW.moved) { var gw = DW.g, bw = DW.before, aw = { x: gw.position.x, z: gw.position.z }; worldRecord(gw); histPush('move ' + worldName(gw), function () { gw.position.x = bw.x; gw.position.z = bw.z; gw.updateMatrixWorld(true); worldRecord(gw); shadowDirty = true; }, function () { gw.position.x = aw.x; gw.position.z = aw.z; gw.updateMatrixWorld(true); worldRecord(gw); shadowDirty = true; }); console.log('[co-editor] ' + JSON.stringify({ moved: DW.id, x: worldRound(aw.x), z: worldRound(aw.z), world: true })); } return; }
+      if (e.button === 0 && propDrag) { var D = propDrag; propDrag = null; if (D.moved) { var P = propPlacement(D.id), x = Math.round(D.g.position.x * 100) / 100, z = Math.round(D.g.position.z * 100) / 100; if (!S.layout) S.layout = {}; S.layout[D.id] = S.layout[D.id] || { x: P.x, z: P.z, rot: P.rot, h: P.h || 0 }; S.layout[D.id].x = x; S.layout[D.id].z = z; if (D.rot !== undefined) S.layout[D.id].rot = D.rot; rebuildProp(D.id); save(); var after = layoutSnap(D.id), bef = D.before; histPush('move ' + D.id, function () { layoutRestore(D.id, bef); }, function () { layoutRestore(D.id, after); }); editorSelect(D.id); console.log('[co-editor] ' + JSON.stringify({ moved: D.id, x: x, z: z })); } }
+      if (e.button === 0 && partDrag) { console.log('[co-editor] ' + JSON.stringify({ partDragEnd: partDrag.part, type: partDrag.type })); partDrag = null; }
+    });
+    canvas.addEventListener('mousemove', function (e) {
+      if (toolDown && editorTool.mode && editorTool.mode !== 'model' && TERRAIN.on) toolApply(e);
+      if (boxSel) { boxSelMove(e); return; }
+      if (groupDrag) { var pg = pointOnPlane(e, groupDrag.y); if (!pg) return; var sg = e.shiftKey ? 0.5 : 0.05, gdx = snapTo(pg.x - groupDrag.p0.x, sg), gdz = snapTo(pg.z - groupDrag.p0.z, sg); groupDrag.items.forEach(function (it) { it.g.position.x = it.x0 + gdx; it.g.position.z = it.z0 + gdz; it.g.updateMatrixWorld(true); }); if (gdx || gdz) groupDrag.moved = true; editorHelpersUpdate(); shadowDirty = true; return; }
+      if (propDrag) { var p = pointOnPlane(e, propDrag.y); if (!p) return; var s = e.shiftKey ? 0.5 : 0.05, nx2 = snapTo(p.x - propDrag.off.x, s), nz2 = snapTo(p.z - propDrag.off.z, s); var dd = propDrag.world ? null : propDef(propDrag.id); if (dd && dd.wall) { var ws2 = wallSnap({ x: nx2, z: nz2 }, s); if (ws2) { nx2 = ws2.x; nz2 = ws2.z; if (propDrag.g.rotation.y !== ws2.rot * Math.PI / 2) { propDrag.g.rotation.y = ws2.rot * Math.PI / 2; propDrag.rot = ws2.rot; } } } if (nx2 !== propDrag.g.position.x || nz2 !== propDrag.g.position.z) { propDrag.g.position.x = nx2; propDrag.g.position.z = nz2; propDrag.moved = true; if (editorHelper) editorHelper.update(); shadowDirty = true; } return; }
+      if (partDrag) { var pp = pointOnPlane(e, partDrag.y); if (!pp) return; var now = performance.now(); if (now - dragT < 40) return; dragT = now; var st = e.shiftKey ? 0.25 : 0.05; if (partDrag.vert !== undefined) { var lv = partDrag.mesh.worldToLocal(pp.clone()); console.log('[co-editor] ' + JSON.stringify({ vertDrag: partDrag.part, v: partDrag.vert, type: partDrag.type, x: snapTo(lv.x, st / 5), z: snapTo(lv.z, st / 5) })); return; } var local = partDrag.g.worldToLocal(pp.clone().sub(partDrag.off)); console.log('[co-editor] ' + JSON.stringify({ partDrag: partDrag.part, type: partDrag.type, x: snapTo(local.x, st), z: snapTo(local.z, st) })); }
+    });
+    window.addEventListener('blur', function () { CO.editor.drag = false; });
+    canvas.addEventListener('contextmenu', function (e) { if (CO.editor.on) e.preventDefault(); });
+    // Ctrl and the wheel turn the prop under the pointer (or the selected one) a quarter at a time
+    canvas.addEventListener('wheel', function (e) { if (!CO.editor.on || !ui.started || !(e.ctrlKey || e.metaKey)) return; e.preventDefault(); e.stopImmediatePropagation(); var r2 = canvas.getBoundingClientRect(), wx = ((e.clientX - r2.left) / r2.width) * 2 - 1, wy = -((e.clientY - r2.top) / r2.height) * 2 + 1, hw = editorPick(wx, wy), id = hw && hw.prop && propInst[hw.id] ? hw.id : hw && hw.world ? hw.id : editorSel; var wt = id && !propInst[id] ? eobj(id) : null; if (wt && wt.userData.worldKey) { var ry0 = wt.rotation.y * 180 / Math.PI; editorSet(id, 'rotation.y', Math.round(ry0 + (e.deltaY > 0 ? -90 : 90))); editorSelect(id); return; } if (!id || !propInst[id]) return; var dw = propDef(id); if (dw && dw.fixed) return; var rot = propPlacement(id).rot || 0; editorSet(id, 'prop.rot', (rot + (e.deltaY > 0 ? 1 : 3)) % 4); editorSelect(id); console.log('[co-editor] ' + JSON.stringify({ moved: id, rot: (rot + (e.deltaY > 0 ? 1 : 3)) % 4 })); }, { capture: true, passive: false });
+    window.addEventListener('keydown', function (e) { if (!CO.editor.on || !(e.ctrlKey || e.metaKey)) return; var k = (e.key || '').toLowerCase(); if (k === 'd' || k === 'c' || k === 'v') { e.preventDefault(); var rk = k === 'd' ? editorDuplicate() : k === 'c' ? editorCopy() : editorPaste(); console.log('[co-editor] ' + JSON.stringify({ clip: k, result: rk && (rk.error || rk.made || rk.copied) })); return; } if (k === 'z' && !e.shiftKey) { e.preventDefault(); console.log('[co-editor] ' + JSON.stringify({ history: editorUndoStep() })); } else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); console.log('[co-editor] ' + JSON.stringify({ history: editorRedoStep() })); } });
+  }
+  // ── Undo and redo: a stack of steps, each one knowing how to undo and redo itself ──
+  // The editor's own edits are steps (a prop field, a live field, a spawn, a remove); the game's build mode is play, not editing, and is not.
+  var editorUndoStack = [], editorRedoStack = [];
+  function histPush(label, undo, redo) { editorUndoStack.push({ label: label, undo: undo, redo: redo, t: Date.now() }); if (editorUndoStack.length > 200) editorUndoStack.shift(); editorRedoStack.length = 0; }
+  function layoutSnap(id) { return S && S.layout && S.layout[id] ? JSON.parse(JSON.stringify(S.layout[id])) : undefined; }
+  function layoutRestore(id, snap) { if (!S.layout) S.layout = {}; if (snap === undefined) delete S.layout[id]; else S.layout[id] = JSON.parse(JSON.stringify(snap)); rebuildProp(id); save(); if (editorSel === id) editorSelect(propInst[id] ? id : null); }
+  function editorUndoStep() { var s = editorUndoStack.pop(); if (!s) return 'nothing to undo'; s.undo(); editorRedoStack.push(s); if (editorHelper) editorHelper.update(); return 'undid: ' + s.label; }
+  function editorRedoStep() { var s = editorRedoStack.pop(); if (!s) return 'nothing to redo'; s.redo(); editorUndoStack.push(s); if (editorHelper) editorHelper.update(); return 'redid: ' + s.label; }
+  function editorHistory() { return { undo: editorUndoStack.map(function (s) { return s.label; }), redo: editorRedoStack.map(function (s) { return s.label; }) }; }
+  // the current value of a live field, in the units set() takes, so a step can put it back
+  function editorGet(id, path) {
+    var o = eobj(id); if (!o) return undefined; var p = String(path).split('.');
+    if (p[0] === 'position' || p[0] === 'scale') return o[p[0]][p[1]];
+    if (p[0] === 'rotation') return o.rotation[p[1]] * 180 / Math.PI;
+    if (p[0] === 'visible') return o.visible;
+    if (p[0] === 'material') { var m = o.material; if (!m) return undefined; return (p[1] === 'color' || p[1] === 'emissive') ? (m[p[1]] ? '#' + m[p[1]].getHexString() : undefined) : m[p[1]]; }
+    if (p[0] === 'light') return !o.isLight ? undefined : p[1] === 'color' ? '#' + o.color.getHexString() : o[p[1]];
+    if (p[0] === 'name') return o.name;
+    return undefined;
+  }
+  // set() records a step around apply(): a prop field as a layout snapshot before and after, a live field as its old and new value
+  function editorSet(id, path, value) {
+    var head = String(path).split('.')[0];
+    if (head === 'prop') { var before = layoutSnap(id), r = editorApply(id, path, value); if (r === 'ok') { var after = layoutSnap(id); histPush(path + ' of ' + id, function () { layoutRestore(id, before); }, function () { layoutRestore(id, after); }); } return r; }
+    if (head === 'world') { var wo = eobj(id); if (!wo || !wo.userData.worldKey) return 'not a world item'; var snap = function () { return { p: wo.position.clone(), ry: wo.rotation.y, s: wo.scale.clone(), v: wo.visible }; }, put = function (q) { wo.position.copy(q.p); wo.rotation.y = q.ry; wo.scale.copy(q.s); wo.visible = q.v; wo.updateMatrixWorld(true); worldRecord(wo); shadowDirty = true; }, w0 = snap(), rw = editorApply(id, path, value), w1 = snap(); if (rw === 'ok') histPush('put back ' + worldName(wo), function () { put(w0); }, function () { put(w1); }); return rw; }
+    var was = editorGet(id, path), r2 = editorApply(id, path, value);
+    if (r2 === 'ok' && was !== undefined) histPush(path + ' of ' + id, function () { editorApply(id, path, was); }, function () { editorApply(id, path, value); });
+    return r2;
+  }
+
+  // ── Pack authoring: a prop definition's build code, compiled and previewed live, and new definitions ──
+  // The names a build function may use when the editor compiles it outside the closure: the engine's kit, plus what the game adds in
+  // GAME.editorKit (an object, or a function returning one). A name missing here surfaces as "x is not defined" in the preview.
+  function editorKit() {
+    var K = { THREE: THREE, CO: CO, S: S, SET: SET, MAT: MAT, TEX: TEX, NRM: NRM, PROPS: PROPS, defProp: defProp, propDef: propDef, propPlacement: propPlacement, propWorld: propWorld, propLabel: propLabel, customById: customById, propInst: propInst,
+      box: box, plane: plane, cyl: cyl, sphere: sphere, sprite: sprite, sign: sign, tex: tex, textTex: textTex, normalTex: normalTex, roughTex: roughTex, std: std, glowMat: glowMat, cachedGeo: cachedGeo, boxGeo: boxGeo, bevelGeo: bevelGeo, taperGeo: taperGeo, roundCylGeo: roundCylGeo,
+      groundBlob: groundBlob, hitBox: hitBox, solid: solid, solids: solids, animate: animate, animated: animated, burst: burst, parentOf: parentOf, inter: inter, addInter: addInter, dyn: dyn, scene: scene, camera: camera, player: player, ui: ui,
+      clamp: clamp, lerp: lerp, money: money, randi: randi, randf: randf, pick: pick, uid: uid, dist2: dist2, pad2: pad2, fmtTime: fmtTime, floorY: floorY, propSeed: propSeed, seededF: seededF, seededI: seededI, seededPick: seededPick, mixHex: mixHex, hexCss: hexCss,
+      hook: hook, runHooks: runHooks, sfx: sfx, toast: toast, logEvent: logEvent, save: save, buildProp: buildProp, removePropInst: removePropInst, touchScreen: touchScreen, screens: screens, screenDirtyAll: screenDirtyAll, scBg: scBg, scHead: scHead, scText: scText, scButton: scButton, openPanel: openPanel, closePanel: closePanel, pay: pay, terrainY: terrainY, TERRAIN: TERRAIN, LAYOUT: LAYOUT };
+    if (CO.game && CO.game.editorKit) { var G = typeof CO.game.editorKit === 'function' ? CO.game.editorKit() : CO.game.editorKit; for (var k in G) K[k] = G[k]; }
+    return K;
+  }
+  var ORIG_BUILD = {};
+  // code the editor runs (a build function, a whole definition, a pack) runs inside the engine's own scope by a direct eval here, so it sees every name a part of the game sees (0.6.0; before, only the kit's names)
+  function closureRun(src) { return eval(src); }
+  function editorCompile(code, what) {
+    var fn; try { fn = closureRun('(' + code + '\n)'); } catch (e) { return { error: 'the ' + what + ' code does not parse: ' + e.message }; }
+    if (typeof fn !== 'function') return { error: 'the ' + what + ' code must be a function expression: function (c, P, inst) { ... }' };
+    return { fn: fn };
+  }
+  function propTypeIds(type) { var ids = []; if (PROPS[type] && !PROPS[type].extra) ids.push(type); LAYOUT.placed.forEach(function (p) { if (p.type === type && !PROPS[p.id]) ids.push(p.id); }); (S && S.custom || []).forEach(function (c) { if (c.type === type) ids.push(c.id); }); return ids; }
+  function rebuildType(type) { var n = 0, err = null; propTypeIds(type).forEach(function (id) { try { rebuildProp(id); n++; } catch (e) { err = err || (id + ': ' + e.message); } }); if (editorSel && propTypeIds(type).indexOf(editorSel) >= 0) editorSelect(propInst[editorSel] ? editorSel : null); return { rebuilt: n, error: err }; }
+  // the build code this prop stands on is also another prop's (a pack's loop, a builder used twice): saving over it would reshape them all
+  function buildShared(type) { var b0 = ORIG_BUILD[type] || PROPS[type].build, s0 = b0 ? b0.toString() : ''; if (!s0) return false; for (var k in PROPS) { if (k === type) continue; var b = ORIG_BUILD[k] || PROPS[k].build; if (b && (b === b0 || b.toString() === s0)) return true; } return false; }
+  function editorSource(type) {
+    var def = PROPS[type]; if (!def) return { error: 'no prop definition ' + type };
+    var fields = {}; ['label', 'cat', 'x', 'z', 'rot', 'y', 'wall', 'fixed', 'extra', 'price', 'desc', 'lvl', 'ico', 'noBlob'].forEach(function (k) { if (def[k] !== undefined) fields[k] = def[k]; });
+    return { type: type, fields: fields, build: def.build ? def.build.toString() : null, after: def.after ? def.after.toString() : null, original: ORIG_BUILD[type] ? ORIG_BUILD[type].toString() : null, modified: !!ORIG_BUILD[type] && def.build !== ORIG_BUILD[type], shared: buildShared(type) || !!MODEL_OVER[type], canOverride: true, instances: propTypeIds(type), kit: Object.keys(editorKit()) };
+  }
+  // the new build function takes over every placed instance of the type at once; a build that throws is refused and the previous one comes back
+  function editorPreview(type, code) {
+    var def = PROPS[type]; if (!def) return { ok: false, error: 'no prop definition ' + type };
+    var c = editorCompile(code, 'build'); if (c.error) return { ok: false, error: c.error };
+    if (!ORIG_BUILD[type]) ORIG_BUILD[type] = def.build;
+    var was = def.build; def.build = c.fn;
+    var r = rebuildType(type);
+    if (r.error) { def.build = was; rebuildType(type); return { ok: false, error: 'the new build threw, the previous one is back: ' + r.error }; }
+    return { ok: true, rebuilt: r.rebuilt, modified: def.build !== ORIG_BUILD[type] };
+  }
+  function editorRevert(type) { var def = PROPS[type]; if (!def) return { ok: false, error: 'no prop definition ' + type }; if (ORIG_BUILD[type]) { def.build = ORIG_BUILD[type]; delete ORIG_BUILD[type]; } var r = rebuildType(type); return { ok: !r.error, rebuilt: r.rebuilt, error: r.error }; }
+  // a whole definition, run live: defProp(id, { ... }). A placed one (x, z, not extra) builds at once; an extra one joins the assets
+  function editorDefine(code) {
+    var n0 = PROP_ORDER.length, known = PROP_ORDER.slice();
+    try { closureRun(code + '\n'); } catch (e) { return { ok: false, error: 'the definition does not run: ' + e.message }; }
+    var added = PROP_ORDER.slice(n0); if (!added.length) return { ok: false, error: 'the code ran but defined no prop: it should call defProp(id, { ... })' };
+    PROP_ORDER.length = n0; var ids = []; added.forEach(function (k) { if (ids.indexOf(k) < 0) ids.push(k); if (PROP_ORDER.indexOf(k) < 0) PROP_ORDER.push(k); });   /* a redefinition keeps its place in the order; a pack adds many */
+    var id = ids[ids.length - 1], def = PROPS[id], built = 0, redefined = [];
+    for (var q = 0; q < ids.length; q++) {
+      var k2 = ids[q], d2 = PROPS[k2];
+      if (known.indexOf(k2) >= 0) { delete ORIG_BUILD[k2]; var rr = rebuildType(k2); if (rr.error) return { ok: false, id: k2, error: 'the new definition does not build: ' + rr.error }; built += rr.rebuilt; redefined.push(k2); }
+      else if (!d2.extra && typeof d2.x === 'number' && typeof d2.z === 'number') { try { buildProp(k2); built++; } catch (e) { delete PROPS[k2]; PROP_ORDER.splice(PROP_ORDER.indexOf(k2), 1); return { ok: false, id: k2, error: 'the new prop ' + k2 + ' does not build: ' + e.message }; } }
+    }
+    return { ok: true, id: id, ids: ids, built: ids.length === 1 ? built > 0 : built, extra: !!def.extra, redefined: ids.length === 1 ? redefined.length > 0 : redefined };
+  }
+
+  // ── The layout the game ships: what the editor writes into src/00-layout.js, and the moment it did ──
+  function sameSpot(a, b) { return a.x === b.x && a.z === b.z && (a.rot || 0) === (b.rot || 0) && (a.h || 0) === (b.h || 0) && !!a.hidden === !!b.hidden; }
+  function editorLayout() {
+    var props = {}, placed = [], changed = 0, pendingCopies = 0;
+    PROP_ORDER.forEach(function (id) { var d = PROPS[id]; if (d.extra) return; var P = propPlacement(id), D = propDefault(id), def = { x: d.x, z: d.z, rot: d.rot || 0, h: 0, hidden: false }; if (!sameSpot(P, D)) changed++; if (!sameSpot(P, def)) props[id] = { x: P.x, z: P.z, rot: P.rot, h: P.h || 0, hidden: !!P.hidden }; });
+    LAYOUT.placed.forEach(function (p) { if (PROPS[p.id]) return; var P = propPlacement(p.id); if (!sameSpot(P, propDefault(p.id))) changed++; if (!P.hidden) placed.push({ id: p.id, type: p.type, x: P.x, z: P.z, rot: P.rot, h: P.h || 0 }); });
+    (S && S.custom || []).forEach(function (c) { if (!PROPS[c.type] || placedById(c.id)) return; var P = propPlacement(c.id); if (!P.hidden) { placed.push({ id: c.id, type: c.type, x: P.x, z: P.z, rot: P.rot, h: P.h || 0 }); pendingCopies++; } });
+    // every world's layout is written (0.13.0): this page's from the scene, the others as they were read, so editing one stage keeps the rest
+    var lines = ['//@ the layout the editor saved: where the props stand and the copies that ship with the game. Written by the Co Engine editor; it sorts first in src/ so the boot sees it. Move things in the editor rather than here.'];
+    var setCode = function (sp, sl, v) {
+      lines.push('  CO.layout({', '    props: {');
+      Object.keys(sp).sort().forEach(function (id) { var p = sp[id]; lines.push('      ' + JSON.stringify(id) + ': { x: ' + p.x + ', z: ' + p.z + ', rot: ' + (p.rot || 0) + ', h: ' + (p.h || 0) + (p.hidden ? ', hidden: true' : '') + ' },'); });
+      lines.push('    },', '    placed: [');
+      sl.forEach(function (p) { lines.push('      { id: ' + JSON.stringify(p.id) + ', type: ' + JSON.stringify(p.type) + ', x: ' + p.x + ', z: ' + p.z + ', rot: ' + (p.rot || 0) + ', h: ' + (p.h || 0) + ' },'); });
+      lines.push('    ]', '  }' + (v ? ', ' + JSON.stringify(v) : '') + ');');
+    };
+    Object.keys(LAYOUT_SETS).sort().forEach(function (v) { var T = LAYOUT_SETS[v]; if (T === LAYOUT) { if (!v || Object.keys(props).length || placed.length) setCode(props, placed, v); } else if (Object.keys(T.props).length || T.placed.length) setCode(T.props, T.placed, v); });
+    lines.push('');
+    return { props: props, placed: placed, changed: changed, copies: placed.length, pending: changed + pendingCopies, code: lines.join('\n') };
+  }
+  // the file is written: what it says is now the baseline, the copies it carries leave the save, and overrides equal to the baseline go
+  function editorLayoutAdopt(L) {
+    L = L || editorLayout(); LAYOUT.props = {}; for (var k in L.props) LAYOUT.props[k] = L.props[k]; LAYOUT.placed = (L.placed || []).slice();
+    var moved = []; if (S.custom) S.custom = S.custom.filter(function (c) { if (placedById(c.id)) { moved.push(c.id); return false; } return true; });
+    if (S.layout) Object.keys(S.layout).forEach(function (id) { if (!PROPS[id] && !placedById(id) && !customById(id)) return; if (sameSpot(propPlacement(id), propDefault(id))) delete S.layout[id]; });
+    moved.forEach(function (id) { buildProp(id); }); save();
+    return { adopted: true, props: Object.keys(LAYOUT.props).length, placed: LAYOUT.placed.length, pending: editorLayout().pending };
+  }
+
+  // ── Drop: a placed prop falls under physics from where it is (or from a height) and its resting place goes into the layout ──
+  var dropping = {};
+  function editorDrop(id, fromHeight) {
+    var inst = propInst[id]; if (!inst) return { error: id + ' is not a placed prop' }; if (dropping[id]) return { error: id + ' is already falling' };
+    var g = inst.g; if (fromHeight) g.position.y += +fromHeight;
+    var before = layoutSnap(id), B = body(g, { mass: 1, restitution: 0.1, friction: 0.7 }); B.ignoreOwn = id; dropping[id] = { t: 0, B: B, before: before };
+    return { ok: true, id: id, from: rnd(g.position.y) };
+  }
+  hook('frame', function (dt) {
+    for (var id in dropping) {
+      var D = dropping[id], g = D.B.obj; D.t += dt;
+      if (D.B.asleep || D.t > 6) {
+        removeBody(g); delete dropping[id]; var P = propPlacement(id), ground = propGroundY(g.position.x, g.position.z);
+        if (!S.layout) S.layout = {}; var L = S.layout[id] = S.layout[id] || { x: P.x, z: P.z, rot: P.rot, h: P.h || 0 }; L.x = Math.round(g.position.x * 100) / 100; L.z = Math.round(g.position.z * 100) / 100; L.h = Math.max(0, Math.round((g.position.y - ground) * 100) / 100);
+        rebuildProp(id); save(); var after = layoutSnap(id), bef = D.before; histPush('drop ' + id, function () { layoutRestore(id, bef); }, function () { layoutRestore(id, after); });
+        if (editorSel === id) editorSelect(id); console.log('[co-editor] ' + JSON.stringify({ dropped: id, x: L.x, z: L.z, h: L.h }));
+      }
+    }
+  });
+
+  // ── The profiler: the frame's phases and the renderer's counts, sampled while the editor's profiler is open ──
+  var PROF = { on: false, ring: [], max: 120, cur: null };
+  function profBegin() { if (!PROF.on) return; PROF.cur = { t0: performance.now(), sim: 0, world: 0, present: 0, ui: 0, render: 0, total: 0 }; }
+  function profMark(k, t) { if (!PROF.on || !PROF.cur) return; PROF.cur[k] += performance.now() - t; }
+  function profEnd() { if (!PROF.on || !PROF.cur) return; var c = PROF.cur; c.total = performance.now() - c.t0; PROF.ring.push(c); if (PROF.ring.length > PROF.max) PROF.ring.shift(); PROF.cur = null; }
+  function rnd2(v) { return Math.round(v * 100) / 100; }
+  function editorProfile(on) {
+    if (on !== undefined) { PROF.on = !!on; if (!PROF.on) PROF.ring.length = 0; }
+    var r = PROF.ring, n = r.length, sum = { sim: 0, world: 0, present: 0, ui: 0, render: 0, total: 0 }, mx = 0, totals = [], k;
+    r.forEach(function (c) { for (k in sum) sum[k] += c[k]; mx = Math.max(mx, c.total); totals.push(c.total); });
+    var sorted = totals.slice().sort(function (a, b) { return a - b; }), p95 = n ? rnd2(sorted[Math.min(n - 1, Math.floor(n * 0.95))]) : 0, avg = {}; for (k in sum) avg[k] = n ? rnd2(sum[k] / n) : 0;
+    var wall = n > 1 ? (r[n - 1].t0 - r[0].t0) / (n - 1) : 0, info = renderer.info, mem = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null, lights = 0; scene.traverse(function (o) { if (o.isLight) lights++; });
+    return { on: PROF.on, frames: n, fps: wall ? Math.round(1000 / wall) : null, avg: avg, max: rnd2(mx), p95: p95, samples: r.map(function (c) { return [rnd2(c.sim), rnd2(c.world), rnd2(c.present), rnd2(c.ui), rnd2(c.render), rnd2(c.total)]; }),
+      draws: post.calls || info.render.calls, triangles: post.tris || info.render.triangles, lines: info.render.lines, points: info.render.points, geometries: info.memory.geometries, textures: info.memory.textures, programs: info.programs ? info.programs.length : null, heapMB: mem,
+      counts: { baked: baked.meshes.length, bakedDraws: baked.draws, inter: inter.length, dyn: dyn.length, solids: solids.length, animated: animated.length, lights: lights, props: Object.keys(propInst).length, lightBudget: lightBudget.n, shadows: !!renderer.shadowMap.enabled } };
+  }
+
+  CO.editor = {
+    on: false, drag: false, bind: editorBind,
+    tree: editorTree, children: editorChildren, inspect: editorInspect, set: editorSet, select: editorSelect, pick: editorPick, frame: editorFrame, spawn: editorSpawn, remove: editorRemove, assets: editorAssets, shot: editorShot,
+    mode: editorMode, enter: editorEnter, pause: function (v) { CO.paused = v === undefined ? !CO.paused : !!v; return CO.paused; }, step: function () { CO.stepOnce = true; return 'step'; },
+    selected: function () { return editorSel; }, state: function () { return devState(); }, sfx: function (k) { sfx(k); return k; }, command: function (name, arg) { return devCommand(name, arg); }, log: function (n) { return S && S.log ? S.log.slice(0, n || 30) : []; },
+    undo: editorUndoStep, redo: editorRedoStep, history: editorHistory, get: editorGet,
+    source: editorSource, preview: editorPreview, revert: editorRevert, define: editorDefine, kit: function () { return Object.keys(editorKit()); },
+    profile: editorProfile, adopt: function (type) { delete ORIG_BUILD[type]; return 'ok'; },
+    layout: editorLayout, layoutAdopt: editorLayoutAdopt,
+    setTool: editorSetTool, tool: function () { return editorTool; },
+    setTool: editorSetTool, tool: function () { return editorTool; },
+    terrain: terrainState, terrainY: terrainY, terrainBrush: function (x, z, mode, radius, strength, tex) { if (!TERRAIN.on) return terrainBrush(x, z, mode, radius, strength, tex); var bh = Float32Array.from(TERRAIN.heights), bp = Uint8Array.from(TERRAIN.paint), r = terrainBrush(x, z, mode, radius, strength, tex); if (r && r.changed) { var ah = Float32Array.from(TERRAIN.heights), ap = Uint8Array.from(TERRAIN.paint); histPush('terrain ' + mode, function () { terrainRestore(bh, bp); }, function () { terrainRestore(ah, ap); }); } return r; }, terrainPick: terrainPick, terrainCode: terrainCode, terrainScatter: terrainScatter,
+    terrainNew: function (cfg) { cfg = cfg || {}; var T = CO.terrain({ w: cfg.w || 48, d: cfg.d || 48, cell: cfg.cell || 1, x0: cfg.x0, z0: cfg.z0, palette: cfg.palette, maxH: cfg.maxH }); if (!T.mesh) terrainBuild(); NAV.dirty = true; return terrainState(); },
+    terrainOff: function () { var T = TERRAIN; if (T.mesh) { if (T.mesh.parent) T.mesh.parent.remove(T.mesh); T.mesh = null; } T.on = false; T.heights = null; T.paint = null; NAV.dirty = true; shadowDirty = true; return terrainState(); },
+    materials: matGraphs, material: function (name, graph) { var prev = MATGRAPH[name] ? JSON.parse(JSON.stringify(MATGRAPH[name])) : null, next = JSON.parse(JSON.stringify(graph || {})); matBuild(name, next); histPush('material ' + name, function () { if (prev) matBuild(name, prev); else matRemove(name); }, function () { matBuild(name, next); }); return { ok: true, name: name, shot: matShot(name) }; }, materialShot: matShot, materialCode: matGraphCode, materialRemove: matRemove,
+    clips: clipList, clip: function (name, clip) { if (!name) return { error: 'a clip needs a name' }; var c = CO.clip(name, clip); return { ok: true, name: name, duration: c.duration, tracks: c.tracks.length }; }, clipRemove: function (name) { if (!CLIPS[name]) return false; CO.clip(name, null); return true; }, clipCode: clipCode,
+    clipPlay: function (id, name, opt) { var o = eobj(id); if (!o) return { error: 'no such object ' + id }; if (!CLIPS[name]) return { error: 'no clip ' + name }; var P = playClip(o, name, opt || {}); return P ? { ok: true, name: name, tracks: P.tracks.length, duration: P.clip.duration, loop: P.loop } : { error: 'the clip did not start' }; },
+    clipStop: function (id) { var o = eobj(id); if (o) stopClip(o); return !!o; },
+    clipSeek: function (id, name, t) { var o = eobj(id), c = CLIPS[name]; if (!o || !c) return { error: 'no such object or clip' }; stopClip(o); c.tracks.forEach(function (tr) { var tg = clipTarget(o, tr.path); if (tg) { var v = trackValue(tr.keys, t); if (v !== undefined) tg.set(v); } }); return { ok: true, t: t }; },
+    clipKey: function (id, name, t, ease) { var o = eobj(id); if (!o) return { error: 'no such object ' + id }; var n = clipKeyPose(o, name, +t || 0, ease); return n === null ? { error: 'no clip ' + name } : { ok: true, keyed: n, t: +t || 0 }; },
+    clipPaths: function (id) { var o = eobj(id); if (!o) return []; var u = o.userData || {}, out = ['position.x', 'position.y', 'position.z', 'rotation.x', 'rotation.y', 'rotation.z', 'scale.x', 'scale.y', 'scale.z', 'visible']; if (u.legs) ['leg.0', 'leg.1', 'knee.0', 'knee.1', 'arm.0', 'arm.1', 'elbow.0', 'elbow.1', 'torso', 'head'].forEach(function (p) { out.push(p + '.rotation.x', p + '.rotation.y', p + '.rotation.z'); out.push(p + '.position.y'); }); o.children.forEach(function (ch, i) { if (ch.userData.editor) return; ['rotation.x', 'rotation.y', 'rotation.z', 'position.x', 'position.y', 'position.z'].forEach(function (f) { out.push('child.' + i + '.' + f); }); if (ch.name) out.push('name.' + ch.name + '.rotation.y'); }); return out; },
+    npcs: npcData, npcsCode: npcCode, npcSpawn: npcSpawnNow, npcInfo: npcInfo, npcAim: npcAim, npcClear: npcClear,
+    npcsSet: function (data) { var prev = npcData(), next = JSON.parse(JSON.stringify(data || {})); CO.npcs(next); histPush('NPCs', function () { CO.npcs(prev); }, function () { CO.npcs(next); }); return npcData(); },
+    atMenu: menusAtMenu,
+    menus: menusData, menusCode: menusCode, menusSeed: menusSeed, menusPreview: menusPreview,
+    menusSet: function (data) { var prev = menusData(), next = JSON.parse(JSON.stringify(data || {})); CO.menus(next); histPush('Menus', function () { CO.menus(prev); }, function () { CO.menus(next); }); return menusData(); },
+    ui: uiData, uiSet: function (data) { var prev = uiData(), next = JSON.parse(JSON.stringify(data || {})); CO.ui(next); if (ui.panelOpen) renderPanel(); histPush('UI', function () { CO.ui(prev); }, function () { CO.ui(next); }); return uiData(); },
+    tables: tablesList, tableSet: tableSet, tablesCode: tablesCode, uiCode: uiCode, uiOpen: function (kind) { openPanel(kind); return !!UI.panels[kind]; }, uiEval: uiEval,
+    packCode: function (types) { var ids = (types && types.length ? types : PROP_ORDER.filter(function (id) { return !/^pk[A-Z]/.test(id); })).filter(function (id) { return PROPS[id] && PROPS[id].build; }); var lines = ['//@ a pack made in the Co Engine editor from ' + (CO.game && CO.game.handle || 'a game') + '\'s props. A prop that calls the game\'s own functions needs them in the game it goes to.']; ids.forEach(function (id) { var d = PROPS[id], f = {}; ['label', 'cat', 'wall', 'fixed', 'price', 'desc', 'lvl', 'ico', 'noBlob'].forEach(function (k) { if (d[k] !== undefined) f[k] = d[k]; }); f.extra = true; f.shop = false; var body = JSON.stringify(f); lines.push('  defProp(' + JSON.stringify(id) + ', Object.assign(' + body + ', { build: ' + d.build.toString() + (d.after ? ', after: ' + d.after.toString() : '') + ' }));'); }); return { ids: ids, code: lines.join('\n') + '\n' }; },
+    run: function (code) { var r = closureRun(String(code)); try { return r === undefined ? null : JSON.parse(JSON.stringify(r)); } catch (e) { return String(r); } },
+    model: modelOf, modelPreview: modelPreview, modelStart: modelStart, modelPick: modelPick, modelMirror: modelMirror, modelCode: modelCode, modelConvert: modelConvert, worldCode: worldCode, selection: function () { return editorMulti.slice(); }, duplicate: editorDuplicate, copy: editorCopy, paste: editorPaste, worldCopies: function () { return WORLD_COPIES.slice(); }, worldVariant: function () { return WORLD_VARIANT; }, selectMany: function (ids) { editorMulti = (ids || []).filter(function (k) { return !!eobj(k); }); editorSel = editorMulti[editorMulti.length - 1] || null; editorHelpersShow(); return editorMulti.slice(); }, moveSel: editorMoveSel, removeSel: editorRemoveSel, worldItems: function () { return WORLD_ITEMS.map(function (o) { return { id: eid(o), key: o.userData.worldKey, name: worldName(o), hidden: !o.visible }; }); },
+    physics: physicsState, bodyAdd: function (id, opt) { var o = eobj(id); if (!o) return { error: 'no such object ' + id }; var B = body(o, opt || {}); return { ok: true, id: B.id, size: [B.hx * 2, B.hy * 2, B.hz * 2] }; }, bodyRemove: function (id) { var o = eobj(id); return !!o && removeBody(o); }, impulse: function (id, vx, vy, vz) { var o = eobj(id); return !!o && impulse(o, vx, vy, vz); },
+    springAdd: function (id, opt) { var o = eobj(id); if (!o) return { error: 'no such object ' + id }; var S2 = spring(o, opt || {}); return { ok: true, anchor: S2.anchor, k: S2.k }; }, springRemove: function (id) { var o = eobj(id); return !!o && unspring(o); },
+    drop: editorDrop, hingeAdd: function (id, opt) { var o = eobj(id); if (!o) return { error: 'no such object ' + id }; var H = hinge(o, opt || {}); return { ok: true, pivot: H.pivot, length: H.length, axis: H.axis }; }, hingeRemove: function (id) { var o = eobj(id); return !!o && removeHinge(o); },
+    ids: function () { return { props: Object.keys(propInst), objects: Object.keys(EOBJ) }; }
+  };
+  // ── The prop modeller ─────────────────────────────────────────────
+  // A part: { kind, mat, x, y, z, ry (degrees), name } plus, by kind: box { w, h, d, r (bevel) }, cyl { r, h, seg, rb }, sphere { r },
+  // plane { w, h, rx }, sign { lines, w, h }, light { color, intensity, dist }, solid { w, d, h } (an obstacle, not drawn), hit { w, h, d, prompt }.
+  // A model: { parts: [...], autoSolid: true } (autoSolid adds one obstacle around every box and cylinder that touches the ground).
+  var MODEL_MARK = '/*@model ';
+  function modelFrom(code) { var i = String(code || '').indexOf(MODEL_MARK); if (i < 0) return null; var j = code.indexOf('*/', i); if (j < 0) return null; try { return JSON.parse(code.slice(i + MODEL_MARK.length, j).trim()); } catch (e) { return null; } }
+  function n2(v) { return Math.round((+v || 0) * 1000) / 1000; }
+  function matRef(m) { return /^[A-Za-z_]\w*$/.test(m || '') ? 'MAT.' + m : 'MAT.grey'; }
+  function packMat(pk, path, hex, rough, metal) { var get = CO.packMats && CO.packMats[pk], v = get ? get() : null; String(path).split('.').forEach(function (k) { v = v && typeof v === 'object' ? v[k] : null; }); return v && v.isMaterial ? v : hex ? modelMat(hex, rough === undefined ? 0.8 : rough, metal || 0) : MAT.grey; }
+  function partMat(p) { if (p.img && !p.mat) return 'modelImgMat(' + JSON.stringify(p.img) + ', ' + JSON.stringify(p.color || '#ffffff') + ', ' + (p.basic ? 1 : 0) + ', ' + (p.clear || 0) + ', ' + n2(p.rough === undefined ? 0.8 : p.rough) + ', ' + n2(p.metal || 0) + ')'; if (p.mat && p.mat.indexOf('/') > 0) { var sl = p.mat.indexOf('/'); return 'packMat(' + JSON.stringify(p.mat.slice(0, sl)) + ', ' + JSON.stringify(p.mat.slice(sl + 1)) + (p.color ? ', ' + JSON.stringify(p.color) + ', ' + n2(p.rough === undefined ? 0.8 : p.rough) + ', ' + n2(p.metal || 0) : '') + ')'; } return !p.mat && p.color ? 'modelMat(' + JSON.stringify(p.color) + ', ' + n2(p.rough === undefined ? 0.8 : p.rough) + ', ' + n2(p.metal || 0) + (p.glow || p.opacity !== undefined ? ', ' + JSON.stringify(p.glow || '') : '') + (p.opacity !== undefined ? ', ' + n2(p.opacity) : '') + ')' : matRef(p.mat); }
+  function modelPartCode(p, i) {
+    var x = n2(p.x), y = n2(p.y), z = n2(p.z), ry = (p.rx || p.rz) && p.kind !== 'plane' ? ' p' + i + '.rotation.set(' + n2((p.rx || 0) * Math.PI / 180) + ', ' + n2((p.ry || 0) * Math.PI / 180) + ', ' + n2((p.rz || 0) * Math.PI / 180) + ', "YXZ");' : p.ry ? ' p' + i + '.rotation.y = ' + n2(p.ry * Math.PI / 180) + ';' : '', tag = ' p' + i + '.userData.part = ' + i + ';';
+    if (p.kind === 'box') return p.r ? 'var p' + i + ' = box(' + n2(p.w) + ', ' + n2(p.h) + ', ' + n2(p.d) + ', ' + partMat(p) + ', ' + x + ', ' + y + ', ' + z + ', { parent: c.group, r: ' + n2(p.r) + ' });' + ry + tag : 'var p' + i + ' = c.box(' + n2(p.w) + ', ' + n2(p.h) + ', ' + n2(p.d) + ', ' + partMat(p) + ', ' + x + ', ' + y + ', ' + z + ');' + ry + tag;
+    if (p.kind === 'mesh') { var vs = (p.verts || []).map(function (q) { return [n2(q[0]), n2(q[1]), n2(q[2])]; }), fs = (p.faces || []).map(function (q) { return [q[0] | 0, q[1] | 0, q[2] | 0]; }); return 'var p' + i + ' = (function () { var V = ' + JSON.stringify(vs) + ', F = ' + JSON.stringify(fs) + ', pos = [], map = []; F.forEach(function (f) { f.forEach(function (k) { pos.push(V[k][0], V[k][1], V[k][2]); map.push(k); }); }); var geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals(); var m = new THREE.Mesh(geo, ' + partMat(p) + '); m.castShadow = m.receiveShadow = true; m.userData.vertexEdit = true; m.userData.vertMap = map; return c.add(m); })(); p' + i + '.position.set(' + x + ', ' + y + ', ' + z + ');' + ry + tag; }
+    if (p.kind === 'lathe') return 'var p' + i + ' = c.add(new THREE.Mesh(new THREE.LatheGeometry(' + JSON.stringify((p.points || [[0.3, 0], [0.4, 0.5], [0.2, 1]]).map(function (q) { return [n2(q[0]), n2(q[1])]; })) + '.map(function (q) { return new THREE.Vector2(q[0], q[1]); }), ' + (p.seg || 24) + '), ' + partMat(p) + ')); p' + i + '.position.set(' + x + ', ' + y + ', ' + z + '); p' + i + '.castShadow = p' + i + '.receiveShadow = true;' + ry + tag;
+    if (p.kind === 'extrude') return 'var p' + i + ' = c.add(new THREE.Mesh(new THREE.ExtrudeGeometry(new THREE.Shape(' + JSON.stringify((p.shape || [[-0.5, 0], [0.5, 0], [0, 0.8]]).map(function (q) { return [n2(q[0]), n2(q[1])]; })) + '.map(function (q) { return new THREE.Vector2(q[0], q[1]); })), { depth: ' + n2(p.depth || 0.2) + ', bevelEnabled: false }), ' + partMat(p) + ')); p' + i + '.position.set(' + x + ', ' + y + ', ' + z + '); p' + i + '.castShadow = p' + i + '.receiveShadow = true;' + ry + tag;
+    if (p.kind === 'cyl') return 'var p' + i + ' = c.cyl(' + n2(p.r) + ', ' + n2(p.h) + ', ' + partMat(p) + ', ' + x + ', ' + y + ', ' + z + (p.seg || p.rb ? ', ' + (p.seg || 16) + (p.rb ? ', ' + n2(p.rb) : '') : '') + ');' + ry + tag;
+    if (p.kind === 'sphere') return 'var p' + i + ' = c.sphere(' + n2(p.r) + ', ' + partMat(p) + ', ' + x + ', ' + y + ', ' + z + ');' + tag;
+    if (p.kind === 'plane') return 'var p' + i + ' = c.plane(' + n2(p.w) + ', ' + n2(p.h) + ', ' + partMat(p) + ', ' + x + ', ' + y + ', ' + z + ', ' + n2((p.rx || 0) * Math.PI / 180) + ', ' + n2((p.ry || 0) * Math.PI / 180) + ');' + tag;
+    if (p.kind === 'sign') return 'var p' + i + ' = c.sign(' + JSON.stringify(p.lines || ['SIGN']) + ', ' + n2(p.w || 1) + ', ' + n2(p.h || 0.4) + ', ' + x + ', ' + y + ', ' + z + ', ' + n2((p.ry || 0) * Math.PI / 180) + (p.opt ? ', ' + JSON.stringify(p.opt) : '') + ');' + (' if (p' + i + ' && p' + i + '.userData) p' + i + '.userData.part = ' + i + ';');
+    if (p.kind === 'light') return 'var p' + i + ' = c.light(' + JSON.stringify(p.color || '#ffd9a0') + ', ' + n2(p.intensity || 1) + ', ' + n2(p.dist || 8) + ', ' + x + ', ' + y + ', ' + z + ');' + tag;
+    if (p.kind === 'solid') return 'c.solid(' + n2(x - p.w / 2) + ', ' + n2(x + p.w / 2) + ', ' + n2(z - p.d / 2) + ', ' + n2(z + p.d / 2) + ', ' + n2(y) + ', ' + n2(y + p.h) + ');';
+    if (p.kind === 'hit') return 'c.hit(' + n2(p.w) + ', ' + n2(p.h) + ', ' + n2(p.d) + ', ' + x + ', ' + y + ', ' + z + ', { prompt: function () { return ' + JSON.stringify(p.prompt || 'Use it') + '; }, use: function () { toast(' + JSON.stringify(p.prompt || 'Used') + ', ""); } });';
+    return '';
+  }
+  function modelCode(model) {
+    model = model || { parts: [] }; var lines = ['function (c, P, inst) {', '  ' + MODEL_MARK + JSON.stringify(model) + ' */'];
+    (model.parts || []).forEach(function (p, i) { var l = modelPartCode(p, i); if (l) lines.push('  ' + l); });
+    if (model.autoSolid !== false) (model.parts || []).forEach(function (p) { if ((p.kind === 'box' || p.kind === 'cyl') && n2(p.y) - (p.kind === 'box' ? p.h : p.h) / 2 < 0.3) { var hw = p.kind === 'box' ? p.w / 2 : p.r, hd = p.kind === 'box' ? p.d / 2 : p.r, top = n2(p.y) + p.h / 2; lines.push('  c.solid(' + n2(p.x - hw) + ', ' + n2(p.x + hw) + ', ' + n2(p.z - hd) + ', ' + n2(p.z + hd) + ', 0, ' + n2(top) + ');'); } });
+    lines.push('}'); return lines.join('\n');
+  }
+  function modelOf(type) { var def = PROPS[type]; if (!def || !def.build) return { error: 'no prop definition ' + type }; var src = def.build.toString(), m = modelFrom(src); return { type: type, model: m, modelled: !!m, code: src, mats: modelMatList(m) }; }
+  function modelMatList(m) { var out = Object.keys(MAT).filter(function (k) { return k !== 'hit'; }); ((m && m.parts) || []).forEach(function (p) { if (p.mat && out.indexOf(p.mat) < 0) out.push(p.mat); }); return out; }
+  function modelPreview(type, model) { var code = modelCode(model); var r = editorPreview(type, code); r.code = code; return r; }
+  function modelStart(type) { var def = PROPS[type]; if (!def) return { error: 'no prop definition ' + type }; var m = { parts: [{ kind: 'box', mat: 'wood', x: 0, y: 0.5, z: 0, w: 1, h: 1, d: 1, ry: 0 }], autoSolid: true }; return modelPreview(type, m).ok ? { ok: true, model: m, code: modelCode(m) } : { error: 'the first box did not build' }; }
+  // which part of a modelled prop is under a viewport point
+  function modelPick(type, nx, ny) { var ids = propTypeIds(type); scene.updateMatrixWorld(true); eRay.setFromCamera({ x: nx || 0, y: ny || 0 }, camera); eRay.far = 120; for (var k = 0; k < ids.length; k++) { var inst = propInst[ids[k]]; if (!inst) continue; var hits = eRay.intersectObject(inst.g, true); for (var i = 0; i < hits.length; i++) { var o = hits[i].object; while (o && o !== inst.g) { if (o.userData && o.userData.part !== undefined) return { part: o.userData.part, id: ids[k], distance: rnd(hits[i].distance) }; o = o.parent; } } } return null; }
+  function modelMirror(model, axis) { var m = JSON.parse(JSON.stringify(model)); m.parts.forEach(function (p) { if (axis === 'z') { p.z = -n2(p.z); if (p.ry) p.ry = -p.ry; if (p.rx) p.rx = -p.rx; if (p.verts) p.verts.forEach(function (v) { v[2] = -v[2]; }); } else { p.x = -n2(p.x); if (p.ry) p.ry = -p.ry; if (p.rz) p.rz = -p.rz; if (p.verts) p.verts.forEach(function (v) { v[0] = -v[0]; }); } if (p.faces) p.faces.forEach(function (f) { var s = f[1]; f[1] = f[2]; f[2] = s; }); }); return m; }
+  // ── Parts from a prop drawn in code (0.8.0) ──────────────────────
+  // The selected prop's placed copy is read back as a model: every box, cylinder, sphere and plane keeps its size and turn, a sign
+  // keeps its lines, a light its colour, a use box its prompt, an obstacle becomes a solid, and any other shape becomes a mesh of
+  // its corners (vertex drag works on it). A material the palette names keeps its name; any other keeps its colour, roughness,
+  // metalness and glow (a picture or a texture drawn in code becomes its plain colour). Nothing is built to read it: the copy that
+  // stands is what is read, so no stray uses or screens are left behind.
+  var modelMats = {}, modelImgs = {};
+  // a picture drawn in code, carried in the model as a PNG (at most 512 px a side) and made into a material once per picture
+  function modelImgMat(src, hex, basic, clear, rough, metal) {
+    var k = src.length + ':' + src.slice(-48) + hex + basic + clear + rough + metal; if (modelImgs[k]) return modelImgs[k];
+    var t = new THREE.TextureLoader().load(src); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+    var o = { map: t, color: new THREE.Color(hex), transparent: !!clear, opacity: typeof clear === 'number' && clear > 0 && clear < 1 ? clear : 1 }; return (modelImgs[k] = basic ? new THREE.MeshBasicMaterial(o) : std(Object.assign(o, { roughness: rough, metalness: metal })));
+  }
+  function imgOf(map) { var im = map && map.image; if (!im || !(im.width > 0) || !(im.height > 0)) return null; try { var s = Math.min(1, 512 / Math.max(im.width, im.height)), cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(im.width * s)); cv.height = Math.max(1, Math.round(im.height * s)); cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height); return cv.toDataURL('image/png'); } catch (e) { return null; } }
+  function modelMat(hex, rough, metal, glow, opacity) { var see = typeof opacity === 'number' && opacity < 1, k = hex + ',' + rough + ',' + metal + ',' + (glow || '') + ',' + (see ? opacity : ''); if (!modelMats[k]) modelMats[k] = std({ color: new THREE.Color(hex), roughness: rough, metalness: metal, emissive: glow ? new THREE.Color(glow) : new THREE.Color(0), emissiveIntensity: glow ? 1 : 0, transparent: see, opacity: see ? opacity : 1, depthWrite: !see }); return modelMats[k]; }
+  // which pack names a material: a carried variable, or an entry of a table or a cache one holds ("growco/MAT.wood", "depotco/FABRIC")
+  function packMatName(m) {
+    if (!m || !CO.packMats) return null;
+    for (var pk in CO.packMats) { var vals; try { vals = CO.packMats[pk](); } catch (e) { continue; }
+      for (var k in vals) { var v = vals[k]; if (!v || typeof v !== 'object') continue; if (v === m) return pk + '/' + k; if (v.isMaterial || v.isTexture || v.isObject3D || v.isBufferGeometry) continue;
+        var ks = Object.keys(v); if (ks.length > 4000) continue; for (var j = 0; j < ks.length; j++) if (v[ks[j]] === m && /^[\w$]+$/.test(ks[j])) return pk + '/' + k + '.' + ks[j]; } }
+    return null;
+  }
+  function modelConvert(type) {
+    var def = PROPS[type]; if (!def) return { error: 'no prop definition ' + type };
+    var ids = propTypeIds(type), inst = null; for (var k = 0; k < ids.length && !inst; k++) inst = propInst[ids[k]] || null;
+    if (!inst) return { error: 'place a ' + (def.label || type) + ' first: the parts are read from a copy that stands' };
+    var root = inst.g; root.updateMatrixWorld(true);
+    var inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), M = new THREE.Matrix4(), pos = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), eu = new THREE.Euler(), D = 180 / Math.PI;
+    var parts = [], stats = { box: 0, cyl: 0, sphere: 0, plane: 0, sign: 0, mesh: 0, light: 0, hit: 0, solid: 0, colour: 0, skipped: 0 }, skip = [];
+    function near0(a) { return Math.abs(a) < 1e-3; }
+    function hex(c) { return '#' + c.getHexString(); }
+    function matOf(m, p) {
+      if (Array.isArray(m)) m = m[0];
+      for (var key in MAT) if (MAT[key] === m) { p.mat = key; return; }
+      var pm = packMatName(m); if (pm) { p.mat = pm; if (m.color) { p.color = hex(m.color); p.rough = typeof m.roughness === 'number' ? n2(m.roughness) : 0.8; p.metal = typeof m.metalness === 'number' ? n2(m.metalness) : 0; } stats.pack = (stats.pack || 0) + 1; return; }
+      if (m && m.map && m.map !== (typeof blobTex !== 'undefined' ? blobTex : null)) { var img = imgOf(m.map); if (img) { p.img = img; p.basic = !!m.isMeshBasicMaterial; p.clear = m.transparent ? (m.opacity < 1 ? n2(m.opacity) : 1) : 0; stats.picture = (stats.picture || 0) + 1; } }
+      if (!p.img) stats.colour++; p.color = m && m.color ? hex(m.color) : '#888888'; p.rough = m && typeof m.roughness === 'number' ? n2(m.roughness) : 0.8; p.metal = m && typeof m.metalness === 'number' ? n2(m.metalness) : 0;
+      if (m && m.emissive && m.emissive.getHex() && (m.emissiveIntensity || 0) > 0) p.glow = hex(m.emissive.clone().multiplyScalar(Math.min(1, m.emissiveIntensity)));
+      if (m && m.transparent && m.opacity < 1) p.opacity = n2(m.opacity);
+    }
+    // a shape whose corners were moved after it was made (a bent frond, a tapered leg) is only what its numbers say if its bounds agree
+    function shapeHolds(g, t, P) {
+      var b = new THREE.Box3().setFromBufferAttribute(g.attributes.position), ok = function (v, w) { return Math.abs(v - w) < 2e-3; };
+      if (t === 'BoxGeometry') return ok(b.min.x, -P.width / 2) && ok(b.max.x, P.width / 2) && ok(b.min.y, -P.height / 2) && ok(b.max.y, P.height / 2) && ok(b.min.z, -P.depth / 2) && ok(b.max.z, P.depth / 2);
+      if (t === 'CylinderGeometry') { var rm = Math.max(P.radiusTop, P.radiusBottom); return ok(b.min.y, -P.height / 2) && ok(b.max.y, P.height / 2) && b.max.x <= rm + 2e-3 && b.max.x >= rm * 0.7 && b.max.z <= rm + 2e-3; }
+      if (t === 'SphereGeometry') return ok(b.max.y, P.radius) && ok(b.min.y, -P.radius) && ok(b.max.x, P.radius);
+      if (t === 'PlaneGeometry') return ok(b.min.x, -P.width / 2) && ok(b.max.x, P.width / 2) && ok(b.min.y, -P.height / 2) && ok(b.max.y, P.height / 2) && ok(b.min.z, 0) && ok(b.max.z, 0);
+      return false;
+    }
+    function under(o, list) { for (var a = o.parent; a && a !== root; a = a.parent) if (list.indexOf(a) >= 0) return true; return false; }
+    root.traverse(function (o) {
+      if (o === root || under(o, skip)) return;
+      for (var a = o; a && a !== root; a = a.parent) if (a.visible === false && !a.userData.bakedAway && !(a.isMesh && a.material === MAT.hit)) return;   /* a piece the static bake merged away is hidden but still part of the prop */
+      M.multiplyMatrices(inv, o.matrixWorld); M.decompose(pos, q, sc);
+      var x = n2(pos.x), y = n2(pos.y), z = n2(pos.z);
+      if (o.isPointLight) { parts.push({ kind: 'light', color: hex(o.color), intensity: n2(o.intensity), dist: n2(o.distance || 8), x: x, y: y, z: z }); stats.light++; return; }
+      if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || !o.geometry || (blobMat && o.material === blobMat)) return;   /* the contact shadow is the engine's, laid again under the rebuilt prop */
+      var g = o.geometry, P = g.parameters || {}, t = g.type, p = null;
+      if (o.material === MAT.hit || (o.material && o.material.visible === false)) {
+        if (t !== 'BoxGeometry') return; var it = o.userData.it, pr = null; try { pr = it && (typeof it.prompt === 'function' ? it.prompt() : it.prompt); } catch (e) {}
+        parts.push({ kind: 'hit', w: n2(P.width * sc.x), h: n2(P.height * sc.y), d: n2(P.depth * sc.z), x: x, y: y, z: z, prompt: typeof pr === 'string' && pr ? pr : 'The ' + (def.label || type) }); stats.hit++; return;
+      }
+      var R = new THREE.Matrix4().compose(pos, q, sc), sheared = false; for (var e = 0; e < 16; e++) if (Math.abs(R.elements[e] - M.elements[e]) > 1e-4) sheared = true;   /* a turn under a stretched parent skews: only a mesh holds that */
+      eu.setFromQuaternion(q, 'YXZ'); var upright = near0(eu.x) && near0(eu.z);
+      if (o.userData.sign && t === 'PlaneGeometry' && upright && !sheared && shapeHolds(g, t, P)) { skip.push(o); p = { kind: 'sign', lines: o.userData.sign.lines, w: n2(P.width * sc.x), h: n2(P.height * sc.y), x: x, y: y, z: z, ry: n2(eu.y * D) }; if (o.userData.sign.opt) p.opt = o.userData.sign.opt; parts.push(p); stats.sign++; return; }
+      if (sheared || !shapeHolds(g, t, P)) p = null;
+      else if (t === 'BoxGeometry') p = { kind: 'box', w: n2(P.width * Math.abs(sc.x)), h: n2(P.height * Math.abs(sc.y)), d: n2(P.depth * Math.abs(sc.z)) };
+      else if (t === 'CylinderGeometry' && Math.abs(sc.x - sc.z) < 1e-3) { p = { kind: 'cyl', r: n2(P.radiusTop * sc.x), h: n2(P.height * sc.y), seg: P.radialSegments }; if (Math.abs(P.radiusBottom - P.radiusTop) > 1e-4) p.rb = n2(P.radiusBottom * sc.x); }
+      else if (t === 'SphereGeometry' && Math.abs(sc.x - sc.y) < 1e-3 && Math.abs(sc.x - sc.z) < 1e-3 && upright) p = { kind: 'sphere', r: n2(P.radius * sc.x) };
+      else if (t === 'PlaneGeometry') { var ex = new THREE.Euler().setFromQuaternion(q, 'XYZ'); if (near0(ex.z)) { p = { kind: 'plane', w: n2(P.width * sc.x), h: n2(P.height * sc.y), x: x, y: y, z: z, rx: n2(ex.x * D), ry: n2(ex.y * D) }; matOf(o.material, p); parts.push(p); stats.plane++; return; } p = null; }
+      if (p) { p.x = x; p.y = y; p.z = z; if (!near0(eu.y)) p.ry = n2(eu.y * D); if (!upright) { p.rx = n2(eu.x * D); p.rz = n2(eu.z * D); } matOf(o.material, p); parts.push(p); stats[p.kind]++; return; }
+      // any other shape: a mesh of its corners in the prop's own space, a corner shared where faces meet
+      var pa = g.attributes && g.attributes.position; if (!pa || pa.count > 6000) { stats.skipped++; return; }
+      var V = [], F = [], seen = {}, v = new THREE.Vector3(), idx = g.index, flip = M.determinant() < 0;
+      var vid = function (i) { v.fromBufferAttribute(pa, i).applyMatrix4(M); var key = n2(v.x) + ',' + n2(v.y) + ',' + n2(v.z); if (seen[key] === undefined) { seen[key] = V.length; V.push([n2(v.x), n2(v.y), n2(v.z)]); } return seen[key]; };
+      var n = idx ? idx.count : pa.count; for (var f = 0; f + 2 < n; f += 3) { var a0 = vid(idx ? idx.getX(f) : f), a1 = vid(idx ? idx.getX(f + 1) : f + 1), a2 = vid(idx ? idx.getX(f + 2) : f + 2); if (a0 !== a1 && a1 !== a2 && a0 !== a2) F.push(flip ? [a0, a2, a1] : [a0, a1, a2]); }
+      if (!F.length) return; p = { kind: 'mesh', x: 0, y: 0, z: 0, verts: V, faces: F }; matOf(o.material, p); parts.push(p); stats.mesh++;
+    });
+    (inst.ctx && inst.ctx.obstacles || []).forEach(function (ob) { parts.push({ kind: 'solid', w: n2(ob.x1 - ob.x0), d: n2(ob.z1 - ob.z0), h: n2(ob.y1 - ob.y0), x: n2((ob.x0 + ob.x1) / 2), y: n2(ob.y0), z: n2((ob.z0 + ob.z1) / 2) }); stats.solid++; });
+    if (!parts.length) return { error: (def.label || type) + ' has nothing to read back' };
+    var model = { parts: parts, autoSolid: false }, r = modelPreview(type, model);
+    if (!r.ok) return { error: 'the parts did not build: ' + r.error };
+    return { ok: true, model: model, code: r.code, stats: stats, mats: modelMatList(model) };
+  }
+  // ── Boot ──────────────────────────────────────────────────────────
+  // The game's last part calls CO.boot(GAME). GAME carries the hooks (they merge into CO.game) and these steps, every one optional:
+  //   freshState()             the game's default S              migrate(s, fresh)      its save migrations
+  //   afterLoad(loaded)        repairs on S before the world      buildWorld(loaded)     the walls, the props (buildProps), the people
+  //   afterBuild(loaded)       meshes for the saved things        startStats(loaded)     the start screen chips, as strings
+  //   startNote(loaded)        the line under the chips           onEnter(loaded)        the first thing after the start button
+  //   tick(dt)                 the world, once a frame while running    present(dt)     the game's own per-frame presentation
+  //   menuCamera(dt)           the camera behind the start screen       hiddenTick(dt)  what still ticks in a hidden tab
+  //   T                        what the game adds to the test handle    handle          the window property ('DEPOT')
+  //   bake false               skip the static bake                     weather false   no weather state machine
+  //   autoplay false           the game's own front menu handles the autoplay flag
+  //   input false (in CO.setup)  the game binds its own keys and mouse;  editMode false, photo false, lighting false, hudFields false: those engine passes stay off
+  //   render(dt)               the game draws the frame itself (return true)
+  var loaded = false, autosaveT = 0, fpsN = 0, fpsT = 0, lastFrame = 0;
+  function coBoot(GAME) {
+    GAME = GAME || {}; if (!CO.game) CO.game = {}; for (var k in GAME) if (!(k in CO.game)) CO.game[k] = GAME[k]; CO.gameVersion = GAME.version || window[GAME.versionGlobal || 'GAME_VERSION'] || CO.gameVersion;
+    loaded = loadSave(GAME.freshState || function () { return { day: 1, time: CAL.dayStart, bank: 0, log: [], ledger: [], stats: { earned: 0, spent: 0 }, layout: {}, custom: [], hdoors: {} }; }, GAME.migrate);
+    if (GAME.afterLoad) GAME.afterLoad(loaded);
+    layoutPick();   // part 20: the layout of the world this page builds (GAME.worldVariant), before anything is built
+    runHooks('beforeBuild', loaded);
+    terrainBuild();
+    if (GAME.buildWorld) GAME.buildWorld(loaded);
+    runHooks('afterBuild', loaded);
+    if (GAME.afterBuild) GAME.afterBuild(loaded);
+    worldEditsApply();   // part 26: what the editor moved, resized or removed of the world, before the bake
+    applySettings(); resize();
+    if (GAME.bake !== false && !/nobake=1/.test(location.search)) bakeStatic();
+    if (!GAME.menuCamera) { camera.position.set(12, 3.6, 0); camera.lookAt(0, 1.4, 0); }   // a game with a menu camera of its own places the camera itself
+    var st = $('dc-start-stats'); if (st) st.innerHTML = (GAME.startStats ? GAME.startStats(loaded) : (UI.start.length ? uiStartChips() : [loaded ? 'Day ' + S.day : 'New game'])).map(function (s) { return '<span>' + esc(s) + '</span>'; }).join('');
+    var sn = $('dc-start-note'); if (sn) sn.textContent = GAME.startNote ? GAME.startNote(loaded) : ('Slot ' + BOOT_SLOT + (loaded ? ' · last saved ' + (S.savedAt ? new Date(S.savedAt).toLocaleString() : 'never') : ''));
+    var sb = $('dc-start-btn'); if (sb) sb.addEventListener('click', enter);
+    requestAnimationFrame(frame);
+    // a hidden tab gets no animation frames; the world still ticks ten times a second
+    setInterval(function () { if (!document.hidden) return; var n = performance.now(), dt = Math.min(0.05, Math.max(0.001, (n - lastFrame) / 1000)); lastFrame = n; worldTime += dt; if (ui.started && !ui.blocked() && !photo.on) { if (CO.game.tick) CO.game.tick(dt); updatePlayer(dt); doorsTick(dt); if (CO.game.hiddenTick) CO.game.hiddenTick(dt); scene.updateMatrixWorld(true); updateFocus(); updatePrompt(); } }, 50);
+    window.addEventListener('beforeunload', function () { if (ui.started) saveNow(); });
+    var handle = { enter: enter, bootSlot: BOOT_SLOT, version: CO.gameVersion || 'dev', engine: CO.version, T: coHandle() };
+    if (GAME.T) { var gt = typeof GAME.T === 'function' ? GAME.T() : GAME.T; for (var tk in gt) handle.T[tk] = gt[tk]; }
+    window[GAME.handle || 'CO_GAME'] = handle; CO.handle = handle; window.CO_EDITOR = CO.editor;   // the editor and the MCP server reach the bridge here, outside the closure
+    if (/[?&]editor=1/.test(location.search)) { CO.editor.on = true; CO.editor.bind(); }   // opened in the editor's viewport: clicks select, the right button flies
+    // <prefix>-autoplay in sessionStorage (or ?autoplay=1) presses the start button on the first frame; GAME.autoplay false leaves
+    // the flag to the game's own front menu, which reads and presses it itself
+    if (GAME.autoplay !== false) { var auto = false; try { auto = sessionStorage.getItem(CO.save.prefix + '-autoplay') === '1'; if (auto) sessionStorage.removeItem(CO.save.prefix + '-autoplay'); } catch (e) {} if (auto || /[?&]autoplay=1/.test(location.search)) setTimeout(enter, 50); }
+    runHooks('boot', loaded);
+    return handle;
+  }
+  function enter() {
+    if (ui.started) return;
+    ui.started = true; var s = $('dc-start'); if (s) s.hidden = true; var h = $('dc-hud'); if (h) h.hidden = false; hudDirty = true;
+    lockPointer(); sfx('ok');
+    if (CO.game.onEnter) CO.game.onEnter(loaded);
+    if (/[?&]dev=1/.test(location.search) && !devLink.on) devLinkToggle();
+    runHooks('enter', loaded);
+  }
+  // ── The frame loop ────────────────────────────────────────────────
+  function frame(nowMs) {
+    requestAnimationFrame(frame);
+    var dt = Math.min(0.05, Math.max(0.001, (nowMs - lastFrame) / 1000)); lastFrame = nowMs;
+    // paused by the editor: the world holds, the scene camera still flies, the frame still draws; one step runs a single frame through
+    if (CO.paused && !CO.stepOnce) { if (photo.on && CO.game.photo !== false) photoTick(dt); updateLightBudget(); shadowTick(dt); if (!(CO.game.render && CO.game.render(dt))) renderFrame(dt); return; }
+    CO.stepOnce = false; profBegin(); var pf = PROF.on ? performance.now() : 0;
+    if (!ui.started) { if (CO.game.menuCamera) CO.game.menuCamera(dt); else { var ma = worldTime * 0.07; camera.position.set(Math.cos(ma) * 12, 3.6 + Math.sin(ma * 1.7) * 0.6, Math.sin(ma) * 9.5); camera.lookAt(Math.cos(ma + 1.2) * 4, 1.4, Math.sin(ma + 1.2) * 3); } }
+    if (ui.started && !ui.blocked()) { if (photo.on && CO.game.photo !== false) photoTick(dt); else { if (CO.game.tick) CO.game.tick(dt); if (CO.game.weather !== false) tickWeatherState(dt); updatePlayer(dt); } autosaveT += dt; if (autosaveT > 30) { autosaveT = 0; save(); } }
+    profMark('sim', pf); pf = PROF.on ? performance.now() : 0;
+    worldTime += dt;
+    if (CO.game.lighting !== false) lighting(dt); updateLightBudget(); shadowTick(dt); if (sky.dome || sky.rain) tickSky(dt); tickBursts(dt); doorsTick(dt); drawScreens(dt); editTick(); tickTraffic(dt); npcsTick(dt);
+    profMark('world', pf); pf = PROF.on ? performance.now() : 0;
+    if (CO.game.present) CO.game.present(dt); runHooks('frame', dt);
+    for (var ai = 0; ai < animated.length; ai++) animated[ai](dt);
+    profMark('present', pf); pf = PROF.on ? performance.now() : 0;
+    updateFocus(); updatePrompt(); updateHud(dt); tickCards(dt); tickDevLink(dt);
+    profMark('ui', pf); pf = PROF.on ? performance.now() : 0;
+    if (!(CO.game.render && CO.game.render(dt))) renderFrame(dt);
+    profMark('render', pf); profEnd();   // a game may render the frame itself (a security camera view, a picture in picture)
+    if (SET.fps) { fpsN++; fpsT += dt; if (fpsT >= 0.5) { var f = $('h-fps'); if (f) f.textContent = Math.round(fpsN / fpsT) + ' fps · ' + (post.calls || renderer.info.render.calls) + ' draws'; fpsN = 0; fpsT = 0; } }
+  }
+  // ── The handle: the engine's part of window.<handle>.T, for the editor and the smoke tests ──
+  function coHandle() {
+    return {
+      get S() { return S; }, CO: CO, editor: CO.editor, player: player, ui: ui, edit: edit, photo: photo, SET: SET, scene: scene, camera: camera, renderer: renderer, baked: baked, MAT: MAT, TEX: TEX, NRM: NRM, solids: solids, dyn: dyn, inter: inter, screens: screens, hdoors: hdoors, lampMeshes: lampMeshes, sky: sky, NAV: NAV, PROPS: PROPS, propInst: propInst, HOOKS: HOOKS,
+      run: function (sec) { var n = Math.round(sec / 0.05); for (var i = 0; i < n; i++) { if (CO.game.tick) CO.game.tick(0.05); if (CO.game.step) CO.game.step(0.05); } scene.updateMatrixWorld(true); },
+      setTime: function (h) { S.time = h; hudDirty = true; },
+      save: save, saveNow: saveNow, loadSave: loadSave, pay: pay, enter: enter, floorY: floorY, route: route, navFreeAt: navFreeAt, collides: collides, updatePlayer: updatePlayer, updateFocus: updateFocus, useFocus: useFocus, focusText: function () { return focusText; },
+      lookAt: function (x, y, z) { camera.position.set(player.x, player.y + 1.62, player.z); camera.lookAt(x, y, z); camera.updateMatrixWorld(true); player.yaw = Math.atan2(-(x - player.x), -(z - player.z)); player.pitch = Math.atan2(y - camera.position.y, Math.sqrt(dist2(x, z, player.x, player.z))); updateFocus(); return focusText; },
+      buildProp: buildProp, buildProps: buildProps, propPlacement: propPlacement, propWorld: propWorld, removePropInst: removePropInst, catalogueData: catalogueData, editToggle: editToggle, editGrab: editGrab, editDrop: editDrop, editRotate: editRotate, editReset: editReset, editRemove: editRemove, editRestore: editRestore, editBuy: editBuy,
+      panelAct: panelAct, hd: hd, doorById: doorById, doorUse: doorUse, doorLock: doorLock, doorsTick: doorsTick, doorSolids: doorSolids, lockAll: lockAll, drawScreens: drawScreens, screenTap: screenTap, screenZoneAt: screenZoneAt, screenDirtyAll: screenDirtyAll,
+      openPanel: openPanel, closePanel: closePanel, renderPanel: renderPanel, panelHtml: function () { var b = $('dc-panel-body'); return b ? b.innerHTML : ''; }, openMenu: openMenu, closeMenu: closeMenu, menuAct: menuAct, settingsHtml: settingsHtml, applySettings: applySettings, showCard: showCard, hideCards: hideCards,
+      photoToggle: photoToggle, photoTick: photoTick, photoZoom: photoZoom, updateHud: updateHud, toast: toast, logEvent: logEvent, sfx: sfx,
+      devCommand: devCommand, devCommandList: devCommandList, devLink: devLink, devLinkToggle: devLinkToggle, devState: devState,
+      THREE: THREE, makeHuman: makeHuman, animateHuman: animateHuman, say: say, setMood: setMood, walkAlong: walkAlong, carMesh: carMesh, trafficAdd: trafficAdd, driveStep: driveStep, vehicleBlocked: vehicleBlocked,
+      pickWeather: pickWeather, tickWeatherState: tickWeatherState, lighting: lighting, buildSky: buildSky, season: season, isSunday: isSunday, nowAbs: nowAbs,
+      bakeStatic: bakeStatic, unbakeStatic: unbakeStatic, rebake: rebake, renderFrame: renderFrame, post: post, resize: resize,
+      propSeed: propSeed, seededF: seededF, mixHex: mixHex, fmtTime: fmtTime, money: money, hook: hook, runHooks: runHooks,
+      counts: function () { return { draws: (post.calls || renderer.info.render.calls), inter: inter.length, dyn: dyn.length, baked: baked.draws, hidden: baked.hidden }; }
+    };
+  }
+  CO.boot = coBoot;
+  CO.layout({
+    props: {
+      "pkBed": { x: -13.2, z: 36.45, rot: 0, h: 0, hidden: true },
+      "pkBench": { x: -11.9, z: 21.4, rot: 1, h: 0, hidden: true },
+      "pkBin": { x: -6.05, z: 25.95, rot: 0, h: 0, hidden: true },
+      "pkLamp": { x: -7, z: 24, rot: 0, h: 0, hidden: true },
+      "pkTree": { x: -15.95, z: 24.05, rot: 0, h: 0, hidden: true },
+    },
+    placed: [
+    ]
+  });
+  CO.material("pk-stone", {"size":512,"repeat":[3,3],"layers":[{"type":"fill","color":"#b8b6b0"},{"type":"grain","alpha":0.1},{"type":"cracks","color":"#505048","n":25,"sz":120}],"roughness":0.9,"metalness":0.1,"bump":{"amp":24,"strength":0.9}});
+  CO.material("pk-plaster-rich", {"size":512,"repeat":[2,2],"layers":[{"type":"fill","color":"#e9e6dc"},{"type":"grain","alpha":0.1},{"type":"grain","alpha":0.05,"dark":true}],"roughness":0.93,"metalness":0.02,"bump":{"amp":4,"strength":0.35}});
+  CO.material("pk-wood-rich", {"size":512,"repeat":[2,1],"layers":[{"type":"fill","color":"#a07850"},{"type":"grain","alpha":0.3},{"type":"planks","color":"#9c7349","color2":"#7c5836","size":64,"vary":true,"gap":2}],"roughness":0.85,"metalness":0.05,"bump":{"amp":12,"strength":0.6}});
+  CO.material("pk-glass-rich", {"size":128,"repeat":[1,1],"layers":[{"type":"fill","color":"#b8c8d8","alpha":0.85}],"roughness":0.15,"metalness":0.05,"transparent":true,"opacity":0.85});
+  CO.material("pk-metal-rich", {"size":256,"repeat":[1,1],"layers":[{"type":"fill","color":"#4a5058"},{"type":"grain","alpha":0.25},{"type":"speckle","color":"#2a2d33","n":2000}],"roughness":0.4,"metalness":0.8,"bump":{"amp":8,"strength":0.4}});
+  CO.menus({
+    "start": {
+      "title": "Park Co",
+      "subtitle": "Sell the tickets, work the ride, keep the queue moving.",
+      "buttons": [
+        {
+          "label": "Play",
+          "action": "play",
+          "primary": true
+        },
+        {
+          "label": "Settings",
+          "action": "settings"
+        },
+        {
+          "label": "How to play",
+          "action": "guide"
+        },
+        {
+          "label": "Save slots",
+          "action": "slots"
+        },
+        {
+          "label": "Quit",
+          "action": "quit"
+        }
+      ]
+    },
+    "pause": {
+      "title": "Paused",
+      "buttons": [
+        {
+          "label": "Resume",
+          "action": "resume",
+          "primary": true
+        },
+        {
+          "label": "Settings",
+          "action": "settings"
+        },
+        {
+          "label": "How to play",
+          "action": "guide"
+        },
+        {
+          "label": "Build mode",
+          "action": "edit"
+        },
+        {
+          "label": "Save file",
+          "action": "saves"
+        },
+        {
+          "label": "Main menu",
+          "action": "quit"
+        }
+      ]
+    },
+    "settings": {
+      "hide": [],
+      "custom": []
+    }
+  });
+  CO.npcs({
+    "characters": {
+      "visitorA": {
+        "names": [
+          "Anna",
+          "Bram",
+          "Sanne",
+          "Daan",
+          "Lotte",
+          "Sem"
+        ],
+        "look": {
+          "shirt": "#3f6a9e",
+          "pants": "#2f3440",
+          "skin": "#d8a97c",
+          "hair": "#3a2a1c"
+        },
+        "speed": 1.35,
+        "steps": [
+          {
+            "do": "walk",
+            "to": "plaza"
+          },
+          {
+            "do": "wander",
+            "radius": 6,
+            "seconds": 12
+          },
+          {
+            "do": "walk",
+            "to": "midway"
+          },
+          {
+            "do": "wander",
+            "radius": 4,
+            "seconds": 10
+          },
+          {
+            "do": "walk",
+            "to": "station"
+          },
+          {
+            "do": "wait",
+            "seconds": 6
+          },
+          {
+            "do": "walk",
+            "to": "snack"
+          },
+          {
+            "do": "wait",
+            "seconds": 4
+          },
+          {
+            "do": "walk",
+            "to": "plaza"
+          },
+          {
+            "do": "leave"
+          }
+        ]
+      },
+      "visitorB": {
+        "names": [
+          "Femke",
+          "Thijs",
+          "Noor",
+          "Jesse",
+          "Mila",
+          "Ruben"
+        ],
+        "look": {
+          "shirt": "#a8462f",
+          "pants": "#3a3f48",
+          "skin": "#e8c49b",
+          "hair": "#6b4a2a"
+        },
+        "speed": 1.28,
+        "steps": [
+          {
+            "do": "walk",
+            "to": "plaza"
+          },
+          {
+            "do": "walk",
+            "to": "carousel"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 14
+          },
+          {
+            "do": "walk",
+            "to": "midway"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 10
+          },
+          {
+            "do": "walk",
+            "to": "ferris"
+          },
+          {
+            "do": "wait",
+            "seconds": 5
+          },
+          {
+            "do": "walk",
+            "to": "plaza"
+          },
+          {
+            "do": "leave"
+          }
+        ]
+      },
+      "visitorC": {
+        "names": [
+          "Omar",
+          "Yara",
+          "Sven",
+          "Iris",
+          "Timo",
+          "Eva"
+        ],
+        "look": {
+          "shirt": "#5b8a52",
+          "pants": "#2d333b",
+          "skin": "#c99266",
+          "hair": "#1e1712"
+        },
+        "speed": 1.42,
+        "steps": [
+          {
+            "do": "walk",
+            "to": "midway"
+          },
+          {
+            "do": "wander",
+            "radius": 7,
+            "seconds": 16
+          },
+          {
+            "do": "say",
+            "text": "Such a nice little park."
+          },
+          {
+            "do": "walk",
+            "to": "teacups"
+          },
+          {
+            "do": "wander",
+            "radius": 4,
+            "seconds": 8
+          },
+          {
+            "do": "walk",
+            "to": "plaza"
+          },
+          {
+            "do": "leave"
+          }
+        ]
+      },
+      "sweeper": {
+        "names": [
+          "Piet"
+        ],
+        "look": {
+          "shirt": "#e0a92c",
+          "pants": "#2f3440",
+          "skin": "#d8a97c",
+          "hair": "#5a5a5a"
+        },
+        "speed": 1.1,
+        "steps": [
+          {
+            "do": "walk",
+            "to": "midway"
+          },
+          {
+            "do": "wander",
+            "radius": 9,
+            "seconds": 25
+          },
+          {
+            "do": "walk",
+            "to": "plaza"
+          },
+          {
+            "do": "wander",
+            "radius": 6,
+            "seconds": 20
+          },
+          {
+            "do": "walk",
+            "to": "snack"
+          },
+          {
+            "do": "wander",
+            "radius": 5,
+            "seconds": 18
+          }
+        ]
+      },
+      "watcher": {
+        "names": [
+          "Kees"
+        ],
+        "look": {
+          "shirt": "#4a5a6a",
+          "pants": "#2f3440",
+          "skin": "#e0b48e",
+          "hair": "#2a2a2a"
+        },
+        "speed": 1.05,
+        "steps": [
+          {
+            "do": "walk",
+            "to": "station"
+          },
+          {
+            "do": "face",
+            "to": "coaster"
+          },
+          {
+            "do": "wait",
+            "seconds": 40
+          },
+          {
+            "do": "walk",
+            "to": "ferris"
+          },
+          {
+            "do": "wait",
+            "seconds": 30
+          },
+          {
+            "do": "walk",
+            "to": "carousel"
+          },
+          {
+            "do": "wait",
+            "seconds": 30
+          }
+        ]
+      }
+    },
+    "spawners": [
+      {
+        "id": "crowdA",
+        "character": "visitorA",
+        "x": -5,
+        "z": 26,
+        "every": 13,
+        "max": 5,
+        "hours": [
+          9,
+          22
+        ]
+      },
+      {
+        "id": "crowdB",
+        "character": "visitorB",
+        "x": 5,
+        "z": 26,
+        "every": 17,
+        "max": 4,
+        "hours": [
+          9,
+          22
+        ]
+      },
+      {
+        "id": "crowdC",
+        "character": "visitorC",
+        "x": 0,
+        "z": 24,
+        "every": 21,
+        "max": 4,
+        "hours": [
+          9,
+          22
+        ]
+      }
+    ],
+    "workers": [
+      {
+        "id": "sweeper",
+        "character": "sweeper",
+        "x": 0,
+        "z": 20,
+        "ry": 0,
+        "home": [
+          0,
+          24
+        ],
+        "hours": [
+          9,
+          22
+        ]
+      },
+      {
+        "id": "watcher",
+        "character": "watcher",
+        "x": 0,
+        "z": 2,
+        "ry": 3.141592653589793,
+        "home": [
+          0,
+          24
+        ],
+        "hours": [
+          9,
+          22
+        ]
+      }
+    ],
+    "spots": {
+      "plaza": {
+        "x": 0,
+        "z": 26
+      },
+      "midway": {
+        "x": 0,
+        "z": 14
+      },
+      "station": {
+        "x": 0,
+        "z": 4
+      },
+      "snack": {
+        "x": -11,
+        "z": 9
+      },
+      "carousel": {
+        "x": -14,
+        "z": 19
+      },
+      "teacups": {
+        "x": -14,
+        "z": 3
+      },
+      "ferris": {
+        "x": 13,
+        "z": 19
+      },
+      "coaster": {
+        "x": 0,
+        "z": -2
+      },
+      "gate": {
+        "x": 0,
+        "z": 28
+      }
+    }
+  });
+  CO.world({
+    "door@-21.27,19.95": { x: -23.35, z: 26.75 },
+    "door@-22.57,3": { x: -21.3, z: -0.7 },
+    "door@20.27,20": { x: 22.35, z: 24.8 },
+    "group@-10,-72": { hidden: true },
+    "group@-13,33": { x: -13.05, z: 35.35, hidden: true },
+    "group@-13,8": { x: -16.3, z: 13.8, ry: -990 },
+    "group@-14,40": { x: -13.65, z: 40.05 },
+    "group@-14,52": { x: -13.55, z: 50.4 },
+    "group@-15,33.5": { x: -15.05, z: 33.45, hidden: true },
+    "group@-22.9,19.95": { x: -25.05, z: 26.75 },
+    "group@-22.9,20": { z: 19.95 },
+    "group@-22.95,-0.7": { x: -22.9 },
+    "group@-23.57,72.77": { x: -23.55, z: 72.7, hidden: true },
+    "group@-23.82,-9.27": { x: -18.65, z: -1.85, hidden: true },
+    "group@-24.2,3": { x: -22.95, z: -0.7 },
+    "group@-25.02,-47.43": { x: -25.1, z: -48.95, hidden: true },
+    "group@-25.13,-33.6": { hidden: true },
+    "group@-25.2,-24.96": { hidden: true },
+    "group@-25.25,-40.18": { hidden: true },
+    "group@-25.35,-47.53": { hidden: true },
+    "group@-25.37,-2.89": { x: -23.25, z: -2.75, hidden: true },
+    "group@-25.43,-17.3": { x: -27.8, z: -20.35 },
+    "group@-25.47,-11.11": { hidden: true },
+    "group@-25.89,-39.88": { x: -27.15, z: -43.45 },
+    "group@-27.9,-32": { hidden: true },
+    "group@-30.35,38.76": { hidden: true },
+    "group@-34,3": { z: 3.1 },
+    "group@-34.1,-8": { hidden: true },
+    "group@-36.25,-17.6": { x: -36.3, z: -17.55, hidden: true },
+    "group@-36.29,-10.69": { hidden: true },
+    "group@-36.72,-33.45": { x: -34.15, z: -27.65 },
+    "group@-36.9,-40.6": { x: -34.3, z: -31.75 },
+    "group@-37.45,-46.32": { hidden: true },
+    "group@-37.65,-29.25": { hidden: true },
+    "group@-37.77,-18.62": { hidden: true },
+    "group@-4.11,-67.45": { hidden: true },
+    "group@-40.91,-38.36": { hidden: true },
+    "group@-5,-76.5": { hidden: true },
+    "group@-6,26": { x: -6.6, z: 24.15 },
+    "group@-6,38": { x: -7, z: 36 },
+    "group@-6,6": { x: -6.6, z: 12.05, hidden: true },
+    "group@-6.3,-71.25": { z: -71.3, hidden: true },
+    "group@-6.33,-75.64": { x: -6.35, z: -75.65, hidden: true },
+    "group@-7,12": { x: -6.75, z: 15.05 },
+    "group@-7,24": { x: -6.75, z: 23.5 },
+    "group@-8,10": { x: -6.75, z: 10.6, hidden: true },
+    "group@-8,2": { x: -6.65, z: 13.6, hidden: true },
+    "group@-8,20": { x: -9.25, z: 22.35, ry: -180 },
+    "group@0,0": { x: -1.75, ry: -360 },
+    "group@0,0#2": { x: -0.1, z: 0.1 },
+    "group@0,0#3": { x: 0.2, z: 0.05 },
+    "group@10.23,-70.99": { x: 10.1, z: -71.15, hidden: true },
+    "group@11.93,-53.12": { hidden: true },
+    "group@13,33": { x: 0.15, z: 44.9, ry: -90 },
+    "group@13.5,-84.5": { x: 13.45, hidden: true },
+    "group@14,-70": { x: 13.8, hidden: true },
+    "group@14,40": { x: 13.65, z: 40.05 },
+    "group@14,52": { x: 13.65, z: 50.4 },
+    "group@15,-81": { x: 14.95, hidden: true },
+    "group@15,33.5": { x: 0, z: 40.2, ry: -90 },
+    "group@16,-76": { hidden: true },
+    "group@19.25,-53.25": { hidden: true },
+    "group@21.32,9.45": { x: 21.3, z: 9.45, hidden: true },
+    "group@21.62,-54.31": { hidden: true },
+    "group@21.78,-49.1": { hidden: true },
+    "group@21.9,20": { x: 24.05, z: 24.85 },
+    "group@27.01,-53.37": { x: 27, z: -53.35, hidden: true },
+    "group@28.72,-40.34": { hidden: true },
+    "group@28.73,-24.91": { x: 28.7, z: -23.7, hidden: true },
+    "group@28.79,-3.32": { hidden: true },
+    "group@28.93,-48.82": { x: 28.95, z: -48.8, hidden: true },
+    "group@29.17,-17.9": { hidden: true },
+    "group@29.24,-8.98": { hidden: true },
+    "group@29.29,-32.52": { hidden: true },
+    "group@29.61,-10.94": { hidden: true },
+    "group@40.49,-3.75": { hidden: true },
+    "group@40.68,-17.74": { ry: 20794, hidden: true },
+    "group@41,-9.64": { x: 40.95, z: -9.6, hidden: true },
+    "group@41.01,-18.27": { x: 41.05, z: -18.2, hidden: true },
+    "group@42.4,-32": { x: 42.45, z: -32.05 },
+    "group@49.65,-12.73": { hidden: true },
+    "group@6,26": { x: 6.5, z: 24.1 },
+    "group@6,38": { x: 6.7, z: 35.95 },
+    "group@60,-17.05": { x: 60, z: -17, hidden: true },
+    "group@69.92,-18.13": { hidden: true },
+    "group@7,0": { hidden: true },
+    "group@7,24": { x: 6.65, z: 23.45 },
+    "group@7.92,-67.26": { hidden: true },
+    "group@8,10": { x: 6.3, z: 9.5, hidden: true },
+    "group@8,2": { x: 8.4, z: 15.9, hidden: true },
+    "group@8,20": { x: 13.95, z: 22.5, ry: -180, hidden: true },
+    "group@8.4,13.7": { hidden: true },
+    "lamp post@-22.7,-0.8": { x: -22.7, hidden: true },
+    "mesh box 0.01x0.44x0.66@12.37,-2.86,1.42": { x: 12.35, z: -2.85, hidden: true },
+    "mesh box 0.05x0.04x0.34@14.15,-2.5,0.06": { x: 12.45, z: -2.1 },
+    "mesh box 0.05x0.04x0.34@14.21,-2.68,0.06": { x: 12.51, z: -2.28 },
+    "mesh box 0.05x0.04x0.34@14.3,-2.39,0.06": { x: 12.6, z: -1.99 },
+    "mesh box 0.05x0.04x0.34@14.39,-2.68,0.06": { x: 12.69, z: -2.28 },
+    "mesh box 0.05x0.04x0.34@14.45,-2.5,0.06": { x: 12.75, z: -2.1 },
+    "mesh box 0.05x0.5x0.72@12.4,-2.86,1.42": { z: -2.85, hidden: true },
+    "mesh box 0.05x0.98x2@11.13,-0.98,0.49": { x: 11.9, z: -1, hidden: true },
+    "mesh box 0.05x0.98x2@11.13,2.98,0.49": { hidden: true },
+    "mesh box 0.06x0.03x0.1@12.66,-1.9,1.02": { hidden: true },
+    "mesh box 0.06x0.16x0.22@12.44,-2.86,1.06": { x: 12.45, z: -2.9, hidden: true },
+    "mesh box 0.06x0.86x2.9@12.83,-2.2,0.45": { hidden: true },
+    "mesh box 0.08x0.34x0.06@12.44,-2.86,1.24": { x: 12.45, z: -2.85, hidden: true },
+    "mesh box 0.08x0.9x0.08@12.05,-0.74,0.45": { hidden: true },
+    "mesh box 0.08x0.9x0.08@12.05,-3.66,0.45": { z: -3.65, hidden: true },
+    "mesh box 0.08x0.9x0.08@12.82,-0.74,0.45": { hidden: true },
+    "mesh box 0.08x0.9x0.08@12.82,-3.66,0.45": { hidden: true },
+    "mesh box 0.09x0.07x2.02@11.14,-0.98,1": { x: 11.15, z: -0.95, hidden: true },
+    "mesh box 0.09x0.07x2.02@11.14,2.98,1": { hidden: true },
+    "mesh box 0.12x0.02x8@-22,60,0.02": { hidden: true },
+    "mesh box 0.12x1.95x0.12@-34.5,30,0.98": { hidden: true },
+    "mesh box 0.12x1.95x0.12@-37,30,0.98": { hidden: true },
+    "mesh box 0.14x0.05x0.02@12.5,-3.34,1.1": { z: -3.35, hidden: true },
+    "mesh box 0.14x0.5x0.14@-5.38,30,0.25": { hidden: true },
+    "mesh box 0.14x0.5x0.14@-8.5,10.44,0.25": { hidden: true },
+    "mesh box 0.14x0.5x0.14@-8.5,12.67,0.25": { z: 12.7, hidden: true },
+    "mesh box 0.14x0.5x0.14@-8.5,14.89,0.25": { z: 14.9, hidden: true },
+    "mesh box 0.14x0.5x0.14@-8.5,17.11,0.25": { z: 17.15, hidden: true },
+    "mesh box 0.14x0.5x0.14@-8.5,19.33,0.25": { hidden: true },
+    "mesh box 0.14x0.5x0.14@-8.5,21.56,0.25": { z: 21.55, hidden: true },
+    "mesh box 0.14x0.5x0.14@-8.5,23.78,0.25": { hidden: true },
+    "mesh box 0.14x0.5x0.14@-8.5,26,0.25": { x: -7.1, z: 27.85 },
+    "mesh box 0.14x0.5x0.14@-8.5,6,0.25": { hidden: true },
+    "mesh box 0.14x0.5x0.14@-8.5,8.22,0.25": { hidden: true },
+    "mesh box 0.14x0.5x0.14@5.38,30,0.25": { x: 5.4, hidden: true },
+    "mesh box 0.14x0.5x0.14@8.5,10.44,0.25": { z: 10.45, hidden: true },
+    "mesh box 0.14x0.5x0.14@8.5,12.67,0.25": { z: 12.65, hidden: true },
+    "mesh box 0.14x0.5x0.14@8.5,14.89,0.25": { hidden: true },
+    "mesh box 0.14x0.5x0.14@8.5,17.11,0.25": { x: 7.4, z: 23.3 },
+    "mesh box 0.14x0.5x0.14@8.5,19.33,0.25": { x: 7.4, z: 24.33 },
+    "mesh box 0.14x0.5x0.14@8.5,21.56,0.25": { x: 7.35, z: 25.31 },
+    "mesh box 0.14x0.5x0.14@8.5,23.78,0.25": { x: 7.35, z: 26.33 },
+    "mesh box 0.14x0.5x0.14@8.5,26,0.25": { x: 7.3, z: 27.35 },
+    "mesh box 0.14x0.5x0.14@8.5,6,0.25": { hidden: true },
+    "mesh box 0.14x0.5x0.14@8.5,8.22,0.25": { z: 8.25, hidden: true },
+    "mesh box 0.16x0.03x0.44@12.62,-2.2,1.02": { hidden: true },
+    "mesh box 0.18x0.12x0.1@12.44,-3.34,1.08": { hidden: true },
+    "mesh box 0.22x0.06x0.22@-5.38,30,0.55": { hidden: true },
+    "mesh box 0.22x0.06x0.22@-8.5,10.44,0.55": { z: 10.45, hidden: true },
+    "mesh box 0.22x0.06x0.22@-8.5,12.67,0.55": { x: -8.55, z: 12.65, hidden: true },
+    "mesh box 0.22x0.06x0.22@-8.5,14.89,0.55": { z: 14.85, hidden: true },
+    "mesh box 0.22x0.06x0.22@-8.5,17.11,0.55": { hidden: true },
+    "mesh box 0.22x0.06x0.22@-8.5,19.33,0.55": { z: 19.35, hidden: true },
+    "mesh box 0.22x0.06x0.22@-8.5,21.56,0.55": { z: 21.55, hidden: true },
+    "mesh box 0.22x0.06x0.22@-8.5,23.78,0.55": { z: 23.8, hidden: true },
+    "mesh box 0.22x0.06x0.22@-8.5,26,0.55": { x: -7.1, z: 27.85 },
+    "mesh box 0.22x0.06x0.22@-8.5,6,0.55": { hidden: true },
+    "mesh box 0.22x0.06x0.22@-8.5,8.22,0.55": { x: -8.45, z: 8.25, hidden: true },
+    "mesh box 0.22x0.06x0.22@5.38,30,0.55": { hidden: true },
+    "mesh box 0.22x0.06x0.22@8.5,10.44,0.55": { z: 10.45, hidden: true },
+    "mesh box 0.22x0.06x0.22@8.5,12.67,0.55": { hidden: true },
+    "mesh box 0.22x0.06x0.22@8.5,14.89,0.55": { hidden: true },
+    "mesh box 0.22x0.06x0.22@8.5,17.11,0.55": { x: 7.4, z: 23.31 },
+    "mesh box 0.22x0.06x0.22@8.5,19.33,0.55": { x: 7.4, z: 24.33 },
+    "mesh box 0.22x0.06x0.22@8.5,21.56,0.55": { x: 7.35, z: 25.3 },
+    "mesh box 0.22x0.06x0.22@8.5,23.78,0.55": { x: 7.35, z: 26.33 },
+    "mesh box 0.22x0.06x0.22@8.5,26,0.55": { x: 7.3, z: 27.35 },
+    "mesh box 0.22x0.06x0.22@8.5,6,0.55": { hidden: true },
+    "mesh box 0.22x0.06x0.22@8.5,8.22,0.55": { z: 8.25, hidden: true },
+    "mesh box 0.2x2.6x0.2@-12.2,50.6,1.3": { x: -12.05, z: 51.1 },
+    "mesh box 0.2x2.6x0.2@-2.6,51.5,1.3": { x: 17.9, z: 37.6 },
+    "mesh box 0.2x2.6x0.2@-7,50.6,1.3": { x: -7.3, z: 49.85 },
+    "mesh box 0.2x2.6x0.2@2.6,51.5,1.3": { x: 23.1, z: 37.6 },
+    "mesh box 0.34x0.2x0.01@12.32,-3.85,1.89": { x: 12.3 },
+    "mesh box 0.3x0.01x0.4@12.55,-1.46,1.03": { z: -1.45, hidden: true },
+    "mesh box 0.3x0.01x0.4@12.6,-1.5,1.02": { hidden: true },
+    "mesh box 0.3x0.12x0.3@-32.5,54.71,0.06": { z: 54.7 },
+    "mesh box 0.3x0.12x0.3@-34.5,30,0.06": { hidden: true },
+    "mesh box 0.3x0.12x0.3@-37,30,0.06": { hidden: true },
+    "mesh box 0.44x0.06x0.06@14.3,-2.3,0.97": { hidden: true },
+    "mesh box 0.5x0.02x0.03@12.5,-0.7,0.18": { hidden: true },
+    "mesh box 0.5x0.02x0.03@12.5,-0.7,0.38": { hidden: true },
+    "mesh box 0.5x0.02x0.03@12.5,-0.7,0.58": { hidden: true },
+    "mesh box 0.5x0.09x0.5@14.3,-2.55,0.47": { x: 12.6, z: -2.15, ry: -90 },
+    "mesh box 0.5x0.52x0.09@14.3,-2.3,0.74": { x: 12.6, z: -1.9 },
+    "mesh box 0.62x0.6x0.62@12.5,-1.02,0.3": { hidden: true },
+    "mesh box 0.86x0.06x3.1@12.4,-2.2,0.94": { hidden: true },
+    "mesh box 0.86x0.06x3.1@12.4,-2.2,0.98": { hidden: true },
+    "mesh box 0.8x0.85x1.9@-9.5,10.4,0.43": { x: -7.5, z: 11.5 },
+    "mesh box 0.8x0.85x1.9@-9.5,12.6,0.43": { x: -7.5, z: 13.75 },
+    "mesh box 0.8x0.85x1.9@-9.5,14.8,0.43": { x: -7.5, z: 15.95 },
+    "mesh box 0.8x0.85x1.9@-9.5,23.6,0.43": { x: -8.2, z: 23.3, ry: -90 },
+    "mesh box 0.8x0.85x1.9@-9.5,25.8,0.43": { x: -7.15, z: 23.15, ry: -90, hidden: true },
+    "mesh box 0.8x0.85x1.9@-9.5,6,0.43": { x: -7.5, z: 7.05 },
+    "mesh box 0.8x0.85x1.9@-9.5,8.2,0.43": { x: -7.5, z: 9.25 },
+    "mesh box 0.8x0.85x1.9@9.5,10.4,0.43": { x: 21.55, z: 12.35, hidden: true },
+    "mesh box 0.8x0.85x1.9@9.5,12.6,0.43": { x: 21.55, z: 14.55, hidden: true },
+    "mesh box 0.8x0.85x1.9@9.5,14.8,0.43": { x: 8.45, z: 16.45, ry: -90 },
+    "mesh box 0.8x0.85x1.9@9.5,23.6,0.43": { x: 8.95, z: 23.55, ry: -90 },
+    "mesh box 0.8x0.85x1.9@9.5,25.8,0.43": { x: 11.8, z: 23.5, ry: -90 },
+    "mesh box 0.8x0.85x1.9@9.5,6,0.43": { x: 10.8, z: 16.45, ry: -90 },
+    "mesh box 0.8x0.85x1.9@9.5,8.2,0.43": { x: 21.55, z: 10.15, hidden: true },
+    "mesh box 0.8x0.95x3@12.4,-2.2,0.48": { x: 11.6, z: -2.15 },
+    "mesh box 0.9x0.06x3.1@12.4,-2.2,0.98": { x: 11.6, z: -2.15 },
+    "mesh box 1.02x0.07x0.09@12.05,1.86,1": { hidden: true },
+    "mesh box 1.62x0.07x0.09@15.5,1.86,1": { z: 1.85, hidden: true },
+    "mesh box 1.6x0.98x0.05@15.5,1.87,0.49": { z: 1.85, hidden: true },
+    "mesh box 1x0.22x2.1@-9.5,10.4,0.11": { x: -7.5, z: 11.5 },
+    "mesh box 1x0.22x2.1@-9.5,12.6,0.11": { x: -7.5, z: 13.75 },
+    "mesh box 1x0.22x2.1@-9.5,14.8,0.11": { x: -7.5, z: 15.95 },
+    "mesh box 1x0.22x2.1@-9.5,23.6,0.11": { x: -8.2, z: 23.3, ry: -90 },
+    "mesh box 1x0.22x2.1@-9.5,25.8,0.11": { x: -7.1, z: 23.25, ry: -90, hidden: true },
+    "mesh box 1x0.22x2.1@-9.5,6,0.11": { x: -7.5, z: 7.05 },
+    "mesh box 1x0.22x2.1@-9.5,8.2,0.11": { x: -7.5, z: 9.25 },
+    "mesh box 1x0.22x2.1@9.5,10.4,0.11": { x: 21.55, z: 12.35, hidden: true },
+    "mesh box 1x0.22x2.1@9.5,12.6,0.11": { x: 21.55, z: 14.55, hidden: true },
+    "mesh box 1x0.22x2.1@9.5,14.8,0.11": { x: 8.45, z: 16.45, ry: -90 },
+    "mesh box 1x0.22x2.1@9.5,23.6,0.11": { x: 8.95, z: 23.55, ry: -90 },
+    "mesh box 1x0.22x2.1@9.5,25.8,0.11": { x: 11.8, z: 23.5, ry: -90 },
+    "mesh box 1x0.22x2.1@9.5,6,0.11": { x: 10.8, z: 16.45, ry: -90 },
+    "mesh box 1x0.22x2.1@9.5,8.2,0.11": { x: 21.55, z: 10.15, hidden: true },
+    "mesh box 1x0.98x0.05@12.05,1.87,0.49": { x: 12, z: 1.85, hidden: true },
+    "mesh box 2.5x0.16x0.2@-35.75,30,0.08": { hidden: true },
+    "mesh box 2.5x0.16x0.2@-38.25,30,0.08": { hidden: true },
+    "mesh box 20x0.1x1.17@0,0.1,0.3": { z: -0.1 },
+    "mesh box 5.62x0.07x0.09@14,-3.86,1": { hidden: true },
+    "mesh box 5.62x0.07x0.09@16.86,-1,1": { hidden: true },
+    "mesh box 5.6x0.98x0.05@14,-3.87,0.49": { hidden: true },
+    "mesh box 5.6x0.98x0.05@16.87,-1,0.49": { hidden: true },
+    "mesh box 6.46x0.62x6.46@14,-1,0.31": { hidden: true },
+    "mesh buffer@0,44,0.01": { x: -62.95, z: 12.8 },
+    "mesh buffer@2,-4,0.02": { x: 1.95, z: -4.1 },
+    "mesh cone 0.16x0.15@12.34,-0.94,1.46": { hidden: true },
+    "mesh cone 0.45x0.18@-14,20,2.6": { hidden: true },
+    "mesh cone 0.45x0.18@-14,3,2.6": { hidden: true },
+    "mesh cone 0.45x0.18@-15.33,20,2.6": { x: -15.35, hidden: true },
+    "mesh cone 0.45x0.18@-15.33,3,2.6": { x: -15.35, hidden: true },
+    "mesh cone 0.45x0.18@-16.67,20,2.6": { x: -16.65, hidden: true },
+    "mesh cone 0.45x0.18@-16.67,3,2.6": { x: -16.7, hidden: true },
+    "mesh cone 0.45x0.18@-18,20,2.6": { hidden: true },
+    "mesh cone 0.45x0.18@-18,3,2.6": { hidden: true },
+    "mesh cone 0.45x0.18@-19.33,20,2.6": { hidden: true },
+    "mesh cone 0.45x0.18@-19.33,3,2.6": { hidden: true },
+    "mesh cone 0.45x0.18@-20.67,20,2.6": { hidden: true },
+    "mesh cone 0.45x0.18@-20.67,3,2.6": { hidden: true },
+    "mesh cone 0.45x0.18@-22,20,2.6": { hidden: true },
+    "mesh cone 0.45x0.18@-22,3,2.6": { hidden: true },
+    "mesh cone 0.5x0.35@-7,12,3.6": { hidden: true },
+    "mesh cone 0.5x0.35@-7,24,3.6": { hidden: true },
+    "mesh cone 0.5x0.35@7,0,3.6": { hidden: true },
+    "mesh cylinder 0.03x0.09@12.32,-0.98,1.03": { hidden: true },
+    "mesh cylinder 0.11x0.05@12.62,-0.86,1.07": { hidden: true },
+    "mesh cylinder 0.41x0.02@12.33,-0.96,1.23": { hidden: true },
+    "mesh cylinder 0.42x0.05@14.3,-2.55,0.23": { x: 12.6, z: -2.15 },
+    "mesh cylinder 0.42x0.15@16.4,-3.5,0.21": { hidden: true },
+    "mesh cylinder 0.5x0.02@-7,12,4.35": { hidden: true },
+    "mesh cylinder 2.6x0.04@-14,20,1.3": { hidden: true },
+    "mesh cylinder 2.6x0.04@-14,3,1.3": { hidden: true },
+    "mesh plane 10x1.2@0,27.8,6": { ry: -180, hidden: true },
+    "mesh plane 12x1.55@0,27.94,6.9": { ry: -180 },
+    "mesh plane 14x32@0,12,0.02": { x: -0.05 },
+    "mesh plane 2.38x1.8@-35.75,30,0.95": { hidden: true },
+    "mesh plane 2.38x1.8@-38.25,30,0.95": { hidden: true },
+    "mesh plane 2.38x1.8@-68.25,30,0.95": { x: -68.2, z: 30.05 },
+    "mesh plane 2.6x6.6@13.6,5.2,0.05": { hidden: true },
+    "mesh plane 3.2x0.8@0,-4.4,3": { y: 3.65, z: 0 },
+    "mesh plane 3.4x22.4@9.5,-69.5,0.04": { hidden: true },
+    "mesh plane 3.7x10.3@14,-63.3,0.04": { hidden: true },
+    "mesh plane 34x18@0,44,0.01": { x: 9, z: 41 },
+    "mesh plane 36x18@2,-4,0.02": { z: -3.8 },
+    "mesh plane 3x9.6@14,-63.3,0.04": { z: -63.25, hidden: true },
+    "mesh plane 4.1x23.1@9.5,-69.5,0.04": { x: 9.45, z: -69.55, hidden: true },
+    "mesh plane 420x420@0,0,-0.03": { z: -1.55 },
+    "mesh plane 52x20@0,60,0.01": { z: 60.05 },
+    "mesh plane 6x1.4@0,51.5,2.6": { x: 20.5, z: 37.6 },
+    "mesh sphere 0.06@12.34,-0.94,1.4": { hidden: true },
+    "mesh sphere 0.08@-34.5,30,2.02": { hidden: true },
+    "mesh sphere 0.08@-37,30,2.02": { hidden: true },
+    "mesh sphere 0.08@-72,27.5,2.02": { z: 27.45 },
+    "mesh sphere 0.09@-6.72,12,3.5": { hidden: true },
+    "mesh sphere 0.09@-6.72,24,3.5": { hidden: true },
+    "mesh sphere 0.09@-6.86,11.76,3.5": { hidden: true },
+    "mesh sphere 0.09@-6.86,12.24,3.5": { x: -6.85, z: 12.25, hidden: true },
+    "mesh sphere 0.09@-6.86,23.76,3.5": { hidden: true },
+    "mesh sphere 0.09@-6.86,24.24,3.5": { hidden: true },
+    "mesh sphere 0.09@-7.14,11.76,3.5": { hidden: true },
+    "mesh sphere 0.09@-7.14,12.24,3.5": { hidden: true },
+    "mesh sphere 0.09@-7.14,23.76,3.5": { hidden: true },
+    "mesh sphere 0.09@-7.14,24.24,3.5": { hidden: true },
+    "mesh sphere 0.09@-7.28,12,3.5": { x: -7.3, hidden: true },
+    "mesh sphere 0.09@-7.28,24,3.5": { hidden: true },
+    "mesh sphere 0.09@6.72,0,3.5": { hidden: true },
+    "mesh sphere 0.09@6.86,-0.24,3.5": { x: 6.85, z: -0.25, hidden: true },
+    "mesh sphere 0.09@6.86,0.24,3.5": { hidden: true },
+    "mesh sphere 0.09@7.14,-0.24,3.5": { hidden: true },
+    "mesh sphere 0.09@7.14,0.24,3.5": { hidden: true },
+    "mesh sphere 0.09@7.28,0,3.5": { hidden: true },
+  });
+  CO.worldCopies([
+    { id: "wc-mvco28o4-2", of: "mesh box 1x0.22x2.1@9.5,25.8,0.11", x: 17.25, y: 0.11, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvco28o4-3", of: "mesh box 0.8x0.85x1.9@9.5,25.8,0.43", x: 17.25, y: 0.43, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvco28o4-4", of: "mesh box 1x0.22x2.1@9.5,23.6,0.11", x: 14.6, y: 0.11, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvco28o4-5", of: "mesh box 0.8x0.85x1.9@9.5,23.6,0.43", x: 14.6, y: 0.43, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvco3p46-7", of: "mesh box 1x0.22x2.1@9.5,14.8,0.11", x: 13.25, y: 0.11, z: 16.45, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvco3p46-8", of: "mesh box 0.8x0.85x1.9@9.5,14.8,0.43", x: 13.25, y: 0.43, z: 16.45, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvco3p47-9", of: "mesh box 0.8x0.85x1.9@9.5,6,0.43", x: 15.6, y: 0.43, z: 16.45, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvco3p47-a", of: "mesh box 1x0.22x2.1@9.5,6,0.11", x: 15.6, y: 0.11, z: 16.45, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvco3zku-b", of: "mesh box 0.8x0.85x1.9@9.5,6,0.43", x: 18, y: 0.43, z: 16.5, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvco3zku-c", of: "mesh box 1x0.22x2.1@9.5,6,0.11", x: 18, y: 0.11, z: 16.5, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvco4361-d", of: "mesh box 0.8x0.85x1.9@9.5,6,0.43", x: 20.55, y: 0.43, z: 16.45, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvco4361-e", of: "mesh box 1x0.22x2.1@9.5,6,0.11", x: 20.55, y: 0.11, z: 16.45, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvco4im1-f", of: "mesh box 1x0.22x2.1@9.5,25.8,0.11", x: 20.1, y: 0.11, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvco4im2-g", of: "mesh box 0.8x0.85x1.9@9.5,25.8,0.43", x: 20.1, y: 0.43, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvco99z9-i", of: "group@13,33", x: 0.25, y: 0, z: 48.95, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvco9wt7-j", of: "group@14,52", x: 0.15, y: 0, z: 46.8, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcoa1ud-k", of: "group@14,52", x: 0.1, y: 0, z: 42.45, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcoaq1t-l", of: "mesh plane 34x18@0,44,0.01", x: 1.45, y: 0.01, z: 45.6, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcobglr-m", of: "mesh plane 34x18@0,44,0.01", x: -9.15, y: 0.01, z: 41.1, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcoir5j-15", of: "mesh box 0.14x0.5x0.14@-8.5,26,0.25", x: -7.1, y: 0.25, z: 25.2, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcoisyr-17", of: "mesh box 0.22x0.06x0.22@-8.5,26,0.55", x: -7.1, y: 0.55, z: 25.2, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcoj4vs-18", of: "mesh box 0.14x0.5x0.14@-8.5,26,0.25", x: -7.1, y: 0.25, z: 27.25, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcoj4vt-19", of: "mesh box 0.22x0.06x0.22@-8.5,26,0.55", x: -7.1, y: 0.55, z: 27.25, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcoj7tb-1a", of: "mesh box 0.14x0.5x0.14@-8.5,26,0.25", x: -7.1, y: 0.25, z: 26.65, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcoj7tb-1b", of: "mesh box 0.22x0.06x0.22@-8.5,26,0.55", x: -7.1, y: 0.55, z: 26.65, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcoj9lo-1c", of: "mesh box 0.14x0.5x0.14@-8.5,26,0.25", x: -7.1, y: 0.25, z: 26, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcoj9lo-1d", of: "mesh box 0.22x0.06x0.22@-8.5,26,0.55", x: -7.1, y: 0.55, z: 26, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcojdt2-1e", of: "mesh box 0.14x0.5x0.14@-8.5,26,0.25", x: -7.1, y: 0.25, z: 23.85, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcojdt3-1f", of: "mesh box 0.22x0.06x0.22@-8.5,26,0.55", x: -7.1, y: 0.55, z: 23.85, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcol19s-1j", of: "mesh box 0.22x0.06x0.22@-8.5,26,0.55", x: -7.1, y: 0.55, z: 24.6, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcol19s-1k", of: "mesh box 0.14x0.5x0.14@-8.5,26,0.25", x: -7.1, y: 0.25, z: 24.6, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcoqqh9-1r", of: "mesh box 1x0.22x2.1@-9.5,12.6,0.11", x: -19, y: 0.11, z: 14.85, ry: -180, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcoqqh9-1s", of: "mesh box 0.8x0.85x1.9@-9.5,12.6,0.43", x: -19, y: 0.43, z: 14.85, ry: -360, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcoqulj-1t", of: "mesh box 1x0.22x2.1@-9.5,12.6,0.11", x: -19, y: 0.11, z: 12.4, ry: -180, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcoqulj-1u", of: "mesh box 0.8x0.85x1.9@-9.5,12.6,0.43", x: -19, y: 0.43, z: 12.4, ry: -180, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcor17r-1v", of: "mesh box 1x0.22x2.1@-9.5,12.6,0.11", x: -19, y: 0.11, z: 10.05, ry: -180, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcor17r-1w", of: "mesh box 0.8x0.85x1.9@-9.5,12.6,0.43", x: -19, y: 0.43, z: 10.05, ry: -180, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcorbh6-1x", of: "mesh box 1x0.22x2.1@-9.5,12.6,0.11", x: -18.55, y: 0.11, z: 7.1, ry: -180, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcorbh6-1y", of: "mesh box 0.8x0.85x1.9@-9.5,12.6,0.43", x: -18.55, y: 0.43, z: 7.1, ry: -180, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcortx2-21", of: "mesh box 1x0.22x2.1@-9.5,12.6,0.11", x: -9.15, y: 0.11, z: 16.55, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcortx2-22", of: "mesh box 0.8x0.85x1.9@-9.5,12.6,0.43", x: -9.15, y: 0.43, z: 16.55, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcortx2-23", of: "mesh box 1x0.22x2.1@-9.5,12.6,0.11", x: -11.5, y: 0.11, z: 16.55, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcortx2-24", of: "mesh box 0.8x0.85x1.9@-9.5,12.6,0.43", x: -11.5, y: 0.43, z: 16.55, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcos557-25", of: "mesh box 1x0.22x2.1@-9.5,12.6,0.11", x: -13.9, y: 0.11, z: 16.55, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcos557-26", of: "mesh box 0.8x0.85x1.9@-9.5,12.6,0.43", x: -13.9, y: 0.43, z: 16.55, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcos557-27", of: "mesh box 1x0.22x2.1@-9.5,12.6,0.11", x: -16.3, y: 0.11, z: 16.55, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcos557-28", of: "mesh box 0.8x0.85x1.9@-9.5,12.6,0.43", x: -16.3, y: 0.43, z: 16.55, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcos9xv-29", of: "mesh box 1x0.22x2.1@-9.5,12.6,0.11", x: -18.65, y: 0.11, z: 16.55, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcos9xw-2a", of: "mesh box 0.8x0.85x1.9@-9.5,12.6,0.43", x: -18.65, y: 0.43, z: 16.55, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcos9xw-2b", of: "mesh box 1x0.22x2.1@-9.5,12.6,0.11", x: -21, y: 0.11, z: 16.5, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcos9xw-2c", of: "mesh box 0.8x0.85x1.9@-9.5,12.6,0.43", x: -21, y: 0.43, z: 16.5, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcosgpf-2d", of: "mesh box 1x0.22x2.1@-9.5,12.6,0.11", x: -18.95, y: 0.11, z: 23.25, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcosgpf-2e", of: "mesh box 0.8x0.85x1.9@-9.5,12.6,0.43", x: -18.95, y: 0.43, z: 23.25, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcosgpf-2f", of: "mesh box 1x0.22x2.1@-9.5,12.6,0.11", x: -21.6, y: 0.11, z: 23.25, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcosgpf-2g", of: "mesh box 0.8x0.85x1.9@-9.5,12.6,0.43", x: -21.6, y: 0.43, z: 23.25, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcosgpf-2h", of: "mesh box 1x0.22x2.1@-9.5,12.6,0.11", x: -16, y: 0.11, z: 23.25, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcosgpg-2i", of: "mesh box 0.8x0.85x1.9@-9.5,12.6,0.43", x: -16, y: 0.43, z: 23.25, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcosgpg-2j", of: "mesh box 1x0.22x2.1@-9.5,12.6,0.11", x: -13.25, y: 0.11, z: 23.25, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcosgpg-2k", of: "mesh box 0.8x0.85x1.9@-9.5,12.6,0.43", x: -13.25, y: 0.43, z: 23.25, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcospus-2l", of: "mesh box 1x0.22x2.1@-9.5,23.6,0.11", x: -10.65, y: 0.11, z: 23.3, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcosput-2m", of: "mesh box 0.8x0.85x1.9@-9.5,23.6,0.43", x: -10.65, y: 0.43, z: 23.25, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvdht6lp-4", of: "group@-8,20", x: -9.15, y: 0, z: 17.8, ry: -540, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvdhtvqo-7", of: "group@-8,20", x: -8.65, y: 0, z: 9.7, ry: -450, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvdhvxz3-9", of: "mesh plane 18x6@-14,3,0.02", x: -15.95, y: 0.02, z: 3.75, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvdhxa5q-a", of: "group@-8,20", x: -12.25, y: 0, z: 15.3, ry: -720, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvdhxlgm-b", of: "group@-8,20", x: -9.85, y: 0, z: 15.35, ry: -720, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvdhxvhh-d", of: "group@-8,20", x: -8.65, y: 0, z: 12.1, ry: -450, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvdhy2sl-e", of: "group@-6,6", x: -8.45, y: 0, z: 14.25, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvdhyd39-f", of: "fence@7.8,4.1", x: -16.25, y: 0, z: -3.95, ry: -180, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvdhyrz7-g", of: "fence@7.8,4.1", x: -11.3, y: 0, z: -12.65, ry: -270, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvdhz5zc-h", of: "fence@7.8,4.1", x: -2.1, y: 0, z: -12.7, ry: -270, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvdhz92g-i", of: "fence@7.8,4.1", x: 7.15, y: 0, z: -12.65, ry: -270, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvdhzd1j-j", of: "fence@7.8,4.1", x: 16.35, y: 0, z: -12.7, ry: -270, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgupfz8-2", of: "fence@7.8,4.1", x: -20.7, y: 0, z: 0.35, ry: -270, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgupuup-3", of: "fence@7.8,4.1", x: -21.95, y: 0, z: 5.45, ry: -270, sx: 0.97, sy: 0.97, sz: 0.84 },
+    { id: "wc-mvgurziu-6", of: "group@-25.43,-17.3", x: -27.95, y: 0, z: -15.75, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgusgij-7", of: "group@-25.43,-17.3", x: -28.2, y: 0, z: -8.6, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgusle3-8", of: "group@-25.43,-17.3", x: -28, y: 0, z: -4, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgutw4o-9", of: "group@-25.43,-17.3", x: -34.3, y: 0, z: -3.85, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvguu0sv-a", of: "group@-25.43,-17.3", x: -34.05, y: 0, z: -8.65, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvguu7i0-b", of: "group@-25.43,-17.3", x: -34.1, y: 0, z: -12.9, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvguucdz-c", of: "group@-25.43,-17.3", x: -34.1, y: 0, z: -16.9, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvguuoot-d", of: "group@-36.9,-40.6", x: -34.25, y: 0, z: -35.75, ry: 39396.6, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvguuv9j-e", of: "group@-36.9,-40.6", x: -34.15, y: 0, z: -39.7, ry: 39396.6, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvguuybm-f", of: "group@-36.9,-40.6", x: -34.05, y: 0, z: -45.75, ry: 39396.6, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvguvoxp-g", of: "group@-25.43,-17.3", x: -27.7, y: 0, z: -23.85, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvguvsb0-h", of: "group@-25.43,-17.3", x: -27.6, y: 0, z: -27.4, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvguvzx5-i", of: "group@-25.43,-17.3", x: -27.6, y: 0, z: -32.45, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvguw4hw-j", of: "group@-25.43,-17.3", x: -27.65, y: 0, z: -36.1, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvguwa8t-k", of: "group@-25.43,-17.3", x: -27.55, y: 0, z: -40.15, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgv18f5-1", of: "mesh buffer@2,-4,0.02", x: 3.5, y: 0.02, z: -2.55, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgv1kjo-2", of: "mesh buffer@-13,8,0.02", x: -12.7, y: 0.02, z: 12.9, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgv1osh-3", of: "mesh buffer@-13,8,0.02", x: -14.1, y: 0.02, z: 12.25, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgv22qi-4", of: "mesh buffer@2,-4,0.02", x: 46.15, y: 0.02, z: -28.95, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgv2tw3-6", of: "mesh buffer@2,-4,0.02", x: 17.2, y: 0.02, z: -1.7, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgv3mh0-7", of: "mesh buffer@2,-4,0.02", x: 61.75, y: 0.02, z: -29, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgxqvl9-8", of: "group@-25.43,-17.3", x: -23.6, y: 0, z: -1.35, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgxr2em-9", of: "group@-25.43,-17.3", x: -21.2, y: 0, z: -1.35, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgxr9c3-a", of: "group@-25.43,-17.3", x: -18.55, y: 0, z: -1.65, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgxrmqb-b", of: "group@-25.43,-17.3", x: -17.45, y: 0, z: -3.8, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgxrv6a-c", of: "group@-25.43,-17.3", x: -17.25, y: 0, z: -6.95, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgxs0bp-d", of: "group@-23.82,-9.27", x: -23.25, y: 0, z: 7.1, ry: 19285.8, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgxs65g-e", of: "group@-23.82,-9.27", x: -19.8, y: 0, z: 9.35, ry: 19285.8, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgxsdwq-f", of: "group@-23.82,-9.27", x: -20.9, y: 0, z: 26, ry: 19285.8, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgxsi1v-g", of: "group@-23.82,-9.27", x: -17, y: 0, z: 26.4, ry: 19285.8, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgxswtn-h", of: "group@-23.82,-9.27", x: -19.95, y: 0, z: 13.35, ry: 19285.8, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgxvhzv-i", of: "group@-8,20", x: -8.65, y: 0, z: 7.35, ry: -450, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgxxinz-j", of: "mesh buffer@0,44,0.01", x: 1.5, y: 0.01, z: 45.5, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgxy5xm-k", of: "mesh buffer@0,44,0.01", x: -45.8, y: 0.01, z: 12.4, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgxyb7s-l", of: "mesh buffer@0,44,0.01", x: -54.75, y: 0.01, z: 31.4, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgxyqo5-m", of: "mesh buffer@0,44,0.01", x: -41.35, y: 0.01, z: 37.6, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgxz30m-n", of: "mesh buffer@0,44,0.01", x: -54.75, y: 0.01, z: 45.55, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgxznkw-o", of: "mesh box 2.47x0.16x0.2@-32.5,53.47,0.08", x: -33.85, y: 0.08, z: 54.75, ry: -180, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgy03w6-p", of: "mesh plane 2.35x1.8@-32.5,53.47,0.95", x: -33.75, y: 0.95, z: 54.75, ry: -180, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgy0quw-q", of: "mesh box 0.3x0.12x0.3@-32.5,54.71,0.06", x: -35.05, y: 0.06, z: 54.75, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgy14ky-r", of: "mesh box 0.12x1.95x0.12@-32.5,54.71,0.98", x: -35.05, y: 0.98, z: 54.75, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvgy1sv1-s", of: "mesh sphere 0.08@-32.5,54.71,2.02", x: -35.05, y: 2.02, z: 54.75, ry: 0, sx: 1, sy: 1, sz: 1 },
+  ]);
+  // ── Park Co ───────────────────────────────────────────────────────
+  // A small park: a gate at the south, two ticket windows outside it, a midway running north to the coaster station, and the
+  // operator's room beside the platform. Guests arrive from the car park, buy a ticket at a window, pass a turnstile, queue
+  // for the coaster and ride it. The player works the window and the ride.
+  var PK_GATE_Z = 30, PK_PLATFORM_Y = 0.6, PK_STATION_Z = -4.6;
+  // the park is a long rectangle: the gate at the south, the coaster across the north, and rides either side of the midway
+  var PK_PARK = { x0: -72, x1: 72, z0: -95, z1: 70 };
+  var PK_BOOTHS = [{ x: -9, z: 36, turnstile: -6 }, { x: 9, z: 36, turnstile: 6 }];
+  var PK_TURNSTILES = [-6, -2, 2, 6];
+  // the coaster queue: a single lane beside the platform, fenced on both sides. Guests join at the back (PK_QUEUE_ENTRY,
+  // south, off the midway), stand one to a slot, and shuffle toward the front (north) as the line moves. Slot 0 is the front.
+  var PK_QUEUE_SLOTS = [];
+  for (var pkQi = 0; pkQi < 8; pkQi++) PK_QUEUE_SLOTS.push({ x: 7, z: 0.6 + pkQi * 1.0 });
+  var PK_QUEUE_ENTRY = { x: 7, z: 9.4 };
+  // the plots: every ride the park can open. level is the level that opens it, q the point the queue stands at
+  var PK_PLOTS = [
+    { id: 'carousel',  name: 'Carousel',     x: -34, z: 20, r: 8.5,  q: [-22, 20],  level: 2 },
+    { id: 'teacups',   name: 'Teacups',      x: -56, z: 3,  r: 7.2,  q: [-44, 3],   level: 4 },
+    { id: 'ferris',    name: 'Ferris wheel', x: 34,  z: 20, r: 9.5,  q: [22, 20],   level: 6 },
+    { id: 'dodgems',   name: 'Dodgems',      x: 56,  z: 3,  r: 8.2,  q: [44, 3],    level: 8, bo: [0, -6.5] },
+    { id: 'droptower', name: 'Drop tower',   x: -54, z: -52, r: 6.5, q: [-44, -52], level: 9, bo: [0, 6.5] },
+    { id: 'flume',     name: 'Log flume',    x: 54,  z: -32, r: 9.0, q: [46.4, -24], level: 10 },
+    { id: 'haunted',   name: 'Haunted house',x: -58, z: -24, r: 9.5, q: [-44, -24],  level: 11, bo: [0, 6.5] }
+  ];
+  // the ladder: what the park earns its way to. Every ride is open from the first day; the levels open the services.
+  var PK_LEVELS = [
+    { xp: 0,   name: 'The gate',      note: 'Sell tickets at the window and work the coaster.' },
+    { xp: 40,  name: 'Snack stand',   note: 'A snack stand opens on the midway.', unlock: 'snack' },
+    { xp: 120, name: 'Ticket clerk',  note: 'Hire a clerk and the window serves itself.', unlock: 'clerk' },
+    { xp: 280, name: 'Ride operator', note: 'Hire an operator and the coaster runs itself.', unlock: 'operator' },
+    { xp: 520, name: 'Park lights',   note: 'The park stays open into the evening.', unlock: 'lights' }
+  ];
+  // the live park: everything that is not worth saving. The saved bits live in S (ticketPrice, auto, xp, the hires)
+  var PK = {
+    guests: [], booths: [], turnstiles: [], gates: [], seats: [], cars: [], train: null,
+    curve: null, len: 1, cpU: [], stationU: 0.02, stationX0: 0, liftU: [0, 0], carGap: 2.9,
+    ride: { state: 'idle', t: 0, u: 0.02, v: 0, riders: 0, bars: 0, barsWant: 0, gates: 0, beat: 0, autoT: 0, loadT: 0, wait: 0, fault: '', last: '' },
+    queue: [], spawnT: 0, nextId: 1, today: { tickets: 0, snacks: 0, rides: 0, earned: 0 },
+    attractions: [], attrById: {}, plots: {}, rides: {}, lanes: [],
+    playerRide: null, playerWait: null,
+    lastMin: -1, lastDay: 1, level: 1, xp: 0, clerk: false, operator: false, snackOpen: false, train2: false, lights: false,
+    served: 0, refused: 0, screen: null, snack: null, closed: false
+  };
+  // ── The tables the park reads ─────────────────────────────────────
+  function pkLevel() { var lv = 1; for (var i = 0; i < PK_LEVELS.length; i++) if (PK.xp >= PK_LEVELS[i].xp) lv = i + 1; return lv; }
+  function pkXp(n) {
+    PK.xp += n; S.xp = PK.xp; var lv = pkLevel();
+    if (lv > PK.level) {
+      var from = PK.level;
+      PK.level = lv; S.level = lv;
+      for (var i = from + 1; i <= lv; i++) pkLevelUp(i);   // every level crossed opens what it opens
+    }
+    hudDirty = true;
+  }
+  function pkLevelUp(lv) {
+    var L = PK_LEVELS[lv - 1]; if (!L) return;
+    sfx('ok'); logEvent('Level ' + lv + ': ' + L.name, 'good');
+    showCard('h-card', '<b>Level ' + lv + '</b><br>' + esc(L.name) + '<br><span class="dc-sub">' + esc(L.note) + '</span>', 6);
+    toast('Level ' + lv + ' - ' + L.name, 'good');
+    if (L.unlock === 'snack') { PK.snackOpen = true; S.snackOpen = true; }
+    if (L.unlock === 'lights') { PK.lights = true; S.lights = true; }
+    if (L.unlock && L.unlock !== 'snack' && L.unlock !== 'lights' && L.unlock !== 'clerk' && L.unlock !== 'operator') pkOpenRide(L.unlock);
+    hudDirty = true;
+  }
+  // the platform sits south of the track, so the queue and the guests reach it without crossing the rails.
+  // a short ramp at its south edge carries the player and the guests up the 0.6 m step.
+  function pkFloor(x, z) {
+    if (pkOnPlatform(x, z)) return PK_PLATFORM_Y;
+    if (x > -10 && x < 10 && z >= -0.6 && z < 0.4) return PK_PLATFORM_Y * (0.4 - z);
+    return 0;
+  }
+  function pkOnPlatform(x, z) { return x > -10 && x < 10 && z > -3.6 && z < -0.6; }
+  function pkInsidePark(x, z) { return x > PK_PARK.x0 && x < PK_PARK.x1 && z > PK_PARK.z0 && z < PK_PARK.z1; }
+  function pkBoothSlot(bi, i) { var b = PK_BOOTHS[bi]; return { x: b.x, z: b.z + 2.0 + i * 1.1 }; }
+  function pkCoasterAuto() { return !!S.auto || !!S.operator; }
+  function pkRideWord() {
+    var R = PK.ride;
+    if (R.fault) return 'stopped';
+    return { idle: 'waiting', loading: 'boarding', ready: 'ready', dispatch: 'dispatching', running: 'running', arrive: 'arriving', unload: 'unloading' }[R.state] || R.state;
+  }
+  // ── The ground, the gate and the midway ───────────────────────────
+  // a seeded stream, so the planting is the same park every time it loads
+  function pkRng(seed) {
+    var a = seed >>> 0;
+    return function () { a = (a + 0x6D2B79F5) >>> 0; var t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+  var PK_ASPHALT = null;
+  function pkAsphalt() { return PK_ASPHALT || (PK_ASPHALT = std({ color: 0x3c4046, roughness: 0.96 })); }
+  // pavers keep their size whatever the slab: the slab sizes and heights below are the ones the editor's world file refers to
+  function pkSlab(w, d, x, z, y, mat) {
+    // built with the engine's own plane(), so the editor's world file still finds it by the same key; the UVs are stretched to metres afterwards
+    var p = plane(w, d, mat || pkMats().pavers, x, y, z, -Math.PI / 2);
+    p.geometry = p.geometry.clone();
+    var uv = p.geometry.attributes.uv; for (var i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w / 2.4, uv.getY(i) * d / 2.4);
+    p.receiveShadow = true; return p;
+  }
+  function pkGround() {
+    var M = pkMats();
+    // the lawn: the shared grass map tiles at 14 m, which turns the hand-drawn blades into pencil hatching. Clone the map and the
+    // material for the ground alone, and repeat it at 2.8 m a tile, so the blades read as turf underfoot.
+    var lawnMap = TEX.grass.clone();
+    lawnMap.wrapS = lawnMap.wrapT = THREE.RepeatWrapping;
+    lawnMap.repeat.set(150, 150);   // 420 m plane / 150 = a 2.8 m tile
+    lawnMap.needsUpdate = true;
+    var lawnMat = MAT.grass.clone();
+    lawnMat.map = lawnMap;
+    plane(420, 420, lawnMat, 0, -0.03, 0, -Math.PI / 2);
+    pkSlab(34, 18, 0, 44, 0.012, M.paversWarm);      // the forecourt, where the guests arrive
+    pkSlab(28, 10, 0, 33, 0.014, M.paversWarm);      // the plaza under the gate
+    pkSlab(14, 32, 0, 12, 0.016);      // the midway
+    pkSlab(36, 18, 2, -4, 0.018);      // the station apron
+    pkSlab(6, 6, 14, -1, 0.02);        // the operator's room floor
+    pkSlab(10, 8, -13, 8, 0.02, M.paversWarm);       // the snack stand apron
+    pkSlab(62, 18, 0, 62, 0.01, pkAsphalt());       // the car park: two ranks of bays off a wide aisle
+    // the entrance drive up from the road
+    pkSlab(11, 5, 0, 73.5, 0.011, pkAsphalt());
+    // each ride's own paved pad is laid by the dressing (part 06), tinted to its theme
+    pkSlab(18, 6, -14, 20, 0.017);   // out to the carousel
+    pkSlab(18, 6, -14, 3, 0.017);    // the start of the street out to the teacups (part 12 carries it on)
+    pkSlab(18, 6, 14, 20, 0.017);    // out to the ferris wheel
+    pkSlab(18, 6, 14, 3, 0.017);     // the start of the street out to the dodgems
+    // the routes out to the far rides, the hub, the lake and the planting are laid in part 12
+    // the car park markings: 22 bays a side, two removed for the walk through to the gate
+    var bayW = 2.75, bayN = 22, bayX0 = -bayW * bayN / 2 + bayW / 2;
+    for (var i = 0; i < bayN; i++) {
+      var bx = bayX0 + i * bayW;
+      if (i === 11) continue;
+      box(0.12, 0.02, 5, MAT.whiteLine, bx - bayW / 2, 0.02, 55.5);   // rank A, heads to the north
+      box(0.12, 0.02, 5, MAT.whiteLine, bx - bayW / 2, 0.02, 68.5);   // rank B, heads to the south
+    }
+    box(0.12, 0.02, 5, MAT.whiteLine, -bayW * bayN / 2, 0.02, 55.5);
+    box(0.12, 0.02, 5, MAT.whiteLine, -bayW * bayN / 2, 0.02, 68.5);
+    box(0.12, 0.02, 5, MAT.whiteLine, bayW * bayN / 2, 0.02, 55.5);
+    box(0.12, 0.02, 5, MAT.whiteLine, bayW * bayN / 2, 0.02, 68.5);
+    box(62, 0.02, 0.14, MAT.whiteLine, 0, 0.02, 53.1);
+    box(62, 0.02, 0.14, MAT.whiteLine, 0, 0.02, 70.9);
+    // the walk up the middle of the near rank, so nobody has to squeeze between cars
+    pkSlab(5.5, 5, 0, 55.5, 0.016, M.paversWarm);
+    box(5.5, 0.02, 0.14, MAT.whiteLine, 0, 0.02, 58.05);
+  }
+  function pkGate() {
+    // stone piers with caps, a pitched roof over the turnstiles and 3D signage
+    [-10, 10].forEach(function (x) { pkGatePier(x, PK_GATE_Z); });
+    solid(-12.2, -7.8, 27.8, 32.2, 0, 5.6); solid(7.8, 12.2, 27.8, 32.2, 0, 5.6);
+    box(24, 2.4, 4, MAT.plaster, 0, 6.6, PK_GATE_Z);
+    box(24.9, 0.24, 4.9, MAT.trim, 0, 7.9, PK_GATE_Z);
+    box(24.4, 0.16, 4.4, MAT.trim, 0, 5.42, PK_GATE_Z);
+    // the roof: two slabs tilted up to a ridge
+    var rA = box(27.5, 0.34, 3.2, MAT.roof, 0, 8.1, PK_GATE_Z + 1.4); rA.rotation.x = 0.24;
+    var rB = box(27.5, 0.34, 3.2, MAT.roof, 0, 8.1, PK_GATE_Z - 1.4); rB.rotation.x = -0.24;
+    // the name on the outside face, over the arriving guests, and on the park side
+    pkSign3D(['PARK CO'], 12.0, 1.55, 0, 6.95, PK_GATE_Z + 2.06, 0, { bg: '#1b232c', fg: '#f5b53d' });
+    pkSign3D(['WELCOME'], 5.0, 0.5, 0, 5.86, PK_GATE_Z + 2.06, 0, { bg: '#0d1216', fg: '#eef1f5' });
+    pkSign3D(['PARK CO'], 9.0, 1.1, 0, 6.95, PK_GATE_Z - 2.06, Math.PI, { bg: '#1b232c', fg: '#f5b53d' });
+    pkSign3D(['OPEN 09:00 - 22:00'], 5.8, 0.5, 0, 5.86, PK_GATE_Z - 2.06, Math.PI, { bg: '#0d1216', fg: '#eef1f5' });
+    // pilasters framing the name, and downlights under the beam
+    [-11.4, -7.1, 7.1, 11.4].forEach(function (x) {
+      box(0.5, 2.3, 0.16, MAT.trim, x, 6.6, PK_GATE_Z + 2.02);
+      box(0.5, 2.3, 0.16, MAT.trim, x, 6.6, PK_GATE_Z - 2.02);
+    });
+    [-9, -4.5, 0, 4.5, 9].forEach(function (x) {
+      cyl(0.22, 0.16, MAT.steelDark, x, 5.34, PK_GATE_Z + 1.2, null, 12);
+      sphere(0.16, glowMat(0xfff2c0, 1.5), x, 5.26, PK_GATE_Z + 1.2);
+    });
+    [-8.6, 8.6].forEach(function (x) { sphere(0.24, glowMat(0xfff2c0, 0.9), x, 6.9, PK_GATE_Z - 2.24); });
+    // the turnstile bank: a brushed cabinet between each pair, a turnstile in each gap
+    var bankM = std({ color: 0xc2c7cd, roughness: 0.34, metalness: 0.72 });
+    [[-8, -6.8], [-5.2, -2.8], [-1.2, 1.2], [2.8, 5.2], [6.8, 8]].forEach(function (b) {
+      var w = b[1] - b[0], cx = (b[0] + b[1]) / 2;
+      box(w, 0.92, 0.5, bankM, cx, 0.46, PK_GATE_Z);
+      box(w + 0.08, 0.07, 0.58, MAT.steelDark, cx, 0.95, PK_GATE_Z);
+      box(w - 0.12, 0.16, 0.03, MAT.black, cx, 0.8, PK_GATE_Z + 0.26);   // the reader face, toward the guests
+      box(w - 0.2, 0.03, 0.01, glowMat(0x5fd38d, 1.4), cx, 0.9, PK_GATE_Z + 0.27);
+      box(w - 0.12, 0.1, 0.02, MAT.hazard || MAT.steelDark, cx, 0.06, PK_GATE_Z + 0.26);
+      solid(b[0], b[1], PK_GATE_Z - 0.28, PK_GATE_Z + 0.28, 0, 1.1);
+    });
+    PK_TURNSTILES.forEach(function (x) { pkTurnstileBetter(x, PK_GATE_Z); });
+    // planters and lamps at the entrance
+    [[-15, 33.5], [15, 33.5]].forEach(function (p) { pkFlowerBed(p[0], p[1], 3.0, 1.6); });
+    [[-13.5, 27.5], [13.5, 27.5]].forEach(function (p) { pkLamp(p[0], p[1], 4.6); });
+    // a welcome line across the forecourt
+    box(22, 0.02, 0.4, MAT.whiteLine, 0, 0.03, PK_GATE_Z + 5);
+    // the fence either side of the gate: the only way in is a turnstile. A palisade of iron spears on a stone kerb.
+    pkPalisade(PK_PARK.x0, PK_GATE_Z, -12, PK_GATE_Z);
+    pkPalisade(12, PK_GATE_Z, PK_PARK.x1, PK_GATE_Z);
+    // and round the park
+    pkPalisade(PK_PARK.x0, PK_GATE_Z, PK_PARK.x0, PK_PARK.z0);
+    pkPalisade(PK_PARK.x1, PK_GATE_Z, PK_PARK.x1, PK_PARK.z0);
+    pkPalisade(PK_PARK.x0, PK_PARK.z0, PK_PARK.x1, PK_PARK.z0);
+    // the boundary round the forecourt and the car park, with the drive in at the south
+    pkPalisade(-32.5, PK_GATE_Z, -32.5, 72);
+    pkPalisade(32.5, PK_GATE_Z, 32.5, 72);
+    pkPalisade(-32.5, 72, -5.8, 72);
+    pkPalisade(5.8, 72, 32.5, 72);
+  }
+  // the park office: a small room on the forecourt with the owner's PC, which opens the management panel
+  function pkOffice() {
+    pkOfficeBetter(-20, 43);
+  }
+  function pkTurnstile(x, z) {
+    pkTurnstileBetter(x, z);
+  }
+  function pkBooths() {
+    PK_BOOTHS.forEach(function (b, i) { pkTicketBoothBetter(b, i); });
+  }
+  function pkPrice(n) {
+    S.ticketPrice = clamp(Math.round((S.ticketPrice + n) * 100) / 100, 5, 200);
+    screenDirtyAll(); hudDirty = true;
+    toast('Adults ' + money(S.ticketPrice), '');
+    return S.ticketPrice;
+  }
+  // is this spot free for a tree? Keeps the rides, the routes, the lake, the midway, the gate and the coaster's footprint clear.
+  function pkTreeOK(x, z) {
+    for (var i = 0; i < PK_PLOTS.length; i++) { var p = PK_PLOTS[i]; if (dist2(x, z, p.x, p.z) < (p.r + 3.5) * (p.r + 3.5)) return false; }
+    if (x > -12 && x < 12 && z > -14 && z < 30) return false;
+    if (Math.abs(z - 20) < 5 && Math.abs(x) < 32) return false;   // the carousel and ferris paths
+    if (Math.abs(z - 3) < 5 && Math.abs(x) < 32) return false;    // the teacup and dodgem paths
+    if (z > 27) return false;
+    if (typeof pkThemeKeepClear === 'function' && pkThemeKeepClear(x, z)) return false;
+    return true;
+  }
+  function pkMidway() {
+    // lanterns down the midway, benches and bins at the sides
+    [[-7, 24], [7, 24], [-7, 12], [5.9, 12.8], [-7, 0], [7, 0], [-14, 40], [14, 40], [-14, 52], [14, 52]].forEach(function (p) { pkLamp(p[0], p[1], 4.6); });
+    [[-8, 20], [8, 20], [-8, 10], [8, 10], [-8, 2], [8, 2]].forEach(function (p) { pkBench(p[0], p[1], p[0] < 0 ? Math.PI / 2 : -Math.PI / 2); });
+    [[-6, 26], [6, 26], [-6, 6], [8.4, 13.7], [-6, 38], [6, 38]].forEach(function (p) { pkBin(p[0], p[1]); solid(p[0] - 0.35, p[0] + 0.35, p[1] - 0.35, p[1] + 0.35, 0, 1.0); });
+    // hedges either side of the midway, with a gap at each ride path: clipped hedge on a stone kerb,
+    // broken by flower beds so it reads as planting, not a wall
+    [-9.5, 9.5].forEach(function (x) {
+      for (var z = 6; z <= 26; z += 2.2) {
+        if (Math.abs(z - 19) < 2.4 || Math.abs(z - 3) < 2.4) continue;
+        if (Math.round(z * 10) % 11 === 0) { pkFlowerBed(x, z, 1.6, 2.0); continue; }
+        var M = pkMats();
+        box(1.0, 0.22, 2.1, M.stone, x, 0.11, z);
+        pkHedge(x, z, 0.8, 1.9, 0.85);
+      }
+    });
+    // trees: a seeded scatter over the park, skipping the rides, the routes and the midway.
+    // broadleafs with a conifer mixed in, each seeded so it keeps its shape - and the park keeps its trees from one load to the next
+    var rng = pkRng(20260418);
+    for (var tx = -68; tx <= 68; tx += 9) {
+      for (var tz = -92; tz <= 26; tz += 9) {
+        var px = tx + (rng() - 0.5) * 6, pz = tz + (rng() - 0.5) * 6, keep = rng(), ps = 0.85 + rng() * 0.8;
+        if (keep < 0.42 || !pkTreeOK(px, pz)) continue;
+        var seed = Math.abs(Math.round(px * 13 + pz * 7));
+        if (seed % 5 === 0) pkConifer(px, pz, ps, null, seed); else pkTree(px, pz, ps, null, seed);
+      }
+    }
+    // a forest wraps the park, so the palisade is the edge of the trees rather than of a bare green field
+    var rng2 = pkRng(77123);
+    for (var fx = -88; fx <= 88; fx += 7) {
+      for (var fz = -104; fz <= 88; fz += 7) {
+        if (fx > -75 && fx < 75 && fz > -98 && fz < 71) continue;   // the park and a breathing margin
+        if (fz >= 72 && fz <= 80) continue;                         // the road runs along z 76
+        var jx = (rng2() - 0.5) * 4, jz = (rng2() - 0.5) * 4, thin = rng2(), sc = 0.95 + rng2() * 1.2;
+        if (thin < 0.28) continue;                                  // thin the ring a little
+        var qx = fx + jx, qz = fz + jz, qseed = Math.abs(Math.round(qx * 13 + qz * 7));
+        if (qseed % 4 === 0) pkConifer(qx, qz, sc, null, qseed); else pkTree(qx, qz, sc, null, qseed);
+      }
+    }
+    // flower beds either side of the gate
+    [[-13, 33], [13, 33]].forEach(function (p) { pkFlowerBed(p[0], p[1], 3.0, 1.6); });
+    // the park sign on the forecourt, beside the walk up from the car park
+    sign(['PARK CO', 'a small park, growing'], 6.0, 1.4, -9.6, 2.6, 50.6, 0.25, { bg: '#1b232c', fg: '#f5b53d' });
+    box(0.2, 2.6, 0.2, MAT.wood, -12.2, 1.3, 50.6); box(0.2, 2.6, 0.2, MAT.wood, -7.0, 1.3, 50.6);
+    solid(-12.6, -6.6, 50.4, 50.8, 0, 2.6);
+    // the road past the car park, with a little traffic
+    plane(200, 8, MAT.yard, 0, 0.008, 76, -Math.PI / 2);
+    box(200, 0.02, 0.16, MAT.whiteLine, 0, 0.02, 76);
+    traffic.x0 = -90; traffic.x1 = 90;
+    for (var i = 0; i < 5; i++) trafficAdd(74.5, 1, randf(7, 11));
+    for (var j = 0; j < 4; j++) trafficAdd(77.5, -1, randf(7, 11));
+    // cars in the bays, nose in, a proper rank either side of the aisle
+    var CAR_COLS_PK = [0xb23a2e, 0x2f5d8a, 0xe0dccf, 0x2f6f4f, 0x8a8f96, 0x1f2328, 0xc9a227, 0x6b4f8a, 0xd06a2a, 0x4b6b7a];
+    var BAY_X0 = -28.875, BAY_W = 2.75;
+    var RANK_A = [0, 1, 3, 4, 7, 8, 12, 13, 15, 17, 19, 21];
+    var RANK_B = [2, 5, 6, 9, 12, 14, 16, 18, 20];
+    function pkParkCar(bay, row, colour) {
+      var c = carMesh({ col: colour });
+      c.position.set(BAY_X0 + bay * BAY_W, 0, row === 0 ? 55.5 : 68.5);
+      c.rotation.y = row === 0 ? Math.PI / 2 : -Math.PI / 2;
+      scene.add(c);
+    }
+    RANK_A.forEach(function (b, n) { pkParkCar(b, 0, CAR_COLS_PK[n % CAR_COLS_PK.length]); });
+    RANK_B.forEach(function (b, n) { pkParkCar(b, 1, CAR_COLS_PK[(n + 4) % CAR_COLS_PK.length]); });
+    // wheel stops at the head of the occupied bays
+    RANK_A.forEach(function (b) { box(1.7, 0.12, 0.22, MAT.steelDark, BAY_X0 + b * BAY_W, 0.06, 53.5); });
+    RANK_B.forEach(function (b) { box(1.7, 0.12, 0.22, MAT.steelDark, BAY_X0 + b * BAY_W, 0.06, 70.5); });
+    // lamp posts down the edges of the lot
+    [[-31.6, 55.5], [31.6, 55.5], [-31.6, 68.5], [31.6, 68.5]].forEach(function (p) { pkLamp(p[0], p[1], 5.2); });
+    // and a barrier at the entrance drive, with a little booth
+    [[-5.5, 72.6], [5.5, 72.6]].forEach(function (p) { cyl(0.14, 1.1, MAT.steelDark, p[0], 0.55, p[1], null, 10); });
+    var boom = box(11, 0.12, 0.12, MAT.whiteLine, 0, 1.05, 72.6); boom.rotation.y = 0.05;
+    box(0.5, 1.0, 0.5, MAT.steelDark, -5.9, 0.5, 72.6);
+    box(0.34, 0.24, 0.02, glowMat(0x5fd38d, 1.1), -5.9, 1.12, 72.6);
+  }
+  function pkBenchAt(x, z, rot) {
+    var g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rot * Math.PI / 2; scene.add(g);
+    box(1.8, 0.08, 0.5, MAT.wood, 0, 0.45, 0, g);
+    box(1.8, 0.5, 0.08, MAT.wood, 0, 0.72, -0.22, g);
+    [[-0.75, -0.18], [0.75, -0.18], [-0.75, 0.18], [0.75, 0.18]].forEach(function (p) { box(0.08, 0.45, 0.08, MAT.steelDark, p[0], 0.22, p[1], g); });
+    solid(x - 0.95, x + 0.95, z - 0.35, z + 0.35, 0, 0.9);
+  }
+  function pkBinAt(x, z) {
+    var g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+    cyl(0.34, 0.9, MAT.green, 0, 0.45, 0, g, 14);
+    cyl(0.38, 0.08, MAT.steelDark, 0, 0.94, 0, g, 14);
+    box(0.3, 0.22, 0.02, MAT.black, 0, 0.62, 0.34, g);
+    hitBox(0.9, 1.2, 0.9, 0, 0.6, 0, {
+      prompt: function () { return 'Papier hier!'; },
+      use: function () { sfx('ok'); say(pkNearestHuman(x, z), 'Papier hier!'); toast('Papier hier!', 'good'); }
+    }, g);
+    solid(x - 0.4, x + 0.4, z - 0.4, z + 0.4, 0, 1.0);
+  }
+  function pkBedAt(x, z) {
+    var g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+    box(3.0, 0.3, 1.6, MAT.brick, 0, 0.15, 0, g);
+    box(2.8, 0.12, 1.4, MAT.grass, 0, 0.32, 0, g);
+    for (var i = 0; i < 9; i++) { var c = [0xd94f4f, 0xf0c04a, 0xe08fc0, 0xf2f2f2][i % 4]; sphere(0.13, std({ color: c, roughness: 0.8 }), -1.1 + (i % 3) * 1.1, 0.44, -0.4 + Math.floor(i / 3) * 0.4, g); }
+    solid(x - 1.5, x + 1.5, z - 0.8, z + 0.8, 0, 0.5);
+  }
+  function pkNearestHuman(x, z) {
+    var best = null, bd = 9;
+    PK.guests.forEach(function (g) { var d = dist2(g.rec.x, g.rec.z, x, z); if (d < bd) { bd = d; best = g.g; } });
+    return best;
+  }
+  // ── The props the park can place in build mode ────────────────────
+  function pkDefProps() {
+    defProp('pkBench', { label: 'park bench', x: -8, z: 20, rot: 1, cat: 'park', build: function (c) {
+      c.box(1.8, 0.08, 0.5, MAT.wood, 0, 0.45, 0); c.box(1.8, 0.5, 0.08, MAT.wood, 0, 0.72, -0.22);
+      [[-0.75, -0.18], [0.75, -0.18], [-0.75, 0.18], [0.75, 0.18]].forEach(function (p) { c.box(0.08, 0.45, 0.08, MAT.steelDark, p[0], 0.22, p[1]); });
+      c.solid(-0.95, 0.95, -0.35, 0.35, 0, 0.9);
+    } });
+    defProp('pkBin', { label: 'paper bin', x: -6, z: 26, rot: 0, cat: 'park', build: function (c) {
+      c.cyl(0.34, 0.9, MAT.green, 0, 0.45, 0, 14); c.cyl(0.38, 0.08, MAT.steelDark, 0, 0.94, 0, 14); c.box(0.3, 0.22, 0.02, MAT.black, 0, 0.62, 0.34);
+      c.hit(0.9, 1.2, 0.9, 0, 0.6, 0, { prompt: function () { return 'Papier hier!'; }, use: function () { sfx('ok'); toast('Papier hier!', 'good'); } });
+      c.solid(-0.4, 0.4, -0.4, 0.4, 0, 1.0);
+    } });
+    defProp('pkBed', { label: 'flower bed', x: -13, z: 33, rot: 0, cat: 'park', build: function (c) {
+      c.box(3.0, 0.3, 1.6, MAT.brick, 0, 0.15, 0); c.box(2.8, 0.12, 1.4, MAT.grass, 0, 0.32, 0);
+      for (var i = 0; i < 9; i++) c.sphere(0.13, std({ color: [0xd94f4f, 0xf0c04a, 0xe08fc0, 0xf2f2f2][i % 4], roughness: 0.8 }), -1.1 + (i % 3) * 1.1, 0.44, -0.4 + Math.floor(i / 3) * 0.4);
+      c.solid(-1.5, 1.5, -0.8, 0.8, 0, 0.5);
+    } });
+    defProp('pkLamp', { label: 'lamp post', x: -7, z: 24, rot: 0, cat: 'park', build: function (c) {
+      c.cyl(0.06, 5, MAT.steelDark, 0, 2.5, 0, 8, 0.09); c.box(0.9, 0.06, 0.06, MAT.steelDark, 0.45, 4.95, 0);
+      var lens = c.box(0.36, 0.14, 0.3, glowMat(0xfff2c0, 0.6), 0.9, 4.88, 0); lampMeshes.push(lens);
+      c.solid(-0.15, 0.15, -0.15, 0.15, 0, 5);
+    } });
+    defProp('pkTree', { label: 'tree', x: -16, z: 24, rot: 0, cat: 'park', build: function (c) {
+      c.cyl(0.12, 2.6, std({ color: 0x5b4634, roughness: 1 }), 0, 1.3, 0, 8, 0.18);
+      [[0, 3.2, 0, 1.3], [0.7, 2.7, 0.4, 0.9], [-0.6, 2.9, -0.5, 1.0], [0.1, 4.0, 0.2, 0.8]].forEach(function (b, i) { c.sphere(b[3], std({ color: [0x3f6f2e, 0x5c8f44, 0x45752f, 0x6f9a4a][i], roughness: 1 }), b[0], b[1], b[2]); });
+      c.solid(-0.3, 0.3, -0.3, 0.3, 0, 2.6);
+    } });
+    defProp('pkSign', { label: 'park sign', x: 0, z: 51.5, rot: 0, cat: 'park', build: function (c) {
+      c.sign(['PARK CO'], 2.4, 0.6, 0, 2.2, 0.06, 0, { bg: '#1b232c', fg: '#f5b53d' });
+      c.box(0.14, 2.2, 0.14, MAT.wood, -1.0, 1.1, 0); c.box(0.14, 2.2, 0.14, MAT.wood, 1.0, 1.1, 0);
+      c.solid(-1.2, 1.2, -0.15, 0.15, 0, 2.4);
+    } });
+  }
+  // ── The game ──────────────────────────────────────────────────────
+  var GAME = {
+    handle: 'PARK_CO', version: '0.1.1',
+    floorY: function (x, z) { return pkFloor(x, z); },
+    insideWalk: function (x, z) { return pkInsidePark(x, z); },
+    indoors: function (x, z) { return x > 11 && x < 17 && z > -4 && z < 2; },
+    roofAt: function (x, z) { return x > 11 && x < 17 && z > -4 && z < 2 ? 3.3 : 0; },
+    wallPlanes: function () { return [{ a: 'x', v: 11, n: 1, z0: -4, z1: 2 }, { a: 'x', v: 17, n: -1, z0: -4, z1: 2 }, { a: 'z', v: -4, n: 1, x0: 11, x1: 17 }, { a: 'z', v: 2, n: -1, x0: 11, x1: 17 }]; },
+    editClamp: function (pt) { return { x: clamp(pt.x, PK_PARK.x0 + 1, PK_PARK.x1 - 1), z: clamp(pt.z, PK_PARK.z0 + 1, PK_PARK.z1 - 1) }; },
+    doorOpeners: function () {
+      var w = PK.guests.map(function (g) { return { x: g.rec.x, z: g.rec.z }; });
+      if (typeof player !== 'undefined' && player) w.push({ x: player.x, z: player.z });   // the player opens doors by walking up to them
+      return w;
+    },
+    stepSurface: function (x, z) { return pkInsidePark(x, z) ? 'floor' : 'outside'; },
+    collides: function (x, z) { return pkLaneCollides(x, z); },
+    playerOverride: function (dt) { return pkPlayerRideOverride(dt); },
+    key: function (e) {
+      if (e.code === 'KeyE' && !e.repeat && PK.playerRide) return pkPlayerRideExitTry();
+      return false;
+    },
+    powered: function () { return !!PK.lights && (S.time >= 18 || S.time < 7); },
+    freshState: function () {
+      return { day: 1, time: 9, bank: 500, level: 1, log: [], ledger: [], stats: { earned: 0, spent: 0 }, layout: {}, custom: [], hdoors: {},
+        ticketPrice: 25, snackPrice: 6, auto: false, ctlAuto: {}, cycles: 0, xp: 0, clerk: true, operator: false, snackOpen: false, train2: false, lights: false,   // the starter clerk works day one for free
+        wear: 0, rides: {}, today: { tickets: 0, snacks: 0, rides: 0, earned: 0 } };
+    },
+    // a day one save from before the starter clerk gets one too; later days keep the park they earned
+    migrate: function (s) { if (s.day === 1 && !s.clerk) s.clerk = true; return s; },
+    buildWorld: function (loaded) {
+      pkGround(); pkGate(); pkBooths(); pkOffice(); pkMidway(); pkBuildCoaster(); pkBuildOperatorRoom(); pkBuildSnack();
+      pkBuildAttractions();
+      pkDressAll();
+      if (typeof pkThemeBuild === 'function') pkThemeBuild();   // part 12: the routes, the hub, the lake, the planting
+      pkBuildNpcs();
+      pkDefProps(); buildProps();
+      buildSky({ clouds: 6, rainN: 2500, snowN: 1200 });
+      navSetup({ x0: PK_PARK.x0 - 4, z0: PK_PARK.z0 - 4, width: (PK_PARK.x1 - PK_PARK.x0) + 8, depth: (PK_PARK.z1 - PK_PARK.z0) + 8, cell: 0.6 });
+    },
+    afterBuild: function (loaded) { pkSyncSaved(); },
+    onEnter: function (loaded) { pkLog('The gate opens. Day ' + S.day + '.'); if (!loaded && S.clerk) toast('Your clerk works the ticket window - wages from day 2', 'good'); },
+    tick: function (dt) { pkTick(dt); },
+    startStats: function (loaded) {
+      return loaded ? ['Day ' + S.day, money(S.bank), 'level ' + PK.level, pkOpenCount() + ' of ' + (PK.attractions.length + 1) + ' rides open']
+        : ['A small park', money(500), 'one coaster', 'seven rides to open'];
+    },
+    startNote: function (loaded) { return loaded ? 'Slot ' + CO.save.slot + ' · last saved ' + (S.savedAt ? new Date(S.savedAt).toLocaleString() : 'never') : 'Slot ' + CO.save.slot + ' · a new park'; },
+    hud: function () {
+      var g = $('h-guests'); if (g) g.textContent = PK.guests.length + ' in the park';
+      var r = $('h-ride'); if (r) r.textContent = 'Ride: ' + pkRideWord() + ' · ' + pkOpenCount() + '/' + (PK.attractions.length + 1) + ' open' + (pkCoasterAuto() ? ' · auto' : '');
+    },
+    panel: function (kind, tab) { return pkPanel(kind, tab); },
+    panelAct: function (act, arg) { return pkPanelAct(act, arg); },
+    guideHtml: function () { return pkGuide(); },
+    commands: {
+      cash: function (n) { pay(+n || 0, 'dev'); return 'bank ' + money(S.bank); },
+      guests: function () { return PK.guests.length + ' guests, ' + PK.queue.length + ' in the coaster queue'; },
+      ride: function () { return 'ride ' + PK.ride.state + (S.auto ? ' (auto)' : ' (manual)') + ', ' + PK.ride.riders + ' riding, ' + S.cycles + ' cycles'; },
+      ticket: function (n) { return 'adults ' + money(pkPrice(+n || 0)); },
+      xp: function (n) { pkXp(+n || 0); return 'xp ' + PK.xp + ', level ' + PK.level; },
+      spawn: function (n) { var k = clamp(+n || 1, 1, 20); for (var i = 0; i < k; i++) pkSpawnGuest(); return k + ' guests arrive'; },
+      auto: function () { var on = pkSetAuto(!pkCoasterAuto()); return 'coaster auto ' + (on ? 'on' : 'off'); },
+      dispatch: function () { return pkDispatch() ? 'dispatched' : 'the ride will not go: ' + PK.ride.fault; },
+      rides: function () { return pkOpenCount() + ' of ' + (PK.attractions.length + 1) + ' open: ' + pkRideList(); },
+      open: function (id) { return pkOpenRide(String(id || '')) ? 'opened ' + id : 'no ride called ' + id; }
+    },
+    devState: function () { return { guests: PK.guests.length, queue: PK.queue.length, ride: PK.ride.state, auto: !!S.auto, cycles: S.cycles || 0, level: PK.level, xp: PK.xp, tickets: PK.today.tickets }; },
+    T: function () {
+      return { GAME: GAME, PK: PK, PK_LEVELS: PK_LEVELS, PK_QUEUE_SLOTS: PK_QUEUE_SLOTS, PK_BOOTHS: PK_BOOTHS,
+        pkSpawnGuest: pkSpawnGuest, pkServe: pkServe, pkDispatch: pkDispatch, pkTestRun: pkTestRun, pkSetAuto: pkSetAuto, pkPrice: pkPrice,
+        pkRideWord: pkRideWord, pkLevel: pkLevel, pkXp: pkXp, pkFloor: pkFloor, pkOnPlatform: pkOnPlatform,
+        pkBoothSlot: pkBoothSlot, pkGuestAt: pkGuestAt, pkSeatWorld: pkSeatWorld, pkRideTick: pkRideTick, pkGuestTick: pkGuestTick,
+        pkQueueJoin: pkQueueJoin, pkQueueReslot: pkQueueReslot,
+        pkOpenGates: pkOpenGates, pkCloseGates: pkCloseGates, pkGatesToggle: pkGatesToggle, pkBarsDown: pkBarsDown, pkBarsUp: pkBarsUp, pkStop: pkStop, pkReset: pkReset,
+        pkTick: pkTick, pkPanel: pkPanel, pkPanelAct: pkPanelAct, pkGuide: pkGuide, pkTrack: function () { return PK.curve; }, pkTrain: function () { return PK.cars; },
+        pkCoasterAuto: pkCoasterAuto,
+        pkSeats: function () { return PK.seats; }, pkCounts: function () { return { guests: PK.guests.length, queue: PK.queue.length, seats: PK.seats.length, cars: PK.cars.length, track: PK.len }; },
+        pkBuildCoaster: pkBuildCoaster, pkBuildOperatorRoom: pkBuildOperatorRoom, pkBuildSnack: pkBuildSnack,
+        pkBuildAttractions: pkBuildAttractions, pkOpenRide: pkOpenRide, pkOpenCount: pkOpenCount, pkRideList: pkRideList,
+        pkSetRideOpen: pkSetRideOpen,
+        pkOffice: pkOffice, pkService: pkService, pkFire: pkFire, pkAdminPanel: pkAdminPanel,
+        pkAttractions: function () { return PK.attractions; }, pkAttraction: function (id) { return PK.attrById[id]; },
+        pkAttrQueueJoin: pkAttrQueueJoin, pkAttrQueueLeave: pkAttrQueueLeave,
+        pkPlayerRideJoin: pkPlayerRideJoin, pkPlayerRideStepOff: pkPlayerRideStepOff, pkPlayerRideExitTry: pkPlayerRideExitTry,
+        pkPlayerRides: pkPlayerRides, pkPlayerTick: pkPlayerTick, pkLanes: function () { return PK.lanes; },
+        pkAttrTick: pkAttrTick, pkAttrSeat: pkAttrSeat, pkAttrUnseatAll: pkAttrUnseatAll, pkAttrSlot: pkAttrSlot,
+        pkTurnstiles: function () { return PK.turnstiles; }, pkGates: function () { return PK.gates; }, pkBooths: function () { return PK.booths; },
+        pkSnack: function () { return PK.snack; }, pkScreen: function () { return PK.screen; },
+        pkConsole: function () { return PK.console; },
+        pkCabinet: function () { return PK.console && PK.console.cabinet; },
+        pkNearestHuman: pkNearestHuman, pkLog: pkLog, pkNewDay: pkNewDay,
+        pkHire: pkHire, pkSnackBuy: pkSnackBuy, pkSnackPrice: pkSnackPrice, pkRideLoad: pkRideLoad, pkPlaceTrain: pkPlaceTrain, pkSeatGuest: pkSeatGuest, pkUnseatGuest: pkUnseatGuest,
+        spanCut: spanCut, lineWall: lineWall, roomFloor: roomFloor, troffer: troffer, highBay: highBay, fenceRun: fenceRun, tree: tree, lampPost: lampPost,
+        insideWalk: insideWalk, inRect: inRect, navSetup: navSetup, yawWrap: yawWrap, sfxCount: function () { return sfxCount; }, SFX: SFX,
+        geoCache: geoCache, BEVEL: BEVEL, bevelGeo: bevelGeo, roundCylGeo: roundCylGeo, boxGeo: boxGeo, taperGeo: taperGeo, textTex: textTex,
+        box: box, cyl: cyl, sign: sign, groundBlob: groundBlob, disposeTree: disposeTree, burst: burst, tickBursts: tickBursts, bursts: bursts,
+        lightBudget: lightBudget, seededStream: seededStream, hexCss: hexCss, mergeById: mergeById, scFit: scFit, catalogueHtml: catalogueHtml,
+        cards: cards, tickCards: tickCards, tickSky: tickSky, weatherFlash: function () { return weatherFlash; }, updateLightBudget: updateLightBudget,
+        shadowTick: shadowTick, faceTex: faceTex, humanGeo: humanGeo, collides: collides, panel: panel, hitBox: hitBox, addInter: addInter, inter: inter,
+        propSeed: propSeed, mixHex: mixHex, fmtTime: fmtTime, money: money, hook: hook, runHooks: runHooks, floorY: floorY, tickWeatherState: tickWeatherState };
+    }
+  };
+  // the engine pulls the fog in to 70 m every frame; a park this wide needs to be seen across it
+  hook('lighting', function (day, dawn, overcast, power) {
+    if (scene.fog) { scene.fog.near = 210 - (overcast || 0) * 60; scene.fog.far = 540 - (overcast || 0) * 200; }
+  });
+  CO.setup({ canvas: 'co-canvas', save: 'park-co', game: GAME, spawn: { x: 0, z: 42, yaw: 0 }, sun: { box: 120, far: 320, mapSize: 2048, target: [0, 0, 0] }, lightBudget: 10, fog: { color: 0x9dbbd8, near: 210, far: 520 } });
+  // ── The guests ────────────────────────────────────────────────────
+  // A guest arrives from the car park, joins the shorter ticket line, buys a ticket, passes a turnstile, queues for the
+  // coaster, boards when the gates open, rides, and goes home. The whole thing is a small state machine on a walk record.
+  var PK_POOL = [];
+  function pkTakeHuman() {
+    if (PK_POOL.length) { var g = PK_POOL.pop(); g.visible = true; scene.add(g); return g; }
+    return makeHuman({});
+  }
+  function pkParkHuman(g) {
+    scene.remove(g);
+    if (PK_POOL.length < 40) { g.visible = false; PK_POOL.push(g); return; }
+    var blob = pkBlobOf(g);
+    if (blob) g.remove(blob);
+    disposeTree(g);
+    if (blob) g.add(blob);
+  }
+  function pkSpawnGuest() {
+    var g = pkTakeHuman();
+    var x = randf(-18, 18), z = randf(58, 64);
+    g.position.set(x, 0, z);
+    g.rotation.set(0, Math.PI, 0);
+    var gu = {
+      id: PK.nextId++, g: g,
+      rec: { x: x, z: z, yaw: Math.PI, path: [], speed: randf(1.3, 1.9) },
+      state: 'toBooth', ticket: false, booth: -1, seat: null, attr: null, slot: -1, qslot: -1, rides: 0, pose: 'sit',
+      hunger: randf(30, 90), ate: false, mood: 'neutral', t: 0
+    };
+    PK.guests.push(gu);
+    return gu;
+  }
+  function pkGuestAt(x, z) {
+    var best = null, bd = 9;
+    PK.guests.forEach(function (gu) { var d = dist2(gu.rec.x, gu.rec.z, x, z); if (d < bd) { bd = d; best = gu; } });
+    return best;
+  }
+  function pkPickBooth() {
+    var best = 0, bl = 1e9;
+    for (var i = 0; i < PK.booths.length; i++) { var n = PK.booths[i].queue.length; if (n < bl) { bl = n; best = i; } }
+    return best;
+  }
+  function pkTurnstileAt(x) {
+    for (var i = 0; i < PK.turnstiles.length; i++) if (Math.abs(PK.turnstiles[i].x - x) < 0.6) return PK.turnstiles[i];
+    return null;
+  }
+  function pkGo(gu, x, z, next) {
+    gu.rec.path = route({ x: gu.rec.x, z: gu.rec.z }, { x: x, z: z });
+    gu.state = next;
+  }
+  // the coaster queue: one lane, one guest to a slot. A guest joins at the back, stands on their slot, and shuffles up as the
+  // line drains. PK.queue is the line, front first; gu.qslot is where in it they stand.
+  function pkQueueJoin(gu) {
+    if (gu.state === 'walkQueue' || gu.state === 'queue' || gu.state === 'board' || gu.state === 'seated') return false;
+    if (PK.queue.indexOf(gu) >= 0) return false;
+    if (PK.queue.length >= PK_QUEUE_SLOTS.length) return false;
+    gu.qslot = PK.queue.length;
+    PK.queue.push(gu);
+    gu.state = 'walkQueue';
+    var s = PK_QUEUE_SLOTS[gu.qslot];
+    gu.rec.path = route({ x: gu.rec.x, z: gu.rec.z }, PK_QUEUE_ENTRY).concat(route(PK_QUEUE_ENTRY, s));
+    return true;
+  }
+  // Reserve an attraction slot when the guest commits to walking there. This
+  // prevents arrivals from racing for the same queue position while in flight.
+  function pkAttrQueueJoin(gu, a) {
+    if (!a || !a.open || a.queue.indexOf(gu) >= 0) return false;
+    if (a.queue.length >= a.seats.length * 2) return false;
+    gu.attr = a.id;
+    gu.slot = a.queue.length;
+    a.queue.push(gu);
+    var s = pkAttrSlot(a, gu.slot);
+    pkGo(gu, s.x, s.z, 'walkAttr');
+    return true;
+  }
+  function pkAttrQueueLeave(gu, a) {
+    var i = a ? a.queue.indexOf(gu) : -1;
+    if (i >= 0) { a.queue.splice(i, 1); if (typeof pkAttrQueueReslot === 'function') pkAttrQueueReslot(a); screenDirtyAll(); }
+    gu.attr = null; gu.slot = -1;
+  }
+  function pkAttrQueueReslot(a) {
+    for (var i = 0; i < a.queue.length; i++) {
+      var gu = a.queue[i];
+      if (gu.slot === i) continue;
+      gu.slot = i;
+      if (gu.state === 'walkAttr' || gu.state === 'qwait' || gu.state === 'qmove') {
+        var s = pkAttrSlot(a, i);
+        gu.rec.path = route({ x: gu.rec.x, z: gu.rec.z }, s);
+        gu.state = gu.rec.path.length ? (gu.state === 'walkAttr' ? 'walkAttr' : 'qmove') : 'qwait';
+      }
+    }
+  }
+  function pkQueueReslot() {
+    for (var i = 0; i < PK.queue.length; i++) {
+      var gu = PK.queue[i];
+      if (gu.qslot === i) continue;
+      gu.qslot = i;
+      if (gu.state === 'queue' || gu.state === 'walkQueue') {
+        gu.rec.path = route({ x: gu.rec.x, z: gu.rec.z }, PK_QUEUE_SLOTS[i]);
+        gu.state = 'walkQueue';
+      }
+    }
+  }
+  function pkGuestStep(gu, dt) {
+    var rec = gu.rec, g = gu.g;
+    gu.t += dt;
+    var arrived = rec.path.length ? walkAlong(rec, rec.path, rec.speed, dt) : true;
+    if (gu.state === 'toBooth') {
+      var b = pkPickBooth();
+      gu.booth = b;
+      var s = pkBoothSlot(b, PK.booths[b].queue.length);
+      pkGo(gu, s.x, s.z, 'walkBooth');
+    } else if (gu.state === 'walkBooth') {
+      if (arrived) { PK.booths[gu.booth].queue.push(gu); gu.state = 'boothQueue'; }
+    } else if (gu.state === 'boothQueue') {
+      // the window serves the front of the line
+    } else if (gu.state === 'toTurn') {
+      var tb = PK.booths[gu.booth] || PK.booths[0];
+      if (!rec.path.length) pkGo(gu, tb.turnstile, PK_GATE_Z + 2, 'walkTurn');
+    } else if (gu.state === 'walkTurn') {
+      if (arrived) {
+        var tb2 = PK.booths[gu.booth] || PK.booths[0];
+        var t = pkTurnstileAt(tb2.turnstile);
+        if (t) { t.spin = 1; t.pass++; }
+        sfx('click');
+        pkGuestPickRide(gu);
+      }
+    } else if (gu.state === 'walkQueue') {
+      if (arrived) gu.state = 'queue';
+    } else if (gu.state === 'queue') {
+      // standing in line: the front of the line is invited in when the gates open (pkRideLoad)
+    } else if (gu.state === 'walkAttr') {
+      if (arrived) {
+        var at = PK.attrById[gu.attr];
+        if (!at || !at.open) {
+          pkAttrQueueLeave(gu, at); pkGuestPickRide(gu);
+        } else {
+          gu.state = 'qwait';
+          gu.rec.path = [];
+          pkAttrQueueReslot(at);
+          screenDirtyAll();
+        }
+      }
+    } else if (gu.state === 'qwait') {
+      // the ride boards this guest when its boarding starts
+    } else if (gu.state === 'qmove') {
+      if (arrived) gu.state = 'qwait';
+    } else if (gu.state === 'walkSeat') {
+      if (arrived) {
+        var seatAttr = PK.attrById[gu.attr];
+        if (seatAttr && gu.seat) pkAttrSit(seatAttr, gu, gu.seat);
+        else gu.state = 'off';
+      }
+    } else if (gu.state === 'board') {
+      if (arrived) pkSeatGuest(gu, gu.seat);   // they reached their car: step in and sit
+    } else if (gu.state === 'seated') {
+      // nothing to do but enjoy it
+    } else if (gu.state === 'toSnack') {
+      if (arrived) {
+        if (!PK.closed && PK.snackOpen && S.bank >= S.snackPrice) {
+          pay(S.snackPrice, 'Snack'); PK.today.snacks++; PK.today.earned += S.snackPrice; pkXp(1);
+          gu.ate = true; sfx('cash'); say(g, 'Thanks!'); screenDirtyAll(); hudDirty = true;
+        }
+        if (PK.closed || S.bank < S.snackPrice) pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
+        else gu.state = 'off';
+      }
+    } else if (gu.state === 'off') {
+      if (!rec.path.length) {
+        if (PK.closed) pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
+        else if (PK.snackOpen && !gu.ate && gu.hunger > 60 && S.bank >= S.snackPrice) pkGo(gu, -13, 10.4, 'toSnack');
+        else if ((gu.rides || 0) < 2 && randf(0, 1) < 0.55 && (pkQueueJoin(gu) || pkAttrPick(gu))) { /* off to another ride */ }
+        else pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
+      }
+    } else if (gu.state === 'leave') {
+      if (arrived) gu.state = 'gone';
+    }
+    if (gu.state !== 'seated') {
+      g.position.set(rec.x, pkFloor(rec.x, rec.z), rec.z);
+      g.rotation.y = rec.yaw;
+      var moving = rec.path.length > 0;
+      var mode = moving ? 'walk' : (gu.state === 'boothQueue' || gu.state === 'queue' || gu.state === 'board' ? 'wait' : 'idle');
+      animateHuman(g, dt, mode, rec.speed, null, false);
+    } else {
+      animateHuman(g, dt, gu.pose === 'stand' ? 'idle' : 'sit', 0, null, false);
+    }
+  }
+  function pkGuestTick(dt) {
+    for (var i = PK.guests.length - 1; i >= 0; i--) {
+      var gu = PK.guests[i];
+      pkGuestStep(gu, dt);
+      if (gu.state === 'gone') {
+        pkParkHuman(gu.g);
+        var qi = PK.queue.indexOf(gu); if (qi >= 0) { PK.queue.splice(qi, 1); pkQueueReslot(); }
+        if (gu.attr) { var aq = PK.attrById[gu.attr]; if (aq) { var ai = aq.queue.indexOf(gu); if (ai >= 0) { aq.queue.splice(ai, 1); pkAttrQueueReslot(aq); } } }
+        PK.guests.splice(i, 1);
+      }
+    }
+  }
+  function pkCloseGuests() {
+    PK.guests.forEach(function (gu) {
+      if (gu.state === 'seated' || gu.state === 'board') return;
+      if (gu.booth >= 0 && PK.booths[gu.booth]) {
+        var b = PK.booths[gu.booth], bi = b.queue.indexOf(gu);
+        if (bi >= 0) { b.queue.splice(bi, 1); screenDirtyAll(); }
+      }
+      if ((gu.state === 'toBooth' || gu.state === 'walkBooth') && !gu.ticket) {
+        gu.booth = -1;
+        gu.state = 'leave'; pkGo(gu, randf(-14, 14), randf(40, 56), 'leave'); return;
+      }
+      if (gu.attr) pkAttrQueueLeave(gu, PK.attrById[gu.attr]);
+      if (PK.queue.indexOf(gu) >= 0) { PK.queue.splice(PK.queue.indexOf(gu), 1); pkQueueReslot(); }
+      gu.state = 'leave';
+      pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
+    });
+  }
+  // ── The ticket window ─────────────────────────────────────────────
+  function pkServe(bi) {
+    if (PK.closed) { sfx('bad'); toast('The park is closed', 'bad'); return false; }
+    var b = PK.booths[bi]; if (!b) return false;
+    var gu = null;
+    for (var i = 0; i < b.queue.length; i++) if (b.queue[i].state === 'boothQueue') { gu = b.queue[i]; break; }
+    if (!gu) { sfx('bad'); toast('Nobody is waiting at the window', 'bad'); return false; }
+    pay(S.ticketPrice, 'Ticket');
+    PK.today.tickets++; PK.today.earned += S.ticketPrice;
+    pkXp(1);
+    gu.ticket = true; gu.state = 'toTurn'; gu.booth = bi;
+    b.queue.splice(b.queue.indexOf(gu), 1);
+    sfx('cash'); say(gu.g, 'One, please!');
+    toast('Ticket sold - ' + money(S.ticketPrice), 'good');
+    screenDirtyAll(); hudDirty = true;
+    return true;
+  }
+  // ── The day ───────────────────────────────────────────────────────
+  function pkNewDay() {
+    var wages = (S.clerk ? 40 : 0) + (S.operator ? 60 : 0);
+    if (wages) pay(-wages, 'Wages');
+    PK.today = S.today = { tickets: 0, snacks: 0, rides: 0, earned: 0 };
+    logEvent('Day ' + S.day + ' begins' + (wages ? ' - wages ' + money(wages) : ''), '');
+    screenDirtyAll(); hudDirty = true;
+  }
+  // ── The coaster ───────────────────────────────────────────────────
+  // One closed circuit: a station straight at the south, a lift hill in the north-east, a drop, a hill, a turn and a run home.
+  // The train is three cars of four seats. The operator's room stands east of the platform, with the desk that runs the ride.
+  var PK_CAR_N = 3;
+  // the four seats of a car, in the order they fill: the platform side first, then the far side, front row before back
+  var PK_SEAT_LOCAL = [[-0.35, 0.62], [-0.35, -0.62], [0.35, 0.62], [0.35, -0.62]];
+  var PK_CAR_COLS = [0xd94f4f, 0xf0c04a, 0x4f8fd9];
+  // the control points of the circuit. The station straight runs x -9..9 at z -4.6; the track then swings east and north,
+  // climbs to 14 m, comes back west over the park and drops home. It stays clear of the operator's room (x 11..17, z -4..2).
+  var PK_TRACK_PTS = [
+    [-9, 0.6, -4.6], [9, 0.6, -4.6],
+    [21, 0.8, -6], [26, 3, -14], [27, 9, -24], [24, 14, -34],
+    [14, 5, -43], [2, 2.2, -48], [-10, 10, -46], [-20, 3, -40],
+    [-26, 5, -30], [-24, 9, -20], [-18, 3, -12], [-13, 0.6, -6]
+  ];
+  // the u of the point on the curve nearest a world point: the station is found this way, never guessed
+  function pkNearestU(x, y, z) {
+    var N = 1200, best = 0, bd = Infinity;
+    for (var i = 0; i < N; i++) {
+      var p = PK.curve.getPointAt(i / N), d = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y) + (p.z - z) * (p.z - z);
+      if (d < bd) { bd = d; best = i; }
+    }
+    return best / N;
+  }
+  function pkBuildCoaster() {
+    var pts = PK_TRACK_PTS.map(function (p) { return new THREE.Vector3(p[0], p[1], p[2]); });
+    PK.curve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.5);
+    PK.len = PK.curve.getLength();
+    var N = 1200, samples = [];
+    for (var i = 0; i < N; i++) samples.push(PK.curve.getPointAt(i / N));
+    PK.cpU = pts.map(function (p) {
+      var best = 0, bd = Infinity;
+      for (var k = 0; k < N; k++) { var d = samples[k].distanceToSquared(p); if (d < bd) { bd = d; best = k; } }
+      return best / N;
+    });
+    PK.liftU = [PK.cpU[3], PK.cpU[5]];
+    // the train travels +x along the station, so the front car sits at the highest x: aim the front car at x 4
+    PK.stationU = pkNearestU(4, PK_PLATFORM_Y, PK_STATION_Z);
+    PK.stationX0 = PK.curve.getPointAt(PK.stationU).x;
+    PK.ride.u = PK.stationU;
+    pkTrack(); pkStation(); pkTrain(); pkQueueLine();
+    pkPlaceTrain();
+  }
+  function pkTrack() {
+    var M = pkMats();
+    // the spine: deep blue steel, so the circuit reads against the sky
+    var spine = new THREE.Mesh(new THREE.TubeGeometry(PK.curve, 500, 0.24, 8, true), M.steelBlue);
+    spine.castShadow = true; spine.receiveShadow = true; scene.add(spine);
+    // the two running rails, pale steel
+    var railPts = [[], []];
+    for (var i = 0; i < 500; i++) {
+      var u = i / 500, p = PK.curve.getPointAt(u), t = PK.curve.getTangentAt(u);
+      var lat = new THREE.Vector3(-t.z, 0, t.x).normalize();
+      railPts[0].push(p.clone().addScaledVector(lat, 0.55));
+      railPts[1].push(p.clone().addScaledVector(lat, -0.55));
+    }
+    railPts.forEach(function (rp) {
+      var c = new THREE.CatmullRomCurve3(rp, true, 'catmullrom', 0.5);
+      var m = new THREE.Mesh(new THREE.TubeGeometry(c, 500, 0.09, 6, true), MAT.chrome);
+      m.castShadow = true; scene.add(m);
+    });
+    // the ties, every couple of metres
+    var tieN = Math.max(8, Math.round(PK.len / 2));
+    for (var j = 0; j < tieN; j++) {
+      var u2 = j / tieN, p2 = PK.curve.getPointAt(u2), t2 = PK.curve.getTangentAt(u2);
+      var tie = box(1.5, 0.1, 0.24, MAT.steelDark, p2.x, p2.y - 0.16, p2.z);
+      tie.rotation.order = 'YXZ'; tie.rotation.y = Math.atan2(t2.x, t2.z); tie.rotation.x = -Math.asin(clamp(t2.y, -1, 1));
+    }
+    // the legs, wherever the track is off the ground
+    var supN = Math.max(4, Math.round(PK.len / 6));
+    for (var k = 0; k < supN; k++) {
+      var u3 = k / supN, p3 = PK.curve.getPointAt(u3);
+      if (p3.y < 1.6) continue;
+      var h = p3.y - 0.2;
+      cyl(0.16, h, MAT.steelDark, p3.x, h / 2, p3.z, null, 8);
+      box(0.7, 0.3, 0.7, MAT.grey, p3.x, 0.15, p3.z);
+    }
+  }
+  function pkStation() {
+    // the platform, south of the track, with a ramp down to the apron at its south edge
+    box(20, 0.6, 3.0, MAT.floor, 0, 0.3, -2.1);
+    var ramp = box(20, 0.1, 1.17, MAT.floor, 0, 0.3, 0.1);
+    ramp.rotation.x = -0.54;
+    // the canopy over it
+    [[-9.4, -3.4], [9.4, -3.4], [-9.4, -0.8], [9.4, -0.8]].forEach(function (p) { cyl(0.1, 3.2, MAT.steelDark, p[0], 2.2, p[1], null, 8); });
+    box(20.4, 0.2, 3.4, MAT.roof, 0, 3.9, -2.1);
+    sign(['PARK CO', 'the coaster'], 3.2, 0.8, 0, 3.0, -4.4, 0, { bg: '#1b232c', fg: '#f5b53d' });
+    // the gates along the platform edge, one per car door
+    [-6, -2, 2, 6].forEach(function (x) {
+      var g = new THREE.Group(); g.position.set(x, PK_PLATFORM_Y, -3.6); scene.add(g);
+      box(0.14, 1.0, 0.14, MAT.steelDark, 0, 0.5, 0, g);          // the hinge post
+      var arm = new THREE.Group(); arm.position.set(0, 0.9, 0); g.add(arm);
+      box(1.0, 0.1, 0.1, MAT.hazard, 0.5, 0.14, 0, arm);          // the top rail, across the way in
+      box(1.0, 0.1, 0.1, MAT.hazard, 0.5, -0.28, 0, arm);         // the bottom rail
+      for (var m = 0; m < 5; m++) box(0.05, 0.42, 0.05, MAT.steel, 0.12 + m * 0.19, -0.07, 0, arm);
+      box(0.12, 0.12, 0.12, MAT.red, 0.98, 0.14, 0, arm);         // the end cap
+      PK.gates.push({ x: x, z: -3.6, g: g, leaf: arm, bar: arm, open: false, t: 0 });
+    });
+  }
+  function pkTrain() {
+    for (var i = 0; i < PK_CAR_N; i++) {
+      var car = pkCoasterCarBetter(i, 0, 0, 0, 0, PK_CAR_COLS[i % PK_CAR_COLS.length]);
+      // the bevelled tub, seats and lap bars all come from pkCoasterCarBetter
+      PK.cars.push(car);
+      // the seats, in the order they fill
+      PK_SEAT_LOCAL.forEach(function (sl) {
+        PK.seats.push({ car: i, local: { x: sl[0], y: -0.06, z: sl[1] }, guest: null });
+      });
+    }
+  }
+  function pkQueueLine() {
+    // the waiting line: two runs of park fence with both ends open, so the guests walk in at the south and out at the north
+    pkParkFence(6.2, 8.6, 6.2, -0.4);
+    pkParkFence(7.8, 8.6, 7.8, -0.4);
+    // the lane floor: a kerbed strip in the park pavers, so the line reads as a place of its own
+    box(1.92, 0.10, 10.6, pkMats().kerb, 7, 0.012, 4.3);
+    box(1.54, 0.05, 10.2, pkMats().pavers, 7, 0.035, 4.3);
+    // the entry arch at the back, facing the gate
+    [-1, 1].forEach(function (sx) {
+      pkRoundCyl(0.085, 2.34, MAT.steelDark, 7 + sx * 0.86, 1.17, 9.35, null, 8);
+      sphere(0.09, pkMats().gold, 7 + sx * 0.86, 2.36, 9.35);
+    });
+    pkBevelBox(1.98, 0.16, 0.14, MAT.steelDark, 7, 2.32, 9.35);
+    pkSign3D(['QUEUE', 'THE COASTER'], 1.50, 0.34, 7, 2.58, 9.35, 0, { bg: '#1b232c', fg: '#f5b53d' });
+    // the player's way on: press E at the back of the line and the train carries you
+    hitBox(2.2, 2.2, 2.0, 7, 1.1, 9.0, {
+      prompt: function () {
+        if (PK.playerRide || PK.closed) return '';
+        if (PK.playerWait && PK.playerWait.coaster) return 'Waiting for the coaster - press E to leave the line';
+        return 'Ride the coaster';
+      },
+      use: function () { pkPlayerRideJoin(null); }
+    });
+  }
+  // ── The operator's room ───────────────────────────────────────────
+  function pkBuildOperatorRoom() {
+    var X0 = 11, X1 = 17, Z0 = -4, Z1 = 2, H = 3.2;
+    var M = pkMats(), plaster = pkMatPlasterRich(), oak = pkMatWoodRich(), stone = pkMatStone();
+    var paint = std({ color: 0xece5d7, roughness: 0.94, emissive: 0x3a352c, emissiveIntensity: 0.42 });        // the walls, painted cream
+    var wains = std({ color: 0x3d5b49, roughness: 0.62, metalness: 0.04, emissive: 0x1b2a20, emissiveIntensity: 0.5 });   // the wainscot, park green
+    var red = std({ color: 0xa8402c, roughness: 0.62 });          // the coaster's own red
+    var iron = MAT.steelDark, brass = pkMatMetalRich();
+    var steel = std({ color: 0x39434a, roughness: 0.45, metalness: 0.45 });      // the booth's steel
+    var darkSill = std({ color: 0x20272c, roughness: 0.62, metalness: 0.30 });   // the anti-bandit sill
+    var hzDark = std({ color: 0x111417, roughness: 0.7 }), hzGold = std({ color: 0xc9a227, roughness: 0.7 });
+    // ── the shell: cream bays + coaster-red trim, striped tented canopy.
+    // Window/door openings + all interior (desk, console, screen) stay
+    // exactly as they were — only the exterior skin is rebuilt.
+    // the west wall, with a window onto the platform
+    // the west wall, with a window onto the platform
+    box(0.2, H, 1, plaster, X0, H / 2, -3.5);
+    box(0.2, H, 3, plaster, X0, H / 2, 0.5);
+    box(0.2, 1.0, 2, plaster, X0, 0.5, -2);
+    box(0.2, 1.0, 2, plaster, X0, 2.7, -2);
+    box(0.2, H, 6, plaster, X1, H / 2, -1);
+    box(6, H, 0.2, plaster, 14, H / 2, Z0);
+    // the south wall: cream bays each side of the door, red trim band,
+    // sill wall and header band (openings unchanged)
+    [[11.96, 1.92], [15.64, 2.72]].forEach(function (bay) {
+      var bx = bay[0], bw = bay[1], half = bw / 2, panes = bw > 2.2 ? 3 : 2;
+      box(bw, 0.65, 0.2, paint, bx, 0.945, Z1);
+      box(bw, 0.18, 0.22, red, bx, 0.72, Z1);
+      box(bw + 0.06, 0.06, 0.28, MAT.steelDark, bx, 1.27, Z1);
+      for (var hz2 = 0, hzN = Math.floor((bw - 0.2) / 0.18); hz2 < hzN; hz2++) {
+        box(0.08, 0.10, 0.02, hz2 % 2 ? hzGold : hzDark, bx - half + 0.10 + hz2 * 0.18, 0.72, Z1 + 0.105);
+      }
+      var lw = Math.min(1.5, bw - 0.9);
+      for (var lv2 = 0; lv2 < 5; lv2++) box(lw, 0.035, 0.03, iron, bx + half - lw / 2 - 0.15, 0.86 + lv2 * 0.075, Z1 + 0.105);
+      box(bw, 0.93, 0.2, plaster, bx, 2.735, Z1);                        // the solid plaster header, as on the booths
+      box(bw - 0.10, 1.0, 0.035, M.glass, bx, 1.77, Z1);                 // the same metre of glass, booth band height
+      [bx - half + 0.03, bx + half - 0.03].forEach(function (vx) { box(0.08, 1.06, 0.09, MAT.steelDark, vx, 1.77, Z1 + 0.005); });
+      for (var pm = 1; pm < panes; pm++) box(0.06, 1.0, 0.075, MAT.steelDark, bx - half + (bw / panes) * pm, 1.77, Z1 + 0.01);
+      box(bw, 0.07, 0.09, MAT.steelDark, bx, 2.31, Z1 + 0.005);
+      box(bw, 0.07, 0.09, MAT.steelDark, bx, 1.27, Z1 + 0.005);
+    });
+    box(1.2, 1.05, 0.2, paint, 13.6, 2.675, Z1);
+    // striped tented canopy in coaster red/cream, shared booth recipe.
+    // wallTop (3.2) clears the fascia sign (top 2.85) + lamps (2.98);
+    // the valance hangs to ~2.86 in front of them (z 2.42 vs sign 2.13).
+    var opRoofG = new THREE.Group(); opRoofG.position.set(14, 0, -1); scene.add(opRoofG);
+    var opRoof = pkBoothTentRoof(opRoofG, { w: 6, d: 6, wallTop: H, roofA: '#a8402c', roofB: '#f3ead6', trimMat: red, roofH: 1.35 });
+    solid(X0 - 0.1, X0 + 0.1, Z0, Z1, 0, H);
+    solid(X1 - 0.1, X1 + 0.1, Z0, Z1, 0, H);
+    solid(X0, X1, Z0 - 0.1, Z0 + 0.1, 0, H);
+    solid(X0, 13, Z1 - 0.1, Z1 + 0.1, 0, H);
+    solid(14.2, X1, Z1 - 0.1, Z1 + 0.1, 0, H);
+    // the outside: the booth language — perimeter plinth strips (not a
+    // filled slab), steel corner posts, red-trimmed sill
+    var opPlinthG = new THREE.Group(); opPlinthG.position.set(14, 0, -1); scene.add(opPlinthG);
+    pkBoothPlinth(6, 6, stone, opPlinthG);
+    [[X0, Z0], [X0, Z1], [X1, Z0], [X1, Z1]].forEach(function (c) {
+      box(0.14, H, 0.20, steel, c[0], H / 2, c[1]);
+      box(0.22, 0.09, 0.28, steel, c[0], H - 0.05, c[1]);
+    });
+    // eave plant: the old deck AC pack tucks under the tented eave on the
+    // west side, with the beacon on its own mast clear of the valance;
+    // a vent stack stays at the back corner
+    box(1.30, 0.52, 0.95, MAT.steel, 11.45, 2.85, 1.55);
+    for (var ac2 = 0; ac2 < 5; ac2++) box(0.92, 0.03, 0.02, MAT.steelDark, 11.45, 2.71 + ac2 * 0.075, 2.05);
+    cyl(0.30, 0.04, MAT.black, 11.45, 3.12, 1.55, null, 16);
+    cyl(0.26, 0.02, pkMats().iron, 11.45, 3.14, 1.55, null, 16);
+    // beacon on its own mast at the eave corner, clear of the valance
+    pkRoundCyl(0.04, 0.30, MAT.steelDark, 16.6, 3.10, 2.15, null, 8);
+    var beacon = sphere(0.11, glowMat(0xff3b30, 0.4), 16.6, 3.32, 2.15);
+    pkRoundCyl(0.07, 0.62, MAT.steel, 16.10, 3.65, -3.35, null, 10);
+    var cap = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.16, 10), MAT.steelDark); cap.position.set(16.10, 4.01, -3.35); scene.add(cap);
+    // the east wall: ribbed steel and a louvered plant grille
+    for (var er = 0; er < 8; er++) box(0.05, 1.86, 0.045, MAT.steelDark, 17.12, 1.55, -3.7 + er * 0.72);
+    for (var lv = 0; lv < 7; lv++) box(0.04, 0.05, 0.80, MAT.steelDark, 17.13, 1.85 + lv * 0.11, -1.55);
+    // the door: red-trimmed jambs, an open cream service door with a wired
+    // pane, lanterns each side, planters flanking the approach
+    [[12.94, 2.06], [14.26, 2.06]].forEach(function (c) { box(0.12, 2.2, 0.13, red, c[0], 1.1, c[1]); });
+    box(1.44, 0.12, 0.13, red, 13.6, 2.21, 2.06);
+    var leafG = new THREE.Group(); leafG.position.set(13.02, 0, 1.92); leafG.rotation.y = 1.34; scene.add(leafG);
+    box(1.08, 2.10, 0.065, paint, 0.54, 1.05, 0, leafG);
+    box(0.50, 0.56, 0.02, M.glass, 0.54, 1.56, 0.043, leafG);
+    box(0.98, 0.24, 0.02, MAT.hazard, 0.54, 0.20, 0.043, leafG);
+    box(0.72, 0.05, 0.04, MAT.chrome, 0.54, 1.02, 0.055, leafG);
+    box(1.28, 0.03, 0.62, MAT.steelDark, 13.6, 0.05, 2.32);
+    for (var hz = 0; hz < 6; hz++) box(0.20, 0.012, 0.05, MAT.hazard, 13.05 + hz * 0.22, 0.066, 2.32);
+    // the fascia board over the door (below the eave, clears the valance)
+    // and the three signal lamps tucked under the eave
+    pkSign3D(['PARK CO · RIDE CONTROL', 'THE COASTER'], 2.1, 0.34, 13.6, 2.62, 2.13, 0, { bg: '#1b232c', fg: '#f5b53d' });
+    box(0.66, 0.20, 0.12, red, 13.6, 2.94, 2.14);
+    var opLampM = [0xff3b30, 0xf0c04a, 0x5fd38d].map(function (col) { return glowMat(col, 0.3); });
+    var opLamps = [0, 1, 2].map(function (i2) { return sphere(0.055, opLampM[i2], 13.42 + i2 * 0.18, 2.94, 2.21); });
+    PK.opLamps = { mats: opLampM, beacon: beacon.material };
+    // lanterns flanking the door + planters on the forecourt (world coords)
+    pkBoothLantern(opPlantG, -1.28, 2.10, 3.14);
+    pkBoothLantern(opPlantG, 0.48, 2.10, 3.14);
+    var opPlantG = new THREE.Group(); opPlantG.position.set(14, 0, -1); scene.add(opPlantG);
+    pkPlanter(1.8, opPlantG, -2.2, 0, 3.9);
+    pkPlanter(1.8, opPlantG, 2.2, 0, 3.9);
+    // the tented eave shelters the door, as on every booth
+    // the platform side: a canopy over the window, the fascia board, and the pane untouched
+    box(1.15, 0.10, 2.55, MAT.steelDark, 10.42, 2.88, -2);
+    box(1.18, 0.06, 0.07, MAT.chrome, 9.87, 2.92, -2);
+    [[-3.30], [-0.70]].forEach(function (c) { pkRod(11.0, 3.06, c[0], 9.92, 2.92, c[0], 0.018, MAT.steelDark, null, 6); });
+    pkSign3D(['PARK CO · RIDE CONTROL', 'THE COASTER'], 2.05, 0.36, 10.93, 2.58, -2, -Math.PI / 2, { bg: '#1b232c', fg: '#f5b53d' });
+    // the forecourt: a paved way from the door to the fountain, so the booth is entered, not marooned
+    pkPaved(2.6, 6.6, pkMats().paversWarm, 13.6, 0.045, 5.2, 0);
+    // ── inside ──
+    pkPaved(5.72, 5.72, MAT.tile, 14, 0.043, -1, 1.1);              // a tiled floor
+    box(5.76, 0.06, 5.76, paint, 14, 3.15, -1);                     // the ceiling
+    // wainscot round the room, with an oak chair rail on top
+    box(5.6, 0.98, 0.05, wains, 14, 0.49, -3.87); box(5.62, 0.07, 0.09, oak, 14, 1.0, -3.86);
+    box(5.6, 0.98, 0.05, wains, 16.87, 0.49, -1); box(5.62, 0.07, 0.09, oak, 16.86, 1.0, -1);
+    [[11.1, 2.98], [11.1, -0.98]].forEach(function (c) { box(0.05, 0.98, 2.0, wains, 11.13, 0.49, c[1]); box(0.09, 0.07, 2.02, oak, 11.14, 1.0, c[1]); });
+    [[12.05, 1.0], [15.5, 1.6]].forEach(function (c) { box(c[1], 0.98, 0.05, wains, c[0], 0.49, 1.87); box(c[1] + 0.02, 0.07, 0.09, oak, c[0], 1.0, 1.86); });
+    // a skirting board all the way round
+    [[14, -3.9, 5.7, 0.06], [14, 1.9, 5.7, 0.06]].forEach(function (w) { box(w[2], 0.12, w[3], oak, w[0], 0.06, w[1]); });
+    [[11.12, -1], [16.88, -1]].forEach(function (w) { box(0.06, 0.12, 5.7, oak, w[0], 0.06, w[1]); });
+    // two ceiling lights, which go dark with the power like every other lamp
+    troffer(13, 3.11, -2.3, 1.15, 0.5);
+    troffer(15.2, 3.11, 0.3, 1.15, 0.5);
+    // the desk along the west wall, facing the platform: an oak top on a steel frame with a drawer pedestal
+    box(0.86, 0.06, 3.1, oak, 12.4, 0.98, -2.2);
+    box(0.86, 0.06, 3.1, red, 12.4, 0.94, -2.2);
+    [[-3.66], [-0.74]].forEach(function (z) { box(0.08, 0.9, 0.08, iron, 12.82, 0.45, z[0]); box(0.08, 0.9, 0.08, iron, 12.05, 0.45, z[0]); });
+    box(0.06, 0.86, 2.9, paint, 12.83, 0.45, -2.2);
+    box(0.62, 0.6, 0.62, iron, 12.5, 0.3, -1.02);
+    [0.44, 0.24, 0.04].forEach(function (y) { box(0.5, 0.02, 0.03, brass, 12.5, y + 0.14, -0.7); });
+    solid(12.0, 12.8, -3.7, -0.7, 0, 1.0);
+    // the monitor, turned to the operator's chair
+    box(0.08, 0.34, 0.06, iron, 12.44, 1.24, -2.86);
+    box(0.06, 0.16, 0.22, iron, 12.44, 1.06, -2.86);
+    var mon = box(0.05, 0.5, 0.72, MAT.black, 12.4, 1.42, -2.86); mon.rotation.z = 0.02;
+    box(0.01, 0.44, 0.66, glowMat(0x8fb6d8, 0.5), 12.37, 1.42, -2.86);
+    // desk clutter: keyboard, mouse, papers, a mug, a radio and a lamp
+    box(0.16, 0.025, 0.44, MAT.plastic, 12.62, 1.02, -2.2);
+    box(0.06, 0.03, 0.1, MAT.plastic, 12.66, 1.02, -1.9);
+    var paper = box(0.3, 0.008, 0.4, MAT.paper, 12.6, 1.02, -1.5); paper.rotation.y = 0.18;
+    box(0.3, 0.008, 0.4, MAT.paper, 12.55, 1.03, -1.46);
+    cyl(0.05, 0.11, std({ color: 0xf2efe6, roughness: 0.5 }), 12.62, 1.07, -0.86, null, 12);
+    box(0.18, 0.12, 0.1, MAT.plastic, 12.44, 1.08, -3.34);
+    box(0.14, 0.05, 0.02, brass, 12.5, 1.1, -3.34);
+    cyl(0.09, 0.03, iron, 12.32, 1.03, -0.98, null, 12);
+    pkRod(12.32, 1.03, -0.98, 12.34, 1.44, -0.94, 0.02, brass, null, 6);
+    var shade = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.16, 14, 1, true), std({ color: 0x2c4739, roughness: 0.5, side: THREE.DoubleSide }));
+    shade.position.set(12.34, 1.46, -0.94); scene.add(shade);
+    sphere(0.055, glowMat(0xfff0c8, 1.1), 12.34, 1.4, -0.94);
+    // the operator's chair, at the console on the north wall
+    var seatMat = std({ color: 0x1f2a33, roughness: 0.85 });
+    box(0.5, 0.09, 0.5, seatMat, 14.3, 0.47, -2.55);
+    box(0.5, 0.52, 0.09, seatMat, 14.3, 0.74, -2.30);
+    box(0.44, 0.06, 0.06, seatMat, 14.3, 0.97, -2.30);
+    cyl(0.045, 0.42, iron, 14.3, 0.23, -2.55, null, 8);
+    for (var ca = 0; ca < 5; ca++) {
+      var an = ca / 5 * Math.PI * 2;
+      var arm = box(0.05, 0.04, 0.34, iron, 14.3 + Math.sin(an) * 0.16, 0.06, -2.55 + Math.cos(an) * 0.16);
+      arm.rotation.y = an;
+    }
+    // the control desk, and the status screen above it
+    pkBuildCoasterConsole();
+    // the north wall: the control screen in a steel bezel, a notice board and a clock
+    box(1.08, 0.96, 0.06, iron, 14, 2.02, -3.93);
+    box(0.98, 0.86, 0.03, MAT.black, 14, 2.02, -3.9);
+    box(1.2, 0.72, 0.05, MAT.cork, 12.3, 1.95, -3.88);
+    box(1.24, 0.06, 0.08, oak, 12.3, 2.34, -3.87);
+    box(1.24, 0.06, 0.08, oak, 12.3, 1.56, -3.87);
+    [[-0.36, 0.14, 0.3, 0.24], [0.02, -0.06, 0.34, 0.2], [0.32, 0.1, 0.22, 0.3]].forEach(function (p) {
+      var pn = box(p[2], p[3], 0.01, MAT.paper, 12.3 + p[0], 1.95 + p[1], -3.85); pn.rotation.z = randf(-0.06, 0.06);
+    });
+    var clock = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.05, 20), std({ color: 0xf4f1e8, roughness: 0.6 }));
+    clock.position.set(15.7, 2.5, -3.87); clock.rotation.x = Math.PI / 2; scene.add(clock);
+    cyl(0.19, 0.04, iron, 15.7, 2.5, -3.9, null, 20).rotation.x = Math.PI / 2;
+    box(0.02, 0.11, 0.012, MAT.black, 15.7, 2.55, -3.84);
+    box(0.08, 0.02, 0.012, MAT.black, 15.74, 2.5, -3.84);
+    // the east wall: a framed safety notice, a first-aid box and the key cabinet by the door
+    box(0.9, 0.62, 0.05, oak, 16.87, 1.95, -2.6);
+    box(0.78, 0.5, 0.01, std({ color: 0xf2efe6, roughness: 0.85 }), 16.84, 1.95, -2.6);
+    box(0.6, 0.34, 0.03, std({ color: 0xb8452f, roughness: 0.7 }), 16.83, 2.0, -2.6);
+    box(0.34, 0.4, 0.12, std({ color: 0xf4f4f0, roughness: 0.6 }), 16.84, 1.5, -1.4);
+    box(0.12, 0.05, 0.13, std({ color: 0x2f9e44, roughness: 0.6 }), 16.84, 1.68, -1.4);
+    box(0.5, 0.66, 0.12, oak, 15.35, 1.6, 1.87);
+    box(0.42, 0.58, 0.02, MAT.steelDark, 15.35, 1.6, 1.8);
+    for (var kk = 0; kk < 6; kk++) box(0.03, 0.09, 0.01, brass, 15.2 + (kk % 3) * 0.14, 1.78 - Math.floor(kk / 3) * 0.16, 1.79);
+    // the fire extinguisher by the door, and a hi-vis on a hook
+    cyl(0.075, 0.46, red, 16.5, 0.62, 1.6, null, 12);
+    cyl(0.03, 0.1, MAT.black, 16.5, 0.9, 1.6, null, 8);
+    box(0.14, 0.05, 0.05, MAT.black, 16.5, 0.86, 1.53);
+    box(0.06, 0.1, 0.06, iron, 16.86, 1.62, 1.48);
+    var vest = box(0.03, 0.52, 0.36, MAT.hivis, 16.84, 1.32, 1.48); vest.rotation.z = 0.02;
+    // a bin in the corner
+    cyl(0.15, 0.42, iron, 16.4, 0.21, -3.5, null, 12);
+    // the screen on the north wall: a status board that reports, while the desk does the work
+    PK.screen = touchScreen({
+      w: 420, h: 380, pw: 0.9, ph: 0.78, x: 14, y: 2.02, z: Z0 + 0.12, parent: null, title: 'Ride control',
+      draw: function (ctx, s) {
+        var R = PK.ride;
+        scBg(ctx, s.w, s.h); scHead(ctx, s.w, 'RIDE CONTROL', pkRideWord());
+        // the state, large, because it is the one thing you look up at
+        var live = R.fault ? 'STOPPED' : R.state === 'running' ? 'ON TRACK' : R.state === 'dispatch' ? 'DISPATCHING' : R.state === 'ready' ? 'READY TO SEND' : R.state === 'unloading' ? 'UNLOADING' : 'AT THE STATION';
+        var col = R.fault ? '#ff6b5e' : R.state === 'running' ? '#5fd38d' : '#f5b53d';
+        ctx.fillStyle = col; ctx.font = 'bold 42px ' + SCREEN_THEME.font; ctx.textAlign = 'left'; ctx.fillText(live, 16, 92);
+        ctx.textAlign = 'right'; ctx.fillStyle = '#a0acb8'; ctx.font = '16px ' + SCREEN_THEME.font;
+        ctx.fillText((R.v || 0).toFixed(1) + ' m/s', s.w - 16, 92);
+        ctx.textAlign = 'left';
+        // the train, car by car: filled seats are riders
+        var cars = 3, per = Math.ceil(PK.seats.length / cars), st = Math.round(R.u * PK.seats.length);
+        for (var c = 0; c < cars; c++) {
+          var x0 = 16 + c * 132, y0 = 112;
+          ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(x0, y0, 120, 46);
+          for (var q = 0; q < per; q++) {
+            var filled = ((c * per + q) < R.riders);
+            ctx.fillStyle = filled ? '#5fd38d' : 'rgba(255,255,255,0.18)';
+            ctx.fillRect(x0 + 8 + q * 18, y0 + 10, 13, 26);
+          }
+          ctx.fillStyle = '#7d8a96'; ctx.font = '12px ' + SCREEN_THEME.font;
+          ctx.fillText('CAR ' + (c + 1), x0 + 4, y0 + 44);
+        }
+        // the line of state, row by row
+        var rows = [
+          ['GATES', PK.gates[0] && PK.gates[0].open ? 'OPEN' : 'CLOSED', PK.gates[0] && PK.gates[0].open ? '#5fd38d' : '#a0acb8'],
+          ['RESTRAINTS', R.barsWant > 0.5 ? 'DOWN' : 'UP', R.barsWant > 0.5 ? '#5fd38d' : '#a0acb8'],
+          ['OPERATION', R.fault ? R.fault.toUpperCase() : (S.auto || S.operator ? 'AUTOMATIC' : 'MANUAL'), R.fault ? '#ff6b5e' : '#f5b53d'],
+          ['TRACK WEAR', Math.round(S.wear || 0) + ' %', (S.wear || 0) > 70 ? '#ff6b5e' : '#eef1f5']
+        ];
+        for (var i = 0; i < rows.length; i++) {
+          var y = 186 + i * 34;
+          ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(16, y - 16, s.w - 32, 28);
+          ctx.fillStyle = '#a0acb8'; ctx.font = '14px ' + SCREEN_THEME.font; ctx.fillText(rows[i][0], 26, y + 3);
+          ctx.fillStyle = rows[i][2]; ctx.font = 'bold 15px ' + SCREEN_THEME.font; ctx.textAlign = 'right';
+          ctx.fillText(rows[i][1], s.w - 26, y + 3); ctx.textAlign = 'left';
+        }
+        scText(ctx, 16, 336, 'Cycles ' + (S.cycles || 0) + '   Riders today ' + PK.today.rides, '#a0acb8', 13);
+        scText(ctx, 16, 356, 'Level ' + PK.level + '   Tickets ' + PK.today.tickets + '   Snacks ' + PK.today.snacks, '#7d8a96', 13);
+      }
+    });
+  }
+  // the desk buttons and the AUTO lever are gone: the screen carries every control
+  // ── The snack stand ───────────────────────────────────────────────
+  function pkBuildSnack() {
+    var g = new THREE.Group(); g.position.set(-13, 0, 8); scene.add(g);
+    box(3.4, 3.0, 0.2, MAT.plaster, 0, 1.5, -1.6, g);
+    box(0.2, 3.0, 3.4, MAT.plaster, -1.6, 1.5, 0, g);
+    box(0.2, 3.0, 3.4, MAT.plaster, 1.6, 1.5, 0, g);
+    box(3.6, 0.16, 3.6, MAT.roof, 0, 3.05, 0, g);
+    box(3.4, 1.05, 0.5, MAT.wood, 0, 0.52, 1.5, g);
+    box(3.5, 0.08, 0.6, MAT.trim, 0, 1.08, 1.5, g);
+    box(3.4, 0.5, 0.2, MAT.plaster, 0, 2.75, 1.6, g);
+    box(0.2, 3.0, 0.2, MAT.plaster, -1.6, 1.5, 1.6, g);
+    box(0.2, 3.0, 0.2, MAT.plaster, 1.6, 1.5, 1.6, g);
+    solid(-14.75, -11.25, 6.25, 6.6, 0, 3.0);
+    solid(-14.75, -14.4, 6.25, 9.75, 0, 3.0);
+    solid(-11.6, -11.25, 6.25, 9.75, 0, 3.0);
+    solid(-14.75, -11.25, 9.3, 9.75, 0, 1.1);
+    // the stand is dressed on every side, because the path runs round it: a timber skirt and
+    // battens, a service door at the back, a menu board on the west flank, a roof fascia and a
+    // small canopy over the hatch. Without these the moved stand is a white box from the north.
+    box(3.4, 0.5, 0.06, MAT.wood, 0, 0.25, -1.73, g);
+    for (var sb = 0; sb < 5; sb++) box(0.07, 2.2, 0.05, MAT.trim, -1.45 + sb * 0.725, 1.75, -1.74, g);
+    box(0.85, 2.0, 0.07, MAT.wood, 0.75, 1.0, -1.74, g);
+    sphere(0.035, MAT.gold, 1.05, 1.0, -1.79, g);
+    box(0.06, 0.5, 3.4, MAT.wood, -1.73, 0.25, 0, g);
+    box(0.06, 0.5, 3.4, MAT.wood, 1.73, 0.25, 0, g);
+    for (var sw = 0; sw < 4; sw++) {
+      box(0.05, 2.2, 0.07, MAT.trim, -1.74, 1.75, -1.25 + sw * 0.83, g);
+      box(0.05, 2.2, 0.07, MAT.trim, 1.74, 1.75, -1.25 + sw * 0.83, g);
+    }
+    sign(['MENU', 'FRIES', 'DRINKS'], 0.8, 0.7, -1.78, 1.95, 0.35, -Math.PI / 2, { bg: '#0d1216', fg: '#eef1f5' }, g);
+    box(3.66, 0.14, 0.08, MAT.trim, 0, 2.93, -1.79, g);
+    box(3.66, 0.14, 0.08, MAT.trim, 0, 2.93, 1.79, g);
+    box(0.08, 0.14, 3.58, MAT.trim, -1.79, 2.93, 0, g);
+    box(0.08, 0.14, 3.58, MAT.trim, 1.79, 2.93, 0, g);
+    box(3.6, 0.09, 0.85, MAT.trim, 0, 2.5, 1.98, g);
+    box(0.07, 0.3, 0.07, MAT.trim, -1.55, 2.36, 2.3, g);
+    box(0.07, 0.3, 0.07, MAT.trim, 1.55, 2.36, 2.3, g);
+    sign(['SNACKS'], 2.6, 0.6, 0, 2.75, 1.72, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
+    sign(['FRIES ' + money(S.snackPrice)], 2.2, 0.4, 0, 1.9, 1.72, 0, { bg: '#0d1216', fg: '#eef1f5' }, g);
+    hitBox(3.0, 1.4, 0.6, 0, 1.5, 1.5, {
+      prompt: function () { return PK.snackOpen ? 'Sell a snack (' + money(S.snackPrice) + ')' : 'The snack stand is shut'; },
+      use: function () { pkSnackBuy(); }
+    }, g);
+    PK.snack = touchScreen({
+      w: 300, h: 220, pw: 0.62, ph: 0.45, x: 0, y: 1.35, z: 1.28, parent: g, title: 'Snack stand',
+      draw: function (ctx, s) {
+        scBg(ctx, s.w, s.h); scHead(ctx, s.w, 'SNACKS', 'Day ' + S.day);
+        scText(ctx, 16, 66, 'Fries ' + money(S.snackPrice));
+        scText(ctx, 16, 88, PK.snackOpen ? 'Open' : 'Shut until level 2', PK.snackOpen ? '#5fd38d' : '#a0acb8');
+        scText(ctx, 16, 110, 'Sold today: ' + PK.today.snacks, '#a0acb8');
+        scButton(s, 16, 130, 130, 40, 'Sell', PK.snackOpen, function () { pkSnackBuy(); });
+        scButton(s, 154, 130, 130, 40, 'Price +', true, function () { pkSnackPrice(1); });
+      }
+    });
+  }
+  function pkSnackPrice(n) {
+    S.snackPrice = clamp(Math.round((S.snackPrice + n) * 100) / 100, 1, 40);
+    screenDirtyAll(); hudDirty = true;
+    toast('Fries ' + money(S.snackPrice), '');
+    return S.snackPrice;
+  }
+  function pkSnackBuy() {
+    if (!PK.snackOpen) { sfx('bad'); toast('The snack stand is not open yet', 'bad'); return false; }
+    var gu = pkNearestHuman(-13, 8);
+    if (!gu) { sfx('bad'); toast('Nobody is at the stand', 'bad'); return false; }
+    pay(S.snackPrice, 'Snack');
+    PK.today.snacks++; PK.today.earned += S.snackPrice;
+    pkXp(1); sfx('cash'); say(gu, 'Thanks!'); toast('Snack sold', 'good');
+    screenDirtyAll(); hudDirty = true; return true;
+  }
+  // ── Placing the train ─────────────────────────────────────────────
+  function pkPlaceCar(car, u) {
+    var p = PK.curve.getPointAt(u), t = PK.curve.getTangentAt(u);
+    car.position.set(p.x, p.y, p.z);
+    car.rotation.order = 'YXZ';
+    car.rotation.y = Math.atan2(t.x, t.z);
+    car.rotation.x = -Math.asin(clamp(t.y, -1, 1));
+    car.rotation.z = 0;
+    car.updateMatrixWorld(true);
+  }
+  function pkPlaceTrain() {
+    if (!PK.curve) return;
+    for (var i = 0; i < PK.cars.length; i++) pkPlaceCar(PK.cars[i], (PK.ride.u - i * PK.carGap / PK.len + 1) % 1);
+  }
+  function pkSpeedAt(u) {
+    if (u >= PK.liftU[0] && u <= PK.liftU[1]) return 4.0;
+    var p = PK.curve.getPointAt(u);
+    return clamp(Math.sqrt(Math.max(1, 2 * 9.81 * (15.5 - p.y))), 4, 26);
+  }
+  // ── Seating ───────────────────────────────────────────────────────
+  function pkBlobOf(g) {
+    for (var i = 0; i < g.children.length; i++) {
+      var c = g.children[i];
+      if (c.isMesh && c.userData && c.userData.noBake && c.geometry && c.geometry.type === 'PlaneGeometry') return c;
+    }
+    return null;
+  }
+  function pkSeatWorld(seat) {
+    var car = PK.cars[seat.car];
+    car.updateMatrixWorld(true);
+    return car.localToWorld(new THREE.Vector3(seat.local.x, seat.local.y, seat.local.z));
+  }
+  function pkSeatGuest(guest, seat) {
+    var car = PK.cars[seat.car];
+    car.add(guest.g);
+    guest.g.position.set(seat.local.x, seat.local.y, seat.local.z);
+    guest.g.rotation.set(0, 0, 0);
+    guest.g.userData.baseY = seat.local.y;
+    var blob = pkBlobOf(guest.g); if (blob) blob.visible = false;
+    guest.seat = seat; seat.guest = guest; guest.state = 'seated'; guest.qslot = -1;
+    var qi = PK.queue.indexOf(guest); if (qi >= 0) PK.queue.splice(qi, 1);
+    PK.ride.riders++;
+    hudDirty = true;
+    return true;
+  }
+  function pkUnseatGuest(guest) {
+    var seat = guest.seat; if (!seat) return false;
+    var w = pkSeatWorld(seat);
+    scene.add(guest.g);
+    guest.g.position.set(w.x, PK_PLATFORM_Y, -3.2);
+    guest.g.rotation.set(0, 0, 0);
+    guest.g.userData.baseY = PK_PLATFORM_Y;
+    var blob = pkBlobOf(guest.g); if (blob) blob.visible = true;
+    guest.seat = null; seat.guest = null;
+    guest.rec.x = w.x; guest.rec.z = -3.2; guest.rec.path = [];
+    guest.state = 'off'; guest.qslot = -1;
+    PK.ride.riders = Math.max(0, PK.ride.riders - 1);
+    hudDirty = true;
+    return true;
+  }
+  function pkSeatsFull() {
+    for (var i = 0; i < PK.seats.length; i++) if (!PK.seats[i].guest && !PK.seats[i].player) return false;
+    return true;
+  }
+  // any guest still walking from the queue to their seat? The bars and the dispatch wait for them.
+  function pkStillBoarding() {
+    for (var i = 0; i < PK.guests.length; i++) if (PK.guests[i].state === 'board') return true;
+    return false;
+  }
+  // the gates are open: invite the front of the line in, one seat each, and send them to walk to their car. They are seated
+  // when they arrive (part 02), so the operator sees the crowd file in rather than blink into the train.
+  function pkRideLoad() {
+    if (!PK.gates[0] || !PK.gates[0].open) return 0;
+    var n = 0;
+    while (PK.queue.length) {
+      var gu = PK.queue[0];
+      if (gu.state !== 'queue') break;   // the front has not reached the line yet
+      var seat = null;
+      for (var i = 0; i < PK.seats.length; i++) if (!PK.seats[i].guest && !PK.seats[i].player) { seat = PK.seats[i]; break; }
+      if (!seat) break;
+      PK.queue.shift();
+      gu.seat = seat; seat.guest = gu; gu.state = 'board';
+      var car = PK.cars[seat.car];
+      gu.rec.path = route({ x: gu.rec.x, z: gu.rec.z }, { x: car.position.x, z: -2.2 });
+      n++;
+    }
+    if (n) { pkQueueReslot(); sfx('click'); hudDirty = true; }
+    return n;
+  }
+  // ── The controls ──────────────────────────────────────────────────
+  var PK_REFUSE_M = '', PK_REFUSE_T = 0;
+  function pkRefuse(msg) {
+    PK.refused++;
+    // the same refusal twice in a row is one refusal: no toast storms when a hand comes down twice
+    var now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    if (msg !== PK_REFUSE_M || now - PK_REFUSE_T > 1200) {
+      sfx('bad'); toast(msg, 'bad'); PK_REFUSE_M = msg; PK_REFUSE_T = now;
+    }
+    return false;
+  }
+  function pkOpenGates() {
+    var R = PK.ride;
+    if (PK.closed) return pkRefuse('The park is closed');
+    if (R.fault) return pkRefuse('The ride is stopped');
+    if (R.state === 'ready' || R.state === 'dispatch' || R.state === 'running' || R.state === 'arrive') return pkRefuse('Not while the train is moving');
+    PK.gates.forEach(function (gt) { gt.open = true; });
+    if (R.state === 'idle' || R.state === 'unload') R.state = 'loading';
+    sfx('unlock'); hudDirty = true; return true;
+  }
+  function pkCloseGates() {
+    var R = PK.ride;
+    if (R.fault) return pkRefuse('The ride is stopped');
+    if (R.state === 'ready' || R.state === 'dispatch' || R.state === 'running' || R.state === 'arrive') return pkRefuse('Not while the train is moving');
+    PK.gates.forEach(function (gt) { gt.open = false; });
+    sfx('lock'); hudDirty = true; return true;
+  }
+  // one button for the gates: open to start boarding, close once the cars are full. The state decides, not the gate leaf,
+  // so after the train comes home (gates already open, state unload) the next press lets the queue in.
+  function pkGatesToggle() {
+    var R = PK.ride;
+    if (R.fault) return pkRefuse('The ride is stopped');
+    if (R.state === 'idle' || R.state === 'unload') return pkOpenGates();
+    if (R.state === 'loading') return pkCloseGates();
+    return pkRefuse(R.state === 'ready' ? 'The restraints are down' : 'Not while the train is moving');
+  }
+  function pkBarsDown() {
+    var R = PK.ride;
+    if (R.fault) return pkRefuse('The ride is stopped');
+    if (R.state !== 'loading' && R.state !== 'ready') return pkRefuse('Open the gates and load first');
+    if (pkStillBoarding()) return pkRefuse('Let the riders sit first');
+    R.barsWant = 1; R.state = 'ready';
+    sfx('lock'); hudDirty = true; return true;
+  }
+  function pkBarsUp() {
+    var R = PK.ride;
+    if (R.fault) return pkRefuse('The ride is stopped');
+    if (R.state === 'running' || R.state === 'arrive' || R.state === 'dispatch') return pkRefuse('Not while the train is moving');
+    R.barsWant = 0;
+    if (R.state === 'ready') R.state = 'loading';
+    sfx('unlock'); hudDirty = true; return true;
+  }
+  function pkService() {
+    if (!(S.wear || 0)) { toast('The coaster is already serviced', ''); return false; }
+    if (S.bank < 150 || S.bank < 0) { sfx('bad'); toast('Not enough money to service it', 'bad'); return false; }
+    pay(-150, 'Service');
+    S.wear = 0;
+    sfx('ok'); toast('Coaster serviced', 'good'); logEvent('Coaster serviced', 'good');
+    screenDirtyAll(); hudDirty = true;
+    return true;
+  }
+  function pkFire(which) {
+    if (which === 'clerk' && !S.clerk) return 'No clerk to let go';
+    if (which === 'operator' && !S.operator) return 'No operator to let go';
+    if (which === 'clerk') { S.clerk = false; PK.clerk = false; }
+    else if (which === 'operator') { S.operator = false; PK.operator = false; }
+    else return 'nobody';
+    sfx('bad'); toast('Staff let go', 'bad'); logEvent('Staff let go', '');
+    screenDirtyAll(); hudDirty = true;
+    return 'Let go';
+  }
+  function pkDispatch() {
+    var R = PK.ride;
+    if (PK.closed && R.riders === 0) return pkRefuse('The park is closed');
+    if (R.fault) return pkRefuse('The ride is stopped');
+    if (R.state !== 'ready') return pkRefuse('Restraints first, then dispatch');
+    if (pkStillBoarding()) return pkRefuse('Wait for the riders to sit');
+    if ((S.wear || 0) >= 90) return pkRefuse('Service the coaster before it goes again');
+    // an empty dispatch is a test run: an operator may send an empty train, it just earns nothing
+    var empty = R.riders === 0;
+    S.wear = Math.min(100, (S.wear || 0) + 1.5);
+    PK.gates.forEach(function (gt) { gt.open = false; });
+    R.state = 'dispatch'; R.beat = 1.2;
+    if (empty) { sfx('bell'); logEvent('Test run, empty train', ''); toast('Test run', ''); }
+    else { pkXp(2); sfx('bell'); logEvent('Dispatch with ' + R.riders + ' aboard', 'good'); }
+    hudDirty = true; return true;
+  }
+  function pkTestRun() {
+    // a test run: send the empty train round from the screen, without needing the gates and the bars first
+    var R = PK.ride;
+    if (PK.closed) return pkRefuse('The park is closed');
+    if (R.fault) return pkRefuse('The ride is stopped');
+    if (R.state === 'dispatch' || R.state === 'running' || R.state === 'arrive') return pkRefuse('Not while the train is moving');
+    if (R.state !== 'idle' && R.state !== 'loading' && R.state !== 'ready' && R.state !== 'unload') return pkRefuse('Not while the train is moving');
+    if (PK.queue.length) return pkRefuse('Riders are waiting - dispatch them first');
+    if (R.riders > 0 || pkStillBoarding()) return pkRefuse('Riders aboard - dispatch them');
+    if ((S.wear || 0) >= 90) return pkRefuse('Service the coaster before it goes again');
+    S.wear = Math.min(100, (S.wear || 0) + 1.5);
+    PK.gates.forEach(function (gt) { gt.open = false; });
+    R.barsWant = 1;
+    R.state = 'dispatch'; R.beat = 1.2;
+    sfx('bell'); logEvent('Test run, empty train', ''); toast('Test run', '');
+    screenDirtyAll(); hudDirty = true; return true;
+  }
+  function pkStop() {
+    var R = PK.ride;
+    if (R.fault) return pkReset();
+    R.fault = 'E-stop'; R.state = 'fault'; R.v = 0;
+    sfx('bad'); toast('E-stop', 'bad'); logEvent('E-stop', 'bad');
+    hudDirty = true; return true;
+  }
+  function pkReset() {
+    var R = PK.ride;
+    R.fault = '';
+    var d = Math.abs(((R.u - PK.stationU + 1.5) % 1) - 0.5);
+    R.state = d < 0.01 ? 'idle' : 'running';
+    sfx('ok'); toast('Ride reset', 'good'); hudDirty = true; return true;
+  }
+  function pkSetAuto(on) {
+    S.auto = !!on; PK.ride.autoT = 0;
+    sfx('click'); toast(S.auto ? 'AUTO on' : 'AUTO off', S.auto ? 'good' : '');
+    logEvent(S.auto ? 'AUTO on' : 'AUTO off', '');
+    screenDirtyAll(); hudDirty = true;
+    return true;
+  }
+  function pkArrive() {
+    var R = PK.ride, n = R.riders;
+    R.state = 'unload'; R.barsWant = 0; R.bars = 0;
+    PK.gates.forEach(function (gt) { gt.open = true; });
+    S.cycles = (S.cycles || 0) + 1;
+    PK.today.rides += n;
+    if (n > 0) pkXp(1);
+    PK.seats.forEach(function (s) { if (s.guest) pkUnseatGuest(s.guest); });
+    R.riders = 0;
+    sfx('bell'); logEvent('The train is back with ' + n + ' aboard', 'good');
+    screenDirtyAll(); hudDirty = true;
+  }
+  // ── The ride, one tick ────────────────────────────────────────────
+  function pkOpSignal() {
+    // the three signal lamps over the operator door and the roof beacon follow the ride,
+    // exactly as the booth lamps do: green idle, amber boarding/unloading, red running or fault
+    var L = PK.opLamps;
+    if (!L) return;
+    var st = PK.ride ? PK.ride.state : 'idle', fault = PK.ride && PK.ride.fault;
+    var on = fault ? 0 : (st === 'running' ? 0 : (st === 'boarding' || st === 'loading' || st === 'ready' || st === 'unload' || st === 'dispatch' || st === 'arrive') ? 1 : 2);
+    for (var i = 0; i < L.mats.length; i++) if (L.mats[i].emissive) L.mats[i].emissiveIntensity = i === on ? 1.8 : 0.12;
+    if (L.beacon && L.beacon.emissive) L.beacon.emissiveIntensity = st === 'running' ? (Math.sin(performance.now() / 210) > 0 ? 1.9 : 0.25) : 0.3;
+  }
+  function pkRideTick(dt) {
+    var R = PK.ride;
+    pkOpSignal();
+    // the gates and the restraints ease to where they were told to be
+    PK.gates.forEach(function (gt) { gt.t += ((gt.open ? 1 : 0) - gt.t) * Math.min(1, dt * 4); gt.bar.rotation.z = gt.t * Math.PI / 2; });
+    R.bars += (R.barsWant - R.bars) * Math.min(1, dt * 3);
+    PK.cars.forEach(function (car) { car.userData.bars.forEach(function (b) { b.rotation.x = -1.3 * (1 - R.bars); }); });
+    // the turnstiles spin as they are passed
+    PK.turnstiles.forEach(function (t) {
+      if (t.spin > 0) { t.spin -= dt * 3; t.arm.rotation.x += dt * 6; if (t.spin <= 0) { t.spin = 0; t.arm.rotation.x = 0; } }
+    });
+    if (R.fault) { R.v = 0; pkPlaceTrain(); return; }
+    // the ride runs itself when AUTO is on, or when an operator is on the payroll
+    if ((pkCoasterAuto() || S.operator) && !R.fault) {
+      R.autoT -= dt;
+      if (R.autoT <= 0) {
+        R.autoT = 1.4;
+        if (R.state === 'idle' || R.state === 'unload') { pkOpenGates(); R.loadT = 0; }
+        else if (R.state === 'loading') { R.loadT += 1.4; if (pkSeatsFull() || R.loadT > 8) pkBarsDown(); }
+        else if (R.state === 'ready') { if (R.riders === 0) { pkBarsUp(); pkOpenGates(); } else pkDispatch(); }
+      }
+    }
+    if (R.state === 'loading') pkRideLoad();
+    if (R.state === 'dispatch') {
+      R.beat -= dt;
+      if (R.beat <= 0) { R.state = 'running'; R.v = 2; }
+    } else if (R.state === 'running') {
+      var d = (PK.stationU - R.u + 1) % 1;
+      if (R.u > 0.5 && d < 0.25) R.state = 'arrive';
+      else { R.v = pkSpeedAt(R.u); R.u = (R.u + R.v * dt / PK.len) % 1; }
+    } else if (R.state === 'arrive') {
+      var d2 = (PK.stationU - R.u + 1) % 1;
+      R.v = Math.max(1.0, Math.min(R.v, Math.sqrt(2 * 4 * d2 * PK.len)));
+      R.u = (R.u + R.v * dt / PK.len) % 1;
+      if (d2 * PK.len < 0.4) { R.u = PK.stationU; R.v = 0; pkArrive(); }
+    }
+    pkPlaceTrain();
+  }
+  // ── Staff ─────────────────────────────────────────────────────────
+  function pkHire(which) {
+    if (which !== 'clerk' && which !== 'operator') return 'No such role';
+    var cost = which === 'clerk' ? 400 : 600;
+    if (which === 'clerk' && S.clerk) return 'A clerk already works the window';
+    if (which === 'operator' && S.operator) return 'An operator already runs the ride';
+    if (S.bank < cost || S.bank < 0) { sfx('bad'); toast('Not enough money', 'bad'); return 'Not enough money'; }
+    pay(-cost, which === 'clerk' ? 'Ticket clerk' : 'Ride operator');
+    if (which === 'clerk') { S.clerk = true; PK.clerk = true; }
+    else { S.operator = true; PK.operator = true; }
+    sfx('cash'); logEvent((which === 'clerk' ? 'Ticket clerk' : 'Ride operator') + ' hired', 'good');
+    screenDirtyAll(); hudDirty = true;
+    return 'Hired';
+  }
+  // ── The clock and the day ─────────────────────────────────────────
+  function pkTick(dt) {
+    var previousTime = S.time;
+    S.time += dt / 60;   // a game minute a second
+    var min = Math.floor(S.time * 60);
+    if (min !== PK.lastMin) { PK.lastMin = min; hudDirty = true; }
+    var open = S.time >= 9 && S.time < 22;
+    var rolledDay = false;
+    if (S.time >= 24) { S.time -= 24; S.day++; PK.lastDay = S.day; pkNewDay(); open = S.time >= 9 && S.time < 22; rolledDay = true; }
+    var closing = !open;
+    PK.closed = closing;
+    // the guests arrive while the gate is open
+    if (open) {
+      PK.spawnT -= dt;
+      if (PK.spawnT <= 0) {
+        PK.spawnT = randf(2.5, 6);
+        if (PK.guests.length < 40) pkSpawnGuest();
+      }
+    }
+    // a clerk works the window on their own
+    if (open && S.clerk) {
+      PK.clerkT = (PK.clerkT || 0) - dt;
+      if (PK.clerkT <= 0) {
+        PK.clerkT = 2.2;
+        for (var i = 0; i < PK.booths.length; i++) if (PK.booths[i].queue.length) { pkServe(i); break; }
+      }
+    }
+    if (closing && (rolledDay || PK.timeWasOpen === true || (PK.timeWasOpen === undefined && previousTime >= 9 && previousTime < 22))) {
+      pkCloseGuests();
+      for (var ci = 0; ci < PK.attractions.length; ci++) PK.attractions[ci].manualStart = false;
+    }
+    PK.timeWasOpen = open;
+    pkRideTick(dt);
+    for (var ai = 0; ai < PK.attractions.length; ai++) pkAttrTick(PK.attractions[ai], dt);
+    pkGuestTick(dt);
+    pkPlayerTick(dt);
+  }
+  function pkClosePark() {
+    // Stop accepting new arrivals; let people already in the grounds finish
+    // their current visit and leave, without starting another attraction cycle.
+    pkCloseGuests();
+    screenDirtyAll(); hudDirty = true;
+  }
+  function pkLog(msg) { logEvent(msg, ''); }
+  function pkSyncSaved() {
+    PK.xp = S.xp || 0; PK.level = pkLevel();
+    PK.clerk = !!S.clerk; PK.operator = !!S.operator;
+    PK.snackOpen = !!S.snackOpen; PK.train2 = !!S.train2; PK.lights = !!S.lights;
+    PK.today = S.today || (S.today = { tickets: 0, snacks: 0, rides: 0, earned: 0 });
+    PK.lastDay = S.day;
+    screenDirtyAll(); hudDirty = true;
+  }
+  // ── The panel ─────────────────────────────────────────────────────
+  // ── The park office ───────────────────────────────────────────────
+  function pkAdminPanel(tab) {
+    var tabs = [['park', 'Park'], ['coaster', 'Coaster'], ['staff', 'Staff']];
+    tab = tab || 'park';
+    var body = '';
+    if (tab === 'park') {
+      body = '<p>Day ' + S.day + ' - ' + fmtTime(S.time) + (PK.closed ? ' (closed)' : '') + '</p>' +
+        '<p>Bank ' + money(S.bank) + '<br>Guests in the park ' + PK.guests.length + '<br>Rides open ' + pkOpenCount() + ' of ' + (PK.attractions.length + 1) + '</p>' +
+        '<p>Today: ' + PK.today.tickets + ' tickets, ' + PK.today.snacks + ' snacks, ' + PK.today.rides + ' rides, ' + money(PK.today.earned) + '</p>' +
+        '<p>Ticket ' + money(S.ticketPrice) + ' - snack ' + money(S.snackPrice) + '</p>' +
+        btn('ticket5', '', 'Ticket +' + money(5), '') + btn('ticket-5', '', 'Ticket -' + money(5), '') +
+        btn('snack5', '', 'Snack +' + money(1), '') + btn('snack-5', '', 'Snack -' + money(1), '');
+    } else if (tab === 'coaster') {
+      var wear = Math.round(S.wear || 0);
+      body = '<p>The coaster: ' + pkRideWord() + ' (' + (pkCoasterAuto() ? 'auto' : 'manual') + ')</p>' +
+        '<p>Cycles ' + (S.cycles || 0) + ' - ' + PK.cars.length + ' cars of ' + Math.round(PK.seats.length / PK.cars.length) + '<br>Aboard now ' + PK.ride.riders + ' of ' + PK.seats.length + '</p>' +
+        '<p>Track ' + Math.round(PK.len) + ' m<br>Wear ' + wear + '%' + (wear >= 90 ? ' - it will not dispatch until it is serviced' : wear > 70 ? ' - service it soon' : '') + '</p>' +
+        btn('service', '', 'Service (' + money(150) + ')', wear > 0 && S.bank >= 150 ? 'primary' : '') +
+        btn('auto', '', pkCoasterAuto() ? 'AUTO on' : 'AUTO off', '');
+    } else {
+      body = '<p>Ticket clerk: ' + (S.clerk ? 'hired' : 'not hired') + '<br>Ride operator: ' + (S.operator ? 'hired' : 'not hired') + '</p>' +
+        '<p>Wages ' + money((S.clerk ? 40 : 0) + (S.operator ? 60 : 0)) + ' a day</p>' +
+        (S.clerk ? btn('fireClerk', '', 'Let the clerk go', '') : btn('hireClerk', '', 'Hire a clerk (' + money(400) + ')', '')) +
+        (S.operator ? btn('fireOperator', '', 'Let the operator go', '') : btn('hireOperator', '', 'Hire an operator (' + money(600) + ')', ''));
+    }
+    return { title: 'Park office', tabs: tabs, tab: tab, body: body };
+  }
+  function pkPanel(kind, tab) {
+    if (kind === 'admin') return pkAdminPanel(tab);
+    if (kind !== 'park') return null;
+    var tabs = [['park', 'Park'], ['rides', 'Rides'], ['ride', 'Coaster'], ['staff', 'Staff'], ['guide', 'Guide']];
+    tab = tab || 'park';
+    var body = '';
+    if (tab === 'park') {
+      body = '<p>Day ' + S.day + ' - ' + fmtTime(S.time) + (PK.closed ? ' (closed)' : '') + '</p>' +
+        '<p>Guests in the park: ' + PK.guests.length + '<br>In the coaster queue: ' + PK.queue.length + '<br>Rides open: ' + pkOpenCount() + ' of ' + (PK.attractions.length + 1) + '</p>' +
+        '<p>Tickets today: ' + PK.today.tickets + ' (' + money(PK.today.earned) + ')<br>Snacks today: ' + PK.today.snacks + '<br>Rides today: ' + PK.today.rides + '</p>' +
+        '<p>Level ' + PK.level + ' - ' + esc(PK_LEVELS[PK.level - 1].name) + ' (' + PK.xp + ' xp)</p>' +
+        btn('ticket5', '', 'Ticket +' + money(5), '') + btn('ticket-5', '', 'Ticket -' + money(5), '');
+    } else if (tab === 'rides') {
+      body = '<p>' + pkOpenCount() + ' of ' + (PK.attractions.length + 1) + ' rides open. Guests pick the shortest line.</p>';
+      PK.attractions.forEach(function (a) {
+        var st = !a.open ? 'opens at level ' + a.level
+          : a.state === 'running' ? 'running'
+          : a.state === 'boarding' ? 'boarding'
+          : a.state === 'unloading' ? 'unloading'
+          : a.state + ', ' + a.queue.length + ' waiting';
+        body += '<p>' + esc(a.name) + ': ' + esc(st) + (a.open ? ' - ' + a.cycles + ' cycles, ' + a.riders + ' aboard' : '') + '</p>';
+      });
+    } else if (tab === 'ride') {
+      body = '<p>The coaster: ' + pkRideWord() + (pkCoasterAuto() ? ' (auto)' : ' (manual)') + (PK.ride.fault ? ' - ' + esc(PK.ride.fault) : '') + '</p>' +
+        '<p>Cycles today: ' + (S.cycles || 0) + '<br>Rides today: ' + PK.today.rides + '<br>Aboard now: ' + PK.ride.riders + ' of ' + PK.seats.length + '</p>' +
+        btn('gates', '', 'Gates', '') + btn('bars', '', 'Restraints', '') + btn('dispatch', '', 'Dispatch', 'primary') +
+        btn('stop', '', 'E-stop', '') + btn('auto', '', pkCoasterAuto() ? 'AUTO on' : 'AUTO off', '');
+    } else if (tab === 'staff') {
+      body = '<p>Ticket clerk: ' + (S.clerk ? 'hired' : 'not hired') + ' (' + money(400) + ')</p>' +
+        '<p>Ride operator: ' + (S.operator ? 'hired' : 'not hired') + ' (' + money(600) + ')</p>' +
+        '<p>A clerk serves the window. A hired ride operator takes over the coaster and all seven attraction rides.</p>' +
+        (S.clerk ? btn('fireClerk', '', 'Let the clerk go', '') : btn('hireClerk', '', 'Hire a clerk', '')) +
+        (S.operator ? btn('fireOperator', '', 'Let the operator go', '') : btn('hireOperator', '', 'Hire an operator', ''));
+    } else {
+      body = pkGuide();
+    }
+    return { title: 'Park Co', tabs: tabs, tab: tab, body: body };
+  }
+  function pkPanelAct(act, arg) {
+    if (act === 'ticket5') { pkPrice(5); return true; }
+    if (act === 'ticket-5') { pkPrice(-5); return true; }
+    if (act === 'gates') return pkGatesToggle();
+    if (act === 'bars') return PK.ride.barsWant > 0.5 ? pkBarsUp() : pkBarsDown();
+    if (act === 'dispatch') return pkDispatch();
+    if (act === 'stop') return pkStop();
+    if (act === 'auto') { pkSetAuto(!pkCoasterAuto()); return true; }
+    if (act === 'snack5') { pkSnackPrice(1); return true; }
+    if (act === 'snack-5') { pkSnackPrice(-1); return true; }
+    if (act === 'service') return pkService();
+    if (act === 'fireClerk') { var fc = pkFire('clerk'); return fc === 'Let go' ? true : 'Action failed: ' + fc; }
+    if (act === 'fireOperator') { var fo = pkFire('operator'); return fo === 'Let go' ? true : 'Action failed: ' + fo; }
+    if (act === 'hireClerk') { var hc = pkHire('clerk'); if (hc === 'Hired') return true; toast(hc, 'bad'); return true; }
+    if (act === 'hireOperator') { var ho = pkHire('operator'); if (ho === 'Hired') return true; toast(ho, 'bad'); return true; }
+    return false;
+  }
+  function pkGuide() {
+    return '<p><b>Park Co</b> - a small park that grows.</p>' +
+      '<p>Guests arrive from the car park. They queue at a ticket window, buy a ticket, pass a turnstile and then pick a ride: the coaster, or any of the seven rides.</p>' +
+      '<p><b>The window.</b> Your clerk sells tickets to the line on their own; stand at a window and press E to keep up with a rush (the screen on the counter sells too). The clerk costs ' + money(40) + ' a day from day 2.</p>' +
+      '<p><b>The coaster.</b> In the operator room, east of the platform: <b>Gates</b> lifts the platform gates and the queue walks in one seat at a time, <b>Restraints</b> pulls the bars down over the riders, <b>Dispatch</b> sends the train. In the wrong order the screen refuses. An empty train can be sent as a test run. <b>E-stop</b> stops the ride; press it again to reset.</p>' +
+      '<p><b>AUTO.</b> Switch AUTO on - on the screen in the operator room, or on any booth screen - and the coaster runs itself: gates, restraints, dispatch, round and round.</p>' +
+      '<p><b>The other rides.</b> The carousel, teacups, ferris wheel, dodgems, drop tower, log flume and haunted house run automatically when AUTO is on. Each has an operator booth beside it - walk in and use its screen to open gates, dispatch, E-stop, test-run or change AUTO. A hired operator runs these rides automatically. Guests need a ticket before riding.</p>' +
+      '<p><b>Levels.</b> Tickets, rides and snacks earn xp. Each level opens a service: the snack stand, a hire or the park lights.</p>';
+  }
+  // ── The attraction system ────────────────────────────────────────
+  // Every ride is the same shape: a queue lane, a set of seats parented to whatever moves, and five states.
+  // idle -> boarding -> ready -> running -> unloading -> idle. A guest is attached to a seat for the ride and let go after it.
+  // Each ride has its own operator booth (part 09). On AUTO (the default, or with an operator hired) the ride works its own
+  // gates, restraints and start; off AUTO it waits for the desk. The coaster keeps its own state machine in part 03.
+  function pkAttrSlot(a, i) {
+    var dz = a.qdz === undefined ? 1 : a.qdz;
+    return { x: a.qx + (a.qdx || 0) * i * 1.05, z: a.qz + dz * i * 1.05 };
+  }
+  // a seat's y is where the rider's feet line is: the sit pose puts the hips 0.86 above it, so a seat surface at s wants s - 0.76
+  function pkAttrSeatWorld(seat) {
+    seat.par.updateMatrixWorld(true);
+    return seat.par.localToWorld(new THREE.Vector3(seat.x || 0, seat.y || 0, seat.z || 0));
+  }
+  // sit them down: the guest group leaves the walk and becomes a child of the moving seat
+  function pkAttrSit(a, gu, seat) {
+    if (!seat) return false;
+    seat.guest = gu; gu.seat = seat; gu.state = 'seated';
+    seat.par.add(gu.g);
+    gu.g.position.set(seat.x, seat.y, seat.z);
+    gu.g.rotation.set(0, seat.ry || 0, 0);
+    gu.g.userData.baseY = seat.y;
+    gu.pose = seat.pose || 'sit';
+    var blob = pkBlobOf(gu.g); if (blob) blob.visible = false;
+    a.riders++;
+    if (a.state === 'boarding') a.boarding = pkAttrWalkers(a);
+    return true;
+  }
+  function pkAttrSeat(a, gu, si) {
+    var seat = a.seats[si]; if (!seat) return false;
+    return pkAttrSit(a, gu, seat);
+  }
+  function pkAttrUnseatAll(a) {
+    var n = 0;
+    for (var i = 0; i < a.seats.length; i++) {
+      var seat = a.seats[i]; if (!seat.guest) continue;
+      var gu = seat.guest; seat.guest = null; gu.seat = null;
+      var ex = a.exit[0] + randf(-0.5, 0.5), ez = a.exit[1] + randf(-0.4, 0.4), fy = pkFloor(ex, ez);
+      scene.add(gu.g);
+      gu.g.position.set(ex, fy, ez);
+      gu.g.rotation.set(0, 0, 0);
+      gu.g.userData.baseY = fy;
+      var blob = pkBlobOf(gu.g); if (blob) blob.visible = true;
+      gu.rec.x = ex; gu.rec.z = ez; gu.rec.path = [];
+      gu.state = 'off'; gu.rides = (gu.rides || 0) + 1;
+      n++;
+    }
+    a.riders = 0;
+    if (n) { PK.today.rides += n; pkXp(1); }
+    return n;
+  }
+  function pkAttrReslot(a) {
+    for (var i = 0; i < a.queue.length; i++) {
+      var gu = a.queue[i];
+      if (gu.slot === i && gu.state !== 'walkAttr') continue;
+      gu.slot = i;
+      if (gu.state === 'walkAttr' || gu.state === 'qwait' || gu.state === 'qmove') {
+        var s = pkAttrSlot(a, i);
+        gu.rec.path = route({ x: gu.rec.x, z: gu.rec.z }, s);
+        gu.state = gu.rec.path.length ? (gu.state === 'walkAttr' ? 'walkAttr' : 'qmove') : 'qwait';
+      }
+    }
+  }
+  function pkAttrFill(a) {
+    var n = 0;
+    while (a.queue.length && n < a.cap) {
+      var gu = a.queue[0];
+      if (gu.state !== 'qwait' && gu.state !== 'qmove') break;
+      var si = -1;
+      for (var i = 0; i < a.seats.length; i++) if (!a.seats[i].guest && !a.seats[i].player) { si = i; break; }
+      if (si < 0) break;
+      var seat = a.seats[si];
+      a.queue.shift();
+      gu.seat = seat; seat.guest = gu; gu.slot = -1; gu.state = 'walkSeat';
+      var w = pkAttrSeatWorld(seat);
+      gu.rec.path = route({ x: gu.rec.x, z: gu.rec.z }, { x: w.x, z: w.z });
+      if (!gu.rec.path.length) pkAttrSit(a, gu, seat);   // already at the seat
+      n++;
+    }
+    if (n) { pkAttrReslot(a); screenDirtyAll(); }
+    return n;
+  }
+  // guests still walking from the gate to their seat: the gates stay open and the ride waits
+  function pkAttrWalkers(a) {
+    var n = 0;
+    for (var i = 0; i < a.seats.length; i++) { var s = a.seats[i]; if (s.guest && s.guest.state === 'walkSeat') n++; }
+    return n;
+  }
+  function pkAttrBegin(a) {
+    if (a.state !== 'idle' && a.state !== 'unloading') return;
+    var C = pkCtl(a);
+    a.state = 'boarding'; a.t = 0; C.gates = true; C.barsWant = 0;
+    pkAttrReslot(a);
+    a.boarding = 0;
+    pkAttrFill(a);
+    if (!a.queue.length && !a.riders && !pkAttrWalkers(a)) { a.state = 'idle'; C.gates = false; }
+  }
+  function pkAttrStart(a) {
+    var C = pkCtl(a);
+    if (C.fault || a.queue.length || a.riders <= 0 || pkAttrWalkers(a)) return false;
+    a.state = 'running'; a.t = 0; C.gates = false; C.barsWant = 1;
+    sfx('bell');
+    if (a.start) a.start(a);
+    screenDirtyAll(); hudDirty = true;
+    return true;
+  }
+  function pkAttrEnd(a) {
+    var C = pkCtl(a);
+    a.state = 'unloading'; a.t = 0; C.barsWant = 0; C.gates = true;
+    var n = pkAttrUnseatAll(a);
+    a.cycles++;
+    sfx('chime');
+    screenDirtyAll(); hudDirty = true;
+    if (n) logEvent(a.name + ': ' + n + ' rode', '');
+  }
+  function pkAttrTick(a, dt) {
+    if (!a.open) return;
+    var C = pkCtl(a), auto = pkCtlAuto(a) || !!S.operator;
+    // the gates and the restraints ease to where they were told to be, and the desk's lights follow
+    C.gateT += ((C.gates ? 1 : 0) - C.gateT) * Math.min(1, dt * 3.5);
+    C.bars += (C.barsWant - C.bars) * Math.min(1, dt * 3);
+    for (var gi = 0; gi < C.gateObjs.length; gi++) C.gateObjs[gi](C.gateT);
+    for (var bi = 0; bi < C.barObjs.length; bi++) C.barObjs[bi](C.bars);
+    pkCtlLamps(a);
+    // the drive: up to speed while running, and wound down over the last few seconds so it stops before anyone gets off
+    var want = (a.state === 'running' && !C.fault && a.t < a.run - 3) ? 1 : 0;
+    C.spd += (want - C.spd) * Math.min(1, dt * (want ? 0.8 : 1.4));
+    if (C.fault) { C.spd = 0; return; } // E-stop freezes the attraction exactly where it is.
+    a.t += dt;
+    if (a.tickRun) a.tickRun(a, dt, C.spd);
+    if (a.state === 'idle') {
+      if (auto && !PK.closed && a.queue.length) pkAttrBegin(a);
+    } else if (a.state === 'boarding') {
+      if (C.gates) pkAttrFill(a);
+      a.boarding = pkAttrWalkers(a);
+        if (auto && !PK.closed) {
+        if (a.t >= a.board - 1.4 && !a.queue.length && a.riders > 0 && C.barsWant < 1) { C.gates = false; C.barsWant = 1; }
+        if (a.t >= a.board) {
+          // Never dispatch with empty seats while people are still en route.
+          if (a.riders > 0 && !a.queue.length && !pkAttrWalkers(a)) pkAttrStart(a);
+          else a.t = a.board;
+        }
+      }
+    } else if (a.state === 'ready') {
+        if (auto && !PK.closed) pkAttrStart(a);
+    } else if (a.state === 'running') {
+      if (a.t >= a.run) pkAttrEnd(a);
+    } else if (a.state === 'unloading') {
+      if (a.t >= a.unload) {
+        a.state = 'idle'; a.t = 0; C.gates = false;
+        if (!PK.closed && (auto || a.manualStart) && a.queue.length) { a.manualStart = false; pkAttrBegin(a); }
+        screenDirtyAll();
+      }
+    }
+  }
+  // ── Who picks which ride ─────────────────────────────────────────
+  function pkAttrPick(gu) {
+    var open = [];
+    for (var i = 0; i < PK.attractions.length; i++) { var at = PK.attractions[i]; if (at.open && !(at.ctl && at.ctl.fault) && at.queue.length < at.seats.length * 2) open.push(at); }
+    if (!open.length) return false;
+    // the shortest line wins, with a little spread so the crowd is not one queue
+    open.sort(function (a, b) { return a.queue.length - b.queue.length; });
+    var pick = open[Math.floor(randf(0, Math.min(3, open.length)))];
+    return pkAttrQueueJoin(gu, pick);
+  }
+  function pkGuestPickRide(gu) {
+    var coasterOk = PK.ride.state !== 'fault';
+    var anyOpen = false;
+    for (var i = 0; i < PK.attractions.length; i++) if (PK.attractions[i].open) { anyOpen = true; break; }
+    if (coasterOk && (!anyOpen || randf(0, 1) < 0.45)) {
+      if (pkQueueJoin(gu)) return;      // the coaster line is never longer than its lane
+      // the line is full: fall through to another ride, or wander the midway
+    }
+    if (!pkAttrPick(gu)) pkGo(gu, randf(-6, 6), randf(8, 22), 'off');
+  }
+  // ── Opening and counting ─────────────────────────────────────────
+  function pkOpenRide(id) {
+    if (id === 'coaster') return true;
+    var a = PK.attrById[id]; if (!a) return false;
+    if (a.open) return true;
+    a.open = true;
+    S.rides[id] = true;
+    if (a.g) a.g.visible = true;
+    if (a.hoard) a.hoard.visible = false;
+    if (a.dress) a.dress.visible = true;
+    // the world is baked into merged meshes, so a plot that changes has to be unbaked, changed and baked again
+    if (typeof baked !== 'undefined' && baked.meshes && baked.meshes.length) {
+      unbakeStatic();
+      if (a.g) a.g.visible = true;
+      if (a.hoard) a.hoard.visible = false;
+      if (a.dress) a.dress.visible = true;
+      bakeStatic();
+    }
+    sfx('unlock'); toast(a.name + ' opens', 'good'); logEvent(a.name + ' opens', 'good');
+    screenDirtyAll(); hudDirty = true;
+    return true;
+  }
+  function pkOpenCount() { var n = 1; for (var i = 0; i < PK.attractions.length; i++) if (PK.attractions[i].open) n++; return n; }
+  // Cut a ride's breaker from the park board: guests stop joining that queue until it is
+  // switched back up. A ride with anyone aboard or waiting will not shut down - the breaker
+  // drops straight back rather than stranding a train full of people.
+  function pkSetRideOpen(id, on) {
+    if (id === 'coaster') return false;
+    var a = PK.attrById[id]; if (!a) return false;
+    on = !!on;
+    if (on === !!a.open) return true;
+    if (!on && (a.state !== 'idle' || a.riders || a.queue.length)) {
+      sfx('bad'); toast(a.name + ' is still working - clear it first', 'bad'); return false;
+    }
+    a.open = on; if (S.rides) S.rides[id] = on;
+    if (on) { sfx('unlock'); toast(a.name + ' open', 'good'); logEvent(a.name + ' open', 'good'); }
+    else { sfx('click'); toast(a.name + ' shut for the day', ''); logEvent(a.name + ' shut down', ''); }
+    screenDirtyAll(); hudDirty = true;
+    return true;
+  }
+  function pkRideList() {
+    var names = ['coaster'];
+    for (var i = 0; i < PK.attractions.length; i++) if (PK.attractions[i].open) names.push(PK.attractions[i].id);
+    return names.join(', ');
+  }
+  // ── The hoarding a closed plot wears ─────────────────────────────
+  function pkHoard(p) {
+    var g = new THREE.Group(); g.position.set(p.x, 0, p.z); scene.add(g);
+    var h = 2.4, r = p.r + 1.3;
+    box(r * 2, h, 0.16, MAT.wood, 0, h / 2, -r, g);
+    box(r * 2, h, 0.16, MAT.wood, 0, h / 2, r, g);
+    box(0.16, h, r * 2, MAT.wood, -r, h / 2, 0, g);
+    box(0.16, h, r * 2, MAT.wood, r, h / 2, 0, g);
+    var side = p.x < 0 ? 1 : -1;
+    sign([p.name.toUpperCase(), 'OPENS AT LEVEL ' + p.level], Math.min(r * 1.5, 5.2), 1.0, side * (r + 0.02), 1.55, 0,
+      side > 0 ? Math.PI / 2 : -Math.PI / 2, { bg: '#1b232c', fg: '#f5b53d' }, g);
+    solid(p.x - r, p.x + r, p.z - r, p.z - r + 0.4, 0, h);
+    solid(p.x - r, p.x + r, p.z + r - 0.4, p.z + r, 0, h);
+    solid(p.x - r, p.x - r + 0.4, p.z - r, p.z + r, 0, h);
+    solid(p.x + r - 0.4, p.x + r, p.z - r, p.z + r, 0, h);
+    return g;
+  }
+  // ── The build: every plot, open or boarded up ────────────────────
+  function pkBuildAttractions() {
+    pkMats();
+    PK.xp = S.xp || 0;
+    var makers = { carousel: pkBuildCarousel, teacups: pkBuildTeacups, ferris: pkBuildFerris, dodgems: pkBuildDodgems, droptower: pkBuildDropTower, flume: pkBuildFlume, haunted: pkBuildHaunted };
+    PK_PLOTS.forEach(function (p) {
+      var mk = makers[p.id]; if (!mk) return;
+      var open = true;   // every ride stands from the first day: the levels open the services, not the rides
+      var a = mk(p, open);
+      a.level = p.level;
+      a.plot = p;
+      pkCtl(a); pkCtlLoad(a);
+      if (!open) {
+        a.open = false;
+        if (a.g) a.g.visible = false;
+        a.hoard = pkHoard(p);
+      } else {
+        a.open = true;
+        if (S.rides) S.rides[p.id] = true;
+      }
+    });
+  }
+  function pkAttr(o) {
+    var side = o.x < 0 ? 1 : -1;   // the way back to the midway: the queue lane runs that way from its head at q
+    var a = {
+      id: o.id, name: o.name, kind: o.id, x: o.x, z: o.z, side: side,
+      qx: o.qx, qz: o.qz, qdx: o.qdx === undefined ? side : o.qdx, qdz: o.qdz === undefined ? 0 : o.qdz,
+      g: o.g, seats: o.seats || [], cap: (o.seats || []).length || o.cap || 8,
+      board: o.board || 9, run: o.run || 16, unload: o.unload || 6,
+      exit: o.exit || [o.qx + side * 1.0, o.qz - 2.3],
+      state: 'idle', t: 0, riders: 0, queue: [], open: false,
+      tickRun: o.tickRun || null, start: o.start || null, cycles: 0, hoard: null,
+      extra: o.extra || {}
+    };
+    PK.attractions.push(a); PK.attrById[a.id] = a;
+    if (o.g) o.g.userData.attr = a;
+    pkCtl(a);
+    return a;
+  }
+  // a part of a ride that moves on its own: drawn as a few merged meshes, never baked into the static world
+  function pkMover(parent, x, y, z) { var m = new THREE.Group(); m.position.set(x || 0, y || 0, z || 0); m.userData.dynamic = true; m.userData.keep = true; parent.add(m); return m; }
+  function pkPrism(r, h, n, mat, x, y, z, parent, rTop, open) {
+    var m = new THREE.Mesh(new THREE.CylinderGeometry(rTop === undefined ? r : rTop, r, h, n, 1, !!open), mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parentOf(parent).add(m); return m;
+  }
+  function pkRing(r, tube, mat, x, y, z, parent, seg, flat) {
+    var m = new THREE.Mesh(new THREE.TorusGeometry(r, tube, 8, seg || 48), mat); m.position.set(x, y, z); if (flat !== false) m.rotation.x = Math.PI / 2; m.castShadow = true; parentOf(parent).add(m); return m;
+  }
+  var PK_HORSE_GEO = null;
+  // a carved carousel horse in profile: prancing, one foreleg raised, tail out. Pulled out 0.22 m with rounded edges.
+  function pkHorseGeo() {
+    if (PK_HORSE_GEO) return PK_HORSE_GEO;
+    var pts = [[-0.62, 0.88], [-0.40, 0.96], [0.05, 0.93], [0.28, 0.99], [0.45, 1.20], [0.56, 1.36], [0.60, 1.47], [0.66, 1.40], [0.72, 1.36], [0.93, 1.12], [0.97, 1.03], [0.88, 0.98],
+      [0.64, 1.04], [0.50, 0.84], [0.56, 0.66], [0.76, 0.58], [0.78, 0.50], [0.50, 0.53], [0.40, 0.70], [0.36, 0.44], [0.38, 0.10], [0.27, 0.07], [0.26, 0.45], [0.18, 0.62],
+      [-0.30, 0.62], [-0.36, 0.46], [-0.30, 0.26], [-0.42, 0.07], [-0.52, 0.07], [-0.45, 0.30], [-0.55, 0.53], [-0.62, 0.64], [-0.72, 0.66], [-0.88, 0.48], [-0.84, 0.72], [-0.68, 0.86]];
+    var g = pkExtrudeGeo(pts, 0.2, 0.06); g.rotateY(-Math.PI / 2); g.userData.shared = true;
+    return (PK_HORSE_GEO = g);
+  }
+  // ── The carousel ─────────────────────────────────────────────────
+  function pkBuildCarousel(p, open) {
+    var M = pkMats(), g = new THREE.Group(); g.position.set(p.x, 0, p.z); scene.add(g);
+    pkLathe([[0, 0], [8.0, 0], [8.0, 0.17], [7.65, 0.17], [7.65, 0.34], [7.35, 0.34], [7.35, 0.5], [0, 0.5]], M.stone, 0, 0, 0, g, 64);
+    var spin = pkMover(g, 0, 0.5, 0);
+    pkPrism(7.1, 0.16, 48, MAT.wood, 0, 0.08, 0, spin);
+    pkRing(7.1, 0.06, M.gold, 0, 0.16, 0, spin, 64);
+    // the mirrored drum in the middle, the sunburst ceiling, the rounding boards and their bulbs, the scalloped valance, the roof
+    pkPrism(1.2, 3.9, 8, M.cream, 0, 2.11, 0, spin);
+    for (var f = 0; f < 8; f++) {
+      var th = (f + 0.5) * Math.PI / 4, rr = 1.2 * Math.cos(Math.PI / 8) + 0.012;
+      var mir = box(0.66, 2.5, 0.02, M.mirror, Math.sin(th) * rr, 2.0, Math.cos(th) * rr, spin); mir.rotation.y = th;
+      var fr = box(0.76, 2.62, 0.015, M.gold, Math.sin(th) * (rr - 0.004), 2.0, Math.cos(th) * (rr - 0.004), spin); fr.rotation.y = th;
+    }
+    pkPrism(1.32, 0.2, 8, M.gold, 0, 0.26, 0, spin); pkPrism(1.32, 0.2, 8, M.gold, 0, 3.98, 0, spin);
+    var ceilMat = std({ map: pkTexSunburst('#c8342a', '#f3ead6'), roughness: 0.8, emissive: 0x2a1208, emissiveIntensity: 0.35 });
+    var ceil = new THREE.Mesh(new THREE.CircleGeometry(7.45, 48), ceilMat); ceil.rotation.x = Math.PI / 2; ceil.position.y = 4.1; spin.add(ceil);
+    var boardMat = std({ map: pkTexRounding('#f3ead6', '#c8342a'), roughness: 0.7, emissive: 0x1e0c05, emissiveIntensity: 0.3 });
+    pkPrism(7.5, 0.8, 48, boardMat, 0, 4.5, 0, spin, 7.5, true);
+    pkRing(7.52, 0.05, M.gold, 0, 4.1, 0, spin, 64); pkRing(7.52, 0.05, M.gold, 0, 4.9, 0, spin, 64);
+    var bulbs = [];
+    for (var b = 0; b < 72; b++) { var ba = b / 72 * Math.PI * 2; bulbs.push([Math.cos(ba) * 7.56, 4.32, Math.sin(ba) * 7.56]); bulbs.push([Math.cos(ba + 0.04) * 7.56, 4.7, Math.sin(ba + 0.04) * 7.56]); }
+    pkBulbs(bulbs, M.bulb, 0.045, spin);
+    for (var sc = 0; sc < 48; sc++) {
+      var sa = (sc + 0.5) / 48 * Math.PI * 2;
+      var sv = new THREE.Mesh(cachedGeo('pkscalC', function () { return new THREE.CircleGeometry(0.48, 12, Math.PI, Math.PI); }), sc % 2 ? MAT.red : M.gold);
+      sv.position.set(Math.cos(sa) * 7.53, 4.1, Math.sin(sa) * 7.53); sv.rotation.y = Math.PI / 2 - sa; spin.add(sv);
+    }
+    var roofTex = pkTexStripes('#c8342a', '#f3ead6', 8); roofTex.repeat.set(3, 1);
+    var roof = new THREE.Mesh(new THREE.ConeGeometry(7.75, 2.0, 48, 1), std({ map: roofTex, roughness: 0.75 })); roof.position.y = 5.9; roof.castShadow = true; spin.add(roof);
+    pkPrism(0.9, 0.7, 12, M.cream, 0, 7.1, 0, spin);
+    var cupola = new THREE.Mesh(new THREE.ConeGeometry(1.05, 0.9, 12), MAT.red); cupola.position.y = 7.9; spin.add(cupola);
+    pkLathe([[0, 0], [0.12, 0], [0.06, 0.2], [0.14, 0.38], [0.04, 0.6], [0, 0.66]], M.gold, 0, 8.3, 0, spin, 12);
+    pkRod(0, 8.9, 0, 0, 9.9, 0, 0.025, M.iron, spin, 6);
+    var flag = box(0.7, 0.42, 0.02, MAT.red, 0.36, 9.65, 0, spin);
+    // the horses: an outer ring that carries riders and an inner ring that dresses the deck. Each rises and falls on its pole.
+    var coats = [0xf3eee4, 0x2a2420, 0x8a5a3a, 0xc9c4bc, 0xf3eee4, 0x6b4a2a, 0xe8d8b8, 0x3a3a40];
+    var saddles = [0xc8342a, 0x2f6fb3, 0x2f9e44, 0xd4a73a, 0x8a3fb3, 0xc8342a, 0x2f6fb3, 0xd4a73a];
+    var seats = [], horses = [];
+    function horse(ang, r, k, rider) {
+      var hg = pkMover(spin, Math.cos(ang) * r, 0, Math.sin(ang) * r); hg.rotation.y = Math.PI - ang;
+      var body = new THREE.Mesh(pkHorseGeo(), pkCoat(coats[k % 8])); body.position.y = 0.42; body.castShadow = true; hg.add(body);
+      box(0.4, 0.09, 0.5, pkCoat(saddles[k % 8]), 0, 1.41, 0.02, hg, { r: 0.03 });
+      box(0.06, 0.32, 0.06, M.gold, -0.22, 1.2, 0.04, hg); box(0.06, 0.32, 0.06, M.gold, 0.22, 1.2, 0.04, hg);
+      for (var mn = 0; mn < 5; mn++) box(0.08, 0.18, 0.1, pkCoat(0x3a2a20), 0, 1.47 + mn * 0.05, 0.52 + mn * 0.06, hg, { r: 0.03 });
+      box(0.24, 0.04, 0.06, pkCoat(saddles[k % 8]), 0, 1.52, 0.86, hg);
+      // the pole is fixed to the deck, not to the horse: the horse rises and falls along it, and the
+      // pole stays planted with a collar at the foot and under the canopy
+      var px = Math.cos(ang) * r, pz = Math.sin(ang) * r;
+      cyl(0.034, 3.62, M.brass, px, 1.81, pz, spin, 10);
+      cyl(0.055, 0.05, M.gold, px, 0.1, pz, spin, 10);
+      cyl(0.055, 0.05, M.gold, px, 3.54, pz, spin, 10);
+      sphere(0.07, M.gold, px, 3.62, pz, spin);
+      pkFuse(hg);
+      var h = { hg: hg, bob: k * 0.79 + (rider ? 0 : 1.6) };
+      horses.push(h);
+      if (rider) seats.push({ par: hg, x: 0, y: 1.46 - 0.76, z: 0.02, ry: 0, guest: null, hg: hg, bob: h.bob });
+    }
+    for (var hn = 0; hn < 8; hn++) horse(hn / 8 * Math.PI * 2, 5.3, hn, true);
+    for (var hi = 0; hi < 8; hi++) horse((hi + 0.5) / 8 * Math.PI * 2, 3.25, hi + 3, false);
+    pkFuse(spin);
+    // the canopy is closed, so the only light inside is what hangs from it: a warm lamp under the
+    // sunburst and a low fill that grazes the horses, instead of the dark hemisphere bounce
+    var pkLampWarm = new THREE.PointLight(0xffd9a0, 1.25, 13, 2); pkLampWarm.position.set(0, 3.15, 0); spin.add(pkLampWarm);
+    var pkLampLow = new THREE.PointLight(0xffc07a, 0.45, 8, 2); pkLampLow.position.set(0, 1.05, 0); spin.add(pkLampLow);
+    var a = pkAttr({ id: 'carousel', name: 'Carousel', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats, board: 8, run: 20, unload: 5,
+      tickRun: function (at, dt, k) {
+        spin.rotation.y += dt * 0.62 * k;
+        for (var i = 0; i < horses.length; i++) horses[i].hg.position.y = 0.08 + Math.sin(spin.rotation.y * 3 + horses[i].bob) * 0.2;
+      } });
+    a.extra.spin = spin; a.extra.horses = horses;
+    return a;
+  }
+  var PK_COATS = {};
+  function pkCoat(c) { return PK_COATS[c] || (PK_COATS[c] = std({ color: c, roughness: 0.32, metalness: 0.05 })); }
+  // ── The teacups ──────────────────────────────────────────────────
+  function pkBuildTeacups(p, open) {
+    var M = pkMats(), g = new THREE.Group(); g.position.set(p.x, 0, p.z); scene.add(g);
+    pkLathe([[0, 0], [7.1, 0], [7.1, 0.2], [6.8, 0.2], [6.8, 0.42], [0, 0.42]], M.stone, 0, 0, 0, g, 64);
+    var spin = pkMover(g, 0, 0.42, 0);
+    pkPrism(6.4, 0.2, 64, MAT.chequer, 0, 0.1, 0, spin);
+    var top = new THREE.Mesh(new THREE.CircleGeometry(6.38, 64), std({ map: pkTexSunburst('#8fd3c7', '#f6eef2'), roughness: 0.55 })); top.rotation.x = -Math.PI / 2; top.position.y = 0.205; spin.add(top);
+    pkRing(6.42, 0.1, M.gold, 0, 0.2, 0, spin, 72);
+    // the teapot in the middle: a turned body, a lid with a knob, a spout and a handle
+    var pot = std({ color: 0xf0a6c0, roughness: 0.3, metalness: 0.05 });
+    pkLathe([[0, 0], [0.9, 0], [1.35, 0.35], [1.55, 0.9], [1.45, 1.45], [1.05, 1.8], [0.6, 1.92], [0.66, 2.02], [0.4, 2.1], [0, 2.1]], pot, 0, 0.2, 0, spin, 32);
+    pkLathe([[0, 0], [0.5, 0], [0.42, 0.18], [0.1, 0.3], [0.14, 0.42], [0, 0.52]], M.gold, 0, 2.28, 0, spin, 20);
+    pkTube([[1.3, 0.9, 0], [1.9, 1.3, 0], [2.2, 2.0, 0], [2.45, 2.35, 0]], 0.16, pot, spin, false, 20, 10);
+    var ph = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.11, 10, 20, Math.PI), pot); ph.position.set(-1.45, 1.2, 0); ph.rotation.z = Math.PI / 2; spin.add(ph);
+    var cupCols = [['#f0a6c0', '#ffffff'], ['#8fc0e8', '#ffffff'], ['#f3d36b', '#ffffff']];
+    var cupMats = cupCols.map(function (c) { return std({ map: pkTexDots(c[0], c[1]), roughness: 0.3, metalness: 0.05 }); });
+    var seats = [];
+    for (var i = 0; i < 6; i++) {
+      var ang = i / 6 * Math.PI * 2;
+      var cup = pkMover(spin, Math.cos(ang) * 4.1, 0.2, Math.sin(ang) * 4.1);
+      pkLathe([[0, 0], [1.45, 0], [1.55, 0.08], [1.5, 0.14], [0, 0.14]], M.white, 0, 0, 0, cup, 32);
+      pkLathe([[0, 0.14], [0.55, 0.14], [0.85, 0.22], [1.1, 0.48], [1.24, 0.85], [1.3, 1.2], [1.34, 1.27], [1.27, 1.29], [1.2, 1.2], [1.14, 0.88], [1.0, 0.56], [0.72, 0.4], [0, 0.4]], cupMats[i % 3], 0, 0, 0, cup, 32);
+      pkRing(1.31, 0.04, M.gold, 0, 1.28, 0, cup, 40);
+      var hd = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.075, 8, 16, Math.PI), cupMats[i % 3]); hd.position.set(1.28, 0.78, 0); hd.rotation.z = -Math.PI / 2; cup.add(hd);
+      pkRing(0.78, 0.15, pkCoat(0xc8342a), 0, 0.56, 0, cup, 24);
+      cyl(0.05, 0.45, M.iron, 0, 0.62, 0, cup, 8);
+      pkRing(0.24, 0.035, M.iron, 0, 0.86, 0, cup, 18);
+      pkFuse(cup);
+      seats.push({ par: cup, x: -0.6, y: 0.62 - 0.76 + 0.2, z: 0, ry: Math.PI / 2, guest: null, cup: cup });
+      seats.push({ par: cup, x: 0.6, y: 0.62 - 0.76 + 0.2, z: 0, ry: -Math.PI / 2, guest: null, cup: cup });
+    }
+    pkFuse(spin);
+    return pkAttr({ id: 'teacups', name: 'Teacups', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats, board: 8, run: 18, unload: 4,
+      tickRun: function (at, dt, k) {
+        spin.rotation.y += dt * 0.8 * k;
+        for (var i = 0; i < 6; i++) at.seats[i * 2].cup.rotation.y += dt * (1.5 + i * 0.18) * k * (i % 2 ? -1 : 1);
+      } });
+  }
+  // ── The ferris wheel ─────────────────────────────────────────────
+  function pkBuildFerris(p, open) {
+    var M = pkMats(), g = new THREE.Group(); g.position.set(p.x, 0, p.z); scene.add(g);
+    var R = 8.8, HUB = 10.6, frame = pkPaint(0xf4f4f0, 0.4, 0.35);
+    // an A-frame each side of the wheel: two legs from wide footings up to the bearing, with braces between
+    [-1, 1].forEach(function (s) {
+      [-1, 1].forEach(function (zs) {
+        pkRod(s * 2.3, 0.3, zs * 4.4, s * 1.75, HUB, zs * 0.25, 0.17, frame, g, 12);
+        box(1.0, 0.6, 1.0, M.stone, s * 2.3, 0.3, zs * 4.4, g);
+      });
+      [3.2, 6.6].forEach(function (y) { var f = y / HUB, zz = 4.4 * (1 - f) + 0.25 * f, xx = 2.3 * (1 - f) + 1.75 * f; pkRod(s * xx, y, -zz, s * xx, y, zz, 0.08, frame, g, 8); });
+      pkRod(s * 2.25, 0.8, -4.1, s * 2.02, 5.2, 2.2, 0.06, frame, g, 6);
+      pkRod(s * 2.25, 0.8, 4.1, s * 2.02, 5.2, -2.2, 0.06, frame, g, 6);
+      box(0.5, 0.7, 0.9, MAT.steelDark, s * 1.75, HUB, 0, g);
+    });
+    pkRod(-2.2, HUB, 0, 2.2, HUB, 0, 0.26, MAT.steelDark, g, 16);
+    box(1.6, 1.4, 1.2, pkPaint(0x2c5f9e, 0.5, 0.3), 3.3, 0.7, 0, g);    // the drive house
+    // the loading platform under the wheel, with steps and a rail
+    box(4.2, 0.5, 3.0, M.stone, 0, 0.25, 0, g);
+    box(4.2, 0.04, 3.0, MAT.rubberMat, 0, 0.52, 0, g);
+    var wheel = pkMover(g, 0, HUB, 0);
+    [-1.15, 1.15].forEach(function (x) {
+      var rim = pkRing(R, 0.14, frame, x, 0, 0, wheel, 120, false); rim.rotation.y = Math.PI / 2;
+      var inner = pkRing(R * 0.6, 0.08, frame, x, 0, 0, wheel, 80, false); inner.rotation.y = Math.PI / 2;
+      var hub = cyl(0.85, 0.3, MAT.steelDark, x, 0, 0, wheel, 24); hub.rotation.z = Math.PI / 2;
+      for (var k = 0; k < 16; k++) { var sa = k / 16 * Math.PI * 2; pkRod(x, Math.sin(sa) * 0.8, Math.cos(sa) * 0.8, x, Math.sin(sa) * R, Math.cos(sa) * R, 0.05, frame, wheel, 6); }
+    });
+    for (var c = 0; c < 16; c++) { var ca = c / 16 * Math.PI * 2; pkRod(-1.15, Math.sin(ca) * R, Math.cos(ca) * R, 1.15, Math.sin(ca) * R, Math.cos(ca) * R, 0.06, frame, wheel, 6); }
+    var lights = [];
+    for (var lb = 0; lb < 96; lb++) { var la = lb / 96 * Math.PI * 2; lights.push([1.3, Math.sin(la) * (R + 0.18), Math.cos(la) * (R + 0.18)]); lights.push([-1.3, Math.sin(la) * (R + 0.18), Math.cos(la) * (R + 0.18)]); }
+    for (var sp = 0; sp < 16; sp++) { var spa = sp / 16 * Math.PI * 2; for (var q = 1; q <= 6; q++) { var rq = 0.8 + q * (R - 0.8) / 7; lights.push([1.22, Math.sin(spa) * rq, Math.cos(spa) * rq]); lights.push([-1.22, Math.sin(spa) * rq, Math.cos(spa) * rq]); } }
+    pkBulbs(lights, M.bulb, 0.05, wheel);
+    // eight cabins on hangers, each kept level as the wheel turns
+    var cabCols = [0xc8342a, 0xf0a020, 0xf3d36b, 0x2f9e44, 0x2f8fb3, 0x2f5fb3, 0x7a3fb3, 0xd94f8a];
+    var seats = [];
+    for (var k2 = 0; k2 < 8; k2++) {
+      var ang = k2 / 8 * Math.PI * 2;
+      var gon = pkMover(wheel, 0, Math.sin(ang) * R, Math.cos(ang) * R);
+      var car = pkMover(gon, 0, -1.45, 0);
+      var col = pkCoat(cabCols[k2]);
+      pkPrism(0.95, 0.12, 8, MAT.steelDark, 0, 0.06, 0, car);
+      pkPrism(0.95, 0.55, 8, col, 0, 0.39, 0, car, 0.95, true);
+      var gl = pkPrism(0.93, 0.55, 8, M.glass, 0, 0.94, 0, car, 0.93, true); gl.castShadow = false;
+      for (var mu = 0; mu < 8; mu++) { var ma = mu / 8 * Math.PI * 2; box(0.05, 0.6, 0.05, col, Math.sin(ma) * 0.94, 0.94, Math.cos(ma) * 0.94, car); }
+      pkPrism(1.05, 0.12, 8, col, 0, 1.27, 0, car);
+      var cr = new THREE.Mesh(new THREE.ConeGeometry(1.0, 0.32, 8), col); cr.position.y = 1.49; car.add(cr);
+      sphere(0.07, M.gold, 0, 1.68, 0, car);
+      pkRod(-1.1, 1.45, 0, -0.5, 1.62, 0, 0.04, MAT.steelDark, car, 6); pkRod(1.1, 1.45, 0, 0.5, 1.62, 0, 0.04, MAT.steelDark, car, 6);
+      box(0.32, 0.4, 1.3, M.seat, -0.62, 0.32, 0, car, { r: 0.05 }); box(0.32, 0.4, 1.3, M.seat, 0.62, 0.32, 0, car, { r: 0.05 });
+      pkFuse(car);
+      seats.push({ par: car, x: -0.5, y: 0.52 - 0.76, z: 0, ry: Math.PI / 2, guest: null, gon: gon });
+      seats.push({ par: car, x: 0.5, y: 0.52 - 0.76, z: 0, ry: -Math.PI / 2, guest: null, gon: gon });
+    }
+    pkFuse(wheel);
+    var a = pkAttr({ id: 'ferris', name: 'Ferris wheel', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats, board: 10, run: 26, unload: 6,
+      // one turn per ride, eased in and out, so every cabin is back at the platform when it stops
+      start: function (at) { at.extra.a0 = wheel.rotation.x; },
+      tickRun: function (at, dt) {
+        if (at.state === 'running') { var f = clamp(at.t / at.run, 0, 1); wheel.rotation.x = (at.extra.a0 || 0) + Math.PI * 2 * (f - Math.sin(Math.PI * 2 * f) / (Math.PI * 2)); }
+        for (var i = 0; i < at.seats.length; i += 2) at.seats[i].gon.rotation.x = -wheel.rotation.x;
+      } });
+    a.extra.wheel = wheel;
+    return a;
+  }
+  // ── The dodgems ──────────────────────────────────────────────────
+  function pkBuildDodgems(p, open) {
+    var M = pkMats(), th = PK_THEME.dodgems, g = new THREE.Group(); g.position.set(p.x, 0, p.z); scene.add(g);
+    var W = 14, D = 10;
+    box(W + 1.2, 0.2, D + 1.2, M.stone, 0, 0.1, 0, g);
+    box(W, 0.12, D, MAT.chequer, 0, 0.26, 0, g);
+    // the fence round the floor: a low wall with a fat rubber bumper on its inside face
+    [[0, -D / 2, W, 0.25], [0, D / 2, W, 0.25], [-W / 2, 0, 0.25, D], [W / 2, 0, 0.25, D]].forEach(function (w) {
+      box(w[2], 0.55, w[3], pkPaint(0x23262b, 0.5, 0.4), w[0], 0.47, w[1], g);
+      box(w[2] > 1 ? w[2] - 0.3 : 0.18, 0.22, w[3] > 1 ? w[3] - 0.3 : 0.18, MAT.hazard, w[0] - Math.sign(w[0]) * 0.12, 0.62, w[1] - Math.sign(w[1]) * 0.12, g);
+    });
+    // the pavilion: white columns, a striped fascia full of bulbs, the electric ceiling net and a hipped roof
+    var colM = pkPaint(0xf4f4f0, 0.4, 0.3);
+    [[-7.4, -5.4], [0, -5.4], [7.4, -5.4], [-7.4, 5.4], [0, 5.4], [7.4, 5.4]].forEach(function (c) {
+      cyl(0.16, 4.2, colM, c[0], 2.1, c[1], g, 16); cyl(0.24, 0.16, M.gold, c[0], 4.0, c[1], g, 16); cyl(0.24, 0.2, M.stone, c[0], 0.1, c[1], g, 16);
+    });
+    var fasc = pkStripes(hexCss(th.a), '#f3ead6');
+    [[0, -5.6, 15.6, 0.12], [0, 5.6, 15.6, 0.12], [-7.8, 0, 0.12, 11.3], [7.8, 0, 0.12, 11.3]].forEach(function (f) { box(f[2], 0.7, f[3], fasc, f[0], 4.45, f[1], g); });
+    var net = plane(W, D, MAT.mesh, 0, 3.9, 0, Math.PI / 2, 0, g);
+    pkHipRoof(16.4, 12.0, 2.0, M.slateRed, 0, 4.8, 0, g);
+    var db = [];
+    for (var bx = 0; bx <= 30; bx++) { db.push([-7.5 + bx * 0.5, 4.45, -5.7]); db.push([-7.5 + bx * 0.5, 4.45, 5.7]); }
+    for (var bz = 1; bz < 22; bz++) { db.push([-7.9, 4.45, -5.5 + bz * 0.5]); db.push([7.9, 4.45, -5.5 + bz * 0.5]); }
+    pkBulbs(db, M.bulb, 0.05, g);
+    var sideX = p.x < 0 ? 1 : -1;
+    sign(['DODGEMS'], 5.0, 0.9, sideX * 7.9, 5.3, 0, sideX > 0 ? Math.PI / 2 : -Math.PI / 2, { bg: '#1b232c', fg: '#f5b53d' }, g);
+    var seats = [], cars = [];
+    var bodyCols = [0xd94f4f, 0xf0c04a, 0x2f8fd9, 0x2f9e44, 0xe07fb8, 0xf4f4f0];
+    for (var k = 0; k < 6; k++) {
+      var c = pkMover(g, -4.5 + (k % 3) * 4.5, 0.32, k < 3 ? -2.2 : 2.2);
+      var body = pkGloss(bodyCols[k]);
+      var tub = new THREE.Mesh(pkDodgemGeo(), body); tub.position.y = 0.36; tub.castShadow = true; c.add(tub);
+      pkTube(pkRoundRect(0.78, 1.08, 0.36).map(function (q) { return [q[0], 0.2, q[1]]; }), 0.11, M.rubber, c, true, 48, 8);
+      box(1.2, 0.62, 0.22, body, 0, 0.82, -0.66, c, { r: 0.08 });
+      box(1.1, 0.12, 0.62, M.seat, 0, 0.6, -0.25, c, { r: 0.04 });
+      pkRod(0, 0.55, 0.62, 0, 0.88, 0.42, 0.03, M.iron, c, 6);
+      var sw = pkRing(0.17, 0.025, M.iron, 0, 0.9, 0.4, c, 18); sw.rotation.x = Math.PI / 2 - 0.5;
+      pkRod(0, 1.1, -0.72, 0, 3.55, -0.72, 0.03, M.steel, c, 6);
+      box(0.24, 0.06, 0.06, MAT.steelDark, 0, 3.58, -0.72, c);
+      sphere(0.06, glowMat(0x9fd0ff, 1.8), 0, 3.6, -0.72, c);
+      pkFuse(c);
+      seats.push({ par: c, x: -0.3, y: 0.66 - 0.76, z: -0.25, ry: 0, guest: null, car: c });
+      seats.push({ par: c, x: 0.3, y: 0.66 - 0.76, z: -0.25, ry: 0, guest: null, car: c });
+      cars.push({ g: c, vx: randf(-2, 2), vz: randf(-1.5, 1.5), t: randf(0, 4) });
+    }
+    var a = pkAttr({ id: 'dodgems', name: 'Dodgems', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats, board: 10, run: 26, unload: 6,
+      tickRun: function (at, dt, k) {
+        var cs = at.extra.cars; if (k < 0.01) return;
+        for (var i = 0; i < cs.length; i++) {
+          var c = cs[i];
+          c.t -= dt;
+          if (c.t <= 0) { c.t = randf(1.1, 2.8); c.vx = randf(-2.6, 2.6); c.vz = randf(-2.0, 2.0); }
+          var x = c.g.position.x + c.vx * dt * k, z = c.g.position.z + c.vz * dt * k;
+          if (x < -5.9 || x > 5.9) { c.vx *= -1; x = clamp(x, -5.9, 5.9); }
+          if (z < -3.8 || z > 3.8) { c.vz *= -1; z = clamp(z, -3.8, 3.8); }
+          c.g.position.x = x; c.g.position.z = z;
+        }
+        // bumps: two cars that touch push apart and swap their way of going
+        for (var m = 0; m < cs.length; m++) for (var n = m + 1; n < cs.length; n++) {
+          var A = cs[m].g.position, B = cs[n].g.position, dx = B.x - A.x, dz = B.z - A.z, d = Math.sqrt(dx * dx + dz * dz);
+          if (d > 0.01 && d < 2.0) {
+            var push = (2.0 - d) / 2, ux = dx / d, uz = dz / d;
+            A.x -= ux * push; A.z -= uz * push; B.x += ux * push; B.z += uz * push;
+            var t1 = cs[m].vx, t2 = cs[m].vz; cs[m].vx = cs[n].vx; cs[m].vz = cs[n].vz; cs[n].vx = t1; cs[n].vz = t2;
+          }
+        }
+        for (var r = 0; r < cs.length; r++) { var want = Math.atan2(cs[r].vx, cs[r].vz); cs[r].g.rotation.y += yawWrap(want - cs[r].g.rotation.y) * Math.min(1, dt * 3 * k); }
+      } });
+    a.extra.cars = cars;
+    return a;
+  }
+  function pkRoundRect(hw, hl, r) {
+    var pts = [], corners = [[hw - r, hl - r, 0], [-hw + r, hl - r, Math.PI / 2], [-hw + r, -hl + r, Math.PI], [hw - r, -hl + r, Math.PI * 1.5]];
+    corners.forEach(function (c) { for (var i = 0; i <= 4; i++) { var a = c[2] + i / 4 * Math.PI / 2; pts.push([c[0] + Math.cos(a) * r, c[1] + Math.sin(a) * r]); } });
+    return pts;
+  }
+  var PK_DODGEM_GEO = null;
+  function pkDodgemGeo() {
+    if (PK_DODGEM_GEO) return PK_DODGEM_GEO;
+    var g = pkExtrudeGeo(pkRoundRect(0.66, 0.96, 0.32), 0.36, 0.07, 6); g.rotateX(-Math.PI / 2); g.userData.shared = true;
+    return (PK_DODGEM_GEO = g);
+  }
+  // ── The drop tower ───────────────────────────────────────────────
+  function pkBuildDropTower(p, open) {
+    var M = pkMats(), g = new THREE.Group(); g.position.set(p.x, 0, p.z); scene.add(g);
+    var H = 30, white = pkPaint(0xf4f4f0, 0.4, 0.35);
+    pkPrism(3.7, 0.6, 8, M.stone, 0, 0.3, 0, g);
+    box(4.6, 0.04, 4.6, MAT.rubberMat, 0, 0.62, 0, g);
+    // the mast: a tapered white column with four guide rails, yellow bands and a machine house on top with an aviation light
+    var mast = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1.2, H, 20), white); mast.position.y = H / 2; mast.castShadow = true; g.add(mast);
+    for (var r4 = 0; r4 < 4; r4++) { var ra = r4 * Math.PI / 2 + Math.PI / 4; box(0.14, H - 3, 0.14, MAT.steelDark, Math.cos(ra) * 1.1, (H - 3) / 2 + 1.0, Math.sin(ra) * 1.1, g); }
+    for (var bnd = 0; bnd < 5; bnd++) pkPrism(1.12 - bnd * 0.055, 0.5, 20, M.gold, 0, 5 + bnd * 5.4, 0, g);
+    pkPrism(1.7, 2.4, 16, pkPaint(0x3a3f48, 0.5, 0.4), 0, H + 1.2, 0, g);
+    var hood = new THREE.Mesh(new THREE.ConeGeometry(1.9, 1.0, 16), MAT.red); hood.position.y = H + 2.9; hood.castShadow = true; g.add(hood);
+    pkRod(0, H + 3.3, 0, 0, H + 6.0, 0, 0.04, M.iron, g, 6);
+    sphere(0.14, glowMat(0xff2a1a, 2.0), 0, H + 6.05, 0, g);
+    var tb = []; for (var t = 0; t < 32; t++) { var tA = t / 32 * Math.PI * 2; tb.push([Math.cos(tA) * 1.74, H + 1.9, Math.sin(tA) * 1.74]); tb.push([Math.cos(tA) * 1.74, H + 0.5, Math.sin(tA) * 1.74]); }
+    pkBulbs(tb, M.bulb, 0.06, g);
+    // the carriage: a collar round the mast, a ring, and four seats facing out, each with an over-the-shoulder harness
+    var car = pkMover(g, 0, 2.2, 0);
+    pkPrism(1.35, 0.9, 16, MAT.steelDark, 0, 0.1, 0, car, 1.35, false);
+    pkRing(2.2, 0.32, pkGloss(0xc8342a), 0, 0, 0, car, 40);
+    var seats = [];
+    for (var i = 0; i < 4; i++) {
+      var a0 = i / 4 * Math.PI * 2 + Math.PI / 4, sx = Math.cos(a0) * 2.5, sz = Math.sin(a0) * 2.5, ry = Math.atan2(Math.cos(a0), Math.sin(a0));
+      pkRod(Math.cos(a0) * 1.35, 0, Math.sin(a0) * 1.35, Math.cos(a0) * 2.1, 0, Math.sin(a0) * 2.1, 0.12, MAT.steelDark, car, 8);
+      var sg = new THREE.Group(); sg.position.set(sx, 0.2, sz); sg.rotation.y = ry; car.add(sg);
+      box(0.62, 0.14, 0.56, M.seat, 0, 0.1, 0.02, sg, { r: 0.05 });
+      box(0.62, 1.05, 0.14, M.seat, 0, 0.68, -0.26, sg, { r: 0.05 });
+      box(0.34, 0.28, 0.12, M.seat, 0, 1.32, -0.24, sg, { r: 0.05 });
+      box(0.5, 0.1, 0.3, MAT.steelDark, 0, -0.04, 0.3, sg);   // the footrest
+      var hn = pkMover(sg, 0, 1.15, -0.2);
+      pkTube([[-0.2, 0, 0.02], [-0.24, -0.25, 0.26], [-0.18, -0.62, 0.34], [0.18, -0.62, 0.34], [0.24, -0.25, 0.26], [0.2, 0, 0.02]], 0.045, MAT.steelDark, hn, false, 24, 8);
+      box(0.14, 0.32, 0.14, M.seat, -0.22, -0.18, 0.2, hn, { r: 0.05 }); box(0.14, 0.32, 0.14, M.seat, 0.22, -0.18, 0.2, hn, { r: 0.05 });
+      pkFuse(hn);
+      seats.push({ par: sg, x: 0, y: 0.17 - 0.76, z: 0.02, ry: 0, guest: null, harness: hn });
+    }
+    pkFuse(car);
+    var a = pkAttr({ id: 'droptower', name: 'Drop tower', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats, board: 10, run: 16, unload: 5,
+      tickRun: function (at, dt) {
+        var t = at.state === 'running' ? at.t : 99, y;
+        if (t < 9) y = 2.2 + (t / 9) * 24.0;
+        else if (t < 11.4) y = 26.2;
+        else if (t < 12.1) y = 26.2 - ((t - 11.4) / 0.7) * 23.0;
+        else if (t < 12.5) y = 3.2 + ((t - 12.1) / 0.4) * 4.5;
+        else if (t < 13.3) y = 7.7 - ((t - 12.5) / 0.8) * 5.5;
+        else y = 2.2;
+        car.position.y = y;
+      } });
+    a.extra.car = car;
+    pkCtl(a).barObjs.push(function (b) { for (var s = 0; s < seats.length; s++) seats[s].harness.rotation.x = -1.7 * (1 - b); });
+    return a;
+  }
+  // ── The log flume ────────────────────────────────────────────────
+  // One closed course: a dock, a lift, a run along the top, a drop into the splash pool, a turn and a long return to the dock.
+  // The boats go round once per ride, so every boat is back at the dock when it stops.
+  var PK_FLUME_PTS = [[0, 0.25, 10], [0, 0.25, 2], [0, 7.5, -5], [0, 7.5, -10], [0, 0.35, -17.5], [0, 0.25, -23], [1.3, 0.25, -25.6], [3.6, 0.25, -26.6], [5.9, 0.25, -25.6], [7.2, 0.25, -23],
+    [7.2, 0.25, 8.6], [6.3, 0.25, 11.8], [3.6, 0.25, 13.2], [0.9, 0.25, 12.2]];
+  function pkBuildFlume(p, open) {
+    var M = pkMats(), g = new THREE.Group(); g.position.set(p.x, 0, p.z); scene.add(g);
+    var PTS = PK_FLUME_PTS, N = PTS.length, lens = [], total = 0;
+    for (var i = 0; i < N; i++) { var A = PTS[i], B = PTS[(i + 1) % N]; var L = Math.sqrt(Math.pow(B[0] - A[0], 2) + Math.pow(B[1] - A[1], 2) + Math.pow(B[2] - A[2], 2)); lens.push(L); total += L; }
+    var trough = pkPaint(0xe9eef0, 0.35, 0.1), U = [[-1.25, -0.25], [1.25, -0.25], [1.25, 0.75], [1.0, 0.75], [1.0, -0.05], [-1.0, -0.05], [-1.0, 0.75], [-1.25, 0.75]];
+    var waters = [];
+    for (var j = 0; j < N; j++) {
+      var A2 = PTS[j], B2 = PTS[(j + 1) % N], dx = B2[0] - A2[0], dy = B2[1] - A2[1], dz = B2[2] - A2[2], hz = Math.sqrt(dx * dx + dz * dz), yaw = Math.atan2(dx, dz), pitch = -Math.atan2(dy, hz), Lj = lens[j] + 0.5;
+      var seg = new THREE.Group(); seg.position.set((A2[0] + B2[0]) / 2, (A2[1] + B2[1]) / 2, (A2[2] + B2[2]) / 2); seg.rotation.order = 'YXZ'; seg.rotation.y = yaw; seg.rotation.x = pitch; g.add(seg);
+      var tm = new THREE.Mesh(pkExtrudeGeo(U, Lj, 0), trough); tm.castShadow = true; tm.receiveShadow = true; seg.add(tm);
+      var wg = new THREE.PlaneGeometry(1.98, Lj), wuv = wg.attributes.uv; for (var wu = 0; wu < wuv.count; wu++) wuv.setXY(wu, wuv.getX(wu), wuv.getY(wu) * Lj / 3);
+      var wm = new THREE.Mesh(wg, M.water); wm.rotation.x = -Math.PI / 2; wm.position.y = 0.12; seg.add(wm); waters.push(wm);
+      // timber trestles under every raised stretch
+      var steps = Math.floor(lens[j] / 2.4);
+      for (var s = 1; s < steps; s++) {
+        var f = s / steps, px = A2[0] + dx * f, py = A2[1] + dy * f, pz = A2[2] + dz * f; if (py < 1.4) continue;
+        [-1.0, 1.0].forEach(function (o) { var ox = Math.cos(yaw) * o, oz = -Math.sin(yaw) * o; box(0.24, py - 0.25, 0.24, MAT.wood, px + ox, (py - 0.25) / 2, pz + oz, g); solid(p.x + px + ox - 0.15, p.x + px + ox + 0.15, p.z + pz + oz - 0.15, p.z + pz + oz + 0.15, 0, py); });
+        var cb = box(2.4, 0.2, 0.2, MAT.wood, px, py - 0.35, pz, g); cb.rotation.y = yaw;
+        if (py > 3) { var cb2 = box(2.4, 0.16, 0.16, MAT.wood, px, py * 0.45, pz, g); cb2.rotation.y = yaw; }
+      }
+      if (Math.max(A2[1], B2[1]) < 1.4) solid(p.x + Math.min(A2[0], B2[0]) - 1.35, p.x + Math.max(A2[0], B2[0]) + 1.35, p.z + Math.min(A2[2], B2[2]) - 1.35, p.z + Math.max(A2[2], B2[2]) + 1.35, 0, 1.2);
+    }
+    // the lift: a chain up the middle of the climb, and the plant room at the top
+    box(2.8, 2.4, 2.6, pkPaint(0x8a6a4a, 0.85, 0), 2.3, 8.7, -7.5, g);
+    pkHipRoof(3.3, 3.1, 1.0, M.slate, 2.3, 9.9, -7.5, g);
+    // the splash pool: a stone basin round the foot of the drop, the water, and rocks
+    [[0, -14.2, 11.0, 0.5], [0, -24.0, 11.0, 0.5], [-5.3, -19.1, 0.5, 10.2], [5.3, -19.1, 0.5, 10.2]].forEach(function (w) { box(w[2], 0.7, w[3], M.stoneDark, w[0], 0.35, w[1], g); });
+    var pool = new THREE.Mesh(new THREE.PlaneGeometry(10.1, 9.3), M.water); pool.rotation.x = -Math.PI / 2; pool.position.set(0, 0.42, -19.1); g.add(pool); waters.push(pool);
+    for (var rk = 0; rk < 20; rk++) {
+      var rs = randf(0.45, 1.05), side = rk % 2 ? 1 : -1;
+      if (rk > 12) pkBoulder(randf(-3, 9), randf(-30, -27.5), rs, g);
+      else pkBoulder(side * randf(2.6, 4.6), randf(-23, -15), rs, g);
+    }
+    // the station: a timber deck along the dock on the lane side, under a pitched roof
+    var lane = p.x < 0 ? 1 : -1;
+    box(5.0, 0.12, 10.5, MAT.wood, lane * 3.95, 0.06, 7.0, g);
+    pkRailRun(p.x + lane * 6.45, p.z + 1.8, p.x + lane * 6.45, p.z + 6.3, { solid: true });
+    pkRailRun(p.x + lane * 6.45, p.z + 9.8, p.x + lane * 6.45, p.z + 12.2, { solid: true });
+    [[1.6, 1.8], [1.6, 12.2], [6.4, 1.8], [6.4, 12.2]].forEach(function (c) { cyl(0.12, 3.4, MAT.wood, lane * c[0], 1.7, c[1], g, 8); });
+    var roofG = new THREE.Group(); roofG.position.set(lane * 4.0, 3.4, 7.0); roofG.rotation.y = Math.PI / 2; g.add(roofG);
+    pkGableRoof(11.0, 5.6, 1.4, M.slateGreen, MAT.wood, 0, 0, 0, roofG, 0.3);
+    // the boats: hollowed logs with two seats and a lap bar
+    var bark2 = std({ map: M.bark.map, roughness: 1, side: THREE.DoubleSide });
+    var boats = [], seats = [];
+    for (var b = 0; b < 3; b++) {
+      var bt = pkMover(g, 0, 0, 0);
+      var hull = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 3.0, 18, 1, true, -0.72 * Math.PI, 1.44 * Math.PI), bark2); hull.rotation.x = Math.PI / 2; hull.position.y = 0.62; hull.castShadow = true; bt.add(hull);
+      [-1.5, 1.5].forEach(function (ez) { var cap = new THREE.Mesh(new THREE.CircleGeometry(0.62, 18, -1.22 * Math.PI, 1.44 * Math.PI), MAT.wood); cap.position.set(0, 0.62, ez); if (ez < 0) cap.rotation.y = Math.PI; bt.add(cap); });
+      box(1.0, 0.08, 0.36, MAT.wood, 0, 0.56, 0.45, bt); box(1.0, 0.08, 0.36, MAT.wood, 0, 0.56, -0.7, bt);
+      var bar = pkMover(bt, 0, 0.9, 0.12);
+      pkTube([[-0.42, 0, 0], [-0.4, -0.05, 0.3], [0.4, -0.05, 0.3], [0.42, 0, 0]], 0.035, MAT.steelDark, bar, false, 16, 6);
+      pkFuse(bt);
+      seats.push({ par: bt, x: -0.26, y: 0.6 - 0.76, z: 0.42, ry: 0, guest: null, boat: bt });
+      seats.push({ par: bt, x: 0.26, y: 0.6 - 0.76, z: 0.42, ry: 0, guest: null, boat: bt });
+      boats.push({ g: bt, u0: b * 3.5 / total, u: b * 3.5 / total, bar: bar });
+    }
+    function placeBoat(bt, u) {
+      var d = ((u % 1) + 1) % 1 * total, k = 0;
+      while (k < lens.length - 1 && d > lens[k]) { d -= lens[k]; k++; }
+      var A = PTS[k], B = PTS[(k + 1) % N], f = lens[k] ? clamp(d / lens[k], 0, 1) : 0, dx = B[0] - A[0], dy = B[1] - A[1], dz = B[2] - A[2];
+      bt.g.position.set(A[0] + dx * f, A[1] + dy * f - 0.12, A[2] + dz * f);
+      bt.g.rotation.order = 'YXZ'; bt.g.rotation.y = Math.atan2(dx, dz); bt.g.rotation.x = -Math.atan2(dy, Math.sqrt(dx * dx + dz * dz));
+    }
+    boats.forEach(function (bt) { placeBoat(bt, bt.u); });
+    var dropU = (lens[0] + lens[1] + lens[2] + lens[3] * 0.98) / total;
+    var a = pkAttr({ id: 'flume', name: 'Log flume', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats, board: 10, run: 30, unload: 5,
+      tickRun: function (at, dt) {
+        M.waterTex.offset.y -= dt * 0.35;
+        if (at.state !== 'running') return;
+        var f = clamp(at.t / (at.run - 1), 0, 1);
+        for (var i = 0; i < at.extra.boats.length; i++) {
+          var bt = at.extra.boats[i], prev = bt.u;
+          bt.u = bt.u0 + f;
+          placeBoat(bt, bt.u);
+          var pu = ((prev % 1) + 1) % 1, nu = ((bt.u % 1) + 1) % 1;
+          if (pu < dropU + 0.04 && nu >= dropU + 0.04) burst(p.x, 0.8, p.z - 17.5, 0x9fd8ff, 34, 'up');
+        }
+      } });
+    a.extra.boats = boats;
+    pkCtl(a).barObjs.push(function (bv) { for (var s = 0; s < boats.length; s++) boats[s].bar.rotation.x = -1.3 * (1 - bv); });
+    return a;
+  }
+  // ── The haunted house ────────────────────────────────────────────
+  // A two-storey Victorian manor, its front to the midway: clapboard over a stone base, a slate roof with a cross gable, a corner
+  // tower with a spire, a porch on turned columns, lit windows with shutters, a chimney, and a graveyard either side.
+  function pkBuildHaunted(p, open) {
+    var M = pkMats(), g = new THREE.Group(); g.position.set(p.x, 0, p.z); g.rotation.y = p.x < 0 ? Math.PI / 2 : -Math.PI / 2; scene.add(g);
+    var wall = M.clapGrey, trim = pkPaint(0xe8e2d4, 0.7, 0), lit = glowMat(0xff9a3d, 0.9), dim = glowMat(0x7a5a3a, 0.5), shutter = pkPaint(0x23332a, 0.7, 0.1);
+    box(12.4, 0.6, 10.4, M.stoneDark, 0, 0.3, 0, g);
+    box(12, 3.0, 10, wall, 0, 2.1, 0, g);
+    box(12.2, 0.2, 10.2, trim, 0, 3.6, 0, g);
+    box(12, 2.8, 10, wall, 0, 5.0, 0, g);
+    [[-6, -5], [6, -5], [-6, 5], [6, 5]].forEach(function (c) { box(0.22, 5.8, 0.22, trim, c[0], 3.5, c[1], g); });
+    pkGableRoof(12, 10, 3.6, M.slate, wall, 0, 6.4, 0, g, 0.5);
+    var cg = new THREE.Group(); cg.position.set(-0.5, 6.0, 3.6); cg.rotation.y = Math.PI / 2; g.add(cg);
+    pkGableRoof(3.6, 4.2, 2.6, M.slate, wall, 0, 0, 0, cg, 0.35);
+    pkWindow(g, -0.5, 7.2, 5.45, 0.9, 1.1, 0, trim, lit);
+    // the tower and its spire
+    box(3.4, 9.6, 3.4, wall, 4.4, 5.4, 3.4, g);
+    box(3.6, 0.2, 3.6, trim, 4.4, 10.2, 3.4, g);
+    pkHipRoof(4.0, 4.0, 4.2, M.slate, 4.4, 10.3, 3.4, g);
+    pkRod(4.4, 14.4, 3.4, 4.4, 15.8, 3.4, 0.04, M.iron, g, 6); sphere(0.12, M.iron, 4.4, 15.2, 3.4, g);
+    pkWindow(g, 4.4, 8.2, 5.15, 0.8, 1.2, 0, trim, lit); pkWindow(g, 6.15, 8.2, 3.4, 0.8, 1.2, Math.PI / 2, trim, dim);
+    box(1.0, 3.8, 1.0, MAT.brick, -3.8, 8.6, -2.0, g); box(1.2, 0.2, 1.2, M.stoneDark, -3.8, 10.5, -2.0, g);
+    // windows, some lit, some with a shutter hanging loose
+    [[-4.4, 2.2], [-2.3, 2.2], [-4.4, 5.0], [-2.3, 5.0], [1.8, 5.0], [4.4, 5.0]].forEach(function (w, i) {
+      pkWindow(g, w[0], w[1], 5.03, 0.95, 1.5, 0, trim, i % 3 === 1 ? lit : (i % 3 === 2 ? dim : M.pane));
+      box(0.42, 1.6, 0.06, shutter, w[0] - 0.75, w[1], 5.06, g);
+      var s2 = box(0.42, 1.6, 0.06, shutter, w[0] + 0.75, w[1] - (i === 4 ? 0.12 : 0), 5.06, g); if (i === 4) s2.rotation.z = 0.32;
+    });
+    [-3, 0, 3].forEach(function (z, i) { [2.2, 5.0].forEach(function (y, j) { [-1, 1].forEach(function (sx) { pkWindow(g, sx * 6.03, y, z, 0.95, 1.5, sx * Math.PI / 2, trim, (i + j + (sx > 0 ? 1 : 0)) % 3 === 0 ? lit : M.pane); }); }); });
+    // the porch: a deck, steps, four turned columns, a railing of balusters and a lean-to roof
+    box(7.2, 0.24, 2.6, MAT.wood, -0.5, 0.72, 6.3, g);
+    for (var st = 0; st < 3; st++) box(2.2, 0.2, 0.4, MAT.wood, -0.5, 0.5 - st * 0.2, 7.8 + st * 0.4, g);
+    [-3.8, -1.9, 0.9, 2.8].forEach(function (x) { pkLathe([[0, 0], [0.16, 0], [0.16, 0.2], [0.1, 0.3], [0.09, 2.2], [0.14, 2.35], [0.14, 2.5], [0, 2.5]], trim, x, 0.84, 7.4, g, 12); });
+    [[-3.8, -1.9], [0.9, 2.8]].forEach(function (seg) { box(seg[1] - seg[0], 0.08, 0.1, trim, (seg[0] + seg[1]) / 2, 1.7, 7.4, g); for (var bx = seg[0] + 0.2; bx < seg[1] - 0.1; bx += 0.22) box(0.05, 0.8, 0.05, trim, bx, 1.28, 7.4, g); });
+    var pr = box(7.8, 0.14, 3.0, M.slate, -0.5, 3.55, 6.45, g); pr.rotation.x = 0.16;
+    // the front doors: they swing open when the ride boards
+    var doors = [];
+    [-1, 1].forEach(function (s) {
+      var hinge = pkMover(g, -0.5 + s * 1.05, 0.84, 5.06);
+      box(1.02, 2.5, 0.08, pkPaint(0x3a1f1a, 0.7, 0), -s * 0.51, 1.25, 0, hinge);
+      box(0.6, 0.8, 0.02, lit, -s * 0.51, 1.75, 0.05, hinge);
+      sphere(0.05, M.brass, -s * 0.88, 1.2, 0.08, hinge);
+      pkFuse(hinge); doors.push({ h: hinge, s: s });
+    });
+    box(2.5, 0.25, 0.14, trim, -0.5, 3.47, 5.08, g);
+    sign(['THE HAUNTED MANOR'], 2.6, 0.42, -0.5, 4.05, 5.12, 0, { bg: '#1b232c', fg: '#ff8a3d' }, g);
+    [-2.0, 1.0].forEach(function (x) { cyl(0.11, 0.36, glowMat(0xffb060, 1.4), x, 2.6, 5.2, g, 8); });
+    // the graveyard either side: headstones, crosses, dead trees and a low iron fence
+    var stone = pkPaint(0x8e8a84, 0.95, 0), stoneShape = [[-0.32, 0], [0.32, 0], [0.32, 0.7], [0.22, 0.86], [0, 0.92], [-0.22, 0.86], [-0.32, 0.7]];
+    [-1, 1].forEach(function (s) {
+      for (var gr = 0; gr < 7; gr++) {
+        var gx = s * (7.6 + (gr % 3) * 1.2), gz = -3.5 + Math.floor(gr / 3) * 2.6 + (gr % 2) * 0.5;
+        if (gr % 3 === 2) { box(0.12, 0.95, 0.1, stone, gx, 0.48, gz, g); box(0.5, 0.12, 0.1, stone, gx, 0.7, gz, g); }
+        else { var hs = pkExtrude(stoneShape, 0.14, stone, gx, 0, gz, g, 0.02); hs.rotation.y = s * Math.PI / 2 + randf(-0.25, 0.25); hs.rotation.z = randf(-0.12, 0.12); }
+        box(0.7, 0.06, 1.3, M.soil, gx, 0.03, gz + 0.8, g);
+      }
+      var tx = s * 10.0;
+      cyl(0.13, 3.6, M.bark, tx, 1.8, 2.0, g, 8, 0.22);
+      pkRod(tx, 2.6, 2.0, tx + s * 1.2, 3.8, 2.6, 0.06, M.bark, g, 6); pkRod(tx, 3.1, 2.0, tx - s * 0.9, 4.2, 1.2, 0.05, M.bark, g, 6); pkRod(tx + s * 0.8, 3.4, 2.4, tx + s * 1.3, 4.3, 1.9, 0.035, M.bark, g, 5);
+      [[6.8, -5], [11.6, -5], [11.6, 5], [6.8, 5]].forEach(function (c, ci, arr) { var n2 = arr[(ci + 1) % arr.length]; if (ci === 3) return; pkRod(s * c[0], 0.95, c[1], s * n2[0], 0.95, n2[1], 0.03, M.iron, g, 6); pkRod(s * c[0], 0.2, c[1], s * n2[0], 0.2, n2[1], 0.025, M.iron, g, 6); });
+      for (var fp = 0; fp < 12; fp++) { var fz = -5 + fp * (10 / 11); box(0.03, 1.0, 0.03, M.iron, s * 11.6, 0.5, fz, g); }
+    });
+    // the ride happens inside: six standing places behind the doors
+    var inside = new THREE.Group(); inside.position.set(0, 0.6, -1.0); g.add(inside);
+    var seats = [];
+    for (var k = 0; k < 6; k++) seats.push({ par: inside, x: -3.6 + (k % 3) * 3.6, y: 0, z: (k < 3 ? -2 : 2), guest: null, pose: 'stand' });
+    pkLocalSolid(g, -6.3, 6.3, -5.3, 5.3, 0, 7); pkLocalSolid(g, -4.1, 3.1, 5.3, 7.5, 0, 1.2);
+    pkLocalSolid(g, 6.6, 11.8, -5.2, 5.2, 0, 1.0); pkLocalSolid(g, -11.8, -6.6, -5.2, 5.2, 0, 1.0);
+    var a = pkAttr({ id: 'haunted', name: 'Haunted house', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats, board: 6, run: 20, unload: 4,
+      tickRun: function (at, dt) {
+        // the lit windows flicker while a party is inside, and the house groans
+        if (at.state === 'running') { lit.emissiveIntensity = 0.6 + Math.max(0, Math.sin(worldTime * 13) * Math.sin(worldTime * 3.1)) * 1.4; if (Math.floor(at.t / 4) !== Math.floor((at.t - dt) / 4)) sfx('door'); }
+        else lit.emissiveIntensity = 0.9;
+      } });
+    a.extra.inside = inside;
+    pkCtl(a).gateObjs.push(function (t) { doors.forEach(function (d) { d.h.rotation.y = d.s * 1.45 * t; }); });
+    return a;
+  }
+  // ── The dressing ─────────────────────────────────────────────────
+  // Everything here is static and parented to one group per plot, so a plot that is not open yet is not drawn and is not
+  // baked; opening it flips the group visible and the world is baked again.
+  var PK_THEME = {
+    carousel:  { a: 0xc94f4f, b: 0xf0c04a, ground: 0xb8a48a, name: 'The Grand Carousel' },
+    teacups:   { a: 0x8fd3c7, b: 0xf0a6c0, ground: 0xb9d6cf, name: 'The Tea Garden' },
+    ferris:    { a: 0x4f8fd9, b: 0x9fd0ff, ground: 0xa8bccd, name: 'The Sky Wheel' },
+    dodgems:   { a: 0xe0563f, b: 0xf0c04a, ground: 0x8a8f96, name: 'The Dodgem Arena' },
+    droptower: { a: 0x3a3f48, b: 0xf0c04a, ground: 0x9a938a, name: 'The Drop' },
+    flume:     { a: 0x3f7fa8, b: 0x8a6a4a, ground: 0x8a9a7a, name: 'The Log Flume' },
+    haunted:   { a: 0x4a4a55, b: 0xff8a3d, ground: 0x6e6a60, name: 'The Haunted Manor' }
+  };
+  // the pavers, tinted toward the ride's own colour so each plot reads as a place of its own
+  var PK_PADS = {};
+  function pkPadMat(c) {
+    if (PK_PADS[c]) return PK_PADS[c];
+    var col = new THREE.Color(c).lerp(new THREE.Color(0xffffff), 0.45);
+    return (PK_PADS[c] = std({ map: pkMats().paverTex, color: col.getHex(), roughness: 0.9 }));
+  }
+  function pkDressAll() {
+    PK.attractions.forEach(function (a) {
+      var th = PK_THEME[a.id], p = a.plot; if (!th || !p) return;
+      var side = p.x < 0 ? 1 : -1;                        // the way back to the midway
+      var dg = new THREE.Group(); dg.visible = !!a.open; scene.add(dg); a.dress = dg;
+      // the plot's own paving (a big coaster plot sets its own pad, so it does not pave over its neighbours)
+      var padR = p.r * (p.pad || 1.25), padY = 0.0195 + PK_PLOTS.indexOf(p) * 0.0025;
+      pkPavedDisc(padR, pkPadMat(th.ground), p.x, padY, p.z, dg, 2.4);
+      pkPavedDisc(padR + 0.55, pkMats().kerb, p.x, padY - 0.001, p.z, dg, 2.4);   // a stone lip round the pad
+      // bunting along the three sides away from the midway (a big coaster plot hangs its own)
+      if (!th.noBunting) {
+        pkBunting(p.x - p.r - 1.2, p.z - p.r - 1.2, p.x + p.r + 1.2, p.z - p.r - 1.2, th, dg);
+        pkBunting(p.x + side * (p.r + 1.2), p.z - p.r - 1.2, p.x + side * (p.r + 1.2), p.z + p.r + 1.2, th, dg);
+        pkBunting(p.x - p.r - 1.2, p.z - p.r - 1.2, p.x - p.r - 1.2, p.z + p.r + 1.2, th, dg);
+      }
+      // the gateway over the queue, facing the midway
+      pkGatewayBetter(p.q[0], p.q[1], th.name, th, side, dg);
+      // the line itself: a fenced lane behind the arch with a boarding gate
+      pkQueueLaneBetter(a, th, dg);
+      // planters by the gateway and two lamps, where the plot has the room for them
+      if (!th.noDecor) {
+        pkBedIn(p.q[0] + side * 2.8, p.q[1] - 2.6, dg);
+        pkBedIn(p.q[0] + side * 2.8, p.q[1] + 2.6, dg);
+        lampPost(p.q[0] - side * 1.2, p.q[1] - 3.8, 0, 4.5);
+        lampPost(p.q[0] - side * 1.2, p.q[1] + 3.8, 0, 4.5);
+      }
+      pkSignature(a, p, th, dg);
+    });
+  }
+  // one triangular pennant, top edge along local x, hanging down: shared by every flag on the cord
+  var PK_PENNANT = null;
+  function pkPennantGeo() {
+    if (PK_PENNANT) return PK_PENNANT;
+    var g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute([-0.15, 0, 0, 0.15, 0, 0, 0, -0.34, 0], 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute([0, 1, 1, 1, 0.5, 0], 2));
+    g.computeVertexNormals();
+    return (PK_PENNANT = g);
+  }
+  var PK_BUNT_MATS = {};
+  function pkBuntMat(c) {
+    return PK_BUNT_MATS[c] || (PK_BUNT_MATS[c] = std({ color: c, roughness: 0.9, side: THREE.DoubleSide }));
+  }
+  function pkBunting(x0, z0, x1, z1, th, parent) {
+    var n = 10;
+    var dx = x1 - x0, dz = z1 - z0, len = Math.sqrt(dx * dx + dz * dz);
+    var rot = Math.atan2(-dz, dx);
+    // the cord: a shallow parabola sagging between the two posts
+    var endY = 2.55, dip = Math.min(0.5, len * 0.055), pts = [];
+    for (var k = 0; k <= 8; k++) {
+      var u = 2 * k / 8 - 1;
+      pts.push([x0 + dx * (k / 8), endY - dip * (1 - u * u), z0 + dz * (k / 8)]);
+    }
+    pkTube(pts, 0.013, std({ color: 0x5a4c3a, roughness: 0.95 }), parent, false, 24, 5);
+    // a post at each end, capped
+    for (var e = 0; e <= 1; e++) {
+      var ex = e ? x1 : x0, ez = e ? z1 : z0;
+      pkRoundCyl(0.1, 2.6, MAT.wood, ex, 1.3, ez, parent, 8);
+      sphere(0.08, pkMats().gold, ex, 2.64, ez, parent);
+    }
+    // pennants hanging from the cord, alternating the ride's colours
+    for (var i = 1; i < n; i++) {
+      var t = i / n, u2 = 2 * t - 1;
+      var flag = new THREE.Mesh(pkPennantGeo(), pkBuntMat(i % 2 ? th.a : th.b));
+      flag.position.set(x0 + dx * t, endY - dip * (1 - u2 * u2) - 0.02, z0 + dz * t);
+      flag.rotation.y = rot;
+      flag.castShadow = true;
+      parent.add(flag);
+    }
+  }
+  function pkGateway(x, z, label, th, side, parent) {
+    pkGatewayBetter(x, z, label, th, side, parent);
+  }
+  // ── The queue lane ────────────────────────────────────────────────
+  // Every ride runs a proper line: the gateway arch stands over the boarding gate at
+  // the front, a low steel fence holds the lane on both sides, and an open entry at the
+  // back carries the QUEUE sign. The slot the guests stand in is unchanged; the lane is
+  // built around it. The boarding gate opens with the ride's own gates (C.gates).
+  function pkQueueLaneBetter(a, th, parent) {
+    var C = pkCtl(a);
+    var N = Math.max(4, a.cap || 8);
+    var dir = a.qdx >= 0 ? 1 : -1;
+    var qx = a.qx, qz = a.qz;
+    var xGate = qx - dir * 0.66;                       // under the arch, clear of slot 0
+    var xBack = qx + dir * (N * 1.05 + 1.1);           // open entry at the back
+    var zA = qz - 0.92, zB = qz + 0.92;
+    var lo = Math.min(xGate, xBack), hi = Math.max(xGate, xBack), mid = (lo + hi) / 2;
+    // the lane floor: a tinted strip with a stone kerb, a hand's width wider than the fence
+    box(hi - lo + 0.9, 0.10, 2.24, pkMats().kerb, mid, 0.012, qz, parent);
+    box(hi - lo + 0.6, 0.055, 1.98, pkPadMat(th.ground), mid, 0.035, qz, parent);
+    // a fence down each side, from the boarding gate to the entry
+    pkLaneFence(xGate, xBack, zA, parent);
+    pkLaneFence(xGate, xBack, zB, parent);
+    // the boarding gate: two steel leaves on the gate posts, under the arch. They swing
+    // toward the ride as C.gates opens, which is the same signal the platform gates use.
+    [-1, 1].forEach(function (sz) {
+      var z = sz < 0 ? zA - 0.02 : zB + 0.02;
+      pkRoundCyl(0.075, 1.30, MAT.steelDark, xGate, 0.65, z, parent, 8);
+      sphere(0.075, pkMats().gold, xGate, 1.33, z, parent);
+    });
+    var leafL = new THREE.Group(); leafL.position.set(xGate, 0, zA); parent.add(leafL);
+    var leafR = new THREE.Group(); leafR.position.set(xGate, 0, zB); parent.add(leafR);
+    var gateMat = std({ color: 0x2f3a42, roughness: 0.5, metalness: 0.35 });
+    pkBevelBox(0.055, 0.92, 0.86, gateMat, 0, 0.55, 0.44, leafL, 0.015);
+    pkBevelBox(0.055, 0.92, 0.86, gateMat, 0, 0.55, -0.44, leafR, 0.015);
+    pkBevelBox(0.075, 0.06, 0.80, pkMats().gold, 0, 0.98, 0.44, leafL, 0.01);
+    pkBevelBox(0.075, 0.06, 0.80, pkMats().gold, 0, 0.98, -0.44, leafR, 0.01);
+    pkBevelBox(0.07, 0.05, 0.80, MAT.steelDark, 0, 0.30, 0.44, leafL, 0.01);
+    pkBevelBox(0.07, 0.05, 0.80, MAT.steelDark, 0, 0.30, -0.44, leafR, 0.01);
+    C.gateObjs.push(function (t) { leafL.rotation.y = -t * 1.42; leafR.rotation.y = t * 1.42; });
+    // the entry arch at the back: two posts, a header and the sign facing the midway
+    [-1, 1].forEach(function (sz) {
+      pkRoundCyl(0.085, 2.30, MAT.steelDark, xBack, 1.15, qz + sz * 1.02, parent, 8);
+      sphere(0.09, pkMats().gold, xBack, 2.33, qz + sz * 1.02, parent);
+    });
+    pkBevelBox(0.13, 0.16, 2.30, MAT.steelDark, xBack, 2.28, qz, parent, 0.02);
+    pkSign3D(['QUEUE', th.name.toUpperCase()], 1.72, 0.34, xBack, 2.58, qz, dir > 0 ? Math.PI / 2 : -Math.PI / 2, { bg: '#1b232c', fg: '#f5b53d' }, parent);
+    // the line's own number plate, so the player can see where it starts
+    pkRoundCyl(0.045, 1.55, MAT.steelDark, xBack + dir * 0.30, 0.77, qz + 1.30, parent, 8);
+    pkSign3D(['QUEUE FROM HERE'], 1.25, 0.20, xBack + dir * 0.30, 1.62, qz + 1.30, dir > 0 ? Math.PI / 2 : -Math.PI / 2, { bg: '#1b232c', fg: '#eef1f5' }, parent);
+    // the player's way in: press E at the entry to ride
+    hitBox(2.4, 2.2, 2.4, xBack, 1.1, qz, {
+      prompt: function () {
+        if (!a.open || PK.playerRide) return '';
+        if (PK.playerWait && PK.playerWait.a === a) return 'Waiting for ' + a.name + ' - press E to leave the line';
+        return 'Ride ' + a.name;
+      },
+      use: function () { pkPlayerRideJoin(a); }
+    }, parent);
+    // the fences block the player, but only while the ride is open and the lane is drawn
+    PK.lanes.push({ a: a, x0: Math.min(xGate, xBack), x1: Math.max(xGate, xBack), zA: zA, zB: zB, gx: xGate, leafL: leafL, leafR: leafR });
+  }
+  function pkLaneFence(x0, x1, z, parent) {
+    var n = Math.max(1, Math.round(Math.abs(x1 - x0) / 1.65));
+    for (var i = 0; i <= n; i++) {
+      var x = x0 + (x1 - x0) * (i / n);
+      pkRoundCyl(0.055, 1.06, MAT.steelDark, x, 0.53, z, parent, 8);
+      sphere(0.052, pkMats().gold, x, 1.09, z, parent);
+    }
+    pkBevelBox(Math.abs(x1 - x0), 0.05, 0.05, MAT.steelDark, (x0 + x1) / 2, 0.99, z, parent, 0.008);
+    pkBevelBox(Math.abs(x1 - x0), 0.045, 0.045, MAT.steelDark, (x0 + x1) / 2, 0.52, z, parent, 0.008);
+  }
+  function pkBedIn(x, z, parent) {
+    pkFlowerBed(x, z, 1.8, 1.1, parent, true);
+  }
+  // the one thing each ride is known for
+  function pkSignature(a, p, th, parent) {
+    var g = parent;
+    if (a.id === 'carousel') {
+      var band = new THREE.Mesh(new THREE.TorusGeometry(7.2, 0.1, 6, 44), std({ color: 0xf0c04a, roughness: 0.35, metalness: 0.45 }));
+      band.rotation.x = Math.PI / 2; band.position.set(p.x, 4.0, p.z); parent.add(band);
+      box(1.7, 1.9, 1.0, std({ color: 0x8a5a3a, roughness: 0.9 }), p.x - p.r - 2.6, 0.95, p.z + 2.4, g);
+      for (var i = 0; i < 5; i++) cyl(0.07, 1.0 - i * 0.13, std({ color: 0xf0c04a, roughness: 0.4 }), p.x - p.r - 3.1 + i * 0.25, 2.2, p.z + 2.4, g, 8);
+      // the fairground quarter: brass lamps on the rim, a souvenir kiosk by the organ
+      // box, flower beds flanking the west lamp and a bench on the north rim
+      [[-41.6, 12.5], [-41.6, 27.5], [-43.0, 20]].forEach(function (q) { pkLandLamp(q[0], q[1], g, th); });
+      parent.add(pkStall(-46.8, 14.6, Math.PI / 2, th.a, th.b, 'SOUVENIRS'));
+      pkFlowerBed(-44.7, 17.3, 1.8, 1.1, g, true);
+      pkFlowerBed(-44.7, 25.2, 1.8, 1.1, g, true);
+      pkBench(-37.5, 30.4, Math.PI, g);
+    } else if (a.id === 'teacups') {
+      var pot = new THREE.Mesh(new THREE.SphereGeometry(1.55, 16, 12), std({ color: 0xf0a6c0, roughness: 0.5 }));
+      pot.position.set(p.x + p.r + 3.2, 1.8, p.z - 3.4); pot.scale.y = 0.85; parent.add(pot);
+      cyl(0.5, 0.35, std({ color: 0xf0a6c0, roughness: 0.5 }), p.x + p.r + 3.2, 3.1, p.z - 3.4, g, 12);
+      var sp = cyl(0.17, 1.2, std({ color: 0xf0a6c0, roughness: 0.5 }), p.x + p.r + 4.7, 1.8, p.z - 3.4, g, 8); sp.rotation.z = -0.9;
+      var hd = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.11, 6, 14), std({ color: 0xf0a6c0, roughness: 0.5 }));
+      hd.position.set(p.x + p.r + 1.7, 1.9, p.z - 3.4); parent.add(hd);
+      // the tea garden: clipped hedges and topiary balls on the far sides, a table set
+      // on the south-west pad, cup lamps flanking the approach and a trellis arch over
+      // the walk in from the midway
+      pkHedgeRun(-65.6, -3.4, -65.6, 9.4, g, 1.05);
+      pkHedgeRun(-63.6, 12.6, -49.2, 12.6, g, 1.05);
+      [[-63.4, -4.4], [-63.4, 10.4], [-49.4, 10.4]].forEach(function (q) { pkTopiary(q[0], q[1], g, 1); });
+      pkTeaTable(-49.8, -4.8, g);
+      [[-47.6, 5.6], [-47.6, 0.4]].forEach(function (q) { pkCupLamp(q[0], q[1], g); });
+      pkTrellis(-40.8, 3, g);
+    } else if (a.id === 'ferris') {
+      for (var b = 0; b < 24; b++) {
+        var ang = b / 24 * Math.PI * 2;
+        sphere(0.17, glowMat(0xfff2c0, 0.9), p.x + Math.cos(ang) * 9.1, 10.6 + Math.sin(ang) * 9.1, p.z, g);
+      }
+      box(2.4, 2.2, 2.0, std({ color: th.a, roughness: 0.8 }), p.x + p.r + 2.6, 1.1, p.z - 4.2, g);
+      sign(['TICKETS'], 1.8, 0.4, p.x + p.r + 2.6, 2.4, p.z - 5.22, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
+      // the sky quarter: three flag poles with festoon strung between them on the north
+      // rim, a viewing deck with a brass telescope on the south rim, globe lamps and benches
+      pkFlagPole(27, 30.1, g, th, 5.6); pkFlagPole(34, 29.9, g, th, 6.5); pkFlagPole(41, 30.1, g, th, 5.6);
+      pkFestoon(27, 30.1, 34, 29.9, g, th, 4.4, 5.1); pkFestoon(34, 29.9, 41, 30.1, g, th, 5.1, 4.4);
+      pkViewDeck(32.6, 9.4, g);
+      pkLandLamp(29.2, 10.2, g, th, 'globe'); pkLandLamp(40.0, 10.2, g, th, 'globe');
+      pkBench(30.0, 11.6, Math.PI, g); pkBench(40.4, 11.6, Math.PI, g);
+    } else if (a.id === 'dodgems') {
+      for (var n = 0; n < 4; n++) box(14, 0.1, 0.1, glowMat(0x5fd3ff, 1.1), p.x, 3.55, p.z - 5 + n * 0.06, g);
+      box(0.1, 0.1, 10, glowMat(0xff5f8a, 1.1), p.x - 7.05, 3.55, p.z, g);
+      box(0.1, 0.1, 10, glowMat(0xff5f8a, 1.1), p.x + 7.05, 3.55, p.z, g);
+    } else if (a.id === 'droptower') {
+      for (var h = 0; h < 5; h++) cyl(0.64, 0.5, std({ color: 0xf0c04a, roughness: 0.6 }), p.x, 5 + h * 5.2, p.z, g, 12);
+      box(5.0, 0.3, 3.0, MAT.steelDark, p.x, 3.2, p.z - 6.5, g);
+      box(0.2, 3.0, 0.2, MAT.steel, p.x - 2.4, 1.5, p.z - 6.5, g);
+      box(0.2, 3.0, 0.2, MAT.steel, p.x + 2.4, 1.5, p.z - 6.5, g);
+    } else if (a.id === 'flume') {
+      // boulders along the channel: lumpy flat-shaded granite at varied scales, half sunk into the ground
+      for (var r = 0; r < 18; r++) pkBoulder(p.x + randf(-4.6, 4.6), p.z + randf(-23, 11), randf(0.55, 1.25), g);
+      box(2.6, 6.2, 0.3, glowMat(0x9fd8ff, 0.55), p.x, 4.1, p.z - 15.6, g);
+      box(3.0, 2.4, 2.6, std({ color: 0x8a6a4a, roughness: 0.95 }), p.x + p.r + 2.8, 1.2, p.z + 4.0, g);
+      sign(['LOGS'], 1.6, 0.5, p.x + p.r + 2.8, 2.6, p.z + 5.32, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
+    } else if (a.id === 'haunted') {
+      for (var d = 0; d < 8; d++) {
+        var dx = p.x + randf(-9, 9), dz = p.z + randf(6, 12);
+        cyl(0.12, randf(2.6, 4.4), std({ color: 0x3a332c, roughness: 1 }), dx, 2.0, dz, g, 6);
+        box(0.9, 0.09, 0.09, std({ color: 0x3a332c, roughness: 1 }), dx, 3.1, dz, g);
+      }
+      for (var f = 0; f < 6; f++) sphere(randf(0.7, 1.4), glowMat(0x8fb0d4, 0.3), p.x + randf(-7, 7), randf(0.5, 1.8), p.z + randf(6, 11), g);
+    }
+  }
+  // ── The land kit ─────────────────────────────────────────────────
+  // Small themed pieces shared by the per-ride lands: a lamp with an emissive lens, a
+  // string of festoon bulbs, a topiary, a clipped hedge, a tea table, a cup lamp, a
+  // trellis arch, a flag pole, a viewing deck. None of these adds a real point light —
+  // the engine keeps only the nearest dozen, and glow materials carry a land at night.
+  function pkLandLamp(x, z, parent, th, style) {
+    var h = style === 'low' ? 2.3 : 3.6;
+    pkRoundCyl(0.055, h, MAT.steelDark, x, h / 2, z, parent, 8);
+    box(0.18, 0.06, 0.18, pkMats().gold, x, 0.05, z, parent);
+    if (style === 'globe') {
+      sphere(0.21, glowMat(0xffecc8, 0.85), x, h + 0.17, z, parent);
+      pkRoundCyl(0.028, 0.16, MAT.steelDark, x, h + 0.44, z, parent, 6);
+      sphere(0.05, pkMats().gold, x, h + 0.55, z, parent);
+    } else {
+      box(0.2, 0.3, 0.2, glowMat(0xffe8b8, 0.8), x, h + 0.17, z, parent);
+      var cap = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.17, 6), MAT.steelDark); cap.position.set(x, h + 0.42, z); parent.add(cap);
+      sphere(0.05, pkMats().gold, x, h + 0.53, z, parent);
+    }
+  }
+  function pkFestoon(x0, z0, x1, z1, parent, th, yA, yB) {
+    var dx = x1 - x0, dz = z1 - z0, len = Math.sqrt(dx * dx + dz * dz), n = Math.max(6, Math.round(len / 0.8));
+    yA = yA === undefined ? 3.2 : yA; yB = yB === undefined ? 3.2 : yB;
+    var dip = Math.min(0.55, len * 0.045), pts = [];
+    for (var k = 0; k <= 10; k++) { var u = 2 * k / 10 - 1; pts.push([x0 + dx * (k / 10), yA + (yB - yA) * (k / 10) - dip * (1 - u * u), z0 + dz * (k / 10)]); }
+    pkTube(pts, 0.012, std({ color: 0x3a332c, roughness: 0.9 }), parent, false, 24, 4);
+    for (var i = 1; i < n; i++) {
+      var t = i / n, u2 = 2 * t - 1;
+      sphere(0.065, glowMat(i % 2 ? 0xffe8b0 : 0xffd060, 0.8), x0 + dx * t, yA + (yB - yA) * t - dip * (1 - u2 * u2) - 0.08, z0 + dz * t, parent);
+    }
+  }
+  function pkTopiary(x, z, parent, s) {
+    s = s || 1;
+    var leaf = std({ color: 0x46763e, roughness: 1 });
+    pkRoundCyl(0.34 * s, 0.5, pkMats().stone, x, 0.25, z, parent, 10);
+    var ball = new THREE.Mesh(new THREE.SphereGeometry(0.75 * s, 12, 10), leaf); ball.position.set(x, 1.5 * s, z); ball.castShadow = true; parent.add(ball);
+    sphere(0.4 * s, leaf, x, 2.35 * s, z, parent);
+  }
+  function pkHedgeRun(x0, z0, x1, z1, parent, h) {
+    h = h || 1.0;
+    var dx = x1 - x0, dz = z1 - z0, len = Math.sqrt(dx * dx + dz * dz), rot = Math.atan2(-dz, dx);
+    var body = pkBevelBox(len, h, 0.85, std({ color: 0x3e6b38, roughness: 1 }), (x0 + x1) / 2, h / 2, (z0 + z1) / 2, parent, 0.12);
+    body.rotation.y = rot;
+    var top = pkBevelBox(len - 0.2, 0.18, 0.7, std({ color: 0x4f8046, roughness: 1 }), (x0 + x1) / 2, h + 0.04, (z0 + z1) / 2, parent, 0.08);
+    top.rotation.y = rot;
+  }
+  function pkTeaTable(x, z, parent) {
+    var M = pkMats();
+    pkRoundCyl(0.07, 0.72, MAT.steelDark, x, 0.36, z, parent, 8);
+    pkRoundCyl(0.55, 0.06, M.cream, x, 0.75, z, parent, 20);
+    sphere(0.05, M.gold, x, 0.81, z, parent);
+    [[-0.95, 0.3], [0.95, -0.3]].forEach(function (q) {
+      pkRoundCyl(0.05, 0.42, MAT.steelDark, x + q[0], 0.21, z + q[1], parent, 8);
+      pkRoundCyl(0.28, 0.08, std({ color: 0xf0a6c0, roughness: 0.5 }), x + q[0], 0.46, z + q[1], parent, 14);
+    });
+  }
+  function pkCupLamp(x, z, parent) {
+    pkRoundCyl(0.05, 1.9, MAT.steelDark, x, 0.95, z, parent, 8);
+    pkLathe([[0, 0], [0.26, 0], [0.3, 0.05], [0.27, 0.3], [0.24, 0.32], [0, 0.32]], std({ color: 0xf6eef2, roughness: 0.4 }), x, 1.9, z, parent, 16);
+    var glow = new THREE.Mesh(new THREE.CircleGeometry(0.2, 12), glowMat(0xfff0d0, 0.9));
+    glow.rotation.x = -Math.PI / 2; glow.position.set(x, 2.22, z); parent.add(glow);
+    sphere(0.04, pkMats().gold, x, 2.3, z, parent);
+  }
+  function pkTrellis(x, z, parent) {
+    [-1.6, 1.6].forEach(function (dz) { pkRoundCyl(0.06, 2.4, MAT.wood, x, 1.2, z + dz, parent, 8); });
+    var arc = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.06, 6, 16, Math.PI), MAT.wood);
+    arc.position.set(x, 2.4, z); arc.rotation.y = Math.PI / 2; parent.add(arc);
+    for (var v = 0; v < 7; v++) sphere(randf(0.14, 0.26), std({ color: v % 2 ? 0x5f8f4a : 0x7fae5a, roughness: 1 }), x + randf(-0.15, 0.15), 2.35 + Math.sin(v / 6 * Math.PI) * 1.45 + randf(-0.1, 0.2), z - 1.5 + v * 0.5, parent);
+  }
+  function pkFlagPole(x, z, parent, th, h) {
+    h = h || 5.6;
+    pkRoundCyl(0.07, h, MAT.steelDark, x, h / 2, z, parent, 8);
+    pkRoundCyl(0.16, 0.14, pkMats().stone, x, 0.07, z, parent, 10);
+    sphere(0.09, pkMats().gold, x, h + 0.05, z, parent);
+    box(0.9, 0.5, 0.02, std({ color: th.a, roughness: 0.8, side: THREE.DoubleSide }), x + 0.48, h - 0.5, z, parent);
+    box(0.9, 0.5, 0.02, std({ color: th.b, roughness: 0.8, side: THREE.DoubleSide }), x + 0.48, h - 1.05, z, parent);
+  }
+  function pkViewDeck(x, z, parent) {
+    var M = pkMats();
+    box(4.4, 0.28, 2.2, M.stone, x, 0.14, z, parent);
+    box(4.4, 0.05, 2.2, MAT.rubberMat, x, 0.3, z, parent);
+    [-2.0, -1.0, 0, 1.0, 2.0].forEach(function (dx) { pkRoundCyl(0.045, 1.0, MAT.steelDark, x + dx, 0.8, z - 1.0, parent, 8); });
+    box(4.2, 0.05, 0.05, MAT.steelDark, x, 1.26, z - 1.0, parent);
+    pkRoundCyl(0.06, 1.05, MAT.steelDark, x + 1.4, 0.82, z, parent, 8);
+    var tube = pkRoundCyl(0.09, 0.7, M.brass, x + 1.4, 1.5, z, parent, 10);
+    tube.rotation.z = Math.PI / 2 - 0.35; tube.rotation.y = 0.4;
+    sphere(0.08, M.gold, x + 1.4, 1.5, z, parent);
+  }
+  // ── The crowd ────────────────────────────────────────────────────
+  // The engine's NPC system (CO.npcs) makes people from data: a character, a spawner on a clock, and a list of steps.
+  // These are the wanderers and the staff. They do not queue and they do not buy: they walk, they look at the rides,
+  // they sit by the midway and they drift home. The queuing guests are a different machine, in part 02.
+  function pkBuildNpcs() {
+    CO.npcs({
+      characters: {
+        visitorA: {
+          names: ['Anna', 'Bram', 'Sanne', 'Daan', 'Lotte', 'Sem'],
+          look: { shirt: '#3f6a9e', pants: '#2f3440', skin: '#d8a97c', hair: '#3a2a1c' },
+          speed: 1.35,
+          steps: [
+            { do: 'walk', to: 'plaza' },
+            { do: 'wander', radius: 6, seconds: 12 },
+            { do: 'walk', to: 'midway' },
+            { do: 'wander', radius: 4, seconds: 10 },
+            { do: 'walk', to: 'station' },
+            { do: 'wait', seconds: 6 },
+            { do: 'walk', to: 'snack' },
+            { do: 'wait', seconds: 4 },
+            { do: 'walk', to: 'plaza' },
+            { do: 'leave' }
+          ]
+        },
+        visitorB: {
+          names: ['Femke', 'Thijs', 'Noor', 'Jesse', 'Mila', 'Ruben'],
+          look: { shirt: '#a8462f', pants: '#3a3f48', skin: '#e8c49b', hair: '#6b4a2a' },
+          speed: 1.28,
+          steps: [
+            { do: 'walk', to: 'plaza' },
+            { do: 'walk', to: 'carousel' },
+            { do: 'wander', radius: 5, seconds: 14 },
+            { do: 'walk', to: 'midway' },
+            { do: 'wander', radius: 5, seconds: 10 },
+            { do: 'walk', to: 'ferris' },
+            { do: 'wait', seconds: 5 },
+            { do: 'walk', to: 'plaza' },
+            { do: 'leave' }
+          ]
+        },
+        visitorC: {
+          names: ['Omar', 'Yara', 'Sven', 'Iris', 'Timo', 'Eva'],
+          look: { shirt: '#5b8a52', pants: '#2d333b', skin: '#c99266', hair: '#1e1712' },
+          speed: 1.42,
+          steps: [
+            { do: 'walk', to: 'midway' },
+            { do: 'wander', radius: 7, seconds: 16 },
+            { do: 'say', text: 'Such a nice little park.' },
+            { do: 'walk', to: 'teacups' },
+            { do: 'wander', radius: 4, seconds: 8 },
+            { do: 'walk', to: 'plaza' },
+            { do: 'leave' }
+          ]
+        },
+        sweeper: {
+          names: ['Piet'],
+          look: { shirt: '#e0a92c', pants: '#2f3440', skin: '#d8a97c', hair: '#5a5a5a' },
+          speed: 1.1,
+          steps: [
+            { do: 'walk', to: 'midway' },
+            { do: 'wander', radius: 9, seconds: 25 },
+            { do: 'walk', to: 'plaza' },
+            { do: 'wander', radius: 6, seconds: 20 },
+            { do: 'walk', to: 'snack' },
+            { do: 'wander', radius: 5, seconds: 18 }
+          ]
+        },
+        watcher: {
+          names: ['Kees'],
+          look: { shirt: '#4a5a6a', pants: '#2f3440', skin: '#e0b48e', hair: '#2a2a2a' },
+          speed: 1.05,
+          steps: [
+            { do: 'walk', to: 'station' },
+            { do: 'face', to: 'coaster' },
+            { do: 'wait', seconds: 40 },
+            { do: 'walk', to: 'ferris' },
+            { do: 'wait', seconds: 30 },
+            { do: 'walk', to: 'carousel' },
+            { do: 'wait', seconds: 30 }
+          ]
+        }
+      },
+      spawners: [
+        { id: 'crowdA', character: 'visitorA', x: -5, z: 26, every: 13, max: 5, hours: [9, 22] },
+        { id: 'crowdB', character: 'visitorB', x: 5, z: 26, every: 17, max: 4, hours: [9, 22] },
+        { id: 'crowdC', character: 'visitorC', x: 0, z: 24, every: 21, max: 4, hours: [9, 22] }
+      ],
+      workers: [
+        { id: 'sweeper', character: 'sweeper', x: 0, z: 20, ry: 0, home: [0, 24], hours: [9, 22] },
+        { id: 'watcher', character: 'watcher', x: 0, z: 2, ry: Math.PI, home: [0, 24], hours: [9, 22] }
+      ],
+      spots: {
+        plaza: { x: 0, z: 26 },
+        midway: { x: 0, z: 14 },
+        station: { x: 0, z: 4 },
+        snack: { x: -11, z: 9 },
+        carousel: { x: -14, z: 19 },
+        teacups: { x: -14, z: 3 },
+        ferris: { x: 13, z: 19 },
+        coaster: { x: 0, z: -2 },
+        gate: { x: 0, z: 28 }
+      }
+    });
+  }
+  // ── Painted textures ─────────────────────────────────────────────
+  function pkTexPavers() {
+    return tex(512, 512, function (c, w, h) {
+      c.fillStyle = '#5d5a55'; c.fillRect(0, 0, w, h);
+      var cols = ['#b3aa9c', '#a89e8f', '#bdb5a8', '#9d9385', '#aea392', '#c2baae'];
+      for (var r = 0; r < 16; r++) {
+        var off = (r % 2) * 32;
+        for (var k = -1; k < 9; k++) {
+          var x = k * 64 + off, y = r * 32;
+          c.fillStyle = cols[(r * 7 + k * 3 + 64) % cols.length]; c.fillRect(x + 2, y + 2, 60, 28);
+          c.fillStyle = 'rgba(255,255,255,0.06)'; c.fillRect(x + 2, y + 2, 60, 3);
+          c.fillStyle = 'rgba(0,0,0,0.08)'; c.fillRect(x + 2, y + 27, 60, 3);
+        }
+      }
+      grain(c, w, h, 3000, 0.03); grain(c, w, h, 1800, 0.025, true); blotches(c, w, h, 14, 20, 70, true, 0.08);
+    }, 1, 1);
+  }
+  function pkTexStripes(a, b, n) {
+    return tex(256, 64, function (c, w, h) {
+      var k = n || 8; for (var i = 0; i < k; i++) { c.fillStyle = i % 2 ? b : a; c.fillRect(i * w / k, 0, w / k + 1, h); }
+      grain(c, w, h, 600, 0.04, true);
+    }, 1, 1);
+  }
+  function pkTexShingles() {
+    return tex(256, 256, function (c, w, h) {
+      c.fillStyle = '#3c3f44'; c.fillRect(0, 0, w, h);
+      for (var r = 0; r < 8; r++) {
+        var off = (r % 2) * 16;
+        for (var k = -1; k < 9; k++) {
+          var x = k * 32 + off, y = r * 32, v = 56 + ((r * 5 + k * 11 + 40) % 7) * 6;
+          c.fillStyle = 'rgb(' + v + ',' + (v + 3) + ',' + (v + 8) + ')';
+          c.beginPath(); c.moveTo(x + 1, y); c.lineTo(x + 31, y); c.lineTo(x + 31, y + 24); c.quadraticCurveTo(x + 16, y + 34, x + 1, y + 24); c.closePath(); c.fill();
+          c.fillStyle = 'rgba(0,0,0,0.35)'; c.fillRect(x + 1, y + 26, 30, 3);
+        }
+      }
+      grain(c, w, h, 3000, 0.06, true);
+    }, 1, 1);
+  }
+  function pkTexClapboard() {
+    return tex(256, 256, function (c, w, h) {
+      c.fillStyle = '#d8d8d8'; c.fillRect(0, 0, w, h);
+      for (var y = 0; y < h; y += 16) {
+        var gr = c.createLinearGradient(0, y, 0, y + 16); gr.addColorStop(0, '#f0f0f0'); gr.addColorStop(0.85, '#c8c8c8'); gr.addColorStop(1, '#8a8a8a');
+        c.fillStyle = gr; c.fillRect(0, y, w, 16);
+      }
+      grain(c, w, h, 2500, 0.05, true);
+    }, 1, 1);
+  }
+  function pkTexWater() {
+    return tex(256, 256, function (c, w, h) {
+      var gr = c.createLinearGradient(0, 0, w, h); gr.addColorStop(0, '#2f7fa6'); gr.addColorStop(1, '#3d93b8');
+      c.fillStyle = gr; c.fillRect(0, 0, w, h);
+      c.strokeStyle = 'rgba(220,245,255,0.35)'; c.lineWidth = 2;
+      for (var i = 0; i < 40; i++) { var x = Math.random() * w, y = Math.random() * h, l = randf(10, 34); c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + l / 2, y - 4, x + l, y); c.stroke(); }
+    }, 1, 1);
+  }
+  function pkTexLeaves() {
+    return tex(256, 256, function (c, w, h) {
+      c.fillStyle = '#4f7a36'; c.fillRect(0, 0, w, h);
+      for (var i = 0; i < 2600; i++) { var g = Math.floor(randf(70, 150)); c.fillStyle = 'rgba(' + Math.floor(g * 0.45) + ',' + g + ',' + Math.floor(g * 0.3) + ',0.7)'; c.beginPath(); c.arc(Math.random() * w, Math.random() * h, randf(1.5, 4), 0, Math.PI * 2); c.fill(); }
+      for (var j = 0; j < 500; j++) { c.fillStyle = 'rgba(15,35,10,0.5)'; c.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
+    }, 1, 1);
+  }
+  function pkTexBark() {
+    return tex(128, 256, function (c, w, h) {
+      c.fillStyle = '#5a4634'; c.fillRect(0, 0, w, h);
+      for (var i = 0; i < 70; i++) { c.strokeStyle = 'rgba(30,20,12,' + randf(0.3, 0.7) + ')'; c.lineWidth = randf(1, 3); var x = Math.random() * w; c.beginPath(); c.moveTo(x, 0); for (var y = 0; y < h; y += 16) c.lineTo(x + randf(-4, 4), y); c.stroke(); }
+      grain(c, w, h, 1500, 0.08, true);
+    }, 1, 1);
+  }
+  // a small trunk sheet for the park trees: vertical streaks in three browns, tiled twice up the trunk so the bark still reads at a distance
+  function pkTexTreeBark() {
+    return tex(64, 128, function (c, w, h) {
+      c.fillStyle = '#67503a'; c.fillRect(0, 0, w, h);
+      var tones = ['#7a6046', '#57422f', '#4a3728'];
+      for (var i = 0; i < 26; i++) {
+        var x = Math.random() * w, bend = randf(-3, 3);
+        c.strokeStyle = tones[i % tones.length]; c.globalAlpha = randf(0.35, 0.65); c.lineWidth = randf(1, 2.5);
+        for (var kx = -1; kx <= 1; kx++) for (var ky = -1; ky <= 1; ky++) {   // drawn across every edge so the sheet tiles without a seam
+          c.beginPath(); c.moveTo(x + kx * w, ky * h);
+          for (var y = 0; y <= h; y += 16) c.lineTo(x + kx * w + Math.sin(y / h * Math.PI * 4 + i) * bend, ky * h + y);
+          c.stroke();
+        }
+      }
+      c.globalAlpha = 1; grain(c, w, h, 700, 0.05, true);
+    }, 1, 2);
+  }
+  function pkTexChain() {
+    return tex(64, 256, function (c, w, h) {
+      c.fillStyle = '#222428'; c.fillRect(0, 0, w, h);
+      for (var y = 0; y < h; y += 32) { c.strokeStyle = '#8c9298'; c.lineWidth = 5; roundRect(c, 16, y + 4, 32, 24, 10); c.stroke(); c.fillStyle = '#5c6268'; c.fillRect(28, y + 26, 8, 12); }
+    }, 1, 1);
+  }
+  function pkTexPalisade() {
+    var t = makeAlphaTex(256, 256, function (c, w, h) {
+      c.clearRect(0, 0, w, h); c.fillStyle = '#1d2226';
+      for (var x = 8; x < w; x += 32) {
+        c.fillRect(x, 30, 8, h - 30);
+        c.beginPath(); c.moveTo(x - 4, 30); c.lineTo(x + 4, 4); c.lineTo(x + 12, 30); c.closePath(); c.fill();
+      }
+      c.fillRect(0, 44, w, 8); c.fillRect(0, h - 40, w, 8);
+    });
+    t.wrapS = THREE.RepeatWrapping; return t;
+  }
+  function pkTexDots(base, dot) {
+    return tex(256, 256, function (c, w, h) {
+      c.fillStyle = base; c.fillRect(0, 0, w, h); c.fillStyle = dot;
+      for (var y = 0; y < 8; y++) for (var x = 0; x < 8; x++) { c.beginPath(); c.arc(x * 32 + (y % 2) * 16 + 8, y * 32 + 16, 7, 0, Math.PI * 2); c.fill(); }
+    }, 2, 1);
+  }
+  function pkTexRounding(a, b) {
+    // the carousel's rounding boards: cream panels picked out in gold with a mirror in each, between painted scrolls
+    return tex(512, 64, function (c, w, h) {
+      c.fillStyle = a; c.fillRect(0, 0, w, h);
+      for (var i = 0; i < 4; i++) {
+        var x = i * 128;
+        c.fillStyle = '#c9a23e'; c.fillRect(x + 4, 4, 120, 56); c.fillStyle = a; c.fillRect(x + 8, 8, 112, 48);
+        var gr = c.createLinearGradient(x + 40, 0, x + 88, 0); gr.addColorStop(0, '#9fb6c9'); gr.addColorStop(0.5, '#eef4fa'); gr.addColorStop(1, '#8aa1b4');
+        c.fillStyle = gr; c.fillRect(x + 44, 16, 40, 32);
+        c.strokeStyle = b; c.lineWidth = 3; c.beginPath(); c.arc(x + 24, 32, 10, 0, Math.PI * 1.6); c.stroke(); c.beginPath(); c.arc(x + 104, 32, 10, Math.PI, Math.PI * 2.6); c.stroke();
+      }
+    }, 6, 1);
+  }
+  function pkTexSunburst(a, b) {
+    return tex(512, 512, function (c, w, h) {
+      var n = 24; c.translate(w / 2, h / 2);
+      for (var i = 0; i < n; i++) { c.fillStyle = i % 2 ? a : b; c.beginPath(); c.moveTo(0, 0); c.arc(0, 0, w, i / n * Math.PI * 2, (i + 1) / n * Math.PI * 2); c.closePath(); c.fill(); }
+      c.fillStyle = '#c9a23e'; c.beginPath(); c.arc(0, 0, 40, 0, Math.PI * 2); c.fill();
+    }, 1, 1);
+  }
+  // ── The materials, made once ─────────────────────────────────────
+  var PKM = null;
+  function pkPaint(c, r, m) { return std({ color: c, roughness: r === undefined ? 0.42 : r, metalness: m === undefined ? 0.3 : m }); }
+  function pkGloss(c) { return std({ color: c, roughness: 0.24, metalness: 0.1 }); }
+  var PK_STRIPES = {};
+  function pkStripes(a, b) {
+    var k = a + '/' + b; if (PK_STRIPES[k]) return PK_STRIPES[k];
+    return (PK_STRIPES[k] = std({ map: pkTexStripes(a, b), roughness: 0.85, side: THREE.DoubleSide }));
+  }
+  function pkMats() {
+    if (PKM) return PKM;
+    var M = PKM = {};
+    M.paverTex = pkTexPavers();
+    M.pavers = std({ map: M.paverTex, roughness: 0.9 });
+    M.paversWarm = std({ map: M.paverTex, color: 0xf0d8c8, roughness: 0.9 });
+    M.kerb = std({ map: TEX.plaster, color: 0xb9b4aa, roughness: 0.9 });
+    M.stone = std({ map: TEX.plaster, color: 0xd8d0c0, roughness: 0.92 });
+    M.stoneDark = std({ map: TEX.plaster, color: 0x8e887e, roughness: 0.95 });
+    M.cream = std({ map: TEX.plaster, color: 0xf3ead6, roughness: 0.85 });
+    M.white = pkPaint(0xf4f4f0, 0.5, 0.1);
+    M.iron = pkPaint(0x1f2427, 0.5, 0.6);
+    M.green = pkPaint(0x23493a, 0.45, 0.4);          // park furniture green
+    M.steel = pkPaint(0xdfe3e6, 0.38, 0.55);          // coaster track white
+    M.steelBlue = pkPaint(0x2c5f9e, 0.36, 0.45);      // coaster supports
+    M.gold = std({ color: 0xd4a73a, roughness: 0.28, metalness: 0.9 });
+    M.brass = std({ color: 0xc9a050, roughness: 0.22, metalness: 0.95 });
+    M.mirror = std({ color: 0xe8eef4, roughness: 0.04, metalness: 1 });
+    M.pane = std({ color: 0x24323f, roughness: 0.06, metalness: 0.7 });
+    M.glass = new THREE.MeshPhysicalMaterial({ color: 0xcfe2ef, transparent: true, opacity: 0.22, roughness: 0.05, metalness: 0, clearcoat: 1, depthWrite: false, side: THREE.DoubleSide });
+    M.slate = std({ map: pkTexShingles(), roughness: 0.8, side: THREE.DoubleSide });
+    M.slateRed = std({ map: M.slate.map, color: 0xd88a7a, roughness: 0.8, side: THREE.DoubleSide });
+    M.slateGreen = std({ map: M.slate.map, color: 0x9fc4a8, roughness: 0.8, side: THREE.DoubleSide });
+    M.clap = std({ map: pkTexClapboard(), roughness: 0.85 });
+    M.clapGrey = std({ map: M.clap.map, color: 0x6c7176, roughness: 0.9 });
+    M.waterTex = pkTexWater();
+    M.water = std({ map: M.waterTex, roughness: 0.08, metalness: 0.15, emissive: 0x0b2a3a, emissiveIntensity: 0.35 });
+    M.water.userData.noBake = true;
+    M.leaves = [0x4c7a34, 0x5d8c3e, 0x3f6a2c, 0x6b9446, 0x557f39].map(function (c) { return std({ map: M.leafTex || (M.leafTex = pkTexLeaves()), color: c, roughness: 0.95 }); });
+    M.hedge = std({ map: M.leafTex, color: 0x5a8a3e, roughness: 0.95 });
+    M.bark = std({ map: pkTexBark(), roughness: 1 });
+    M.treeBark = std({ map: pkTexTreeBark(), roughness: 1 });
+    // three canopy palettes, each a light and a dark shade: the seed chooses one palette, so neighbouring trees differ without one material per tree
+    M.treeLeaves = [
+      [0x4c7a34, 0x5d8c3e],
+      [0x56853b, 0x699347],
+      [0x426c2e, 0x527b37]
+    ].map(function (cols) { return cols.map(function (c) { return std({ map: M.leafTex, color: c, roughness: 0.95 }); }); });
+    M.conifer = [
+      [0x2f5a3a, 0x35633f],
+      [0x336341, 0x3a6d48],
+      [0x2a5336, 0x2e5839]
+    ].map(function (cols) { return cols.map(function (c) { return std({ map: M.leafTex, color: c, roughness: 0.95 }); }); });
+    M.soil = std({ color: 0x4a3626, roughness: 1 });
+    M.chainTex = pkTexChain();
+    M.chain = std({ map: M.chainTex, roughness: 0.5, metalness: 0.7 }); M.chain.userData.noBake = true;
+    M.palisade = std({ map: pkTexPalisade(), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.5, metalness: 0.5 });
+    M.rubber = std({ color: 0x18191b, roughness: 0.9 });
+    M.seat = std({ color: 0x23262b, roughness: 0.55 });
+    M.bulb = glowMat(0xfff0c2, 1.6);
+    M.bulbWarm = glowMat(0xffc87a, 1.5);
+    M.lantern = glowMat(0xfff2d0, 1.2);
+    return M;
+  }
+  // ── Shapes ───────────────────────────────────────────────────────
+  var PK_UP = new THREE.Vector3(0, 1, 0);
+  // a cylinder from one point to another: a rod, a strut, a tie
+  function pkRod(ax, ay, az, bx, by, bz, r, mat, parent, seg) {
+    var dx = bx - ax, dy = by - ay, dz = bz - az, len = Math.sqrt(dx * dx + dy * dy + dz * dz); if (len < 1e-4) return null;
+    var key = 'pkrod' + r.toFixed(3) + ',' + len.toFixed(3) + ',' + (seg || 8);
+    var g = cachedGeo(key, function () { return new THREE.CylinderGeometry(r, r, len, seg || 8); });
+    var m = new THREE.Mesh(g, mat); m.position.set((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2);
+    m.quaternion.setFromUnitVectors(PK_UP, new THREE.Vector3(dx / len, dy / len, dz / len));
+    m.castShadow = true; m.receiveShadow = true; parentOf(parent).add(m); return m;
+  }
+  // a tube along points [[x, y, z], ...]
+  function pkTube(pts, r, mat, parent, closed, segs, radial) {
+    var v = pts.map(function (p) { return new THREE.Vector3(p[0], p[1], p[2]); });
+    var curve = new THREE.CatmullRomCurve3(v, !!closed, 'catmullrom', 0.5);
+    var m = new THREE.Mesh(new THREE.TubeGeometry(curve, segs || Math.max(8, pts.length * 6), r, radial || 8, !!closed), mat);
+    m.castShadow = true; m.receiveShadow = true; parentOf(parent).add(m); return m;
+  }
+  // a turned shape from a profile of [r, y] pairs
+  function pkLathe(profile, mat, x, y, z, parent, seg) {
+    var m = new THREE.Mesh(new THREE.LatheGeometry(profile.map(function (p) { return new THREE.Vector2(p[0], p[1]); }), seg || 24), mat);
+    m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parentOf(parent).add(m); return m;
+  }
+  // a flat shape [[x, y], ...] pulled out depth along z, centred on its depth, with eased edges when bevel is given
+  function pkExtrudeGeo(pts, depth, bevel, curveSeg) {
+    var s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]); for (var i = 1; i < pts.length; i++) s.lineTo(pts[i][0], pts[i][1]); s.closePath();
+    var g = new THREE.ExtrudeGeometry(s, { depth: depth, steps: 1, curveSegments: curveSeg || 6, bevelEnabled: !!bevel, bevelThickness: bevel || 0, bevelSize: bevel || 0, bevelSegments: bevel ? 3 : 0 });
+    g.translate(0, 0, -depth / 2); g.computeVertexNormals(); return g;
+  }
+  function pkExtrude(pts, depth, mat, x, y, z, parent, bevel) {
+    var m = new THREE.Mesh(pkExtrudeGeo(pts, depth, bevel), mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parentOf(parent).add(m); return m;
+  }
+  // a four-sided pyramid roof w by d, h high, its foot at y
+  function pkHipRoof(w, d, h, mat, x, y, z, parent) {
+    var g = new THREE.ConeGeometry(Math.SQRT1_2, h, 4, 1); g.rotateY(Math.PI / 4); g.translate(0, h / 2, 0);
+    var m = new THREE.Mesh(g, mat); m.scale.set(w, 1, d); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parentOf(parent).add(m); return m;
+  }
+  // a gabled roof: the ridge runs along x, w long, over a building d deep, the ridge h above the eaves at y. ov is the overhang.
+  // The gable ends are filled in as a prism, the two slopes are slabs laid over it.
+  function pkGableRoof(w, d, h, mat, wallMat, x, y, z, parent, ov) {
+    ov = ov === undefined ? 0.35 : ov;
+    var g = new THREE.Group(); g.position.set(x, y, z); parentOf(parent).add(g);
+    var prism = new THREE.Mesh(pkExtrudeGeo([[-d / 2, 0], [d / 2, 0], [0, h]], w, 0), wallMat); prism.rotation.y = Math.PI / 2; prism.castShadow = true; prism.receiveShadow = true; g.add(prism);
+    var ang = Math.atan2(h, d / 2), L = (d / 2 + ov) / Math.cos(ang);
+    [-1, 1].forEach(function (s) {
+      var sl = box(w + ov * 2, 0.12, L, mat, 0, 0, 0, { parent: g, r: 0.02 });
+      sl.rotation.x = s * ang; sl.position.set(0, h - Math.sin(ang) * L / 2 + 0.07, s * Math.cos(ang) * L / 2);
+    });
+    box(w + ov * 2 + 0.1, 0.14, 0.18, MAT.steelDark, 0, h + 0.06, 0, g);
+    return g;
+  }
+  // a window set in a wall: a frame, a pane and the glazing bars. ry turns it; the pane looks out along +z before the turn.
+  function pkWindow(parent, x, y, z, w, h, ry, frame, pane, bars) {
+    var g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry || 0; parentOf(parent).add(g);
+    var f = frame || PKM.white, t = 0.08;
+    box(w + t * 2, t, 0.12, f, 0, h / 2 + t / 2, 0, g); box(w + t * 2.6, t * 1.2, 0.2, f, 0, -h / 2 - t / 2, 0.04, g);
+    box(t, h, 0.12, f, -w / 2 - t / 2, 0, 0, g); box(t, h, 0.12, f, w / 2 + t / 2, 0, 0, g);
+    plane(w, h, pane || PKM.pane, 0, 0, -0.01, 0, 0, g);
+    if (bars !== false) { box(0.035, h, 0.05, f, 0, 0, 0, g); box(w, 0.035, 0.05, f, 0, h * 0.1, 0, g); }
+    return g;
+  }
+  // a set of lamp bulbs as one instanced mesh: points [[x, y, z], ...] in the parent's frame
+  function pkBulbs(points, mat, r, parent) {
+    if (!points.length) return null;
+    var g = cachedGeo('pkbulb' + r, function () { return new THREE.SphereGeometry(r, 8, 6); });
+    var im = new THREE.InstancedMesh(g, mat || PKM.bulb, points.length), m4 = new THREE.Matrix4();
+    for (var i = 0; i < points.length; i++) { m4.makeTranslation(points[i][0], points[i][1], points[i][2]); im.setMatrixAt(i, m4); }
+    im.instanceMatrix.needsUpdate = true; im.castShadow = false; im.frustumCulled = false; parentOf(parent).add(im); return im;
+  }
+  // a rectangle given in a group's own frame, turned and set where the group stands, laid down as a solid
+  function pkLocalSolid(g, x0, x1, z0, z1, y0, y1) {
+    var c = Math.cos(g.rotation.y), s = Math.sin(g.rotation.y), xs = [], zs = [];
+    [[x0, z0], [x1, z0], [x0, z1], [x1, z1]].forEach(function (p) { xs.push(g.position.x + p[0] * c + p[1] * s); zs.push(g.position.z - p[0] * s + p[1] * c); });
+    solid(Math.min.apply(null, xs), Math.max.apply(null, xs), Math.min.apply(null, zs), Math.max.apply(null, zs), y0 === undefined ? 0 : y0, y1 === undefined ? 3 : y1);
+  }
+  // a paved slab whose pavers keep their size whatever the slab's size: the UVs are stretched to the slab in metres
+  function pkPaved(w, d, mat, x, y, z, tile, parent, ry) {
+    var geo = new THREE.PlaneGeometry(w, d), uv = geo.attributes.uv, t = tile || 2.4;
+    for (var i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w / t, uv.getY(i) * d / t);
+    var m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.rotation.z = ry || 0; m.position.set(x, y, z); m.receiveShadow = true; parentOf(parent).add(m); return m;
+  }
+  function pkPavedDisc(r, mat, x, y, z, parent, tile) {
+    var geo = new THREE.CircleGeometry(r, 48), uv = geo.attributes.uv, t = tile || 2.4;
+    for (var i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * r * 2 / t, uv.getY(i) * r * 2 / t);
+    var m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.receiveShadow = true; parentOf(parent).add(m); return m;
+  }
+  // a path: pavers with a kerb along both long sides. Runs from (x0, z0) to (x1, z1), w wide.
+  function pkPath(x0, z0, x1, z1, w, mat, y) {
+    var dx = x1 - x0, dz = z1 - z0, len = Math.sqrt(dx * dx + dz * dz); if (len < 0.1) return;
+    var ry = Math.atan2(dx, dz), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+    var p = pkPaved(w, len + w, mat || PKM.pavers, cx, y || 0.016, cz, 2.4, null, ry);
+    [-1, 1].forEach(function (s) {
+      var k = box(0.16, 0.08, len + w, PKM.kerb, cx + Math.cos(ry) * s * (w / 2 + 0.08), 0.04, cz - Math.sin(ry) * s * (w / 2 + 0.08));
+      k.rotation.y = ry;
+    });
+    return p;
+  }
+  // ── Merging a moving group's parts into a handful of meshes ───────
+  // A ride is a lot of small parts that turn together. Left alone, every part is its own draw each frame. pkFuse joins every mesh
+  // under a group (stopping at any child marked keep, which moves on its own) into one mesh per material, in the group's frame.
+  function pkFuse(root) {
+    root.updateMatrixWorld(true);
+    var inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), byMat = {}, kill = [];
+    (function walk(o) {
+      for (var i = 0; i < o.children.length; i++) {
+        var c = o.children[i];
+        if (c.userData && (c.userData.keep || c.userData.it || c.userData.screen)) continue;
+        if (c.isMesh && !c.isInstancedMesh && !c.children.length && c.geometry && c.geometry.attributes.position && !Array.isArray(c.material) && inter.indexOf(c) < 0 && !(c.userData && c.userData.sign)) {
+          (byMat[c.material.uuid] = byMat[c.material.uuid] || { mat: c.material, items: [] }).items.push(c); kill.push(c);
+        }
+        if (!c.isMesh) walk(c);
+      }
+    })(root);
+    var m4 = new THREE.Matrix4();
+    Object.keys(byMat).forEach(function (k) {
+      var grp = byMat[k]; if (grp.items.length < 2) { kill.splice(kill.indexOf(grp.items[0]), 1); return; }
+      var pos = [], nor = [], uv = [];
+      grp.items.forEach(function (o) {
+        var g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+        m4.multiplyMatrices(inv, o.matrixWorld); g.applyMatrix4(m4);
+        var pa = g.attributes.position.array, na = g.attributes.normal ? g.attributes.normal.array : null, ua = g.attributes.uv ? g.attributes.uv.array : null, n = pa.length / 3;
+        for (var i = 0; i < pa.length; i++) pos.push(pa[i]);
+        for (var j = 0; j < pa.length; j++) nor.push(na ? na[j] : 0);
+        for (var u = 0; u < n * 2; u++) uv.push(ua ? ua[u] : 0);
+        g.dispose();
+      });
+      var merged = new THREE.BufferGeometry();
+      merged.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      merged.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+      merged.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      var mesh = new THREE.Mesh(merged, grp.mat); mesh.castShadow = true; mesh.receiveShadow = true; root.add(mesh);
+    });
+    kill.forEach(function (o) { if (o.parent) o.parent.remove(o); });
+    return root;
+  }
+  // ── Park furniture ───────────────────────────────────────────────
+  // a lantern post: upgraded model - rounded pole, proper housing with glass lens and warm glow.
+  function pkLamp(x, z, h, parent, twin) {
+    var M = pkMats(), g = new THREE.Group(); g.position.set(x, 0, z); parentOf(parent).add(g);
+    h = h || 4.2;
+    pkRoundCyl(0.055, h, M.iron, 0, h / 2, 0, g, 10);
+    pkBevelBox(0.5, 0.14, 0.5, M.iron, 0, 0.07, 0, g, 0.03);
+    var arm = new THREE.Group(); arm.position.set(0, h - 0.35, 0); g.add(arm);
+    pkRoundCyl(0.03, 0.9, M.iron, 0, 0, 0.45, arm, 6);
+    var house = pkBevelBox(0.42, 0.2, 0.32, M.iron, 0.45, 0, 0, arm, 0.03);
+    var lens = pkBevelBox(0.34, 0.12, 0.26, std({ color: 0xb8c8d8, roughness: 0.15, metalness: 0.05, transparent: true, opacity: 0.85 }), 0.45, 0, 0, arm, 0.02);
+    var glow = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.22), glowMat(0xfff2c0, 0.7));
+    glow.position.set(0.45, 0, 0); arm.add(glow);
+    g.userData.lampLens = lens;
+    solid(x - 0.2, x + 0.2, z - 0.2, z + 0.2, 0, h);
+    return lens;
+  }
+  // a park bench: upgraded - cast-iron frame, slatted seat and backrest with armrests.
+  function pkBench(x, z, ry, parent) {
+    var M = pkMats(), g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry || 0; parentOf(parent).add(g);
+    [[-0.85, 0, 0.15], [0.85, 0, 0.15]].forEach(function (l) {
+      pkRoundCyl(0.07, 0.42, M.iron, l[0], 0.21, l[2], g, 8);
+    });
+    [-0.18, 0, 0.18].forEach(function (sy) {
+      pkBevelBox(1.8, 0.05, 0.42, M.wood, 0, 0.45, sy, g, 0.02);
+    });
+    pkBevelBox(1.9, 0.06, 0.5, M.iron, 0, 0.42, 0, g, 0.02);
+    [-0.18, 0, 0.18].forEach(function (sy) {
+      pkBevelBox(1.8, 0.32, 0.05, M.wood, 0, 0.78, sy - 0.2, g, 0.02);
+    });
+    pkBevelBox(1.9, 0.34, 0.12, M.iron, 0, 0.78, -0.22, g, 0.02);
+    [[-0.95, 0.55, 0], [0.95, 0.55, 0]].forEach(function (a) {
+      pkBevelBox(0.1, 0.07, 0.5, M.iron, a[0], a[1], a[2], g, 0.02);
+    });
+    var c = Math.cos(ry || 0), s = Math.sin(ry || 0), hx = Math.abs(c) * 0.95 + Math.abs(s) * 0.35, hz = Math.abs(s) * 0.95 + Math.abs(c) * 0.35;
+    solid(x - hx, x + hx, z - hz, z + hz, 0, 0.9);
+    return g;
+  }
+  // a litter bin: upgraded - turned body with domed hood, liner rim and foot pedal.
+  function pkBin(x, z, parent) {
+    var M = pkMats(), g = new THREE.Group(); g.position.set(x, 0, z); parentOf(parent).add(g);
+    pkRoundCyl(0.36, 0.92, M.green, 0, 0.46, 0, g, 14);
+    pkBevelBox(0.42, 0.05, 0.42, M.iron, 0, 0.94, 0, g, 0.02);
+    var lid = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.4, 14), M.iron);
+    lid.position.set(0, 1.0, 0); lid.rotation.x = -Math.PI / 2; g.add(lid);
+    var pedal = pkBevelBox(0.22, 0.04, 0.12, M.iron, 0, 0.05, 0.42, g, 0.02);
+    pedal.rotation.x = 0.25;
+    pkRoundCyl(0.015, 0.1, M.iron, 0, 0.07, 0.48, g, 6);
+    return g;
+  }
+  // trees: lumpy leaf crowns on a rounded trunk. The crowns share one handful of geometries and the textured leaf materials, so a
+  // hundred trees stay cheap and fuse into the baked world. Every fourth seed is a tall oval crown (a poplar) for a change of line.
+  function pkTree(x, z, s, parent, seed) {
+    var M = pkMats(); s = s || 1; seed = seed === undefined ? Math.abs(Math.round(x * 13 + z * 7)) : seed;
+    var g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = seed * 0.9; parentOf(parent).add(g);
+    var C = pkCrownGeos(), tall = seed % 4 === 0, th = (tall ? 3.3 : 2.7) * s;
+    var v = Math.abs(Math.round(seed)), leaves = M.treeLeaves[v % M.treeLeaves.length];
+    pkRoundCyl(0.17 * s, th, M.treeBark, 0, th / 2, 0, g, 8);
+    if (!tall) {
+      pkRod(0, 2.1 * s, 0, 0.9 * s, 3.3 * s, 0.3 * s, 0.07 * s, M.treeBark, g, 6);
+      pkRod(0, 2.4 * s, 0, -0.7 * s, 3.6 * s, -0.4 * s, 0.06 * s, M.treeBark, g, 6);
+    }
+    var blobs = tall
+      ? [[0, 3.7, 0, 1.05], [0.15, 4.7, 0.1, 0.95], [-0.15, 5.6, 0, 0.75], [0.35, 4.0, -0.3, 0.8], [-0.4, 4.4, 0.3, 0.8]]
+      : [[0, 4.0, 0, 1.45], [0.95, 3.5, 0.3, 1.05], [-0.9, 3.7, -0.4, 1.1], [0.2, 4.8, 0.25, 1.0], [-0.3, 3.4, 0.8, 0.9], [0.5, 3.5, -0.85, 0.85]];
+    blobs.forEach(function (b, i) {
+      var m = new THREE.Mesh(C[(seed + i) % 4], leaves[(v + i) % leaves.length]), r = b[3] * s * 2;
+      m.scale.set(r, r * (tall ? 1.3 : 0.92), r); m.position.set(b[0] * s, b[1] * s, b[2] * s); m.rotation.y = (seed + i) * 1.3;
+      m.castShadow = true; m.receiveShadow = true; g.add(m);
+    });
+    return g;
+  }
+  function pkConifer(x, z, s, parent, seed) {
+    var M = pkMats(); s = s || 1; seed = seed || 0;
+    var g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = seed * 0.7; parentOf(parent).add(g);
+    var cones = M.conifer[Math.abs(Math.round(seed)) % M.conifer.length];
+    pkRoundCyl(0.14 * s, 1.6 * s, M.treeBark, 0, 0.8 * s, 0, g, 8);
+    [[1.0, 2.2, 1.9], [1.65, 1.9, 1.6], [2.3, 1.6, 1.35], [2.95, 1.25, 1.1], [3.55, 0.85, 0.9]].forEach(function (t, i) {
+      var m = new THREE.Mesh(new THREE.ConeGeometry(t[1] * s, t[2] * s, 10), cones[i % cones.length]);
+      m.position.set(0, (t[0] + t[2] / 2) * s, 0); m.castShadow = true; m.receiveShadow = true; g.add(m);
+    });
+    return g;
+  }
+  // a clipped hedge: a softened block of leaves on a soil line
+  function pkHedge(x, z, w, d, h, parent, noSolid) {
+    var M = pkMats();
+    pkBevelBox(w, h, d, M.hedge, x, h / 2, z, parent, Math.min(0.22, h * 0.3, w * 0.3, d * 0.3));
+    if (!noSolid) solid(x - w / 2, x + w / 2, z - d / 2, z + d / 2, 0, h);
+  }
+
+  var PK_CROWN_GEOS = null;
+  // four lumpy blob shapes for foliage crowns, rocks and flower heads
+  function pkCrownGeos() {
+    if (PK_CROWN_GEOS) return PK_CROWN_GEOS;
+    PK_CROWN_GEOS = [0, 1, 2, 3].map(function (i) {
+      var geo = new THREE.IcosahedronGeometry(0.5, 1);
+      var pos = geo.attributes.position, v = new THREE.Vector3();
+      for (var j = 0; j < pos.count; j++) {
+        v.fromBufferAttribute(pos, j);
+        var n = Math.sin(v.x * 5.1 + i * 2.3) * Math.cos(v.y * 4.7 + i * 1.7) * Math.sin(v.z * 4.3 + i * 3.1);
+        v.multiplyScalar(1 + n * 0.22);
+        pos.setXYZ(j, v.x, v.y, v.z);
+      }
+      geo.computeVertexNormals();
+      return geo;
+    });
+    return PK_CROWN_GEOS;
+  }
+  // granite for boulders: flat-shaded, so the facets catch the light and it reads as stone rather than a smooth blob
+  var PK_ROCK_MATS = null;
+  function pkRockMats() {
+    if (PK_ROCK_MATS) return PK_ROCK_MATS;
+    PK_ROCK_MATS = [0x7b746a, 0x6a645c, 0x8a8378, 0x5e5952].map(function (c) {
+      return std({ color: c, roughness: 0.95, flatShading: true });
+    });
+    return PK_ROCK_MATS;
+  }
+  // a boulder of the given radius, sunk part way into the ground, turned and squashed so no two look alike
+  function pkBoulder(x, z, r, parent, sink) {
+    var m = new THREE.Mesh(pkCrownGeos()[(Math.abs(x * 7 + z * 13) | 0) % 4], pkRockMats()[(Math.abs(x * 3 + z * 5) | 0) % 4]);
+    m.scale.set(r * 1.45, r * 0.95, r * 1.2);
+    m.position.set(x, r * 0.95 * 0.5 - (sink === undefined ? r * 0.28 : sink), z);
+    m.rotation.set(randf(-0.22, 0.22), randf(0, 6.283), randf(-0.22, 0.22));
+    m.castShadow = true; m.receiveShadow = true;
+    parentOf(parent).add(m);
+    return m;
+  }
+
+  // a flower bed: stone edging, soil and a scatter of flowers
+  function pkFlowerBed(x, z, w, d, parent, noSolid) {
+    var M = pkMats(), g = new THREE.Group(); g.position.set(x, 0, z); parentOf(parent).add(g);
+    pkBevelBox(w, 0.34, d, pkMatStone(), 0, 0.17, 0, g, 0.04);
+    pkBevelBox(w - 0.2, 0.06, d - 0.2, M.soil, 0, 0.35, 0, g, 0.02);
+    var cols = [0xd94f6a, 0xf3c84a, 0xe7e2f2, 0xb85cc7, 0xf08a3c], C = pkCrownGeos(), n = Math.max(4, Math.round(w * d * 2.2));
+    for (var i = 0; i < n; i++) {
+      var leaf = new THREE.Mesh(C[i % 4], M.leaves[i % M.leaves.length]); leaf.scale.set(0.2, 0.14, 0.2);
+      var fx = randf(-w / 2 + 0.3, w / 2 - 0.3), fz = randf(-d / 2 + 0.3, d / 2 - 0.3); leaf.position.set(fx, 0.44, fz); g.add(leaf);
+      var bl = new THREE.Mesh(C[(i + 1) % 4], pkFlowerMat(cols[i % cols.length])); bl.scale.set(0.11, 0.08, 0.11); bl.position.set(fx + randf(-0.06, 0.06), 0.56, fz + randf(-0.06, 0.06)); g.add(bl);
+    }
+    if (!noSolid) solid(x - w / 2, x + w / 2, z - d / 2, z + d / 2, 0, 0.5);
+    return g;
+  }
+  var PK_FLOWER_MATS = {};
+  function pkFlowerMat(c) { return PK_FLOWER_MATS[c] || (PK_FLOWER_MATS[c] = std({ color: c, roughness: 0.7 })); }
+  // a queue railing: round posts every 1.6 m and two round rails, with a solid the length of the run
+  function pkRailRun(x0, z0, x1, z1, opt) {
+    opt = opt || {}; var M = pkMats(), mat = opt.mat || M.steel, y = opt.y || 0, hh = opt.h || 1.05;
+    var dx = x1 - x0, dz = z1 - z0, len = Math.sqrt(dx * dx + dz * dz), n = Math.max(1, Math.round(len / 1.6));
+    for (var i = 0; i <= n; i++) { var t = i / n; cyl(0.035, hh, mat, x0 + dx * t, y + hh / 2, z0 + dz * t, opt.parent, 10); cyl(0.05, 0.04, mat, x0 + dx * t, y + 0.02, z0 + dz * t, opt.parent, 10); }
+    pkRod(x0, y + hh, z0, x1, y + hh, z1, 0.032, mat, opt.parent, 10);
+    pkRod(x0, y + hh * 0.5, z0, x1, y + hh * 0.5, z1, 0.022, mat, opt.parent, 8);
+    if (opt.solid !== false) solid(Math.min(x0, x1) - 0.06, Math.max(x0, x1) + 0.06, Math.min(z0, z1) - 0.06, Math.max(z0, z1) + 0.06, y, y + hh + 0.1);
+  }
+  // the park boundary: square iron posts every 2.5 m with ball caps, a palisade of spear-topped bars between, solid all along
+  function pkPalisade(x0, z0, x1, z1) {
+    var M = pkMats(), dx = x1 - x0, dz = z1 - z0, len = Math.sqrt(dx * dx + dz * dz), n = Math.max(1, Math.round(len / 2.5)), rot = Math.atan2(-dz, dx), seg = len / n;
+    for (var i = 0; i <= n; i++) {
+      var t = i / n, px = x0 + dx * t, pz = z0 + dz * t;
+      box(0.12, 1.95, 0.12, M.iron, px, 0.975, pz); sphere(0.08, M.gold, px, 2.02, pz);
+      box(0.3, 0.12, 0.3, M.stone, px, 0.06, pz);
+      if (i < n) {
+        var mx = x0 + dx * (t + 0.5 / n), mz = z0 + dz * (t + 0.5 / n);
+        var pl = new THREE.Mesh(cachedGeo('pkpal' + seg.toFixed(2), function () { var g = new THREE.PlaneGeometry(seg - 0.12, 1.8), uv = g.attributes.uv; for (var u = 0; u < uv.count; u++) uv.setX(u, uv.getX(u) * (seg - 0.12) / 2); return g; }), M.palisade);
+        pl.position.set(mx, 0.95, mz); pl.rotation.y = rot; pl.castShadow = true; parentOf(null).add(pl);
+        var kb = box(seg, 0.16, 0.2, M.stone, mx, 0.08, mz); kb.rotation.y = rot;
+      }
+    }
+    solid(Math.min(x0, x1) - 0.08, Math.max(x0, x1) + 0.08, Math.min(z0, z1) - 0.08, Math.max(z0, z1) + 0.08, 0, 2.1);
+  }
+  var PK_SPEAR_GEO = null;
+  function pkSpearGeo() {
+    return PK_SPEAR_GEO || (PK_SPEAR_GEO = new THREE.ConeGeometry(0.5, 1, 4, 1));
+  }
+  // the park's own fence, the one that keeps the queue in line and the boundary neat: cast-iron posts on stone plinths with
+  // gold spear caps, a top and bottom rail, and slim bars between. opt: { y: ground height, h: height, bars: false, solid: false }
+  // It is a world item of kind 'fence', so the editor's moves and copies of the old fence still land on it.
+  function pkParkFence(x0, z0, x1, z1, opt) { return worldItem('fence', function () {
+    opt = opt || {}; var M = pkMats(), Y = opt.y || 0, H = opt.h || 1.9, bars = opt.bars !== false;
+    var dx = x1 - x0, dz = z1 - z0, len = Math.sqrt(dx * dx + dz * dz);
+    if (len < 0.01) return;
+    var n = Math.max(1, Math.round(len / 1.9)), rot = Math.atan2(-dz, dx), seg = len / n;
+    var ux = Math.cos(rot), uz = -Math.sin(rot);           // the run direction, so bars can be spaced along it
+    for (var i = 0; i <= n; i++) {
+      var t = i / n, px = x0 + dx * t, pz = z0 + dz * t;
+      box(0.17, 0.16, 0.17, M.stoneDark, px, Y + 0.08, pz);                       // plinth
+      box(0.075, H, 0.075, M.iron, px, Y + H / 2, pz);                            // post
+      var tip = new THREE.Mesh(pkSpearGeo(), M.gold);
+      tip.position.set(px, Y + H + 0.09, pz); tip.scale.set(0.085, 0.2, 0.085);
+      tip.rotation.y = Math.PI / 4; tip.castShadow = true; parentOf(null).add(tip);
+      if (i < n) {
+        var mx = x0 + dx * (t + 0.5 / n), mz = z0 + dz * (t + 0.5 / n);
+        [H * 0.93, H * 0.14].forEach(function (ry) { var r = box(seg - 0.09, 0.05, 0.05, M.iron, mx, Y + ry, mz); r.rotation.y = rot; });
+        if (bars) {
+          var nb = Math.max(2, Math.round((seg - 0.2) / 0.22));
+          for (var b = 1; b < nb; b++) {
+            var off = (b / nb) * seg - seg / 2;
+            var bar = box(0.026, H * 0.79, 0.026, M.iron, mx + ux * off, Y + H * 0.535, mz + uz * off);
+            bar.rotation.y = rot;
+          }
+        }
+      }
+    }
+    if (opt.solid !== false) solid(Math.min(x0, x1) - 0.07, Math.max(x0, x1) + 0.07, Math.min(z0, z1) - 0.07, Math.max(z0, z1) + 0.07, Y, Y + H + 0.12);
+  }, opt && opt.parent); }
+  // ── Shared ride-booth shell ────────────────────────────────────
+  // One parametric cabin every ride booth and the coaster operator room
+  // draw from: cream/red or theme-tinted walls, striped tented canopy,
+  // scalloped valance, plinth strips, planters, lanterns and signal lamps.
+  function pkCss(c) { if (typeof c === 'string') return c; var s = c.toString(16); while (s.length < 6) s = '0' + s; return '#' + s; }
+  function pkTexBoothStripes(a, b, n) {
+    return tex(512, 128, function (c, w, h) {
+      var k = n || 10;
+      for (var i = 0; i < k; i++) { c.fillStyle = i % 2 ? b : a; c.fillRect(Math.floor(i * w / k), 0, Math.ceil(w / k) + 1, h); }
+      c.fillStyle = 'rgba(255,255,255,0.07)';
+      for (var x = 0; x < w; x += 4) c.fillRect(x, 0, 1, h);
+      var gr = c.createLinearGradient(0, 0, 0, h);
+      gr.addColorStop(0, 'rgba(255,255,255,0.10)'); gr.addColorStop(0.55, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,0.16)');
+      c.fillStyle = gr; c.fillRect(0, 0, w, h);
+      grain(c, w, h, 900, 0.035, true);
+    }, 1, 1);
+  }
+  function pkTexValance(a, b, n) {
+    // scalloped valance strip drawn procedurally so every booth matches
+    return tex(512, 128, function (c, w, h) {
+      var k = n || 8, sw = w / k;
+      c.clearRect(0, 0, w, h);
+      c.fillStyle = b; c.fillRect(0, 0, w, h * 0.34);
+      c.fillStyle = 'rgba(0,0,0,0.22)'; c.fillRect(0, h * 0.34, w, 3);
+      for (var i = 0; i < k; i++) {
+        var cx = i * sw + sw / 2;
+        c.fillStyle = i % 2 ? a : b;
+        c.beginPath(); c.moveTo(i * sw, h * 0.34);
+        c.lineTo(i * sw + sw, h * 0.34);
+        c.lineTo(i * sw + sw, h * 0.62);
+        c.arc(cx, h * 0.62, sw / 2, 0, Math.PI, false);
+        c.closePath(); c.fill();
+        c.strokeStyle = 'rgba(40,25,15,0.55)'; c.lineWidth = 3; c.stroke();
+      }
+      grain(c, w, h, 500, 0.04, true);
+    }, 1, 1);
+  }
+  function pkBoothRoofMat(a, b) {
+    // stripes run eave-to-ridge so the mapping wraps each slope cleanly
+    var t = pkTexBoothStripes(pkCss(a), pkCss(b), 10);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2.2, 1);
+    return std({ map: t, roughness: 0.82, side: THREE.DoubleSide });
+  }
+  function pkValanceMat(a, b) {
+    var t = pkTexValance(pkCss(a), pkCss(b), 8);
+    t.wrapS = THREE.RepeatWrapping;
+    return std({ map: t, transparent: true, roughness: 0.85, side: THREE.DoubleSide });
+  }
+  // a striped canvas awning: a quarter-round sweep w wide, d out from the wall and h tall, its back at the wall (local z 0)
+  function pkAwning(w, d, h, a, b, x, y, z, ry, parent) {
+    var g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry || 0; parentOf(parent).add(g);
+    var geo = new THREE.CylinderGeometry(1, 1, w, 10, 1, true, 0, Math.PI / 2), pos = geo.attributes.position;
+    // the open quarter cylinder, stretched to d by h and turned so it sweeps out from the wall and down
+    for (var k = 0; k < pos.count; k++) { var px = pos.getX(k), pz = pos.getZ(k); pos.setXYZ(k, pos.getY(k), px * h, pz * d); }
+    geo.computeVertexNormals();
+    var m = new THREE.Mesh(geo, pkStripes(a, b)); m.position.set(0, 0, 0); m.castShadow = true; g.add(m);
+    // the scalloped valance along its front edge
+    for (var s = 0; s < Math.round(w / 0.4); s++) {
+      var v = new THREE.Mesh(cachedGeo('pkscal', function () { return new THREE.CircleGeometry(0.2, 10, Math.PI, Math.PI); }), s % 2 ? pkStripes(b, b) : pkStripes(a, a));
+      v.position.set(-w / 2 + 0.2 + s * 0.4, 0.02, d); g.add(v);
+    }
+    return g;
+  }
+  // perimeter plinth strips instead of a filled slab: four stone kerbs
+  function pkBoothPlinth(w, d, mat, parent) {
+    var M = mat || pkMats().stoneDark, t = 0.22, h = 0.24;
+    pkBevelBox(w + t * 2, h, t, M, 0, h / 2, d / 2 + t / 2, parent, 0.02);
+    pkBevelBox(w + t * 2, h, t, M, 0, h / 2, -d / 2 - t / 2, parent, 0.02);
+    pkBevelBox(t, h, d, M, w / 2 + t / 2, h / 2, 0, parent, 0.02);
+    pkBevelBox(t, h, d, M, -w / 2 - t / 2, h / 2, 0, parent, 0.02);
+  }
+  var PK_PLANTER_COLS = [0xd94f6a, 0xf3c84a, 0xe7e2f2, 0xb85cc7, 0xf08a3c, 0xf2f2f2];
+  function pkPlanter(w, parent, x, y, z) {
+    var M = pkMats(), g = new THREE.Group(); g.position.set(x, y, z); parentOf(parent).add(g);
+    pkBevelBox(w, 0.34, 0.52, pkMatStone(), 0, 0.17, 0, g, 0.03);
+    pkBevelBox(w - 0.16, 0.07, 0.40, M.soil, 0, 0.36, 0, g, 0.015);
+    var n = Math.max(4, Math.round(w * 5));
+    for (var i = 0; i < n; i++) {
+      var fx = (w / 2 - 0.18) * (n === 1 ? 0 : (2 * i / (n - 1) - 1));
+      pkRoundCyl(0.022, 0.22, M.hedge, fx, 0.48, 0, g, 5);
+      var bl = new THREE.Mesh(cachedGeo('pkbloom8', function () { return new THREE.SphereGeometry(0.075, 8, 6); }),
+        pkFlowerMat(PK_PLANTER_COLS[i % PK_PLANTER_COLS.length]));
+      bl.position.set(fx, 0.62, 0); bl.castShadow = true; g.add(bl);
+    }
+    return g;
+  }
+  function pkBoothLantern(parent, x, y, z) {
+    var M = pkMats();
+    pkRoundCyl(0.025, 0.22, M.iron, x, y + 0.14, z, parent, 6);
+    pkBevelBox(0.16, 0.24, 0.16, M.iron, x, y, z, parent, 0.015);
+    pkBevelBox(0.12, 0.16, 0.12, glowMat(0xffd9a0, 1.1), x, y, z, parent, 0.008);
+    var cap = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.10, 6), M.iron);
+    cap.position.set(x, y + 0.17, z); cap.castShadow = true; parentOf(parent).add(cap);
+    sphere(0.035, M.gold, x, y + 0.24, z, parent);
+  }
+  function pkBoothFinial(parent, x, y, z) {
+    var M = pkMats();
+    pkRoundCyl(0.035, 0.30, M.iron, x, y + 0.15, z, parent, 8);
+    sphere(0.075, M.gold, x, y + 0.34, z, parent);
+  }
+  // striped tented canopy: hipped pyramid in theme stripes with a
+  // scalloped valance, fascia boards, ridge finial. Returns eave/roof Y.
+  function pkBoothTentRoof(g, o) {
+    var M = pkMats(), W = o.w, D = o.d, wallTop = o.wallTop;
+    var roofH = o.roofH || 0.95, ov = 0.42;
+    var roof = new THREE.Mesh(new THREE.ConeGeometry(Math.SQRT1_2, roofH, 4, 1), pkBoothRoofMat(o.roofA, o.roofB));
+    roof.geometry.rotateY(Math.PI / 4); roof.geometry.translate(0, roofH / 2, 0);
+    roof.scale.set(W + ov * 2, 1, D + ov * 2);
+    roof.position.set(0, wallTop, 0); roof.castShadow = true; roof.receiveShadow = true; g.add(roof);
+    var trimM = o.trimMat || M.iron;
+    pkBevelBox(W + ov * 2 + 0.06, 0.16, 0.07, trimM, 0, wallTop - 0.02, (D + ov * 2) / 2, g, 0.012);
+    pkBevelBox(W + ov * 2 + 0.06, 0.16, 0.07, trimM, 0, wallTop - 0.02, -(D + ov * 2) / 2, g, 0.012);
+    pkBevelBox(0.07, 0.16, D + ov * 2 + 0.06, trimM, (W + ov * 2) / 2, wallTop - 0.02, 0, g, 0.012);
+    pkBevelBox(0.07, 0.16, D + ov * 2 + 0.06, trimM, -(W + ov * 2) / 2, wallTop - 0.02, 0, g, 0.012);
+    var vMat = pkValanceMat(o.roofA, o.roofB), vH = 0.30;
+    [[0, (D + ov * 2) / 2, W + ov * 2, 0], [0, -(D + ov * 2) / 2, W + ov * 2, 0]].forEach(function (s) {
+      var vm = new THREE.Mesh(new THREE.PlaneGeometry(s[2], vH), vMat);
+      vm.position.set(s[0], wallTop - 0.10 - vH / 2 + 0.06, s[1]); if (s[1] < 0) vm.rotation.y = Math.PI; g.add(vm);
+    });
+    [[(W + ov * 2) / 2, 0, D + ov * 2], [-(W + ov * 2) / 2, 0, D + ov * 2]].forEach(function (s2) {
+      var vm2 = new THREE.Mesh(new THREE.PlaneGeometry(s2[2], vH), vMat);
+      vm2.rotation.y = Math.PI / 2; vm2.position.set(s2[0], wallTop - 0.10 - vH / 2 + 0.06, s2[1]); g.add(vm2);
+    });
+    pkBoothFinial(g, 0, wallTop + roofH - 0.04, 0);
+    return { roofY: wallTop + roofH, eaveY: wallTop - 0.10 };
+  }
+// booths that stand beside each of the seven rides. The booth is enterable: a
+// door onto the midway, and inside a screen with Gates, Dispatch, E-stop and
+// AUTO. On AUTO (the default) a ride works its own gates, restraints and
+// start; off AUTO it waits for the booth screen.
+
+// ── Per-ride control ────────────────────────────────────────────────
+// Every attraction gets a small control object: gate and restraint state that
+// eases toward its target, signal lamps, and the callback arrays that move the
+// ride's gates and restraints.
+
+function pkCtl(a) {
+  if (a.ctl) return a.ctl;
+  var C = a.ctl = {
+    gates: false,      // gates open? eased by gateT
+    barsWant: 0,       // target restraint position (0 up, 1 down)
+    bars: 0,           // current restraint position, eased
+    gateT: 0,          // current gate position, eased (0 closed, 1 open)
+    gateObjs: [],      // callbacks (t) -> move the gates
+    barObjs: [],       // callbacks (b) -> move the restraints
+    spd: 0,            // drive speed (0..1)
+    fault: '',         // fault string; stops everything when set
+    lamps: [],         // lamp meshes above the booth window
+    auto: true         // AUTO: the ride runs its own gates, restraints, start
+  };
+  return C;
+}
+
+function pkCtlAuto(a) {
+  // AUTO is the default: the ride runs itself.
+  if (!a.ctl) pkCtl(a);
+  return a.ctl.auto;
+}
+
+function pkCtlLamps(a) {
+  // signal lamps above the booth window follow the ride state:
+  // idle green, boarding amber, running red, unloading amber; a fault shows red
+  if (!a.ctl) return;
+  var C = a.ctl, col;
+  switch (a.state) {
+    case 'idle':      col = 0x5fd38d; break;
+    case 'boarding':  col = 0xf0c04a; break;
+    case 'ready':     col = 0xf0c04a; break;
+    case 'running':   col = 0xff3b30; break;
+    case 'unloading': col = 0xf0c04a; break;
+    default:          col = 0x5fd38d;
+  }
+  if (C.fault) col = 0xff3b30;
+  for (var i = 0; i < C.lamps.length; i++) {
+    var lamp = C.lamps[i];
+    if (lamp.material && lamp.material.emissive) lamp.material.emissive.setHex(col);
+  }
+}
+
+function pkCtlLoad(a) {
+  // the booth's AUTO setting remembers where it was left
+  var C = pkCtl(a);
+  if (S.ctlAuto && typeof S.ctlAuto[a.id] === 'boolean') C.auto = S.ctlAuto[a.id];
+}
+
+// ── The desk, worked from the booth screen ─────────────────────────
+// Keep status text and button availability derived from the live ride state.
+
+var PK_BREFUSE_M = '', PK_BREFUSE_T = 0;
+function pkBoothRefuse(msg) {
+  var now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  if (msg !== PK_BREFUSE_M || now - PK_BREFUSE_T > 1200) {
+    sfx('bad'); toast(msg, 'bad'); PK_BREFUSE_M = msg; PK_BREFUSE_T = now;
+  }
+  return false;
+}
+
+function pkBoothStatus(a, C) {
+  if (C.fault) return 'E-STOP · RESET REQUIRED';
+  if (PK.closed && !a.riders) return 'PARK CLOSED';
+  if (a.state === 'idle') return a.queue.length ? 'READY TO BOARD' : 'OPEN · WAITING FOR GUESTS';
+  if (a.state === 'boarding') {
+    if (a.boarding > 0) return 'BOARDING · ' + a.boarding + ' WALKING';
+    if (a.queue.length) return 'BOARDING · ' + a.queue.length + ' IN QUEUE';
+    if (a.riders) return 'LOAD COMPLETE · DISPATCH READY';
+    return 'BOARDING · WAITING FOR GUESTS';
+  }
+  if (a.state === 'ready') return 'READY TO DISPATCH';
+  if (a.state === 'running') return 'RIDE IN MOTION';
+  if (a.state === 'unloading') return 'UNLOADING · ' + a.riders + ' ABOARD';
+  return String(a.state || 'UNKNOWN').toUpperCase();
+}
+
+function pkBoothGates(a) {
+  var C = pkCtl(a);
+  if (PK.closed && !a.riders) return pkBoothRefuse('The park is closed');
+  if (C.fault) return pkBoothRefuse('Reset ' + a.name + ' first');
+  if (a.state === 'idle' || a.state === 'unloading') {
+    if (!a.queue.length) return pkBoothRefuse('Nobody is waiting at ' + a.name);
+    a.manualStart = true;
+    pkAttrBegin(a);
+    if (a.state !== 'boarding') { a.manualStart = false; return pkBoothRefuse('Nobody is ready to board'); }
+    sfx('ok'); toast(a.name + ': gates open', 'good');
+    screenDirtyAll();
+    return true;
+  }
+  if (a.state === 'boarding') {
+    C.gates = !C.gates;
+    if (!C.gates && a.state === 'ready') a.state = 'boarding';
+    sfx('ok'); toast(a.name + ': gates ' + (C.gates ? 'open' : 'shut'), '');
+    screenDirtyAll();
+    return true;
+  }
+  return pkBoothRefuse('Not while ' + a.name + ' is ' + a.state);
+}
+
+function pkBoothDispatch(a) {
+  var C = pkCtl(a);
+  if (C.fault) return pkBoothRefuse('Reset ' + a.name + ' first');
+  if (a.state !== 'boarding' && a.state !== 'ready') return pkBoothRefuse(a.state === 'idle' ? 'Board the guests first' : a.name + ' is ' + a.state);
+  if (a.queue.length) return pkBoothRefuse('Wait for the queue to finish boarding');
+  if (a.boarding && pkAttrWalkers(a)) return pkBoothRefuse('Wait for the riders to sit');
+  if (!a.riders) return pkBoothRefuse('Nobody is aboard ' + a.name);
+  if (a.state === 'boarding' && !C.gates) return pkBoothRefuse('Open the gates to board ' + a.name);
+  if (a.state === 'boarding' && C.barsWant < 0.5) return pkBoothRefuse('Secure the restraints before dispatch');
+  if (a.state !== 'ready' && a.state !== 'boarding') return pkBoothRefuse('The ride is not ready to dispatch');
+  if (C.gates) return pkBoothRefuse('Close the gates before dispatch');
+  if (!pkAttrStart(a)) return pkBoothRefuse('Could not dispatch ' + a.name);
+  sfx('bell');
+  toast(a.name + ' dispatched', 'good');
+  screenDirtyAll(); hudDirty = true;
+  return true;
+}
+
+function pkBoothStop(a) {
+  var C = pkCtl(a);
+  if (C.fault) {
+    C.fault = '';
+    C.spd = 0;
+    if (a.state === 'running') {
+      a.t = Math.max(a.t, a.run - 3);
+      if (a.tickRun) a.tickRun(a, 0, 0);
+    }
+    else if (a.state === 'idle') { C.gates = false; C.barsWant = 0; }
+    sfx('ok'); toast(a.name + ' reset', 'good');
+    logEvent(a.name + ' reset after E-stop', '');
+  } else {
+    C.fault = 'E-stop';
+    C.gates = false;
+    a.manualStart = false;
+    sfx('bad'); toast(a.name + ': E-stop', 'bad');
+    logEvent(a.name + ': E-stop', 'bad');
+  }
+  screenDirtyAll(); hudDirty = true;
+  return true;
+}
+
+function pkBoothTest(a) {
+  // A test run is only safe from idle: it sends an empty car, never riders.
+  var C = pkCtl(a);
+  if (C.fault) return pkBoothRefuse('Reset ' + a.name + ' first');
+  if (a.state !== 'idle') return pkBoothRefuse(a.name + ' must be idle for a test run');
+  if (a.queue.length || a.riders || a.boarding) return pkBoothRefuse('Clear the queue and ride before a test run');
+  var oldRiders = a.riders;
+  a.riders = 1; // shared start guard expects a non-empty dispatch
+  var started = false;
+  try { started = pkAttrStart(a); }
+  finally { a.riders = oldRiders; }
+  if (!started) return pkBoothRefuse('Could not start ' + a.name);
+  a.tests = (a.tests || 0) + 1;
+  toast(a.name + ': test run away', 'good');
+  logEvent(a.name + ': test run', '');
+  screenDirtyAll(); hudDirty = true;
+  return true;
+}
+
+function pkBoothAuto(a) {
+  var C = pkCtl(a);
+  if (PK.closed) return pkBoothRefuse('The park is closed');
+  C.auto = !C.auto;
+  if (C.auto) a.manualStart = false;
+  if (C.auto && a.state === 'boarding' && !a.queue.length && a.riders > 0) a.t = Math.max(a.t, a.board);
+  if (!S.ctlAuto) S.ctlAuto = {};
+  S.ctlAuto[a.id] = C.auto;
+  sfx('click');
+  toast(a.name + ': ' + (C.auto ? 'AUTO - runs itself' : 'MANUAL - work the desk'), '');
+  logEvent(a.name + ' set to ' + (C.auto ? 'AUTO' : 'MANUAL'), '');
+  screenDirtyAll();
+  return true;
+}
+
+// ── Operator booths ─────────────────────────────────────────────────
+// Geometry and screen layout live in pkRideBoothBetter (part 11).
+
+var PK_BOOTH = {};
+
+function pkBuildBooth(a, p, th) {
+  pkRideBoothBetter(a, p, th);
+  return;
+}
+
+// ── Hook into the build ─────────────────────────────────────────────
+// After every ride is built, add its booth beside it.
+
+var _pkBuildAttractions = pkBuildAttractions;
+pkBuildAttractions = function () {
+  _pkBuildAttractions();
+  PK.attractions.forEach(function (a) {
+    if (a.plot && !a.booth && a.open) {
+      var th = PK_THEME[a.id];
+      if (th) pkBuildBooth(a, a.plot, th);
+    }
+  });
+};
+
+// the test API picks up the booth controls
+var _pkTestApi = GAME.T;
+GAME.T = function () {
+  var o = _pkTestApi();
+  o.pkBoothTest = pkBoothTest; o.pkBoothGates = pkBoothGates; o.pkBoothDispatch = pkBoothDispatch; o.pkBoothStop = pkBoothStop; o.pkBoothAuto = pkBoothAuto; o.pkBoothStatus = pkBoothStatus; o.pkCtl = pkCtl;
+  return o;
+};
+// String lights across the midway on their own masts, a popcorn cart and a balloon seller by the hub fountain.
+// Everything here is additive. Gone: the second gate arch (the gate already has one), the ride-to-ride bunting garlands (each ride
+// dresses itself in part 06; one had a typo that put its bunting at NaN) and the old string lights (every span was skipped, so none drew).
+// Kept: the hanging baskets and path markers, because the editor's world file moves, hides and copies them.
+
+// ── String lights across the midway ─────────────────────────────────
+// Three spans on masts either side of the walk, sagging in the middle. The bulbs are one instanced mesh per span.
+function pkStringLights() {
+  var M = pkMats(), X = 5.2;
+  [6.5, 16.5, 25.0].forEach(function (z) {
+    [-X, X].forEach(function (x) {
+      pkRoundCyl(0.07, 5.4, M.iron, x, 2.7, z, null, 10);
+      pkBevelBox(0.34, 0.12, 0.34, M.stoneDark, x, 0.06, z, null, 0.03);
+      sphere(0.1, M.gold, x, 5.5, z);
+      solid(x - 0.12, x + 0.12, z - 0.12, z + 0.12, 0, 5.4);
+    });
+    var wire = [], bulbs = [], n = 18;
+    for (var i = 0; i <= n; i++) {
+      var t = i / n, x = -X + 2 * X * t, y = 5.3 - Math.sin(t * Math.PI) * 0.85;
+      wire.push([x, y, z]);
+      if (i > 0 && i < n) bulbs.push([x, y - 0.1, z]);
+    }
+    pkTube(wire, 0.012, M.iron, null, false, 40, 4);
+    pkBulbs(bulbs, M.bulbWarm, 0.075);
+  });
+}
+
+// ── A popcorn cart and a balloon seller ─────────────────────────────
+function pkPopcornCart(x, z, ry) {
+  var M = pkMats(), g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry || 0; scene.add(g);
+  pkBevelBox(1.5, 0.8, 0.95, M.cream, 0, 0.75, 0, g, 0.05);
+  pkBevelBox(1.56, 0.1, 1.0, M.iron, 0, 1.2, 0, g, 0.03);
+  pkBevelBox(1.3, 0.62, 0.8, M.glass, 0, 1.55, 0, g, 0.03);
+  pkBevelBox(1.5, 0.1, 0.95, M.iron, 0, 1.9, 0, g, 0.03);
+  [-0.7, 0.7].forEach(function (wx) { var w = pkRoundCyl(0.32, 0.1, M.iron, wx, 0.32, 0.5, g, 14); w.rotation.z = Math.PI / 2; });
+  pkRod(-0.7, 0.9, -0.5, -1.5, 0.9, -0.5, 0.03, M.iron, g, 6);
+  pkRoundCyl(0.04, 2.5, M.iron, 0, 2.3, 0, g, 6);
+  var brolly = new THREE.Mesh(new THREE.ConeGeometry(1.35, 0.55, 10), pkStripes('#d94f4f', '#f4f4f0')); brolly.position.set(0, 3.45, 0); brolly.castShadow = true; g.add(brolly);
+  sphere(0.07, M.gold, 0, 3.78, 0, g);
+  sign(['POPCORN'], 1.2, 0.3, 0, 1.0, 0.5, 0, { bg: '#d94f4f', fg: '#ffffff' }, g);
+  solid(x - 0.85, x + 0.85, z - 0.6, z + 0.6, 0, 1.9);
+  return g;
+}
+function pkBalloons(x, z) {
+  var M = pkMats(), g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+  pkRoundCyl(0.05, 1.5, M.iron, 0, 0.75, 0, g, 6);
+  pkBevelBox(0.5, 0.12, 0.5, M.stoneDark, 0, 0.06, 0, g, 0.03);
+  var cols = [0xd94f4f, 0xf0c04a, 0x4f8fd9, 0xe08fc0, 0x5fd38d, 0xff8a3d, 0xb85cc7], rng = pkRng(55);
+  for (var i = 0; i < 14; i++) {
+    var a = rng() * 6.283, r = 0.2 + rng() * 0.7, h = 2.6 + rng() * 1.4, bx = Math.cos(a) * r, bz = Math.sin(a) * r;
+    var b = new THREE.Mesh(new THREE.SphereGeometry(0.27, 10, 8), std({ color: cols[i % cols.length], roughness: 0.25, metalness: 0.05 }));
+    b.scale.y = 1.2; b.position.set(bx, h, bz); b.castShadow = true; g.add(b);
+    pkRod(0, 1.5, 0, bx, h - 0.3, bz, 0.005, M.iron, g, 3);
+  }
+  solid(x - 0.3, x + 0.3, z - 0.3, z + 0.3, 0, 1.6);
+  return g;
+}
+
+// ── Hanging baskets on lamp posts ───────────────────────────────────
+function pkHangingBaskets() {
+  var M = pkMats();
+  var posts = [
+    [-7, 24, PK_THEME.carousel], [7, 24, PK_THEME.teacups],
+    [-7, 12, PK_THEME.ferris], [7, 12, PK_THEME.dodgems],
+    [-7, 0, PK_THEME.droptower], [7, 0, PK_THEME.flume]
+  ];
+  posts.forEach(function (p) {
+    var bas = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.5, 8),
+      std({ color: 0x8a5a3a, roughness: 0.8 }));
+    bas.position.set(p[0], 3.6, p[1]); bas.rotation.x = Math.PI;
+    scene.add(bas);
+    pkRod(p[0], 4.6, p[1], p[0], 4.1, p[1], 0.015, M.iron, null, 4);
+    var cols = [0xd94f4f, 0xf0c04a, 0xe08fc0, 0xf2f2f2];
+    for (var f = 0; f < 6; f++) {
+      var fa = f / 6 * Math.PI * 2;
+      sphere(0.09, std({ color: cols[f % 4], roughness: 0.85 }),
+        p[0] + Math.cos(fa) * 0.28, 3.5, p[1] + Math.sin(fa) * 0.28);
+    }
+  });
+}
+
+// ── Path edge markers along the midway ─────────────────────────────
+function pkPathMarkers() {
+  var M = pkMats();
+  var edges = [
+    { x0: -8.5, z0: 6, x1: -8.5, z1: 26 },
+    { x0: 8.5,  z0: 6, x1: 8.5,  z1: 26 },
+    { x0: -14, z0: 30, x1: 14,  z1: 30 },
+  ];
+  edges.forEach(function (e) {
+    var dx = e.x1 - e.x0, dz = e.z1 - e.z0, len = Math.sqrt(dx * dx + dz * dz);
+    var n = Math.max(4, Math.round(len / 2.2));
+    for (var i = 0; i <= n; i++) {
+      var t = i / n, x = e.x0 + dx * t, z = e.z0 + dz * t;
+      box(0.14, 0.5, 0.14, M.stoneDark, x, 0.25, z);
+      box(0.22, 0.06, 0.22, M.brass, x, 0.55, z);
+    }
+  });
+}
+
+// ── Hook into the build ─────────────────────────────────────────────
+var _pkBuildAttractions2 = pkBuildAttractions;
+pkBuildAttractions = function () {
+  _pkBuildAttractions2();
+  pkStringLights();
+  pkPopcornCart(7.1, 17.6, -Math.PI / 2 + 0.3);
+  pkBalloons(-6.8, 18.4);
+  pkHangingBaskets();   // kept as the editor left them: most are hidden, a few stand
+  pkPathMarkers();      // ditto - the little marker row by the gate is yours
+};
+// Trees, lamp posts, benches, bins, flower beds, gate, ticket booths, office,
+// ride gateways, 3D signs, coaster cars and ride booths - all rebuilt with
+// bevelled edges, rounded cylinders, layered materials and proper proportions.
+// Nothing here replaces the layout/editor data; it only upgrades the geometry
+// the build functions draw. Call these from the existing pk* builders.
+
+// ── Material upgrades ─────────────────────────────────────────────────
+function pkMatBrick() {
+  return CO.material('pk-brick', {
+    size: 512, repeat: [4, 4],
+    layers: [
+      { type: 'fill', color: '#c9c2b4' },
+      { type: 'bricks', color: '#8a4a3a', color2: '#95553f', size: 64, size2: 22, gap: 2, vary: true },
+      { type: 'grain', alpha: 0.12 },
+      { type: 'blotches', color: '#6a3a2a', n: 40, sz: 90, dark: true }
+    ],
+    roughness: 0.95, metalness: 0.05,
+    bump: { amp: 16, strength: 0.8 }
+  });
+}
+function pkMatStone() {
+  return CO.material('pk-stone', {
+    size: 512, repeat: [3, 3],
+    layers: [
+      { type: 'fill', color: '#b8b6b0' },
+      { type: 'grain', alpha: 0.1 },
+      { type: 'cracks', color: '#505048', n: 25, sz: 120 }
+    ],
+    roughness: 0.9, metalness: 0.1,
+    bump: { amp: 24, strength: 0.9 }
+  });
+}
+function pkMatWoodRich() {
+  return CO.material('pk-wood-rich', {
+    size: 512, repeat: [2, 1],
+    layers: [
+      { type: 'fill', color: '#a07850' },
+      { type: 'grain', alpha: 0.30 },
+      { type: 'planks', color: '#9c7349', color2: '#7c5836', size: 64, vary: true, gap: 2 }
+    ],
+    roughness: 0.85, metalness: 0.05,
+    bump: { amp: 12, strength: 0.6 }
+  });
+}
+function pkMatMetalRich() {
+  return CO.material('pk-metal-rich', {
+    size: 256, repeat: [1, 1],
+    layers: [
+      { type: 'fill', color: '#4a5058' },
+      { type: 'grain', alpha: 0.25 },
+      { type: 'speckle', color: '#2a2d33', n: 2000 }
+    ],
+    roughness: 0.4, metalness: 0.8,
+    bump: { amp: 8, strength: 0.4 }
+  });
+}
+function pkMatGlassRich() {
+  return CO.material('pk-glass-rich', {
+    size: 128, repeat: [1, 1],
+    layers: [
+      { type: 'fill', color: '#b8c8d8', alpha: 0.85 }
+    ],
+    roughness: 0.15, metalness: 0.05, transparent: true, opacity: 0.85
+  });
+}
+function pkMatPlasterRich() {
+  return CO.material('pk-plaster-rich', {
+    size: 512, repeat: [2, 2],
+    layers: [
+      { type: 'fill', color: '#e9e6dc' },
+      { type: 'grain', alpha: 0.10 },
+      { type: 'grain', alpha: 0.05, dark: true }
+    ],
+    roughness: 0.93, metalness: 0.02,
+    bump: { amp: 4, strength: 0.35 }
+  });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────
+function pkBevelBox(w, h, d, mat, x, y, z, parent, r) {
+  var rOpt = r === undefined ? 0.12 : r;
+  var m = new THREE.Mesh(new bevelGeo(w, h, d, rOpt, 6), mat);
+  if (x !== undefined) m.position.set(x, y, z);
+  if (parent) parent.add(m); else scene.add(m);
+  m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
+function pkRoundCyl(r, h, mat, x, y, z, parent, seg) {
+  var g = new roundCylGeo(r, r, h, seg || 16);
+  var m = new THREE.Mesh(g, mat);
+  if (x !== undefined) m.position.set(x, y, z);
+  if (parent) parent.add(m); else scene.add(m);
+  m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
+function pkSign3D(lines, w, h, x, y, z, ry, opt, parent) {
+  var g = new THREE.Group();
+  if (parent) parent.add(g); else scene.add(g);
+  if (x !== undefined) g.position.set(x, y, z);
+  if (ry !== undefined) g.rotation.y = ry;
+  var o = opt || {};
+  var bg = o.bg || '#1b232c';
+  var fg = o.fg || '#f5b53d';
+  var panel = pkBevelBox(w, h, 0.18, std({ color: bg, roughness: 0.9 }), 0, 0, 0.1, g, 0.04);
+  var lip = pkBevelBox(w + 0.06, h + 0.06, 0.06, std({ color: '#3a3f45', roughness: 0.6 }), 0, 0, 0.16, g, 0.02);
+  sign(lines, w * 0.9, h * 0.7, 0, 0, 0.2, 0, { bg: 'transparent', fg: fg }, g);
+  return g;
+}
+
+// ── Tree: proper trunk with layered foliage ────────────────────────────
+function pkTreeBetter(x, z, seed, scale) {
+  var s = scale === undefined ? 1 : scale;
+  var g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+  var trunkH = 2.6 * s;
+  var trunkR = 0.14 * s;
+  var trunk = pkRoundCyl(trunkR, trunkH, pkMatWoodRich(), 0, trunkH / 2, 0, g, 10);
+  [[0, trunkH * 0.7, 0.5, 0.6], [0.4, trunkH * 0.5, -0.4, 0.5], [-0.5, trunkH * 0.6, 0.2, 0.55]].forEach(function (b) {
+    var br = new THREE.Mesh(new THREE.CylinderGeometry(b[3] * 0.5, b[3] * 0.1, b[2], 8), pkMatWoodRich());
+    br.position.set(b[0], b[1] + b[2] / 2, 0);
+    br.rotation.z = b[1] > trunkH * 0.6 ? -0.6 : 0.6;
+    g.add(br);
+  });
+  var foliageCols = [0x3f6f2e, 0x5c8f44, 0x45752f, 0x6f9a4a];
+  [[0, 3.4, 1.3], [0.6, 2.8, 1.0], [-0.7, 3.0, 0.9], [0.1, 4.2, 0.8], [-0.4, 2.5, 1.1], [0.5, 3.8, 0.9]].forEach(function (f, i) {
+    var off = (seed || 0) * 0.37;
+    var leaf = new THREE.Mesh(new THREE.SphereGeometry(f[2] * s, 12, 10), std({ color: foliageCols[i % 4], roughness: 1 }));
+    leaf.position.set(f[0] * s + Math.sin(off + i) * 0.15, f[1] * s, Math.cos(off + i) * 0.15);
+    leaf.castShadow = true; leaf.receiveShadow = true;
+    g.add(leaf);
+  });
+  g.solid = { x0: -0.35 * s, x1: 0.35 * s, z0: -0.35 * s, z1: 0.35 * s, y0: 0, y1: trunkH * 1.4 };
+  return g;
+}
+
+// ── Lamp post: proper housing with decorative top ──────────────────────
+function pkLampBetter(x, z, h) {
+  var hh = h === undefined ? 4.6 : h;
+  var g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+  pkRoundCyl(0.055, hh, MAT.steelDark, 0, hh / 2, 0, g, 8);
+  pkBevelBox(0.5, 0.14, 0.5, MAT.steelDark, 0, 0.07, 0, g, 0.03);
+  var arm = new THREE.Group(); arm.position.set(0, hh - 0.35, 0); g.add(arm);
+  pkRoundCyl(0.03, 0.9, MAT.steelDark, 0, 0, 0.45, arm, 6);
+  var house = pkBevelBox(0.42, 0.2, 0.32, MAT.steelDark, 0.45, 0, 0, arm, 0.03);
+  var lens = pkBevelBox(0.34, 0.12, 0.26, pkMatGlassRich(), 0.45, 0, 0, arm, 0.02);
+  var glow = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.22), glowMat(0xfff2c0, 0.7));
+  glow.position.set(0.45, 0, 0); arm.add(glow);
+  g.userData.lampLens = lens;
+  return g;
+}
+
+// ── Bench: slatted seat, backrest, legs, armrests ──────────────────────
+function pkBenchBetter(x, z, rot) {
+  var g = new THREE.Group(); g.position.set(x, 0, z); if (rot) g.rotation.y = rot; scene.add(g);
+  [[-0.85, 0, 0.15], [0.85, 0, 0.15]].forEach(function (l) {
+    pkBevelBox(0.07, 0.42, 0.07, MAT.steelDark, l[0], 0.21, l[2], g, 0.02);
+  });
+  [-0.18, 0, 0.18].forEach(function (sy) {
+    pkBevelBox(1.8, 0.05, 0.42, pkMatWoodRich(), 0, 0.45, sy, g, 0.02);
+  });
+  pkBevelBox(1.9, 0.06, 0.5, MAT.steelDark, 0, 0.42, 0, g, 0.02);
+  [-0.18, 0, 0.18].forEach(function (sy) {
+    pkBevelBox(1.8, 0.32, 0.05, pkMatWoodRich(), 0, 0.78, sy - 0.2, g, 0.02);
+  });
+  pkBevelBox(1.9, 0.34, 0.12, MAT.steelDark, 0, 0.78, -0.22, g, 0.02);
+  [[-0.95, 0.55, 0], [0.95, 0.55, 0]].forEach(function (a) {
+    pkBevelBox(0.1, 0.07, 0.5, MAT.steelDark, a[0], a[1], a[2], g, 0.02);
+  });
+  g.solid = { x0: -0.95, x1: 0.95, z0: -0.3, z1: 0.3, y0: 0, y1: 0.9 };
+  return g;
+}
+
+// ── Bin: pedal bin with liner rim and foot pedal ───────────────────────
+function pkBinBetter(x, z) {
+  var g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+  pkRoundCyl(0.36, 0.92, MAT.green, 0, 0.46, 0, g, 14);
+  pkBevelBox(0.42, 0.05, 0.42, MAT.steelDark, 0, 0.94, 0, g, 0.02);
+  var lid = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.4, 14), MAT.steelDark);
+  lid.position.set(0, 1.0, 0); lid.rotation.x = -Math.PI / 2; g.add(lid);
+  var pedal = pkBevelBox(0.22, 0.04, 0.12, MAT.steelDark, 0, 0.05, 0.42, g, 0.02);
+  pedal.rotation.x = 0.25;
+  pkRoundCyl(0.015, 0.1, MAT.steelDark, 0, 0.07, 0.48, g, 6);
+  g.solid = { x0: -0.45, x1: 0.45, z0: -0.45, z1: 0.45, y0: 0, y1: 1.05 };
+  return g;
+}
+
+// ── Flower bed: stone edging, soil, varied flowers ─────────────────────
+function pkFlowerBedBetter(x, z, w, d) {
+  var g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+  pkBevelBox(w, 0.3, d, pkMatStone(), 0, 0.15, 0, g, 0.04);
+  pkBevelBox(w - 0.1, 0.16, d - 0.1, std({ color: 0x5d4037, roughness: 1 }), 0, 0.31, 0, g, 0.02);
+  var cols = [0xd94f4f, 0xf0c04a, 0xe08fc0, 0xf2f2f2, 0xff8a3d];
+  var n = Math.floor((w * d) / 2);
+  for (var i = 0; i < n; i++) {
+    var fx = (Math.random() - 0.5) * (w - 0.2);
+    var fz = (Math.random() - 0.5) * (d - 0.2);
+    var col = cols[i % cols.length];
+    var flower = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), std({ color: col, roughness: 0.8 }));
+    flower.position.set(fx, 0.41, fz);
+    g.add(flower);
+  }
+  g.solid = { x0: -w/2, x1: w/2, z0: -d/2, z1: d/2, y0: 0, y1: 0.5 };
+  return g;
+}
+
+// ── Ticket booth: proper counter, canopy, window frames, sign depth ────
+function pkTicketBoothBetter(b, i) {
+  var g = new THREE.Group(); g.userData.dynamic = true; g.position.set(b.x, 0, b.z); scene.add(g);
+  var side = b.x < 0 ? 1 : -1;
+  var plaster = pkMatPlasterRich();
+  // the kiosk: a solid back and sides, a base and a header at the front, and a glazed window between
+  pkBevelBox(3.2, 2.9, 0.22, plaster, 0, 1.45, -1.5, g, 0.04);
+  pkBevelBox(0.22, 2.9, 3.2, plaster, -1.6, 1.45, 0, g, 0.04);
+  pkBevelBox(0.22, 2.9, 3.2, plaster, 1.6, 1.45, 0, g, 0.04);
+  pkBevelBox(3.2, 0.95, 0.2, plaster, 0, 0.475, 1.5, g, 0.04);    // the base under the window
+  pkBevelBox(3.2, 0.7, 0.24, plaster, 0, 2.35, 1.5, g, 0.04);     // the header over it
+  pkBevelBox(2.98, 0.9, 0.03, pkMatGlassRich(), 0, 1.45, 1.51, g, 0.01);
+  // a projecting counter, with a till and a bell
+  pkBevelBox(3.5, 0.09, 0.52, pkMatWoodRich(), 0, 0.965, 1.68, g, 0.03);
+  pkBevelBox(0.3, 0.04, 0.12, MAT.steelDark, -0.4, 0.92, 1.86, g, 0.01);
+  var tillM = std({ color: 0x2a3138, roughness: 0.55 });
+  pkBevelBox(0.36, 0.18, 0.3, tillM, 1.05, 1.1, 1.64, g, 0.03);
+  pkBevelBox(0.22, 0.03, 0.15, MAT.black, 1.05, 1.21, 1.64, g, 0.01);
+  pkRoundCyl(0.05, 0.07, MAT.chrome, -1.0, 1.045, 1.66, g, 12);
+  // inside: a noticeboard, a shelf of ticket rolls, a stool and a warm lamp
+  pkBevelBox(1.5, 0.9, 0.05, pkMatWoodRich(), 0.6, 1.65, -1.38, g, 0.02);
+  pkBevelBox(1.4, 0.8, 0.01, std({ color: 0xe8e2d2, roughness: 0.92 }), 0.6, 1.65, -1.35, g, 0.004);
+  pkBevelBox(1.3, 0.06, 0.28, pkMatWoodRich(), -0.95, 1.55, -1.32, g, 0.01);
+  [-1.2, -0.95, -0.7].forEach(function (rx) { pkRoundCyl(0.05, 0.1, MAT.trim, rx, 1.63, -1.32, g, 10); });
+  pkRoundCyl(0.17, 0.5, std({ color: 0x2b333a, roughness: 0.8 }), -1.1, 0.25, -0.85, g, 12);
+  box(0.42, 0.05, 0.42, std({ color: 0x2b333a, roughness: 0.8 }), -1.1, 0.55, -0.85, g);
+  box(0.54, 0.03, 0.54, MAT.trim, 0, 2.87, 0, g);
+  sphere(0.09, glowMat(0xffe9b0, 0.9), 0, 2.79, 0, g);
+  // the roof, the fascia and the name over the window
+  pkBevelBox(3.9, 0.16, 3.9, MAT.roof, 0, 3.02, 0, g, 0.04);
+  pkBevelBox(4.0, 0.24, 4.0, MAT.trim, 0, 3.14, 0, g, 0.02);
+  pkBevelBox(3.6, 0.3, 0.05, MAT.trim, 0, 2.82, 1.84, g, 0.02);
+  pkSign3D(['TICKETS'], 2.5, 0.58, 0, 2.82, 1.88, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
+  pkSign3D(['ADULTS ' + money(S.ticketPrice)], 1.5, 0.3, -0.78, 2.13, 1.64, 0, { bg: '#0d1216', fg: '#eef1f5' }, g);
+  // the window under the glass: a small counter display and the serve action
+  var win = hitBox(3.0, 1.4, 0.7, 0, 1.45, 1.55, {
+    prompt: function () { var q = PK.booths[i] ? PK.booths[i].queue.length : 0; return q ? 'Serve the guest at the window (' + q + ' waiting)' : 'The ticket window'; },
+    use: function () { pkServe(i); }
+  }, g);
+  win.userData.pkWindow = i;
+  pkBevelBox(0.14, 0.34, 0.14, MAT.steelDark, -1.22, 1.15, 1.7, g, 0.02);
+  var sc = touchScreen({
+    w: 300, h: 220, pw: 0.56, ph: 0.4, x: -1.22, y: 1.46, z: 1.76, parent: g, title: 'Ticket window',
+    draw: function (ctx, s) {
+      scBg(ctx, s.w, s.h); scHead(ctx, s.w, 'TICKETS', 'Day ' + S.day);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle = '#f5b53d'; ctx.font = 'bold 34px ' + SCREEN_THEME.font; ctx.fillText(money(S.ticketPrice), 16, 92);
+      ctx.fillStyle = '#8b98a4'; ctx.font = '12px ' + SCREEN_THEME.font; ctx.fillText('ADULTS', 18, 110);
+      ctx.fillStyle = '#eef1f5'; ctx.font = 'bold 20px ' + SCREEN_THEME.font;
+      ctx.fillText('Waiting  ' + (PK.booths[i] ? PK.booths[i].queue.length : 0), 16, 152);
+      ctx.fillStyle = '#a0acb8'; ctx.font = '13px ' + SCREEN_THEME.font;
+      ctx.fillText('Sold today  ' + PK.today.tickets, 16, 178);
+      ctx.fillText('Serve at the window', 16, 202);
+    }
+  });
+  // the queue sign on a post, at the head of the line
+  pkRoundCyl(0.05, 1.9, MAT.steelDark, side * 1.55, 0.95, 2.4, g, 8);
+  pkSign3D(['QUEUE HERE'], 1.3, 0.28, side * 1.55, 1.9, 2.4, 0, { bg: '#0d1216', fg: '#eef1f5' }, g);
+  PK.booths.push({ i: i, x: b.x, z: b.z, turnstile: b.turnstile, queue: [], screen: sc, g: g });
+  solid(b.x - 1.72, b.x + 1.72, b.z - 1.62, b.z - 1.38, 0, 3.0);
+  solid(b.x - 1.72, b.x - 1.48, b.z - 1.62, b.z + 1.62, 0, 3.0);
+  solid(b.x + 1.48, b.x + 1.72, b.z - 1.62, b.z + 1.62, 0, 3.0);
+  solid(b.x - 1.72, b.x + 1.72, b.z + 1.38, b.z + 1.78, 0, 1.0);
+  return g;
+}
+
+// ── Office: proper door, window trim, roof overhang, sign depth ────────
+function pkOfficeBetter(X, Z) {
+  var W = 6, D = 5.4, H = 3.0;
+  pkSlab(9, 9, X, Z, 0.022);
+  var g = new THREE.Group(); g.position.set(X, 0, Z); scene.add(g);
+  pkBevelBox(W, H, 0.22, pkMatPlasterRich(), 0, H / 2, -D / 2, g, 0.04);
+  pkBevelBox(0.22, H, D, pkMatPlasterRich(), -W / 2, H / 2, 0, g, 0.04);
+  pkBevelBox(W, H, 0.22, pkMatPlasterRich(), 0, H / 2, D / 2, g, 0.04);
+  pkBevelBox(0.22, H, 1.7, pkMatPlasterRich(), W / 2, H / 2, -D / 2 + 0.85, g, 0.04);
+  pkBevelBox(0.22, H, 1.7, pkMatPlasterRich(), W / 2, H / 2, D / 2 - 0.85, g, 0.04);
+  pkBevelBox(W + 0.8, 0.18, D + 0.8, MAT.roof, 0, H + 0.1, 0, g, 0.04);
+  pkBevelBox(W + 0.6, 0.12, D + 0.6, MAT.trim, 0, H + 0.18, 0, g, 0.02);
+  pkBevelBox(2.6, 1.4, 0.1, pkMatWoodRich(), 0, 1.8, D / 2 + 0.06, g, 0.02);
+  pkBevelBox(2.8, 1.6, 0.06, pkMatGlassRich(), 0, 1.8, D / 2 + 0.08, g, 0.01);
+  pkBevelBox(0.12, H, 0.1, pkMatWoodRich(), W / 2 - 0.06, H / 2, -0.85, g, 0.02);
+  pkBevelBox(0.12, H, 0.1, pkMatWoodRich(), W / 2 - 0.06, H / 2, 0.85, g, 0.02);
+  pkBevelBox(1.4, 0.12, 0.1, pkMatWoodRich(), W / 2 - 0.7, H - 0.06, 0, g, 0.02);
+  pkSign3D(['PARK OFFICE'], 3.2, 0.6, 0, H + 0.7, D / 2 + 0.14, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
+  pkBevelBox(2.4, 0.06, 1.0, pkMatWoodRich(), 0, 0.8, -1.4, g, 0.03);
+  [[-1.05, 0.45, -1.4], [1.05, 0.45, -1.4]].forEach(function (l) {
+    pkRoundCyl(0.04, 0.8, MAT.steelDark, l[0], l[1], l[2], g, 6);
+  });
+  pkBevelBox(2.3, 0.5, 0.04, std({ color: 0x2b333a, roughness: 0.7 }), 0, 0.53, -1.89, g, 0.01);
+
+  // ── the workstation: a real desk machine, not a prop ──
+  var caseM = std({ color: 0x232a30, roughness: 0.42, metalness: 0.5 });
+  var pc = new THREE.Group(); pc.position.set(-0.08, 0.83, -1.62); g.add(pc);
+  var mon = new THREE.Group(); mon.position.set(0, 0.22, 0); mon.rotation.x = -0.07; pc.add(mon);
+  pkBevelBox(1.04, 0.64, 0.05, caseM, 0, 0.13, 0, mon, 0.02);
+  pkBevelBox(0.96, 0.56, 0.02, MAT.black, 0, 0.13, 0.032, mon, 0.007);
+  pkRoundCyl(0.048, 0.20, MAT.steelDark, 0, 0.02, -0.035, pc, 10);
+  pkBevelBox(0.36, 0.02, 0.22, caseM, 0, -0.09, -0.02, pc, 0.008);
+  pkBevelBox(0.05, 0.03, 0.012, std({ color: 0xd8d2c4, roughness: 0.5 }), 0, 0.30, -0.028, mon, 0.004);
+  var scr = touchScreen({ w: 560, h: 320, pw: 0.92, ph: 0.54, x: 0, y: 0.13, z: 0.046, parent: mon, title: 'Park office',
+    draw: function (ctx, s) {
+      scBg(ctx, s.w, s.h); scHead(ctx, s.w, 'PARK CO  ·  OFFICE', 'Day ' + S.day + '   ' + fmtTime(S.time));
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      // the bank, in the size it deserves
+      ctx.fillStyle = '#eef1f5'; ctx.font = 'bold 36px ' + SCREEN_THEME.font;
+      ctx.fillText(money(S.bank), 18, 86);
+      ctx.fillStyle = '#8b98a4'; ctx.font = '12px ' + SCREEN_THEME.font;
+      ctx.fillText('BANK', 20, 102);
+      // the day's counters
+      var st = [['GUESTS', PK.guests.length], ['RIDES', pkOpenCount() + '/8'], ['TICKETS', PK.today.tickets], ['SNACKS', PK.today.snacks]];
+      for (var si = 0; si < st.length; si++) {
+        var sx = 186 + si * 96;
+        ctx.fillStyle = '#8b98a4'; ctx.font = '12px ' + SCREEN_THEME.font; ctx.fillText(st[si][0], sx, 72);
+        ctx.fillStyle = '#eef1f5'; ctx.font = 'bold 20px ' + SCREEN_THEME.font; ctx.fillText(String(st[si][1]), sx, 96);
+      }
+      ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(16, 112, s.w - 32, 1);
+      // the rides, two columns, with a live dot each
+      var atts = PK.attractions || [];
+      for (var r = 0; r < atts.length; r++) {
+        var ax = 22 + (r % 2) * 268, ay = 138 + Math.floor(r / 2) * 32, open = !!atts[r].open;
+        ctx.fillStyle = open ? '#5fd38d' : '#ff6b5e';
+        ctx.beginPath(); ctx.arc(ax + 4, ay - 4, 4.5, 0, 6.2832); ctx.fill();
+        ctx.fillStyle = '#c9d2d9'; ctx.font = '14px ' + SCREEN_THEME.font; ctx.fillText(atts[r].name, ax + 16, ay);
+        ctx.fillStyle = open ? '#5fd38d' : '#ff6b5e'; ctx.font = '12px ' + SCREEN_THEME.font;
+        ctx.textAlign = 'right'; ctx.fillText(open ? 'open' : 'shut', ax + 244, ay); ctx.textAlign = 'left';
+      }
+      scButton(s, 16, 268, 168, 38, 'Manage', true, function () { openPanel('admin'); });
+      scButton(s, 192, 268, 168, 38, 'Rides', true, function () { openPanel('admin', 'coaster'); });
+      scButton(s, 368, 268, 176, 38, 'Service', true, function () { pkService(); });
+    } });
+  // keyboard, keys and mouse on a mat
+  pkBevelBox(0.48, 0.018, 0.16, std({ color: 0x2a3036, roughness: 0.75 }), 0, 0.012, 0.34, pc, 0.006);
+  var keyM = std({ color: 0x3b434a, roughness: 0.62 });
+  for (var kr = 0; kr < 5; kr++) for (var kc = 0; kc < 13; kc++)
+    pkBevelBox(0.026, 0.008, 0.022, keyM, -0.198 + kc * 0.033, 0.024, 0.247 + kr * 0.028, pc, 0.003);
+  pkBevelBox(0.3, 0.006, 0.24, std({ color: 0x1d2328, roughness: 0.9 }), 0.38, 0.006, 0.34, pc, 0.01);
+  pkBevelBox(0.07, 0.035, 0.11, std({ color: 0x2f363c, roughness: 0.6 }), 0.38, 0.024, 0.34, pc, 0.03);
+  pkBevelBox(0.02, 0.006, 0.03, std({ color: 0xd8d2c4, roughness: 0.5 }), 0.38, 0.042, 0.30, pc, 0.003);
+  // the tower under the desk, with a lit button and a drive slot
+  pkBevelBox(0.24, 0.46, 0.48, caseM, 0.78, 0.23, -1.56, g, 0.02);
+  pkBevelBox(0.16, 0.012, 0.012, MAT.black, 0.78, 0.38, -1.315, g, 0.003);
+  box(0.03, 0.03, 0.014, glowMat(0x5fd38d, 1.6), 0.78, 0.12, -1.313, g);
+  for (var vt = 0; vt < 4; vt++) pkBevelBox(0.14, 0.012, 0.012, MAT.black, 0.78, 0.045 + vt * 0.028, -1.318, g, 0.002);
+  // desk clutter: a printer, a lamp, papers and a mug
+  pkBevelBox(0.42, 0.20, 0.34, std({ color: 0xd9d5cb, roughness: 0.7 }), -0.92, 0.10, -1.62, g, 0.02);
+  pkBevelBox(0.34, 0.02, 0.22, MAT.paper, -0.92, 0.205, -1.55, g, 0.004);
+  box(0.02, 0.02, 0.01, glowMat(0x5fd38d, 1.2), -0.72, 0.06, -1.44, g);
+  var lampBase = pkRoundCyl(0.10, 0.03, MAT.steelDark, 1.0, 0.845, -1.82, g, 14);
+  pkRod(1.0, 0.86, -1.82, 1.0, 1.30, -1.78, 0.018, MAT.steelDark, g, 6);
+  pkRod(1.0, 1.30, -1.78, 0.88, 1.30, -1.60, 0.018, MAT.steelDark, g, 6);
+  var lampShade = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.13, 14, 1, true), std({ color: 0x25402f, roughness: 0.55, side: THREE.DoubleSide }));
+  lampShade.position.set(0.86, 1.26, -1.58); g.add(lampShade);
+  box(0.01, 0.01, 0.01, glowMat(0xffe9b0, 1.4), 0.86, 1.21, -1.58, g);
+  var paperA = pkBevelBox(0.28, 0.008, 0.38, MAT.paper, 0.52, 0.845, -1.16, g, 0.004); paperA.rotation.y = 0.16;
+  pkBevelBox(0.28, 0.008, 0.38, MAT.paper, 0.56, 0.853, -1.20, g, 0.004);
+  pkRoundCyl(0.05, 0.11, std({ color: 0xf2efe6, roughness: 0.5 }), 0.82, 0.885, -1.16, g, 12);
+  // the chair, and a bin
+  var chairM = std({ color: 0x252f37, roughness: 0.85 });
+  pkBevelBox(0.5, 0.09, 0.5, chairM, 0.06, 0.47, -0.62, g, 0.03);
+  pkBevelBox(0.5, 0.5, 0.09, chairM, 0.06, 0.72, -0.86, g, 0.03);
+  pkRoundCyl(0.045, 0.42, MAT.steelDark, 0.06, 0.23, -0.62, g, 8);
+  for (var ca = 0; ca < 5; ca++) {
+    var ang = ca / 5 * Math.PI * 2;
+    var armC = pkBevelBox(0.05, 0.04, 0.32, MAT.steelDark, 0.06 + Math.sin(ang) * 0.15, 0.05, -0.62 + Math.cos(ang) * 0.15, g, 0.01);
+    armC.rotation.y = ang;
+  }
+  pkRoundCyl(0.14, 0.34, std({ color: 0x39424a, roughness: 0.8 }), -1.55, 0.17, -0.55, g, 12);
+  // a park map on the east wall by the door
+  pkBevelBox(0.04, 0.8, 1.1, pkMatWoodRich(), 2.86, 1.75, -1.75, g, 0.02);
+  pkBevelBox(0.01, 0.7, 1.0, std({ color: 0xe8e2d2, roughness: 0.9 }), 2.84, 1.75, -1.75, g, 0.004);
+  // a ceiling light and a filing cabinet to fill the room out
+  box(0.9, 0.05, 0.5, MAT.trim, 0, H - 0.03, 0.1, g);
+  box(0.8, 0.02, 0.4, MAT.lamp, 0, H - 0.06, 0.1, g);
+  pkBevelBox(0.5, 1.1, 0.6, std({ color: 0x555f68, roughness: 0.6, metalness: 0.3 }), -2.45, 0.55, -1.6, g, 0.02);
+  [0.32, 0.62, 0.92].forEach(function (dy) { pkBevelBox(0.44, 0.02, 0.02, MAT.chrome, -2.45, dy, -1.29, g, 0.004); });
+  hitBox(1.5, 1.3, 0.9, -0.08, 1.2, -1.5, {
+    prompt: function () { return 'Park management'; },
+    use: function () { openPanel('admin'); }
+  }, g);
+  // the park services switchboard goes on the west wall of the office
+  pkBuildParkCabinet(-22.85, 1.66, 43.55, Math.PI / 2);
+  PK.office = { g: g, x: X, z: Z, screen: scr };
+  solid(X - W / 2 - 0.15, X - W / 2 + 0.15, Z - D / 2, Z + D / 2, 0, H);
+  solid(X - W / 2, X + W / 2, Z - D / 2 - 0.15, Z - D / 2 + 0.15, 0, H);
+  solid(X - W / 2, X + W / 2, Z + D / 2 - 0.15, Z + D / 2 + 0.15, 0, H);
+  solid(X + W / 2 - 0.15, X + W / 2 + 0.15, Z - D / 2, Z - 0.85, 0, H);
+  solid(X + W / 2 - 0.15, X + W / 2 + 0.15, Z + 0.85, Z + D / 2, 0, H);
+}
+
+// ── Gate pier: stone column with cap and base ──────────────────────────
+function pkGatePier(x, z) {
+  var g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+  pkBevelBox(5.2, 0.5, 5.2, pkMatStone(), 0, 0.25, 0, g, 0.06);
+  pkBevelBox(4.6, 4.9, 4.6, pkMatStone(), 0, 2.7, 0, g, 0.08);
+  pkBevelBox(5.0, 0.4, 5.0, pkMatStone(), 0, 5.15, 0, g, 0.04);
+  return g;
+}
+
+// ── Ride gateway: proper arch with pillars and decorative top ──────────
+function pkGatewayBetter(x, z, label, th, side, parent) {
+  var g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = side > 0 ? Math.PI / 2 : -Math.PI / 2; parent.add(g);
+  [[-1.95, 1.75, 0], [1.95, 1.75, 0]].forEach(function (p) {
+    pkRoundCyl(0.28, 3.5, pkMatStone(), p[0], p[1], p[2], g, 10);
+    pkBevelBox(0.38, 0.18, 0.38, pkMatStone(), p[0], 3.45, p[2], g, 0.04);
+  });
+  pkBevelBox(4.4, 0.6, 0.3, std({ color: th.a, roughness: 0.85 }), 0, 3.65, 0, g, 0.04);
+  pkSign3D([label], 3.8, 0.62, 0, 3.65, 0.18, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
+  [[-1.95, 3.6], [1.95, 3.6]].forEach(function (p) {
+    pkRoundCyl(0.12, 0.2, MAT.steelDark, p[0], p[1], 0, g, 8);
+  });
+  for (var i = 0; i < 9; i++) {
+    var sx = -1.6 + i * 0.4;
+    pkBevelBox(0.1, 0.4, 0.06, std({ color: i % 2 ? th.a : th.b, roughness: 0.9 }), sx, 3.16, 0.04, g, 0.02);
+  }
+  return g;
+}
+
+// ── Coaster car: proper body, seats, lap bars, wheels ──────────────────
+function pkCoasterCarBetter(idx, x, y, z, ry, col) {
+  var g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry;
+  g.userData.dynamic = true; scene.add(g);
+  // the chassis and the plank floor, both bevelled
+  pkBevelBox(1.4, 0.24, 2.5, MAT.steelDark, 0, 0.12, 0, g, 0.04);
+  pkBevelBox(1.3, 0.06, 2.4, pkMatWoodRich(), 0, 0.27, 0, g, 0.02);
+  // the coloured tub: four bevelled panels around an open cockpit
+  var body = std({ color: col, roughness: 0.4, metalness: 0.1 });
+  pkBevelBox(0.1, 0.55, 2.5, body, -0.6, 0.55, 0, g, 0.04);   // the sides
+  pkBevelBox(0.1, 0.55, 2.5, body, 0.6, 0.55, 0, g, 0.04);
+  pkBevelBox(1.2, 0.55, 0.1, body, 0, 0.55, 1.2, g, 0.04);    // the ends
+  pkBevelBox(1.2, 0.55, 0.1, body, 0, 0.55, -1.2, g, 0.04);
+  // a chrome trim rail along the top of each side
+  var trim1 = pkRoundCyl(0.03, 2.4, MAT.chrome, -0.6, 0.84, 0, g, 8); trim1.rotation.x = Math.PI / 2;
+  var trim2 = pkRoundCyl(0.03, 2.4, MAT.chrome, 0.6, 0.84, 0, g, 8); trim2.rotation.x = Math.PI / 2;
+  // the wheels, lying on their sides
+  [[-0.5, 0.9], [0.5, 0.9], [-0.5, -0.9], [0.5, -0.9]].forEach(function (w) {
+    var wh = pkRoundCyl(0.16, 0.1, MAT.black, w[0], 0.16, w[1], g, 12); wh.rotation.z = Math.PI / 2;
+  });
+  // the bumpers front and rear
+  pkRoundCyl(0.08, 0.2, MAT.steelDark, 0, 0.35, 1.3, g, 6);
+  pkRoundCyl(0.08, 0.2, MAT.steelDark, 0, 0.35, -1.3, g, 6);
+  // the seats and the restraint bars, one bar per row
+  var bars = [];
+  [0.62, -0.62].forEach(function (sz) {
+    var row = [];
+    [-0.35, 0.35].forEach(function (sx) {
+      var seat = new THREE.Group(); seat.position.set(sx, 0, sz); g.add(seat);
+      pkBevelBox(0.5, 0.08, 0.5, MAT.plastic, 0, 0.62, 0, seat, 0.03);
+      pkBevelBox(0.5, 0.5, 0.08, MAT.plastic, 0, 0.86, -0.24, seat, 0.03);
+      row.push(seat);
+    });
+    var barG = new THREE.Group(); barG.position.set(0, 0.78, sz); g.add(barG);
+    pkBevelBox(0.9, 0.07, 0.07, MAT.chrome, 0, 0, 0.3, barG, 0.02);
+    pkBevelBox(0.07, 0.07, 0.34, MAT.chrome, -0.42, 0, 0.15, barG, 0.02);
+    pkBevelBox(0.07, 0.07, 0.34, MAT.chrome, 0.42, 0, 0.15, barG, 0.02);
+    row.forEach(function (s) { s.userData.bar = barG; });
+    barG.userData.lapBar = true;
+    bars.push(barG);
+  });
+  g.userData.bars = bars;
+  g.userData.seats = g.children.filter(function (c) { return c.userData && c.userData.bar; });
+  g.userData.carIndex = idx;
+  return g;
+}
+
+// ── Ride booth: proper control booth with door, window, sign ───────────
+function pkRideBoothBetter(a, plot, th) {
+  // ── where it stands ──
+  // Beside the head of the queue, 5.6 m off the lane: clear of the pair of lamp
+  // standards that flank every queue mouth (they stand 3.8 m out). Of the two
+  // sides the one further from the ride is chosen, so the booth never stands on
+  // the ride's pad or in the middle of the lane. The window (local +Z) looks at
+  // the ride; the door is cut in the side wall that faces the queue.
+  var q = plot.q || [plot.x, plot.z];
+  var OFF = 6.6;
+  // a step toward the ride, along the lane, so the booth clears the end of the
+  // hedge rows that dress the queue
+  var dx = plot.x - q[0], dz = plot.z - q[1], L = Math.sqrt(dx * dx + dz * dz) || 1;
+  var ax = q[0] + (dx / L) * 4.4;
+  var c1x = ax, c1z = q[1] + OFF, c2x = ax, c2z = q[1] - OFF;
+  var bx = c1x, bz = c1z;
+  if (dist2(c2x, c2z, plot.x, plot.z) > dist2(c1x, c1z, plot.x, plot.z)) { bx = c2x; bz = c2z; }
+  var ry = Math.atan2(plot.x - bx, plot.z - bz);
+  var toQ = Math.atan2(q[0] - bx, q[1] - bz);
+  var doorSide = Math.cos(toQ - (ry + Math.PI / 2)) >= 0 ? 1 : -1;
+
+  var BW = 3.4, BD = 2.5, WALL_H = 2.45, HALF = BW / 2, THICK = 0.14, FLOOR = 0.32;
+  var WINW = 2.96, SILL = 0.95, HEAD = 1.95, DOORW = 0.95, DOORH = 2.02;
+  var g = new THREE.Group();
+  g.position.set(bx, 0, bz); g.rotation.y = ry;
+  var anchor = new THREE.Object3D();
+  anchor.position.set(bx, 0, bz); anchor.rotation.y = ry;
+  anchor.userData.editor = true;
+  anchor.userData.doorSide = doorSide;
+  anchor.userData.half = BW / 2;
+  scene.add(anchor);
+  a.booth = anchor;
+  var plaster = pkMatPlasterRich(), timber = pkMatWoodRich(), trim = MAT.trim, iron = MAT.steelDark;
+  var steel = std({ color: 0x39434a, roughness: 0.45, metalness: 0.45 });
+  var dark = std({ color: 0x20272c, roughness: 0.62, metalness: 0.30 });
+  var wallY = FLOOR + WALL_H / 2;
+  var frontZ = BD / 2 - THICK / 2, backZ = -BD / 2 + THICK / 2;
+
+  // ── the shell: a control cabin, not a cottage ──
+  // stone plinth strips, boarded floor, a steel-framed band of glazing
+  // across the ride side, ribbed side panels, striped tented canopy.
+  // theme walls: cream bays with the ride colour picked up in trim/roof.
+  var wallMat = std({ color: 0xece2cc, roughness: 0.9 });
+  var themeTrim = std({ color: th.a, roughness: 0.6, metalness: 0.1 });
+  pkBoothPlinth(BW, BD, pkMats().stoneDark, g);
+  pkBevelBox(BW, 0.09, BD, timber, 0, FLOOR - 0.045, 0, g, 0.012);
+  pkBevelBox(BW, WALL_H, THICK, plaster, 0, wallY, backZ, g, 0.02);
+
+  // the ride-facing elevation: solid sill panel, 1 m of glass, solid header
+  // cream bays with theme-red sill band, window/door openings unchanged
+  pkBevelBox(BW, SILL, THICK, wallMat, 0, FLOOR + SILL / 2, frontZ, g, 0.015);
+  pkBevelBox(BW, 0.22, THICK + 0.03, themeTrim, 0, FLOOR + 0.30, frontZ + 0.01, g, 0.01);
+  pkBevelBox(BW, WALL_H - HEAD, THICK, wallMat, 0, FLOOR + HEAD + (WALL_H - HEAD) / 2, frontZ, g, 0.02);
+  pkBevelBox(WINW, HEAD - SILL, 0.045, pkMatGlassRich(), 0, FLOOR + (SILL + HEAD) / 2, frontZ + 0.035, g, 0.01);
+  // the glazing frame: rails, two mullions and the outer posts
+  pkBevelBox(BW, 0.10, 0.12, steel, 0, FLOOR + SILL, frontZ + 0.02, g, 0.012);
+  pkBevelBox(BW, 0.10, 0.12, steel, 0, FLOOR + HEAD, frontZ + 0.02, g, 0.012);
+  [-0.50, 0.50].forEach(function (mx) { pkBevelBox(0.06, HEAD - SILL, 0.10, steel, mx, FLOOR + (SILL + HEAD) / 2, frontZ + 0.03, g, 0.01); });
+  [-1, 1].forEach(function (sx) { pkBevelBox(0.12, WALL_H, 0.18, steel, sx * (HALF - 0.06), wallY, BD / 2 - 0.09, g, 0.012); });
+
+  // the sill panel: louvres and a hazard band along the kick plate
+  for (var lv = 0; lv < 5; lv++) pkBevelBox(1.5, 0.035, 0.03, iron, 0.62, FLOOR + 0.26 + lv * 0.075, frontZ + 0.075, g, 0.006);
+  for (var hz = 0; hz < 20; hz++) {
+    var hzc = -HALF + 0.10 + hz * 0.162;
+    pkBevelBox(0.075, 0.13, 0.03, std({ color: 0x111417, roughness: 0.7 }), hzc, FLOOR + 0.075, frontZ + 0.08, g, 0.004);
+    pkBevelBox(0.075, 0.13, 0.03, std({ color: 0xc9a227, roughness: 0.7 }), hzc + 0.081, FLOOR + 0.075, frontZ + 0.08, g, 0.004);
+  }
+
+  // side walls: one ribbed panel, one with the service door
+  var openSide = doorSide;
+  [-1, 1].forEach(function (sx) {
+    var wx = sx * (HALF - THICK / 2);
+    if (sx !== openSide) {
+      pkBevelBox(THICK, WALL_H, BD, wallMat, wx, wallY, 0, g, 0.02);
+      for (var rb = 0; rb < 4; rb++) pkBevelBox(0.05, WALL_H - 0.2, 0.05, steel, wx + sx * 0.06, wallY, -0.75 + rb * 0.5, g, 0.008);
+      // a safety poster on the inside face, so the cabin reads as worked in
+      pkSign3D(['SAFETY', 'FIRST'], 0.46, 0.34, wx - sx * 0.09, FLOOR + 1.32, 0.55, sx > 0 ? -Math.PI / 2 : Math.PI / 2, { bg: '#e9e4d8', fg: '#8a2b22' }, g);
+      return;
+    }
+    var seg = (BD - DOORW) / 2;
+    pkBevelBox(THICK, WALL_H, seg, wallMat, wx, wallY, -(DOORW / 2 + seg / 2), g, 0.02);
+    pkBevelBox(THICK, WALL_H, seg, wallMat, wx, wallY, DOORW / 2 + seg / 2, g, 0.02);
+    pkBevelBox(THICK, WALL_H - DOORH, DOORW, wallMat, wx, FLOOR + DOORH + (WALL_H - DOORH) / 2, 0, g, 0.02);
+    // steel jambs and a cream service door with timber trim + wired window
+    [-1, 1].forEach(function (dz2) { pkBevelBox(THICK + 0.07, DOORH + 0.07, 0.10, themeTrim, wx, FLOOR + DOORH / 2, dz2 * (DOORW / 2 + 0.02), g, 0.012); });
+    pkBevelBox(THICK + 0.07, 0.10, DOORW + 0.12, themeTrim, wx, FLOOR + DOORH + 0.04, 0, g, 0.012);
+    var leaf = new THREE.Group(); leaf.position.set(wx + sx * 0.02, FLOOR, -DOORW / 2); leaf.rotation.y = sx * 1.62; g.add(leaf);
+    pkBevelBox(0.06, DOORH - 0.04, DOORW - 0.06, wallMat, 0, DOORH / 2, DOORW / 2, leaf, 0.012);
+    pkBevelBox(0.05, 0.52, 0.34, pkMatGlassRich(), 0, 1.45, DOORW / 2 + 0.01, leaf, 0.01);
+    pkBevelBox(0.07, 0.10, 0.26, MAT.chrome, sx * 0.03, 0.98, DOORW - 0.16, leaf, 0.012);
+    pkBevelBox(0.07, 0.16, 0.40, dark, 0, 0.12, DOORW / 2, leaf, 0.008);
+    // the ride name over the doorway, for the queue side
+    pkSign3D([th.name.toUpperCase()], 1.15, 0.20, sx * (HALF + 0.04), FLOOR + DOORH + 0.19, 0, sx * Math.PI / 2, { bg: '#1b232c', fg: '#f5b53d' }, g);
+  });
+
+  // the back wall faces the path, so it carries the same order as the sides: ribs, a downpipe,
+  // a vent and a framed notice, instead of reading as a blank cream panel from the midway
+  for (var rb2 = 0; rb2 < 5; rb2++) pkBevelBox(0.05, WALL_H - 0.2, 0.05, steel, -1.3 + rb2 * 0.65, wallY, backZ - 0.08, g, 0.008);
+  pkRoundCyl(0.045, WALL_H, iron, HALF - 0.16, FLOOR + WALL_H / 2, backZ - 0.09, g, 8);
+  pkBevelBox(0.56, 0.42, 0.12, dark, -0.95, FLOOR + 1.72, backZ - 0.10, g, 0.02);
+  for (var ac2 = 0; ac2 < 4; ac2++) pkBevelBox(0.06, 0.34, 0.015, steel, -1.15 + ac2 * 0.13, FLOOR + 1.72, backZ - 0.17, g, 0.006);
+  pkBevelBox(0.64, 0.48, 0.035, timber, 0.66, FLOOR + 1.5, backZ - 0.09, g, 0.012);
+  pkSign3D(['STAFF ONLY'], 0.54, 0.34, 0.66, FLOOR + 1.5, backZ - 0.115, Math.PI, { bg: '#e8e3d6', fg: '#1b232c' }, g);
+  var backLamp = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), glowMat(0xffe3b0, 0.9));
+  backLamp.position.set(-HALF + 0.34, FLOOR + 2.15, backZ - 0.16); g.add(backLamp);
+
+  // striped tented canopy with scalloped valance, fascia + finial.
+  // wallTop clears the fascia sign + door head; eave lamps + beacon
+  // sit under the eave so the roofline stays clean.
+  var wallTop = FLOOR + WALL_H;
+  var roofInfo = pkBoothTentRoof(g, { w: BW, d: BD, wallTop: wallTop, roofA: pkCss(th.a), roofB: '#f3ead6', trimMat: themeTrim, roofH: 0.95 });
+  var lampMats = [0, 1].map(function () { return glowMat(0x5fd38d, 1.2); });
+  var lamp1 = sphere(0.06, lampMats[0], -1.52, roofInfo.eaveY + 0.02, BD / 2 + 0.12, g);
+  var lamp2 = sphere(0.06, lampMats[1], 1.52, roofInfo.eaveY + 0.02, BD / 2 + 0.12, g);
+  var C = pkCtl(a); C.lamps = [lamp1, lamp2];
+  // roof beacon on a short mast at the back corner, clear of the valance
+  pkRoundCyl(0.04, 0.22, iron, HALF - 0.30, roofInfo.roofY - 0.55, -BD / 2 + 0.30, g, 8);
+  sphere(0.09, glowMat(0xff5a4a, 1.1), HALF - 0.30, roofInfo.roofY - 0.40, -BD / 2 + 0.30, g);
+  // wall lanterns flanking the window + front planter boxes
+  pkBoothLantern(g, -HALF - 0.05, FLOOR + 1.90, BD / 2 - 0.10);
+  pkBoothLantern(g, HALF + 0.05, FLOOR + 1.90, BD / 2 - 0.10);
+  pkPlanter(1.6, g, -0.90, FLOOR, BD / 2 + 0.75);
+  pkPlanter(1.6, g, 0.90, FLOOR, BD / 2 + 0.75);
+  // fascia sign sits on the header band, below the eave (clears door head)
+  pkSign3D(['PARK CO · RIDE CONTROL', th.name.toUpperCase()], 2.30, 0.36, 0, FLOOR + HEAD + 0.22, BD / 2 + 0.09, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
+
+  // ── inside: wainscot, a ceiling light, a board and the desk ──
+  pkBevelBox(BW - 0.2, 0.86, 0.05, timber, 0, FLOOR + 0.43, backZ + 0.08, g, 0.015);
+  pkBevelBox(BW - 0.1, 0.05, 0.07, trim, 0, FLOOR + 0.88, backZ + 0.09, g, 0.01);
+  box(0.5, 0.04, 0.34, MAT.trim, 0, FLOOR + WALL_H - 0.02, 0, g);
+  sphere(0.1, glowMat(0xffe9b0, 0.9), 0, FLOOR + WALL_H - 0.08, 0, g);
+
+  // the desk: a steel cabinet the width of the booth, against the window
+  var con = new THREE.Group();
+  con.position.set(0, FLOOR, 0.80); con.rotation.y = Math.PI; g.add(con);
+  var caseM = std({ color: 0x2b333a, roughness: 0.5, metalness: 0.35 });
+  pkBevelBox(1.98, 0.70, 0.56, caseM, 0, 0.35, 0, con, 0.02);
+  pkBevelBox(2.02, 0.05, 0.60, std({ color: 0x39434a, roughness: 0.45, metalness: 0.45 }), 0, 0.72, 0, con, 0.012);
+  pkBevelBox(1.9, 0.10, 0.02, std({ color: 0x171d22, roughness: 0.9 }), 0, 0.05, 0.285, con, 0.006);
+  [-0.52, 0.52].forEach(function (dx2) {
+    pkBevelBox(0.82, 0.44, 0.02, std({ color: 0x333c44, roughness: 0.55 }), dx2, 0.40, 0.285, con, 0.008);
+    pkBevelBox(0.20, 0.035, 0.03, MAT.chrome, dx2, 0.52, 0.30, con, 0.006);
+  });
+  pkBoothPanel(a, con);
+
+  // a swivel chair, tucked in behind the desk
+  var chairM = std({ color: 0x222a31, roughness: 0.85 });
+  pkBevelBox(0.46, 0.08, 0.46, chairM, 0.12, FLOOR + 0.42, -0.02, g, 0.03);
+  pkBevelBox(0.46, 0.46, 0.08, chairM, 0.12, FLOOR + 0.66, -0.25, g, 0.03);
+  pkRoundCyl(0.04, 0.38, iron, 0.12, FLOOR + 0.20, -0.02, g, 8);
+  for (var ca = 0; ca < 5; ca++) {
+    var ang = ca / 5 * Math.PI * 2;
+    var armC = pkBevelBox(0.04, 0.035, 0.28, iron, 0.12 + Math.sin(ang) * 0.13, FLOOR + 0.04, -0.02 + Math.cos(ang) * 0.13, g, 0.008);
+    armC.rotation.y = ang;
+  }
+
+  // ── the status board on the back wall ──
+  var screen = touchScreen({
+    w: 420, h: 380, pw: 1.10, ph: 0.96, x: 0, y: FLOOR + 1.52, z: backZ + 0.06, ry: 0, parent: g, title: a.name,
+    draw: function (ctx, s) {
+      scBg(ctx, s.w, s.h);
+      var status = pkBoothStatus(a, C);
+      var statusCol = C.fault ? '#ff6b5e' : (a.state === 'running' ? '#ff6b5e' : (a.state === 'idle' && !a.queue.length ? '#a0acb8' : '#5fd38d'));
+      scHead(ctx, s.w, a.name.toUpperCase(), status);
+      scText(ctx, 16, 66, 'ON RIDE', '#a0acb8');
+      scText(ctx, 16, 92, a.riders + ' / ' + a.seats.length, a.riders ? '#5fd38d' : '#eef1f5');
+      scText(ctx, 220, 66, 'QUEUE', '#a0acb8');
+      scText(ctx, 220, 92, String(a.queue.length), a.queue.length ? '#f0c04a' : '#eef1f5');
+      scText(ctx, 16, 124, 'GATES  ' + (C.gates ? 'OPEN' : 'CLOSED'), C.gates ? '#5fd38d' : '#a0acb8');
+      scText(ctx, 220, 124, 'RESTRAINTS  ' + (C.barsWant > 0.5 ? 'DOWN' : 'UP'), C.barsWant > 0.5 ? '#f0c04a' : '#a0acb8');
+      scText(ctx, 16, 150, C.fault ? 'FAULT: ' + C.fault : (C.auto ? 'CONTROL: AUTO' : 'CONTROL: MANUAL'), C.fault ? '#ff6b5e' : '#f5b53d');
+      var pills = [['GATES', C.gates ? 'OPEN' : 'SHUT', C.gates], ['RESTRAINTS', C.barsWant > 0.5 ? 'DOWN' : 'UP', C.barsWant > 0.5], ['CONTROL', C.auto ? 'AUTO' : 'MANUAL', C.auto]];
+      for (var pl = 0; pl < pills.length; pl++) {
+        var px2 = 16 + pl * 132, py2 = 160;
+        ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fillRect(px2, py2, 120, 56);
+        ctx.strokeStyle = pills[pl][2] ? 'rgba(95,211,141,0.55)' : 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1.5; ctx.strokeRect(px2, py2, 120, 56);
+        ctx.fillStyle = '#8b98a4'; ctx.font = '12px ' + SCREEN_THEME.font; ctx.fillText(pills[pl][0], px2 + 10, py2 + 20);
+        ctx.fillStyle = pills[pl][2] ? '#5fd38d' : '#d7dee4'; ctx.font = 'bold 17px ' + SCREEN_THEME.font; ctx.fillText(pills[pl][1], px2 + 10, py2 + 44);
+      }
+      scText(ctx, 16, 244, 'Work the desk: gates, restraints, dispatch, test, auto and the stop.', '#8b98a4', 13);
+      scText(ctx, 16, 266, C.fault ? 'STOP LATCHED - TURN THE MUSHROOM TO RESET' : 'SIGNAL  ' + status, C.fault ? '#ff6b5e' : statusCol, 14);
+      scText(ctx, 16, 330, 'TODAY', '#a0acb8');
+      scText(ctx, 116, 330, 'Cycles ' + (a.cycles || 0), '#eef1f5');
+      scText(ctx, 270, 330, 'Tests ' + (a.tests || 0), '#eef1f5');
+      scText(ctx, 16, 356, 'SIGNAL', '#a0acb8');
+      scText(ctx, 116, 356, status, statusCol);
+    }
+  });
+  a.boothScreen = screen;
+  pkCtlLamps(a);
+
+  // ── collision: the walls, in world space, and the open doorway left clear ──
+  // Every wall is cut into short pieces so a booth standing off the axes gets a
+  // collider that follows the wall instead of one big box across the room.
+  function wp(lx, lz) { var c = Math.cos(ry), s = Math.sin(ry); return [bx + lx * c + lz * s, bz - lx * s + lz * c]; }
+  function wallSolid(lx0, lz0, lx1, lz1) {
+    var N = 8;
+    for (var i = 0; i < N; i++) {
+      var t0 = i / N, t1 = (i + 1) / N;
+      var p0 = wp(lx0 + (lx1 - lx0) * t0, lz0 + (lz1 - lz0) * t0);
+      var p1 = wp(lx0 + (lx1 - lx0) * t1, lz0 + (lz1 - lz0) * t1);
+      solid(Math.min(p0[0], p1[0]) - 0.07, Math.max(p0[0], p1[0]) + 0.07,
+            Math.min(p0[1], p1[1]) - 0.07, Math.max(p0[1], p1[1]) + 0.07, 0, FLOOR + WALL_H + 0.3);
+    }
+  }
+  wallSolid(-HALF, backZ, HALF, backZ);
+  wallSolid(-HALF, frontZ, HALF, frontZ);
+  var owx = openSide * (HALF - THICK / 2);
+  var dgap = DOORW / 2 + 0.10;
+  wallSolid(owx, -BD / 2, owx, -dgap);
+  wallSolid(owx, dgap, owx, BD / 2);
+  wallSolid(-owx, -BD / 2, -owx, BD / 2);
+  // the desk is solid; the floor and the doorway stay walkable
+  function boxSolid(lx, lz, hw, hd, y1) {
+    var pts = [wp(lx - hw, lz - hd), wp(lx + hw, lz - hd), wp(lx - hw, lz + hd), wp(lx + hw, lz + hd)];
+    var x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (var k = 0; k < 4; k++) { x0 = Math.min(x0, pts[k][0]); x1 = Math.max(x1, pts[k][0]); z0 = Math.min(z0, pts[k][1]); z1 = Math.max(z1, pts[k][1]); }
+    solid(x0, x1, z0, z1, 0, y1 || (FLOOR + WALL_H + 0.3));
+  }
+  for (var ci = 0; ci < 8; ci++) boxSolid(-0.99 + (ci + 0.5) * 0.2475, 0.80, 0.124, 0.28, 1.30);
+
+  // ── hand the parts to the world, so each can be moved in the editor ──
+  g.updateMatrixWorld(true);
+  var parts = g.children.slice();
+  for (var pi = 0; pi < parts.length; pi++) {
+    var part = parts[pi];
+    g.remove(part);
+    part.applyMatrix4(g.matrixWorld);
+    part.updateMatrixWorld(true);
+    scene.add(part);
+  }
+  PK_BOOTH[a.id] = anchor;
+  return anchor;
+}
+
+// ── Turnstile: proper rotating arms with stainless cabinet ─────────────
+function pkTurnstileBetter(x, z) {
+  var g = new THREE.Group(); g.userData.dynamic = true; g.position.set(x, 0, z); scene.add(g);
+  var steel = std({ color: 0xc2c7cd, roughness: 0.32, metalness: 0.78 });
+  pkBevelBox(0.44, 0.92, 0.5, steel, 0, 0.46, 0, g, 0.03);         // the cabinet
+  pkBevelBox(0.48, 0.05, 0.54, MAT.steelDark, 0, 0.945, 0, g, 0.02);
+  pkRoundCyl(0.055, 0.06, MAT.steelDark, 0, 0.98, 0, g, 12);
+  // three proper tripod arms off a low hub: a short bar with a ball on the end
+  var arm = new THREE.Group(); arm.position.set(0, 0.88, 0); g.add(arm);
+  for (var i = 0; i < 3; i++) {
+    var a = new THREE.Group(); a.rotation.x = i * 2.0944; arm.add(a);
+    var bar = new THREE.Mesh(roundCylGeo(0.018, 0.014, 0.42, 8), MAT.chrome);
+    bar.rotation.x = Math.PI / 2; bar.position.z = 0.21; bar.castShadow = true; a.add(bar);
+    var knob = new THREE.Mesh(new THREE.SphereGeometry(0.026, 10, 8), MAT.chrome);
+    knob.position.z = 0.43; a.add(knob);
+  }
+  // the reader on the cabinet, and a green pass light
+  pkBevelBox(0.3, 0.16, 0.05, MAT.black, 0, 0.8, 0.26, g, 0.02);
+  var led = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.02), glowMat(0x5fd38d, 1.1));
+  led.position.set(0, 0.855, 0.29); g.add(led);
+  PK.turnstiles.push({ x: x, z: z, arm: arm, led: led, spin: 0, pass: 0 });
+}
+
+// ── Fence: proper posts with rails ─────────────────────────────────────
+function pkFenceRunBetter(x0, z0, x1, z1, opt) {
+  var o = opt || {};
+  var dx = x1 - x0, dz = z1 - z0, len = Math.sqrt(dx * dx + dz * dz);
+  var postSpacing = 2.2;
+  var n = Math.ceil(len / postSpacing);
+  for (var i = 0; i <= n; i++) {
+    var t = i / n, x = x0 + dx * t, z = z0 + dz * t;
+    pkRoundCyl(0.09, 1.4, MAT.steelDark, x, 0.7, z, null, 8);
+    pkRoundCyl(0.13, 0.1, MAT.steelDark, x, 1.42, z, null, 8);
+  }
+  [0.5, 1.0].forEach(function (ry) {
+    var railGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x0, ry, z0), new THREE.Vector3(x1, ry, z1)]);
+    var rail = new THREE.Mesh(railGeo, new THREE.MeshBasicMaterial({ color: 0x4a5058 }));
+    rail.castShadow = true; scene.add(rail);
+  });
+  if (!o.wires) return;
+  for (var i = 0; i < n; i++) {
+    var t0 = i / n, t1 = (i + 1) / n;
+    var xa = x0 + dx * t0, za = z0 + dz * t0, xb = x0 + dx * t1, zb = z0 + dz * t1;
+    [0.8, 1.2].forEach(function (wy) {
+      var wGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(xa, wy, za), new THREE.Vector3(xb, wy, zb)]);
+      var w = new THREE.Mesh(wGeo, new THREE.MeshBasicMaterial({ color: 0x8a8f96 }));
+      scene.add(w);
+    });
+  }
+}
+  // ── What this part is for ────────────────────────────────────────
+  // The park had a good gate and a good midway, then rides dropped on bare grass with nothing joining them. This part gives it a
+  // spine and a skin: paved routes with lamps, benches and flower beds out to the haunted manor, the drop tower and the log flume;
+  // a fountain where the midway crosses its two ride spurs; a lake in the middle of the coaster's loop; tree avenues; signposts.
+  // It only adds. Where it needs to keep other things off its ground it answers pkThemeKeepClear (part 01's tree scatter asks).
+  var PK_HUB = { x: 0, z: 10.5 };
+  var PK_LAKE = { x: 1, z: -29, a: 13, b: 10.5 };
+  // the routes, as [x0, z0, x1, z1, width]. Two long streets carry the teacup and dodgem spurs out to the park's flanks; a spine runs
+  // north from each, with a side street to each far ride's queue, and the North Promenade joins the two spines - so the park is a loop.
+  var PK_ROUTES = [
+    [-22, 3, -46, 3, 4], [-31, 3, -31, -60, 3.6], [-31, -24, -45.5, -24, 3.8], [-31, -52, -45.5, -52, 3.8],       // west: teacups, haunted manor, drop tower
+    [22, 3, 46, 3, 4], [35, 3, 35, -60, 3.6], [35, -24, 47.5, -24, 3.8],                                         // east: dodgems, log flume
+    [-31, -60, 35, -60, 5],                                                                                       // the North Promenade
+    [2, -60, 2, -66, 3.6], [9.5, -60, 9.5, -79, 3.4], [14, -60, 14, -66.6, 3]                                         // to the bandstand, the maze and the windmill
+  ];
+  var PK_KEEP = [];   // [x, z, r] circles other parts ask the planting to leave alone (part 13 adds its own)
+  var PK_THEME_T = 0, PK_FOUNTAIN = { jet: null };
+
+  function pkSegDist(px, pz, ax, az, bx, bz) {
+    var dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz, t = l2 ? clamp(((px - ax) * dx + (pz - az) * dz) / l2, 0, 1) : 0;
+    var cx = ax + dx * t, cz = az + dz * t;
+    return Math.sqrt((px - cx) * (px - cx) + (pz - cz) * (pz - cz));
+  }
+  // true where something else (a tree) must not stand: the lake and its shore, the routes, the hub, the coaster's footprint
+  function pkThemeKeepClear(x, z) {
+    var L = PK_LAKE, ex = (x - L.x) / (L.a + 5), ez = (z - L.z) / (L.b + 5);
+    if (ex * ex + ez * ez < 1) return true;
+    for (var i = 0; i < PK_ROUTES.length; i++) {
+      var r = PK_ROUTES[i], hw = r[4] / 2 + 2.5;
+      if (x > Math.min(r[0], r[2]) - hw && x < Math.max(r[0], r[2]) + hw && z > Math.min(r[1], r[3]) - hw && z < Math.max(r[1], r[3]) + hw) return true;
+    }
+    for (var q = 0; q < PK_KEEP.length; q++) if (dist2(x, z, PK_KEEP[q][0], PK_KEEP[q][1]) < PK_KEEP[q][2] * PK_KEEP[q][2]) return true;
+    var P = PK_TRACK_PTS;
+    for (var k = 0; k < P.length; k++) { var A = P[k], B = P[(k + 1) % P.length]; if (pkSegDist(x, z, A[0], A[2], B[0], B[2]) < 4.5) return true; }
+    return false;
+  }
+  function pkNearRoute(x, z, skip, d) {
+    for (var i = 0; i < PK_ROUTES.length; i++) {
+      if (i === skip) continue;
+      var r = PK_ROUTES[i]; if (pkSegDist(x, z, r[0], r[1], r[2], r[3]) < r[4] / 2 + d) return true;
+    }
+    return false;
+  }
+  // inside a ride's pad, or close to its booth
+  function pkNearRide(x, z, d) {
+    for (var i = 0; i < PK_PLOTS.length; i++) { var p = PK_PLOTS[i]; if (dist2(x, z, p.x, p.z) < (p.r * 1.25 + d) * (p.r * 1.25 + d)) return true; }
+    for (var q = 0; q < PK_KEEP.length; q++) if (dist2(x, z, PK_KEEP[q][0], PK_KEEP[q][1]) < (PK_KEEP[q][2] + d * 0.5) * (PK_KEEP[q][2] + d * 0.5)) return true;
+    for (var j = 0; j < PK.attractions.length; j++) { var b = PK.attractions[j].booth; if (b && dist2(x, z, b.position.x, b.position.z) < (d + 2.9) * (d + 2.9)) return true; }
+    return false;
+  }
+
+  function pkThemeBuild() {
+    pkBuildRoutes();
+    pkBuildHub();
+    pkBuildLake();
+    pkBuildRouteFurniture();
+    pkBuildSignposts();
+    if (typeof pkGardensBuild === 'function') pkGardensBuild();   // part 13: the plazas, the stalls and the North Promenade's attractions
+  }
+
+  // ── The routes ───────────────────────────────────────────────────
+  // warm pavers on a stone edge. Every segment sits a hair above the last, so where two meet there is no flicker.
+  function pkBuildRoutes() {
+    var M = pkMats();
+    PK_ROUTES.forEach(function (r, i) {
+      var dx = r[2] - r[0], dz = r[3] - r[1], len = Math.sqrt(dx * dx + dz * dz), w = r[4], ry = Math.atan2(dx, dz);
+      var cx = (r[0] + r[2]) / 2, cz = (r[1] + r[3]) / 2, y = 0.022 + i * 0.002;
+      pkPaved(w + 0.7, len + w + 0.7, M.kerb, cx, y - 0.001, cz, 2.4, null, ry);
+      pkPaved(w, len + w, M.paversWarm, cx, y, cz, 2.4, null, ry);
+    });
+  }
+  // lamps, benches, flower beds and an avenue of trees along every route
+  function pkBuildRouteFurniture() {
+    var rng = pkRng(9001);
+    PK_ROUTES.forEach(function (r, i) {
+      var dx = r[2] - r[0], dz = r[3] - r[1], len = Math.sqrt(dx * dx + dz * dz), ux = dx / len, uz = dz / len, nx = -uz, nz = ux, w = r[4];
+      function at(t, off) { return [r[0] + ux * t + nx * off, r[1] + uz * t + nz * off]; }
+      // lamps every 9 m, alternating sides
+      for (var t = 4.5, k = 0; t < len - 3; t += 9, k++) {
+        var side = k % 2 ? 1 : -1, p = at(t, side * (w / 2 + 0.9));
+        if (pkNearRide(p[0], p[1], 1.5) || pkNearRoute(p[0], p[1], i, 1.2)) continue;
+        pkLamp(p[0], p[1], 4.4);
+      }
+      // a bench every 24 m, facing the route
+      for (var tb = 11, kb = 0; tb < len - 6; tb += 24, kb++) {
+        var sb = kb % 2 ? 1 : -1, pb = at(tb, sb * (w / 2 + 1.3));
+        if (pkNearRide(pb[0], pb[1], 2) || pkNearRoute(pb[0], pb[1], i, 2)) continue;
+        pkBench(pb[0], pb[1], Math.atan2(-sb * nx, -sb * nz));
+      }
+      // a flower bed on each outer corner of the route and at every 30 m
+      for (var tf = 16, kf = 0; tf < len - 8; tf += 30, kf++) {
+        var sf = kf % 2 ? -1 : 1, pf = at(tf, sf * (w / 2 + 1.5)), horiz = Math.abs(dx) > Math.abs(dz);
+        if (pkNearRide(pf[0], pf[1], 2) || pkNearRoute(pf[0], pf[1], i, 2.5)) continue;
+        pkFlowerBed(pf[0], pf[1], horiz ? 2.6 : 1.3, horiz ? 1.3 : 2.6);
+      }
+      // the avenue: a tree each side every 7.5 m, a little off true so it does not look ruled
+      for (var ta = 6, ka = 0; ta < len - 4; ta += 7.5, ka++) {
+        [-1, 1].forEach(function (sd) {
+          var pa = at(ta + (rng() - 0.5) * 2, sd * (w / 2 + 3.3 + rng() * 1.2));
+          if (pkNearRide(pa[0], pa[1], 3) || pkNearRoute(pa[0], pa[1], i, 3.2)) return;
+          if (pkInsideLake(pa[0], pa[1], 4)) return;
+          var seed = Math.abs(Math.round(pa[0] * 13 + pa[1] * 7)), sc = 0.9 + rng() * 0.5;
+          if (seed % 6 === 0) pkConifer(pa[0], pa[1], sc, null, seed); else pkTree(pa[0], pa[1], sc, null, seed);
+        });
+      }
+    });
+  }
+  function pkInsideLake(x, z, margin) {
+    var L = PK_LAKE, ex = (x - L.x) / (L.a + margin), ez = (z - L.z) / (L.b + margin);
+    return ex * ex + ez * ez < 1;
+  }
+
+  // ── The hub ──────────────────────────────────────────────────────
+  // where the midway crosses its two spurs: a paved round with a fountain, and an inlaid round at each spur.
+  function pkBuildHub() {
+    var M = pkMats(), H = PK_HUB, x = H.x, z = H.z;
+    // inlaid rounds at the two spur junctions: stone, a ring of dark radial courses, a warm band
+    // and a brass medallion, so the round reads as designed rather than poured
+    [3, 20].forEach(function (jz) {
+      pkPavedDisc(3.5, M.stoneDark, 0, 0.0185, jz, null, 1.6);
+      pkPavedDisc(3.1, M.paversWarm, 0, 0.0192, jz, null, 1.2);
+      for (var k = 0; k < 12; k++) {
+        var a = k / 12 * Math.PI * 2;
+        var sp = box(1.35, 0.012, 0.16, M.stoneDark, Math.cos(a) * 2.3, 0.0196, jz + Math.sin(a) * 2.3);
+        sp.rotation.y = -a;
+      }
+      pkPavedDisc(1.62, M.paversWarm, 0, 0.0204, jz, null, 1.2);
+      pkPavedDisc(1.5, M.stone, 0, 0.0210, jz, null, 1.2);
+      pkPavedDisc(0.42, M.brass, 0, 0.0216, jz, null, 1.0);
+    });
+    // the fountain's own paving: three rings, stone round warm round stone, with radial courses
+    // across the walkable band and a brass ring against the basin
+    pkPavedDisc(5.7, M.stoneDark, x, 0.0205, z, null, 1.6);
+    pkPavedDisc(5.3, M.paversWarm, x, 0.0212, z, null, 1.4);
+    for (var kf = 0; kf < 16; kf++) {
+      var af = kf / 16 * Math.PI * 2;
+      var spf = box(1.6, 0.012, 0.2, M.stoneDark, x + Math.cos(af) * 4.4, 0.0215, z + Math.sin(af) * 4.4);
+      spf.rotation.y = -af;
+    }
+    pkPavedDisc(3.6, M.stone, x, 0.0224, z, null, 1.4);
+    var g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+    // the basin: a stone lip, and water just under it
+    pkLathe([[0, 0], [2.95, 0], [2.95, 0.66], [2.7, 0.66], [2.7, 0.5], [0, 0.5]], M.stone, 0, 0, 0, g, 40);
+    pkLathe([[2.95, 0.64], [3.05, 0.64], [3.05, 0.72], [2.62, 0.72], [2.62, 0.66], [2.95, 0.66]], M.stoneDark, 0, 0, 0, g, 40);
+    var pool = new THREE.Mesh(new THREE.CircleGeometry(2.68, 40), M.water); pool.rotation.x = -Math.PI / 2; pool.position.y = 0.58; g.add(pool);
+    // the column, the upper bowl and the finial
+    pkLathe([[0, 0], [0.7, 0], [0.7, 0.2], [0.34, 0.36], [0.24, 1.05], [0.36, 1.16], [1.0, 1.32], [1.28, 1.52], [1.3, 1.68], [1.1, 1.64], [0.2, 1.46], [0, 1.46]], M.stone, 0, 0.5, 0, g, 32);
+    var bowl = new THREE.Mesh(new THREE.CircleGeometry(1.08, 28), M.water); bowl.rotation.x = -Math.PI / 2; bowl.position.y = 0.5 + 1.6; g.add(bowl);
+    pkLathe([[0, 0], [0.16, 0], [0.08, 0.28], [0.2, 0.55], [0.07, 0.85], [0, 0.95]], M.gold, 0, 2.14, 0, g, 12);
+    // water: six arcs from the bowl's lip into the basin, and a jet that breathes
+    var spray = std({ color: 0xe2f4ff, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.62 });
+    for (var k = 0; k < 8; k++) {
+      var a = k / 8 * Math.PI * 2 + 0.2, c = Math.cos(a), s = Math.sin(a);
+      pkTube([[1.1 * c, 2.08, 1.1 * s], [1.55 * c, 2.3, 1.55 * s], [2.05 * c, 1.7, 2.05 * s], [2.4 * c, 0.62, 2.4 * s]], 0.032, spray, g, false, 14, 5);
+    }
+    var jetG = new THREE.Group(); jetG.position.set(0, 3.1, 0); jetG.userData.dynamic = true; g.add(jetG);
+    var jet = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.07, 1.5, 8), spray); jet.position.y = 0.75; jetG.add(jet);
+    var drop = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), spray); drop.position.y = 1.55; jetG.add(drop);
+    PK_FOUNTAIN.jet = jetG;
+    solid(x - 3.0, x + 3.0, z - 3.0, z + 3.0, 0, 2.0);
+  }
+
+  // ── The lake ─────────────────────────────────────────────────────
+  // in the heart of the coaster's loop: seen from the platform, from the train and over the apron fence.
+  function pkBuildLake() {
+    var L = PK_LAKE, M = pkMats(), C = pkCrownGeos(), rng = pkRng(4242);
+    function ellipse(sx, sz, mat, y) {
+      var geo = new THREE.CircleGeometry(1, 64);
+      if (mat === M.water) { var uv = geo.attributes.uv; for (var i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * sx / 2.2, uv.getY(i) * sz / 2.2); }
+      var m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.scale.set(sx, sz, 1); m.position.set(L.x, y, L.z); m.receiveShadow = true; scene.add(m); return m;
+    }
+    ellipse(L.a + 1.6, L.b + 1.6, M.soil, 0.03);
+    ellipse(L.a + 0.5, L.b + 0.5, M.stoneDark, 0.045);
+    ellipse(L.a, L.b, M.water, 0.07);
+    // rocks round the rim
+    var n = 44;
+    for (var i = 0; i < n; i++) {
+      var t = i / n * Math.PI * 2 + rng() * 0.12, rs = 0.45 + rng() * 0.75;
+      var rock = new THREE.Mesh(C[i % 4], M.stoneDark); rock.scale.set(rs * (1.2 + rng() * 0.6), rs * 0.7, rs);
+      rock.position.set(L.x + (L.a + 0.9) * Math.cos(t), 0.18, L.z + (L.b + 0.9) * Math.sin(t)); rock.rotation.y = rng() * 6; rock.castShadow = true; rock.receiveShadow = true; scene.add(rock);
+    }
+    // reeds in clumps at the edge
+    var reed = std({ color: 0x5f7f3a, roughness: 0.95 }), reedGeo = new THREE.ConeGeometry(0.035, 1.2, 4);
+    for (var c = 0; c < 22; c++) {
+      var rt = rng() * Math.PI * 2, rx = L.x + (L.a - 0.4) * Math.cos(rt), rz = L.z + (L.b - 0.4) * Math.sin(rt);
+      for (var q = 0; q < 5; q++) {
+        var rm = new THREE.Mesh(reedGeo, reed), hh = 0.7 + rng() * 0.9; rm.scale.set(1, hh, 1);
+        rm.position.set(rx + (rng() - 0.5) * 0.7, 0.07 + hh * 0.6, rz + (rng() - 0.5) * 0.7); rm.rotation.z = (rng() - 0.5) * 0.25; scene.add(rm);
+      }
+    }
+    // lily pads on the water
+    var pad = std({ color: 0x3f7a3a, roughness: 0.85, side: THREE.DoubleSide }), padGeo = new THREE.CircleGeometry(0.34, 10), bloom = std({ color: 0xf2b6d2, roughness: 0.6 });
+    for (var lp = 0; lp < 20; lp++) {
+      var la = rng() * Math.PI * 2, lr = Math.sqrt(rng()) * 0.82, lx = L.x + L.a * lr * Math.cos(la), lz = L.z + L.b * lr * Math.sin(la);
+      var pm = new THREE.Mesh(padGeo, pad); pm.rotation.x = -Math.PI / 2; pm.position.set(lx, 0.085, lz); pm.scale.setScalar(0.7 + rng() * 0.8); scene.add(pm);
+      if (lp % 4 === 0) { var bm = new THREE.Mesh(C[lp % 4], bloom); bm.scale.set(0.16, 0.1, 0.16); bm.position.set(lx, 0.14, lz); scene.add(bm); }
+    }
+    // an island with a willow-ish tree and a few stones
+    var ix = L.x + 3.5, iz = L.z - 1.5;
+    var mound = new THREE.Mesh(C[1], M.hedge); mound.scale.set(6.2, 1.4, 5.4); mound.position.set(ix, 0.2, iz); mound.receiveShadow = true; scene.add(mound);
+    pkTree(ix, iz, 1.15, null, 17);
+    for (var s = 0; s < 5; s++) { var sr = new THREE.Mesh(C[s % 4], M.stoneDark), ss = 0.35 + rng() * 0.3; sr.scale.set(ss * 1.4, ss * 0.8, ss); sr.position.set(ix + 2.6 * Math.cos(s * 1.3), 0.3, iz + 2.2 * Math.sin(s * 1.3)); scene.add(sr); }
+    // the shore planting: a loose ring of trees outside the rocks, clear of the rails
+    var m = 30;
+    for (var j = 0; j < m; j++) {
+      var ja = j / m * Math.PI * 2 + rng() * 0.15, d = 4.5 + rng() * 3.5;
+      var tx = L.x + (L.a + d) * Math.cos(ja), tz = L.z + (L.b + d) * Math.sin(ja);
+      var P = PK_TRACK_PTS, bad = tz > -14.5;
+      for (var k = 0; k < P.length && !bad; k++) { var A = P[k], B = P[(k + 1) % P.length]; if (pkSegDist(tx, tz, A[0], A[2], B[0], B[2]) < 4.5) bad = true; }
+      if (bad) continue;
+      var seed = Math.abs(Math.round(tx * 13 + tz * 7)), sc = 0.9 + rng() * 0.7;
+      if (seed % 4 === 0) pkConifer(tx, tz, sc, null, seed); else pkTree(tx, tz, sc, null, seed);
+    }
+    solid(L.x - L.a, L.x + L.a, L.z - L.b, L.z + L.b, 0, 0.8);
+  }
+
+  // ── Signposts ────────────────────────────────────────────────────
+  // a pole with finger boards. Each board is two signs back to back, so it reads from either side.
+  // pointing: 0 east, PI west, PI/2 north, -PI/2 south
+  function pkSignpost(x, z, boards) {
+    var M = pkMats(), g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+    var h = 2.9 + boards.length * 0.55;
+    pkRoundCyl(0.075, h, M.iron, 0, h / 2, 0, g, 10);
+    pkBevelBox(0.3, 0.14, 0.3, M.stoneDark, 0, 0.07, 0, g, 0.03);
+    sphere(0.1, M.gold, 0, h + 0.08, 0, g);
+    boards.forEach(function (b, i) {
+      var y = h - 0.4 - i * 0.55, w = Math.max(1.8, b[0].length * 0.2 + 0.5);
+      var bg = new THREE.Group(); bg.position.set(0, y, 0); bg.rotation.y = -b[1]; g.add(bg);
+      pkSign3D([b[0]], w, 0.44, w / 2 + 0.08, 0, 0.01, 0, { bg: b[2] || '#1b232c', fg: '#f5b53d' }, bg);
+      pkSign3D([b[0]], w, 0.44, w / 2 + 0.08, 0, -0.01, Math.PI, { bg: b[2] || '#1b232c', fg: '#f5b53d' }, bg);
+    });
+    solid(x - 0.15, x + 0.15, z - 0.15, z + 0.15, 0, h);
+    return g;
+  }
+  function pkBuildSignposts() {
+    // at the hub: the way to every corner of the park, split over two posts so the boards do not
+    // stack into a knot from the middle of the plaza
+    pkSignpost(-4.7, 7.0, [['CAROUSEL <', Math.PI], ['FERRIS WHEEL >', 0], ['COASTER ^', Math.PI / 2]]);
+    pkSignpost(-4.7, 4.2, [['TEACUPS & THE WEST <', Math.PI], ['DODGEMS & THE EAST >', 0]]);
+    // at each crossroads plaza, tucked into the corner of the junction
+    pkSignpost(-28.4, 0.4, [['TEACUPS <', Math.PI], ['HAUNTED MANOR ^', Math.PI / 2], ['MIDWAY >', 0]]);
+    pkSignpost(37.4, 0.4, [['DODGEMS >', 0], ['LOG FLUME ^', Math.PI / 2], ['<- MIDWAY', Math.PI]]);
+    // and where the spines meet the North Promenade
+    pkSignpost(-28.4, -57.4, [['DROP TOWER <', Math.PI], ['NORTH GARDENS >', 0], ['MIDWAY & RIDES v', -Math.PI / 2]]);
+    pkSignpost(37.4, -57.4, [['NORTH GARDENS <', Math.PI], ['LOG FLUME v', -Math.PI / 2]]);
+  }
+
+  // ── Life: the fountain breathes and the water moves ──────────────
+  function pkThemeTick(dt) {
+    PK_THEME_T += dt;
+    if (PKM && PKM.waterTex) PKM.waterTex.offset.x += dt * 0.012;
+    if (PK_FOUNTAIN.jet) { PK_FOUNTAIN.jet.scale.y = 1 + 0.14 * Math.sin(PK_THEME_T * 3.1); PK_FOUNTAIN.jet.scale.x = PK_FOUNTAIN.jet.scale.z = 1 + 0.08 * Math.sin(PK_THEME_T * 4.3); }
+  }
+  var _pkThemePrevTick = GAME.tick;
+  GAME.tick = function (dt) { _pkThemePrevTick(dt); pkThemeTick(dt); };
+  // ── Why ──────────────────────────────────────────────────────────
+  // A park is more than its rides. These are the places to stop: somewhere to eat where the streets cross, and a garden quarter at the
+  // north end where the west and east spines meet. They are scenery - nothing here is staffed or sold - but they are solid, lit and lived in.
+  var PK_PLAZAS = [{ x: -31, z: 3, r: 5.6 }, { x: 35, z: 3, r: 5.6 }];
+  var PK_GARDEN = { clock: { x: 2, z: -60, r: 6.6 }, band: { x: 2, z: -73.5 }, maze: { x: 5, z: -86 }, mill: { x: 14, z: -70 } };
+  var PK_SAILS = null, PK_CLOCK = null;
+  PK_PLAZAS.forEach(function (p) { PK_KEEP.push([p.x, p.z, p.r + 1.5]); });
+  PK_KEEP.push([2, -60, 8.5], [2, -73.5, 8.5], [5, -86, 11], [14, -70, 7], [2, -69, 5]);
+
+  function pkFace(x, z, tx, tz) { return Math.atan2(tx - x, tz - z); }
+
+  function pkGardensBuild() {
+    PK_PLAZAS.forEach(pkPlaza);
+    pkFlowerClock(); pkBandstand(); pkWindmill(); pkMaze(); pkPicnic();
+  }
+
+  // ── A food stall: counter, canopy, sign, a few goods ─────────────
+  // faces local +z; the caller turns it toward the plaza
+  function pkStall(x, z, ry, a, b, label) {
+    var M = pkMats(), g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; scene.add(g);
+    pkBevelBox(2.6, 0.95, 0.75, M.cream, 0, 0.48, 0.5, g, 0.04);
+    pkBevelBox(2.72, 0.08, 0.9, pkMatWoodRich(), 0, 1.0, 0.5, g, 0.02);
+    pkBevelBox(2.6, 2.7, 0.14, M.cream, 0, 1.35, -0.35, g, 0.04);
+    [-1.25, 1.25].forEach(function (px) { pkRoundCyl(0.05, 2.7, M.iron, px, 1.35, 0.95, g, 8); });
+    var canopy = pkBevelBox(3.0, 0.1, 2.1, pkStripes(a, b), 0, 2.78, 0.35, g, 0.02); canopy.rotation.x = 0.16;
+    pkBevelBox(3.0, 0.22, 0.1, pkStripes(b, a), 0, 2.52, 1.37, g, 0.02);
+    sign([label], 2.1, 0.42, 0, 2.2, -0.26, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
+    for (var i = 0; i < 5; i++) {      // goods on the counter: cones, cups
+      var cone = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.3, 8), std({ color: [0xf0c04a, 0xe08fc0, 0xf2f2f2, 0xd94f4f, 0x8fd3c7][i], roughness: 0.6 }));
+      cone.position.set(-0.9 + i * 0.45, 1.19, 0.5); cone.rotation.x = Math.PI; g.add(cone);
+    }
+    pkLocalSolid(g, -1.4, 1.4, -0.45, 0.95, 0, 2.7);
+    return g;
+  }
+  // ── A crossroads plaza ───────────────────────────────────────────
+  function pkPlaza(P) {
+    var M = pkMats(), x = P.x, z = P.z, r = P.r;
+    pkPavedDisc(r + 0.35, M.stoneDark, x, 0.0400, z, null, 1.6);
+    pkPavedDisc(r, M.paversWarm, x, 0.0410, z, null, 1.4);
+    pkPavedDisc(r * 0.42, M.stone, x, 0.0420, z, null, 1.2);
+    pkPavedDisc(r * 0.30, M.paversWarm, x, 0.0430, z, null, 1.0);
+    var defs = [[-1, -1, '#d94f4f', '#f4f4f0', 'ICE CREAM'], [1, -1, '#4f8fd9', '#f4f4f0', 'DRINKS'], [-1, 1, '#f0c04a', '#f4f4f0', 'PRETZELS'], [1, 1, '#5fa86a', '#f4f4f0', 'CHIPS']];
+    defs.forEach(function (d) {
+      var sx = x + d[0] * 4.3, sz = z + d[1] * 4.1;
+      pkStall(sx, sz, pkFace(sx, sz, x, z), d[2], d[3], d[4]);
+    });
+    // benches on the open arcs between the stalls, and a lamp in each
+    [[0, -1], [0, 1]].forEach(function (d) { /* the streets run through the middle; the arcs are the corners */ });
+  }
+
+  // ── The flower clock ─────────────────────────────────────────────
+  // a planted dial laid on the promenade, with hands that tell the park's own time
+  function pkFlowerClock() {
+    var C = PK_GARDEN.clock, x = C.x, z = C.z, M = pkMats();
+    var rings = [[C.r + 0.5, M.stoneDark, 0.0440], [C.r, std({ color: 0x4d7a3a, roughness: 0.95 }), 0.0450], [C.r * 0.86, std({ color: 0xd94f6a, roughness: 0.9 }), 0.0460],
+      [C.r * 0.70, std({ color: 0xf3c84a, roughness: 0.9 }), 0.0470], [C.r * 0.56, std({ color: 0xf4f1e6, roughness: 0.9 }), 0.0480]];
+    rings.forEach(function (rg) { pkPavedDisc(rg[0], rg[1], x, rg[2], z, null, 1.4); });
+    for (var h = 0; h < 12; h++) {           // the hour marks
+      var a = h / 12 * Math.PI * 2, rr = C.r * 0.63, tick = box(0.28, 0.03, h % 3 === 0 ? 1.1 : 0.6, M.iron, x + Math.sin(a) * rr, 0.052, z - Math.cos(a) * rr);
+      tick.rotation.y = -a;
+    }
+    pkLathe([[0, 0], [0.5, 0], [0.5, 0.3], [0.2, 0.45], [0, 0.45]], M.gold, x, 0.05, z, null, 14);
+    var hands = new THREE.Group(); hands.position.set(x, 0.09, z); hands.userData.dynamic = true; scene.add(hands);
+    var hh = new THREE.Group(), mh = new THREE.Group(); hands.add(hh); hands.add(mh);
+    var hb = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.05, 2.6), M.iron); hb.position.z = -1.1; hh.add(hb);
+    var mb = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.05, 3.8), M.gold); mb.position.z = -1.7; mb.position.y = 0.03; mh.add(mb);
+    PK_CLOCK = { hour: hh, min: mh };
+    [[-1, 0], [1, 0]].forEach(function (d) { pkLamp(x + d[0] * (C.r + 1.6), z + 3.4, 4.4); });
+  }
+
+  // ── The bandstand ────────────────────────────────────────────────
+  function pkBandstand() {
+    var B = PK_GARDEN.band, x = B.x, z = B.z, M = pkMats(), g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+    pkPavedDisc(8.2, M.stoneDark, x, 0.040, z, null, 1.6); pkPavedDisc(7.8, M.paversWarm, x, 0.041, z, null, 1.4);
+    var plat = new THREE.Mesh(new THREE.CylinderGeometry(4.4, 4.6, 0.7, 8), M.stone); plat.position.y = 0.35; plat.castShadow = true; plat.receiveShadow = true; g.add(plat);
+    var floor = new THREE.Mesh(new THREE.CylinderGeometry(4.1, 4.1, 0.06, 8), pkMatWoodRich()); floor.position.y = 0.72; floor.receiveShadow = true; g.add(floor);
+    for (var i = 0; i < 8; i++) {
+      var a = (i + 0.5) / 8 * Math.PI * 2, px = Math.sin(a) * 3.85, pz = Math.cos(a) * 3.85;
+      pkRoundCyl(0.11, 3.4, M.white, px, 0.75 + 1.7, pz, g, 10);
+      pkBevelBox(0.34, 0.14, 0.34, M.gold, px, 4.2, pz, g, 0.03);
+      var a2 = (i + 1.5) / 8 * Math.PI * 2, qx = Math.sin(a2) * 3.85, qz = Math.cos(a2) * 3.85;
+      if (i !== 3 && i !== 4) { pkRod(px, 1.55, pz, qx, 1.55, qz, 0.035, M.white, g, 6); pkRod(px, 1.15, pz, qx, 1.15, qz, 0.025, M.white, g, 6); }
+    }
+    var roof = new THREE.Mesh(new THREE.ConeGeometry(5.1, 2.1, 8), M.slateRed); roof.position.y = 4.3 + 1.05; roof.castShadow = true; g.add(roof);
+    pkRoundCyl(0.05, 0.9, M.iron, 0, 6.8, 0, g, 6); sphere(0.14, M.gold, 0, 7.3, 0, g);
+    pkBulbs((function () { var p = []; for (var k = 0; k < 16; k++) { var t = k / 16 * Math.PI * 2; p.push([Math.sin(t) * 4.95, 4.55, Math.cos(t) * 4.95]); } return p; })(), M.bulbWarm, 0.07, g);
+    for (var s = 0; s < 3; s++) pkBevelBox(2.4, 0.2, 0.5, M.stone, 0, 0.1 + 0.0 + s * -0.0, 4.9 + s * 0.45, g, 0.03).position.y = 0.55 - s * 0.22;   // steps on the south (front) side
+    for (var m = 0; m < 5; m++) {   // music stands
+      pkRoundCyl(0.02, 0.9, M.iron, -1.6 + m * 0.8, 1.2, -0.8, g, 4);
+      var st = pkBevelBox(0.4, 0.3, 0.03, M.white, -1.6 + m * 0.8, 1.7, -0.8, g, 0.01); st.rotation.x = -0.3;
+    }
+    solid(x - 4.5, x + 4.5, z - 4.5, z + 3.6, 0, 4.5);
+    // benches ringed round the lawn, all facing the stage
+    for (var b = 0; b < 7; b++) {
+      var ba = (b / 7) * Math.PI * 1.15 + Math.PI * 0.42 + Math.PI, bx = x + Math.sin(ba) * 8.6, bz = z + Math.cos(ba) * 8.6;
+      if (bz > z + 7.5) continue;
+      pkBench(bx, bz, pkFace(bx, bz, x, z));
+    }
+  }
+
+  // ── The windmill ─────────────────────────────────────────────────
+  function pkWindmill() {
+    var W = PK_GARDEN.mill, x = W.x, z = W.z, M = pkMats(), g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+    var tower = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 3.0, 9.5, 12), M.cream); tower.position.y = 4.75; tower.castShadow = true; tower.receiveShadow = true; g.add(tower);
+    var base = new THREE.Mesh(new THREE.CylinderGeometry(3.3, 3.5, 1.1, 12), M.stoneDark); base.position.y = 0.55; g.add(base);
+    var cap = new THREE.Mesh(new THREE.ConeGeometry(2.4, 2.4, 12), M.slate); cap.position.y = 10.7; cap.castShadow = true; g.add(cap);
+    pkRod(0, 11.9, 0, 0, 13.0, 0, 0.05, M.iron, g, 6);
+    pkBevelBox(1.3, 2.3, 0.3, pkMatWoodRich(), 0, 1.15 + 0.5, 2.85, g, 0.04);       // the door, facing the promenade (south)
+    [[0, 5.2], [0, 7.8]].forEach(function (w) { pkWindow(g, w[0], w[1], 2.15, 0.7, 0.9, 0, M.white, M.pane); });
+    var hub = new THREE.Group(); hub.position.set(0, 8.4, -2.4); hub.userData.dynamic = true; g.add(hub);      // the sails turn on the north face
+    pkRoundCyl(0.35, 0.8, M.iron, 0, 0, 0.1, hub, 10).rotation.x = Math.PI / 2;
+    for (var s = 0; s < 4; s++) {
+      var arm = new THREE.Group(); arm.rotation.z = s * Math.PI / 2; hub.add(arm);
+      var spar = new THREE.Mesh(new THREE.BoxGeometry(0.22, 7.2, 0.14), pkMatWoodRich()); spar.position.y = 3.7; arm.add(spar);
+      var cloth = new THREE.Mesh(new THREE.BoxGeometry(1.5, 5.6, 0.05), std({ color: 0xf2ead6, roughness: 0.9 })); cloth.position.set(0.85, 4.0, 0.06); arm.add(cloth);
+      for (var l = 0; l < 6; l++) { var lat = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.05, 0.06), pkMatWoodRich()); lat.position.set(0.85, 1.4 + l * 0.9, 0.1); arm.add(lat); }
+    }
+    PK_SAILS = hub;
+    solid(x - 3.4, x + 3.4, z - 3.4, z + 3.4, 0, 11);
+    [[-4.2, 5.2], [4.2, 5.2]].forEach(function (p) { pkFlowerBed(x + p[0], z + p[1], 2.4, 1.2); });
+  }
+
+  // ── The hedge maze ───────────────────────────────────────────────
+  // 5 x 5 cells, carved by a seeded depth-first walk, so every cell can be reached and the same maze stands every time.
+  // The way in is on the south side, off the promenade; in the middle there is a fountain-topped plinth to reach.
+  function pkMaze() {
+    var Mz = PK_GARDEN.maze, N = 5, cs = 2.6, T = 0.85, H = 2.2, rng = pkRng(31337), M = pkMats();
+    var ox = Mz.x - N * cs / 2, oz = Mz.z - N * cs / 2;
+    var vis = [], right = [], down = [];   // right[r][c]: wall east of cell; down[r][c]: wall south of cell
+    for (var r = 0; r < N; r++) { vis.push([]); right.push([]); down.push([]); for (var c = 0; c < N; c++) { vis[r].push(false); right[r].push(true); down[r].push(true); } }
+    var stack = [[N - 1, 2]]; vis[N - 1][2] = true;
+    while (stack.length) {
+      var cur = stack[stack.length - 1], opts = [];
+      [[-1, 0], [1, 0], [0, -1], [0, 1]].forEach(function (d) { var nr = cur[0] + d[0], nc = cur[1] + d[1]; if (nr >= 0 && nr < N && nc >= 0 && nc < N && !vis[nr][nc]) opts.push([nr, nc, d]); });
+      if (!opts.length) { stack.pop(); continue; }
+      var pick = opts[Math.floor(rng() * opts.length)], d2 = pick[2];
+      if (d2[0] === 1) down[cur[0]][cur[1]] = false; else if (d2[0] === -1) down[pick[0]][pick[1]] = false;
+      else if (d2[1] === 1) right[cur[0]][cur[1]] = false; else right[pick[0]][pick[1]] = false;
+      vis[pick[0]][pick[1]] = true; stack.push([pick[0], pick[1]]);
+    }
+    function wallH(r, c) { pkHedge(ox + (c + 0.5) * cs, oz + r * cs, cs + T, T, H); }     // along x, on the line above row r
+    function wallV(r, c) { pkHedge(ox + c * cs, oz + (r + 0.5) * cs, T, cs + T, H); }     // along z, on the line left of column c
+    for (var c2 = 0; c2 < N; c2++) wallH(0, c2);                       // north edge
+    for (var c3 = 0; c3 < N; c3++) if (c3 !== 2) wallH(N, c3);         // south edge, with the way in at column 2
+    for (var r2 = 0; r2 < N; r2++) { wallV(r2, 0); wallV(r2, N); }     // west and east edges
+    for (var r3 = 0; r3 < N; r3++) for (var c4 = 0; c4 < N; c4++) {
+      if (c4 < N - 1 && right[r3][c4]) wallV(r3, c4 + 1);
+      if (r3 < N - 1 && down[r3][c4]) wallH(r3 + 1, c4);
+    }
+    // the prize: a plinth and a gilded ball, at the middle cell
+    var mx = ox + 2.5 * cs, mz = oz + 2.5 * cs;
+    pkBevelBox(0.9, 0.9, 0.9, M.stone, mx, 0.45, mz, null, 0.05); sphere(0.38, M.gold, mx, 1.3, mz);
+    pkPavedDisc(1.1, M.paversWarm, mx, 0.041, mz, null, 1.0);
+    // a sign at the way in
+    var gx = ox + 2.5 * cs, gz = oz + N * cs;
+    pkRoundCyl(0.05, 1.6, M.iron, gx + 1.9, 0.8, gz + 0.6, null, 6);
+    pkSign3D(['THE HEDGE MAZE'], 1.9, 0.4, gx + 1.9, 1.7, gz + 0.62, 0, { bg: '#23493a', fg: '#f5e9c2' });
+  }
+
+  // ── The picnic lawn ──────────────────────────────────────────────
+  function pkPicnic() {
+    var M = pkMats();
+    [[-10, -72, 0.2], [-5, -76.5, 0.1], [13.5, -84.5, 0], [15, -81, -0.1]].forEach(function (t) {
+      var g = new THREE.Group(); g.position.set(t[0], 0, t[1]); g.rotation.y = t[2]; scene.add(g);
+      pkBevelBox(2.2, 0.08, 0.9, pkMatWoodRich(), 0, 0.78, 0, g, 0.02);
+      [-0.95, 0.95].forEach(function (lx) { var l = pkBevelBox(0.1, 0.78, 0.9, M.iron, lx, 0.39, 0, g, 0.02); });
+      [-0.75, 0.75].forEach(function (bz) { pkBevelBox(2.2, 0.06, 0.34, pkMatWoodRich(), 0, 0.46, bz, g, 0.02); pkBevelBox(0.1, 0.46, 0.3, M.iron, -0.95, 0.23, bz, g, 0.02); pkBevelBox(0.1, 0.46, 0.3, M.iron, 0.95, 0.23, bz, g, 0.02); });
+      var cloth = pkBevelBox(1.3, 0.02, 0.9, pkStripes('#d94f4f', '#f4f4f0'), 0, 0.84, 0, g, 0.005);
+      pkLocalSolid(g, -1.2, 1.2, -1.1, 1.1, 0, 0.9);
+    });
+    // lamps and bins to serve the lawn
+    [[-3, -76], [8, -76], [-3, -84], [8, -84]].forEach(function (p) { pkLamp(p[0], p[1], 4.4); });
+    [[-12, -76], [16, -76]].forEach(function (p) { pkBin(p[0], p[1]); solid(p[0] - 0.4, p[0] + 0.4, p[1] - 0.4, p[1] + 0.4, 0, 1.0); });
+  }
+
+  // ── Life: the sails turn, the clock tells the park's time ────────
+  function pkGardensTick(dt) {
+    if (PK_SAILS) PK_SAILS.rotation.z -= dt * 0.35;
+    if (PK_CLOCK && typeof S !== 'undefined' && S) {
+      var hrs = S.time % 12, mins = (S.time * 60) % 60;
+      PK_CLOCK.hour.rotation.y = -(hrs / 12) * Math.PI * 2;
+      PK_CLOCK.min.rotation.y = -(mins / 60) * Math.PI * 2;
+    }
+  }
+  var _pkGardensPrevTick = GAME.tick;
+  GAME.tick = function (dt) { _pkGardensPrevTick(dt); pkGardensTick(dt); };
+// collars with lit rings, bat switches under rubber boots, a rotary selector, a throttle lever,
+// a mushroom stop and analogue gauges whose needles follow the ride. Each panel's legend is
+// printed once on a canvas plate (section lines, engraved labels, wear) so the hardware sits on
+// a real fascia instead of a blank face, and every console is one editable world item.
+
+// ── Materials ────────────────────────────────────────────────────────
+var PK_CTL_M = null;
+function pkCtlM() {
+  if (PK_CTL_M) return PK_CTL_M;
+  var M = PK_CTL_M = {};
+  M.case  = std({ color: 0x333d45, roughness: 0.58, metalness: 0.35 });   // the cabinet
+  M.face  = std({ color: 0x46525b, roughness: 0.55, metalness: 0.28 });   // the fascia plate
+  M.well  = std({ color: 0x11161a, roughness: 0.5, metalness: 0.5 });     // the recess a control sits in
+  M.bezel = std({ color: 0x1a1f23, roughness: 0.45, metalness: 0.55 });
+  M.knob  = std({ color: 0x22282d, roughness: 0.5, metalness: 0.4 });
+  M.boot  = std({ color: 0x0f1214, roughness: 0.97, side: THREE.DoubleSide });   // the rubber boot on a switch
+  M.yellow = std({ color: 0xe0a51f, roughness: 0.55 });
+  M.needle = std({ color: 0xb8362b, roughness: 0.5 });
+  M.caps = {
+    red:   std({ color: 0xb8362b, roughness: 0.42 }),
+    green: std({ color: 0x2f9e44, roughness: 0.42 }),
+    amber: std({ color: 0xe2a021, roughness: 0.42 }),
+    blue:  std({ color: 0x2f6fb3, roughness: 0.42 }),
+    white: std({ color: 0xe6e3d8, roughness: 0.44 }),
+    black: std({ color: 0x1b1f23, roughness: 0.5 })
+  };
+  return M;
+}
+
+// ── Gauge faces ──────────────────────────────────────────────────────
+var PK_GAUGE_TEX = {};
+function pkCtlGaugeTex(o) {
+  var key = [o.label, o.min, o.max, o.unit, o.red || 0, o.ticks || 10].join('|');
+  if (PK_GAUGE_TEX[key]) return PK_GAUGE_TEX[key];
+  var t = tex(256, 256, function (c, W, H) {
+    var cx = W / 2, cy = H / 2, R = W * 0.48;
+    c.clearRect(0, 0, W, H);
+    var g = c.createRadialGradient(cx, cy - R * 0.3, R * 0.12, cx, cy, R);
+    g.addColorStop(0, '#fbf7ec'); g.addColorStop(0.72, '#efe9d8'); g.addColorStop(1, '#d3ccb8');
+    c.fillStyle = g; c.beginPath(); c.arc(cx, cy, R, 0, 6.2832); c.fill();
+    // the sweep runs 270 degrees from the lower left, the way a real dial does
+    var A = function (v) { return -(135 + 270 * v) * Math.PI / 180; };
+    var P = function (v, rr) { var a = A(v); return [cx + Math.cos(a) * rr, cy - Math.sin(a) * rr]; };
+    if (o.red) { c.beginPath(); c.lineWidth = R * 0.09; c.strokeStyle = '#c0392b'; c.arc(cx, cy, R * 0.80, (135 + 270 * o.red) * Math.PI / 180, (135 + 270) * Math.PI / 180); c.stroke(); }
+    var n = o.ticks || 10;
+    for (var i = 0; i <= n; i++) {
+      var v = i / n, major = i % 2 === 0, a = P(v, R * (major ? 0.74 : 0.80)), b = P(v, R * 0.90);
+      c.beginPath(); c.lineWidth = major ? R * 0.028 : R * 0.016; c.strokeStyle = '#2f3439';
+      c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
+      if (major) {
+        var q = P(v, R * 0.60);
+        c.fillStyle = '#2f3439'; c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.font = 'bold ' + Math.round(R * 0.13) + 'px Arial';
+        c.fillText(String(Math.round((o.min + (o.max - o.min) * v) * 10) / 10), q[0], q[1]);
+      }
+    }
+    c.fillStyle = '#2f3439'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.font = 'bold ' + Math.round(R * 0.115) + 'px Arial'; c.fillText(o.label, cx, cy + R * 0.30);
+    if (o.unit) { c.fillStyle = '#6c7176'; c.font = Math.round(R * 0.10) + 'px Arial'; c.fillText(o.unit, cx, cy + R * 0.47); }
+    // a little wear so the dial is not a clip-art circle
+    for (var k = 0; k < 60; k++) { c.fillStyle = 'rgba(120,110,90,' + randf(0.02, 0.07) + ')'; c.fillRect(randf(0, W), randf(0, H), randf(1, 5), randf(1, 3)); }
+  });
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  return (PK_GAUGE_TEX[key] = t);
+}
+
+// ── The fascia plate ─────────────────────────────────────────────────
+// One canvas per panel: painted steel, section lines, engraved lettering. The hardware is
+// mounted on top at the same coordinates the legend is drawn at, so nothing can drift.
+var PK_FACE_TEX = {};
+function pkCtlFace(key, w, h, draw) {
+  if (PK_FACE_TEX[key]) return PK_FACE_TEX[key];
+  var W = 2048, H = Math.max(160, Math.round(W * h / w));
+  var t = tex(W, H, function (c) {
+    c.fillStyle = '#46525b'; c.fillRect(0, 0, W, H);
+    for (var i = 0; i < 3200; i++) {
+      c.fillStyle = 'rgba(' + (Math.random() < 0.5 ? '255,255,255' : '0,0,0') + ',' + randf(0.01, 0.04) + ')';
+      c.fillRect(Math.random() * W, Math.random() * H, randf(1, 22), 1);
+    }
+    var vg = c.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.12, W / 2, H / 2, Math.max(W, H) * 0.72);
+    vg.addColorStop(0, 'rgba(255,255,255,0.06)'); vg.addColorStop(1, 'rgba(0,0,0,0.20)');
+    c.fillStyle = vg; c.fillRect(0, 0, W, H);
+    draw(c, W, H);
+  });
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  return (PK_FACE_TEX[key] = t);
+}
+// helpers a fascia drawing gets: metres in, canvas pixels out
+function pkCtlRuler(W, H, w, h) {
+  var R2 = {
+    W: W, H: H, w: w, h: h, sx: W / w, sy: H / h,
+    X: function (mx) { return (mx / w + 0.5) * W; },
+    Y: function (my) { return (0.5 - my / h) * H; },
+    L: function (m) { return m * W / w; }
+  };
+  R2.txt = function (s, mx, my, sizeM, col, align, weight) {
+    var c = R2.c;
+    c.save(); c.fillStyle = col || '#dfe6ea'; c.textAlign = align || 'center'; c.textBaseline = 'middle';
+    c.font = (weight || '600') + ' ' + Math.max(7, Math.round(sizeM * W / w)) + 'px Bahnschrift, "Segoe UI", Arial, sans-serif';
+    c.fillText(s, R2.X(mx), R2.Y(my)); c.restore();
+  };
+  R2.box = function (mx, my, mw, mh, col, lw) {
+    var c = R2.c; c.save();
+    c.strokeStyle = col || 'rgba(0,0,0,0.35)'; c.lineWidth = Math.max(1, R2.L(lw || 0.004));
+    c.strokeRect(R2.X(mx - mw / 2), R2.Y(my + mh / 2), R2.L(mw), R2.L(mh));
+    c.restore();
+  };
+  R2.engrave = function (s, mx, my, sizeM, align) {
+    var c = R2.c; c.save(); c.textAlign = align || 'center'; c.textBaseline = 'middle';
+    var px = Math.max(7, Math.round(sizeM * W / w));
+    c.font = '700 ' + px + 'px Bahnschrift, "Segoe UI", Arial, sans-serif';
+    c.fillStyle = 'rgba(0,0,0,0.45)'; c.fillText(s, R2.X(mx) + 1, R2.Y(my) + 1);
+    c.fillStyle = '#e4ebef'; c.fillText(s, R2.X(mx), R2.Y(my)); c.restore();
+  };
+  return R2;
+}
+
+// ── The panel itself ─────────────────────────────────────────────────
+function pkCtlPanel(o) {
+  var M = pkCtlM();
+  var g = new THREE.Group();
+  g.rotation.order = 'YXZ';
+  g.position.set(o.x, o.y, o.z);
+  g.rotation.y = o.ry || 0;
+  g.rotation.x = o.tilt || 0;
+  parentOf(o.parent).add(g);
+  pkBevelBox(o.w + 0.07, o.h + 0.07, 0.055, M.case, 0, 0, -0.030, g, 0.012);
+  var faceTex = pkCtlFace(o.key, o.w, o.h, o.draw);
+  var face = new THREE.Mesh(new THREE.PlaneGeometry(o.w, o.h),
+    new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.55, metalness: 0.22, emissive: 0xffffff, emissiveMap: faceTex, emissiveIntensity: 0.34 }));
+  face.position.z = 0.0005; face.receiveShadow = true; g.add(face);
+  // the machined rim round the plate, and four screws
+  pkBevelBox(o.w + 0.10, 0.018, 0.06, M.bezel, 0, o.h / 2 + 0.038, -0.028, g, 0.005);
+  pkBevelBox(o.w + 0.10, 0.018, 0.06, M.bezel, 0, -o.h / 2 - 0.038, -0.028, g, 0.005);
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (s) {
+    var sc = new THREE.Mesh(roundCylGeo(0.011, 0.011, 0.005, 10), MAT.chrome);
+    sc.rotation.x = Math.PI / 2; sc.position.set(s[0] * (o.w / 2 - 0.012), s[1] * (o.h / 2 - 0.012), 0.004); g.add(sc);
+  });
+  return g;
+}
+
+// ── Hardware ─────────────────────────────────────────────────────────
+// every moving part sits in a dynamic group: the bake leaves it alone, the editor still
+// treats the whole console as one item, and the part can travel.
+var PK_CTL_LIVE = [];
+function pkCtlLive(o) { PK_CTL_LIVE.push(o); }
+var PK_CTL_TICKED = false;
+function pkCtlTick(dt) {
+  if (dt > 0.2) dt = 0.2;
+  for (var i = 0; i < PK_CTL_LIVE.length; i++) PK_CTL_LIVE[i].tick(dt);
+}
+function pkCtlStart() {
+  if (PK_CTL_TICKED) return;
+  PK_CTL_TICKED = true;
+  animate(pkCtlTick);
+}
+
+// a push button: chrome collar, recessed well, coloured cap with a lit ring, and a press travel
+function pkCtlBtn(g, x, y, o) {
+  o = o || {};
+  var M = pkCtlM(), r = o.r || 0.038;
+  var collar = new THREE.Mesh(roundCylGeo(r * 1.40, r * 1.46, 0.011, 20), MAT.chrome);
+  collar.rotation.x = Math.PI / 2; collar.position.set(x, y, 0.006); g.add(collar);
+  var well = new THREE.Mesh(roundCylGeo(r * 1.18, r * 1.18, 0.010, 20), M.well);
+  well.rotation.x = Math.PI / 2; well.position.set(x, y, 0.010); g.add(well);
+  var cg = new THREE.Group(); cg.position.set(x, y, 0.012); cg.userData.dynamic = true; g.add(cg);
+  var cap = new THREE.Mesh(roundCylGeo(r, r * 0.93, 0.021, 20), M.caps[o.col || 'green']);
+  cap.rotation.x = Math.PI / 2; cap.position.z = 0.010; cap.castShadow = true; cg.add(cap);
+  var ledMat = glowMat(o.lampCol || 0x5fd38d, 0.0);
+  var led = new THREE.Mesh(new THREE.TorusGeometry(r * 0.70, r * 0.075, 6, 20), ledMat);
+  led.position.z = 0.021; cg.add(led);
+  var pressT = 0;
+  var api = {
+    id: o.id, label: o.label, lamp: ledMat, lit: false,
+    press: function () {
+      pressT = 0.0001;
+      if (o.act) o.act();
+    },
+    setLit: function (on) { api.lit = !!on; }
+  };
+  pkCtlLive({
+    tick: function (dt) {
+      if (pressT > 0) {
+        pressT += dt;
+        var k = pressT / 0.20;
+        if (k >= 1) { pressT = 0; cg.position.z = 0.012; }
+        else cg.position.z = 0.012 - 0.007 * Math.sin(Math.PI * k);
+      }
+      var want = api.lit && PK.consoleLamps !== false ? 1 : 0;
+      var cur = ledMat.emissiveIntensity || 0;
+      ledMat.emissiveIntensity = cur + (want * 1.35 - cur) * Math.min(1, dt * 12);
+    }
+  });
+  hitBox(r * 2.4, r * 2.4, 0.075, x, y, 0.028, {
+    prompt: function () { return o.prompt || ('Press ' + (o.label || 'the button')); },
+    use: function () { api.press(); }
+  }, g);
+  return api;
+}
+
+// a bat switch under a rubber boot: the lever throws up or down about the plate
+function pkCtlToggle(g, x, y, o) {
+  o = o || {};
+  var M = pkCtlM(), on = !!o.on;
+  pkBevelBox(0.072, 0.096, 0.010, M.bezel, x, y, 0.005, g, 0.004);
+  var boot = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.024, 0.030, 12, 1, true), M.boot);
+  boot.rotation.x = Math.PI / 2; boot.position.set(x, y, 0.025); g.add(boot);
+  var piv = new THREE.Group(); piv.position.set(x, y, 0.040); piv.userData.dynamic = true; g.add(piv);
+  var arm = new THREE.Mesh(roundCylGeo(0.0055, 0.0055, 0.052, 8), MAT.chrome);
+  arm.rotation.x = Math.PI / 2; arm.position.z = 0.026; piv.add(arm);
+  var ball = new THREE.Mesh(new THREE.SphereGeometry(0.0105, 10, 8), M.caps.black);
+  ball.position.z = 0.055; piv.add(ball);
+  var target = on ? -0.42 : 0.42;
+  piv.rotation.x = target;
+  var api = {
+    id: o.id, on: on,
+    set: function (v) { api.on = !!v; target = api.on ? -0.42 : 0.42; },
+    flip: function () {
+      var want = !api.on;
+      api.set(want);
+      // a switch that is refused falls straight back, the way a real breaker does
+      if (o.act && o.act(want) === false) api.set(!want);
+    }
+  };
+  pkCtlLive({ tick: function (dt) { piv.rotation.x += (target - piv.rotation.x) * Math.min(1, dt * 16); } });
+  hitBox(0.095, 0.115, 0.085, x, y, 0.035, {
+    prompt: function () { return (o.prompt || 'Throw the switch') + ' - ' + (o.onName || 'ON') + ' / ' + (o.offName || 'OFF'); },
+    use: function () { api.flip(); }
+  }, g);
+  return api;
+}
+
+// a rotary selector: a knurled knob with a pointer that steps between detents
+function pkCtlRotary(g, x, y, o) {
+  o = o || {};
+  var M = pkCtlM(), r = o.r || 0.048, n = o.n || 3, pos = o.pos || 0;
+  var plate = new THREE.Mesh(roundCylGeo(r * 1.55, r * 1.62, 0.010, 24), M.bezel);
+  plate.rotation.x = Math.PI / 2; plate.position.set(x, y, 0.005); g.add(plate);
+  var piv = new THREE.Group(); piv.position.set(x, y, 0.010); piv.userData.dynamic = true; g.add(piv);
+  var knob = new THREE.Mesh(roundCylGeo(r, r * 0.92, 0.030, 24), M.knob);
+  knob.rotation.x = Math.PI / 2; knob.position.z = 0.016; knob.castShadow = true; piv.add(knob);
+  var grip = new THREE.Mesh(new THREE.TorusGeometry(r * 0.80, 0.005, 6, 20), M.well);
+  grip.position.z = 0.030; piv.add(grip);
+  var ptr = new THREE.Mesh(new THREE.BoxGeometry(0.007, r * 0.66, 0.006), M.caps.white);
+  ptr.position.set(0, r * 0.42, 0.032); piv.add(ptr);
+  var step = n > 1 ? 0.62 : 0, target = (pos - (n - 1) / 2) * step;
+  piv.rotation.z = target;
+  var api = {
+    id: o.id, pos: pos, n: n,
+    set: function (p, quiet) {
+      api.pos = (p + n) % n; target = (api.pos - (n - 1) / 2) * step;
+      if (!quiet && o.act) o.act(api.pos);
+    },
+    step: function () { api.set(api.pos + 1); }
+  };
+  pkCtlLive({ tick: function (dt) { piv.rotation.z += (target - piv.rotation.z) * Math.min(1, dt * 14); } });
+  hitBox(r * 3.1, r * 3.1, 0.085, x, y, 0.030, {
+    prompt: function () { return (o.prompt || 'Turn the selector') + ': ' + (o.names ? o.names[api.pos] : 'position ' + (api.pos + 1)); },
+    use: function () { sfx('click'); api.step(); }
+  }, g);
+  return api;
+}
+
+// the throttle: a quadrant lever that stands out of the plate and swings down toward the operator
+function pkCtlLever(g, x, y, o) {
+  o = o || {};
+  var M = pkCtlM(), len = o.len || 0.22, rest = -0.30, pulled = 0.62;
+  // the quadrant: a raised boss with a slot the lever sweeps through
+  pkBevelBox(0.11, 0.11, 0.030, M.bezel, x, y, 0.014, g, 0.006);
+  var quad = new THREE.Mesh(new THREE.RingGeometry(0.030, len * 0.98, 26, 1, -1.45, 2.90), M.well);
+  quad.position.set(x, y, 0.0305); g.add(quad);
+  var piv = new THREE.Group(); piv.position.set(x, y, 0.034); piv.userData.dynamic = true; g.add(piv);
+  // the shaft stands out of the plate along +Z, so it never sinks into the fascia
+  var shaft = new THREE.Mesh(roundCylGeo(0.012, 0.016, len, 10), MAT.chrome);
+  shaft.rotation.x = Math.PI / 2; shaft.position.z = len / 2; shaft.castShadow = true; piv.add(shaft);
+  var neck = new THREE.Mesh(new THREE.SphereGeometry(0.020, 12, 10), M.caps[o.col || 'black']);
+  neck.position.z = len; piv.add(neck);
+  // the grip stands up off the end of the shaft: a hand-sized handle, not a ball
+  var grip = new THREE.Mesh(roundCylGeo(0.024, 0.028, 0.115, 14), M.caps[o.col || 'black']);
+  grip.position.z = len; grip.castShadow = true; piv.add(grip);
+  var capA = new THREE.Mesh(new THREE.SphereGeometry(0.026, 12, 10), M.caps[o.col || 'black']);
+  capA.position.set(0, 0.058, len); piv.add(capA);
+  var capB = new THREE.Mesh(new THREE.SphereGeometry(0.026, 12, 10), M.caps[o.col || 'black']);
+  capB.position.set(0, -0.058, len); piv.add(capB);
+  piv.rotation.x = rest;
+  var state = 'rest', t = 0;
+  var api = {
+    id: o.id, pulled: false,
+    pull: function () {
+      if (state === 'pull' || state === 'hold') return;
+      state = 'pull'; t = 0;
+      sfx('lever');
+      if (o.act) o.act();
+    }
+  };
+  pkCtlLive({
+    tick: function (dt) {
+      if (state === 'rest') return;
+      t += dt;
+      if (state === 'pull') {
+        var k = Math.min(1, t / 0.16);
+        piv.rotation.x = rest + (pulled - rest) * (1 - Math.pow(1 - k, 2));
+        if (k >= 1) { state = 'hold'; t = 0; }
+      } else if (state === 'hold') {
+        if (t > 0.55) { state = 'back'; t = 0; }
+      } else {
+        var k2 = Math.min(1, t / 0.35);
+        piv.rotation.x = pulled + (rest - pulled) * k2 * k2;
+        if (k2 >= 1) { state = 'rest'; piv.rotation.x = rest; }
+      }
+    }
+  });
+  hitBox(0.15, 0.20, 0.22, x, y + 0.02, 0.115, {
+    prompt: function () { return o.prompt || 'Pull the lever'; },
+    use: function () { api.pull(); }
+  }, g);
+  return api;
+}
+
+// the mushroom: a red head on a yellow plate, and it stays down until it is turned back
+function pkCtlMushroom(g, x, y, o) {
+  o = o || {};
+  var M = pkCtlM(), r = o.r || 0.072;
+  var plate = new THREE.Mesh(roundCylGeo(r * 1.42, r * 1.50, 0.012, 24), M.yellow);
+  plate.rotation.x = Math.PI / 2; plate.position.set(x, y, 0.006); g.add(plate);
+  var collar = new THREE.Mesh(roundCylGeo(r * 0.92, r * 0.98, 0.024, 24), M.bezel);
+  collar.rotation.x = Math.PI / 2; collar.position.set(x, y, 0.020); g.add(collar);
+  var head = new THREE.Group(); head.position.set(x, y, 0.028); head.userData.dynamic = true; g.add(head);
+  var body = new THREE.Mesh(roundCylGeo(r * 0.78, r * 0.86, 0.026, 24), M.caps.red);
+  body.rotation.x = Math.PI / 2; body.castShadow = true; head.add(body);
+  var dome = new THREE.Mesh(new THREE.SphereGeometry(r * 0.78, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), M.caps.red);
+  dome.rotation.x = Math.PI / 2; dome.position.z = 0.013; dome.scale.z = 0.55; head.add(dome);
+  var down = 0, target = 0;
+  var api = {
+    id: o.id, latched: false,
+    press: function () {
+      if (api.latched) { api.latched = false; target = 0; sfx('click'); if (o.release) o.release(); }
+      else { api.latched = true; target = -0.012; sfx('bad'); if (o.act) o.act(); }
+    }
+  };
+  pkCtlLive({ tick: function (dt) { down += (target - down) * Math.min(1, dt * 20); head.position.z = 0.028 + down; } });
+  hitBox(r * 3.0, r * 3.0, 0.09, x, y, 0.030, {
+    prompt: function () { return api.latched ? 'Turn the stop to reset' : (o.prompt || 'Hit the emergency stop'); },
+    use: function () { api.press(); }
+  }, g);
+  return api;
+}
+
+// an indicator lamp in a bezel
+function pkCtlLamp(g, x, y, o) {
+  o = o || {};
+  var M = pkCtlM(), r = o.r || 0.026;
+  var bez = new THREE.Mesh(roundCylGeo(r * 1.34, r * 1.40, 0.012, 16), M.bezel);
+  bez.rotation.x = Math.PI / 2; bez.position.set(x, y, 0.006); g.add(bez);
+  var mat = glowMat(o.col || 0x5fd38d, 0.10);
+  var lens = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 10), mat);
+  lens.position.set(x, y, 0.016); lens.scale.z = 0.86; g.add(lens);
+  // a bright pip on top of the lens so a lit lamp reads from across the room
+  var pip = new THREE.Mesh(new THREE.SphereGeometry(r * 0.52, 10, 8), mat);
+  pip.position.set(x, y, 0.020); g.add(pip);
+  var api = { id: o.id, mat: mat, col: o.col || 0x5fd38d, on: false, level: 0 };
+  pkCtlLive({
+    tick: function (dt) {
+      var want = api.on ? 1 : 0;
+      api.level += (want - api.level) * Math.min(1, dt * 10);
+      mat.emissiveIntensity = 0.10 + api.level * 2.1;
+    }
+  });
+  return api;
+}
+
+// an analogue gauge: printed dial, chrome bezel, a needle on a pivot, and a glass
+function pkCtlGauge(g, x, y, o) {
+  o = o || {};
+  var M = pkCtlM(), r = o.r || 0.10;
+  var bez = new THREE.Mesh(roundCylGeo(r * 1.13, r * 1.17, 0.013, 28), MAT.chrome);
+  bez.rotation.x = Math.PI / 2; bez.position.set(x, y, 0.0065); g.add(bez);
+  var face = new THREE.Mesh(new THREE.CircleGeometry(r * 0.99, 40),
+    new THREE.MeshStandardMaterial({ map: pkCtlGaugeTex(o), roughness: 0.42, metalness: 0.02 }));
+  face.position.set(x, y, 0.014); g.add(face);
+  var piv = new THREE.Group(); piv.position.set(x, y, 0.019); piv.userData.dynamic = true; g.add(piv);
+  var nd = new THREE.Mesh(new THREE.BoxGeometry(0.0055, r * 0.80, 0.004), M.needle);
+  nd.position.y = r * 0.30; piv.add(nd);
+  var cw = new THREE.Mesh(new THREE.BoxGeometry(0.010, r * 0.16, 0.004), M.needle);
+  cw.position.y = -r * 0.07; piv.add(cw);
+  var hub = new THREE.Mesh(roundCylGeo(r * 0.10, r * 0.10, 0.010, 12), M.bezel);
+  hub.rotation.x = Math.PI / 2; hub.position.z = 0.002; piv.add(hub);
+  var glass = new THREE.Mesh(new THREE.CircleGeometry(r * 0.99, 32), MAT.screenGlass);
+  glass.position.set(x, y, 0.027); g.add(glass);
+  var cur = 0;
+  var api = {
+    id: o.id, get: o.get || function () { return 0.25; }, cur: 0, piv: piv,
+    set: function (t) { cur = clamp(t, 0, 1); }
+  };
+  pkCtlLive({
+    tick: function (dt) {
+      var want = clamp(api.get(), 0, 1);
+      cur += (want - cur) * Math.min(1, dt * (o.ease || 3.0));
+      piv.rotation.z = -(225 + 270 * cur) * Math.PI / 180;
+    }
+  });
+  return api;
+}
+
+// ── The state the desks share ────────────────────────────────────────
+function pkCtlState() {
+  if (!PK.console) {
+    PK.console = {
+      on: true,        // the master switch on the big desk
+      lamps: true,     // the lit rings in the buttons
+      mode: 0,         // 0 MANUAL, 1 AUTO, 2 TEST
+      air: 6.6,        // the air receiver, in bar
+      cab: { lights: false, snack: false, clerk: false },   // what the park has bothered to install
+      parts: {}        // the hardware, by id
+    };
+  }
+  return PK.console;
+}
+function pkCtlGuard() {
+  var C = pkCtlState();
+  if (!C.on) { sfx('bad'); toast('The console is dead - turn the power on', 'bad'); return false; }
+  return true;
+}
+
+// ── The coaster's control desk ───────────────────────────────────────
+// One group at the top of the world: the editor selects, moves and turns the whole console as
+// one item, and nothing on the fascia can be nudged out of place on its own.
+function pkBuildCoasterConsole() {
+  pkCtlStart();
+  var C = pkCtlState();
+  if (C.built) return C;
+  C.built = true;
+  var M = pkCtlM();
+  var G = new THREE.Group(); scene.add(G);
+  var CX = 14.30, CZ = -3.50, TOP = 0.91, PW = 2.60, PH = 0.72, TILT = 0.52;
+
+  // ── the cabinet: a steel pedestal with two doors, a kick plate and a vent ──
+  pkBevelBox(2.72, 0.84, 0.68, M.case, CX, 0.43, CZ, G, 0.025);
+  pkBevelBox(2.78, 0.05, 0.72, M.face, CX, TOP - 0.025, CZ, G, 0.012);
+  pkBevelBox(2.72, 0.14, 0.03, M.well, CX, 0.08, CZ + 0.345, G, 0.008);
+  [-0.69, 0.69].forEach(function (dx) {
+    pkBevelBox(1.22, 0.52, 0.022, M.face, CX + dx, 0.46, CZ + 0.344, G, 0.008);
+    pkBevelBox(0.28, 0.045, 0.035, MAT.chrome, CX + dx, 0.62, CZ + 0.365, G, 0.008);
+  });
+  // a vent grille low on the right, and the maker's plate on the cabinet
+  for (var v = 0; v < 5; v++) pkBevelBox(0.34, 0.016, 0.014, M.well, CX + 0.96, 0.20 + v * 0.045, CZ + 0.352, G, 0.004);
+  pkSign3D(['PARK CO', 'COASTER CONTROL'], 0.62, 0.20, CX - 0.72, 0.40, CZ + 0.365, 0, { bg: '#1b232c', fg: '#e8e4d8' }, G);
+
+  // ── the fascia ──
+  var B = [
+    ['gates', 'GATES', 'green', -0.35, 0.17],
+    ['barsDown', 'BARS DN', 'amber', -0.11, 0.17],
+    ['barsUp', 'BARS UP', 'white', 0.13, 0.17],
+    ['dispatch', 'DISPATCH', 'green', 0.37, 0.17],
+    ['reset', 'RESET', 'white', -0.35, -0.04],
+    ['test', 'TEST RUN', 'blue', -0.11, -0.04],
+    ['maint', 'MAINT', 'amber', 0.13, -0.04],
+    ['horn', 'BELL', 'white', 0.37, -0.04]
+  ];
+  var GA = [
+    ['speed', 'SPEED', 'km/h', 0, 80, 0.80, -1.14],
+    ['air', 'AIR', 'bar', 0, 10, 0.72, -0.85],
+    ['load', 'LOAD', 'riders', 0, 12, 0.90, -0.56]
+  ];
+  var LA = [['power', 'POWER'], ['gate', 'GATES'], ['bars', 'BARS'], ['fault', 'FAULT']];
+  var TOG = [['powerSw', 'POWER', -1.15], ['lampSw', 'LAMPS', -0.88]];
+
+  var P = pkCtlPanel({
+    w: PW, h: PH, x: CX, y: TOP + (PH / 2) * Math.cos(TILT), z: CZ + 0.31 - (PH / 2) * Math.sin(TILT),
+    tilt: -TILT, key: 'pk-coaster-desk', parent: G,
+    draw: function (c, W, H) {
+      var R2 = pkCtlRuler(W, H, PW, PH); R2.c = c;
+      // section boxes
+      R2.box(-0.87, 0, 0.86, 0.70, 'rgba(0,0,0,0.30)', 0.006);
+      R2.box(0.08, 0, 1.04, 0.70, 'rgba(0,0,0,0.30)', 0.006);
+      R2.box(0.95, 0, 0.70, 0.70, 'rgba(0,0,0,0.30)', 0.006);
+      R2.engrave('DRIVE', -0.87, 0.300, 0.030);
+      R2.engrave('CONTROL', 0.08, 0.300, 0.030);
+      R2.engrave('DISPATCH', 0.95, 0.300, 0.030);
+      // section 1: lamp captions, gauge captions, switch captions
+      for (var i = 0; i < LA.length; i++) R2.txt(LA[i][1], -1.14 + i * 0.19, 0.262, 0.020, '#aebcc4');
+      R2.txt('MASTER', -1.15, -0.272, 0.020, '#aebcc4');
+      R2.txt('PANEL LAMPS', -0.88, -0.272, 0.020, '#aebcc4');
+      R2.txt('MODE', -0.57, -0.272, 0.020, '#aebcc4');
+      // section 2: button captions
+      for (var b = 0; b < B.length; b++) R2.txt(B[b][1], B[b][3], B[b][4] - 0.068, 0.024, '#d6dee3');
+      R2.txt('PARK CO  ·  COASTER CONTROL  ·  STATION 01', 0.08, -0.268, 0.021, '#8f9ca4');
+      // section 3: the emergency stop
+      R2.engrave('EMERGENCY STOP', 0.80, 0.058, 0.026);
+      R2.txt('turn to release', 0.80, 0.028, 0.017, '#c8d2d8');
+      R2.txt('DISPATCH', 1.03, -0.258, 0.024, '#d6dee3');
+      R2.txt('PULL', 1.03, -0.228, 0.016, '#8f9ca4');
+      // a hazard band along the bottom edge
+      var hy = R2.Y(-0.322), hh = R2.L(0.028);
+      c.save();
+      c.beginPath(); c.rect(R2.X(-1.30), hy, R2.L(2.60), hh); c.clip();
+      c.fillStyle = '#151a1e'; c.fillRect(R2.X(-1.30), hy, R2.L(2.60), hh);
+      c.fillStyle = '#c9a227';
+      for (var hz = 0; hz < 62; hz++) {
+        var x0 = R2.X(-1.30) + hz * R2.L(0.048);
+        c.beginPath(); c.moveTo(x0, hy + hh); c.lineTo(x0 + R2.L(0.022), hy + hh);
+        c.lineTo(x0 + R2.L(0.022) + hh, hy); c.lineTo(x0 + hh, hy); c.closePath(); c.fill();
+      }
+      c.restore();
+    }
+  });
+
+  // hardware, in the order a hand would find it
+  var gauges = {}, lamps = {}, buttons = {};
+  for (var gi = 0; gi < GA.length; gi++) {
+    var gd = GA[gi];
+    gauges[gd[0]] = pkCtlGauge(P, gd[6], 0.115, {
+      id: gd[0], label: gd[1], unit: gd[2], min: gd[3], max: gd[4], red: gd[5], ticks: 8, r: 0.098,
+      get: gd[0] === 'speed' ? function () { return (PK.ride.v || 0) * 3.6 / 80; }
+        : gd[0] === 'air' ? function () { return pkCtlState().air / 10; }
+        : function () { return PK.seats.length ? PK.ride.riders / PK.seats.length : 0; }
+    });
+  }
+  for (var li = 0; li < LA.length; li++) {
+    lamps[LA[li][0]] = pkCtlLamp(P, -1.14 + li * 0.19, 0.305, { id: LA[li][0], r: 0.022, col: li === 0 ? 0x5fd38d : li === 3 ? 0xff4d3d : 0xf0c04a });
+  }
+  for (var bi = 0; bi < B.length; bi++) {
+    var bd = B[bi];
+    buttons[bd[0]] = pkCtlBtn(P, bd[3], bd[4], {
+      id: bd[0], label: bd[1], col: bd[2], r: 0.040,
+      lampCol: bd[2] === 'green' ? 0x5fd38d : bd[2] === 'amber' ? 0xf0c04a : bd[2] === 'blue' ? 0x5aa9ff : 0xe8e4d8,
+      prompt: 'Press ' + bd[1],
+      act: function () {
+        if (!pkCtlGuard()) return;
+        var id = this.id;
+        if (id === 'gates') return pkGatesToggle();
+        if (id === 'barsDown') return pkBarsDown();
+        if (id === 'barsUp') return pkBarsUp();
+        if (id === 'dispatch') return pkCtlState().mode === 2 ? pkTestRun() : pkDispatch();
+        if (id === 'reset') return pkReset();
+        if (id === 'test') return pkTestRun();
+        if (id === 'maint') return pkService();
+        if (id === 'horn') { sfx('bell'); return true; }
+      }
+    });
+  }
+  // the buttons carry a live lamp: green when the thing they do is ready
+  var toggles = {};
+  toggles.powerSw = pkCtlToggle(P, -1.15, -0.19, {
+    id: 'powerSw', on: true, prompt: 'Master power',
+    act: function (on) {
+      C.on = on; sfx('click');
+      toast(on ? 'Console live' : 'Console dead', on ? 'good' : 'bad');
+    }
+  });
+  toggles.lampSw = pkCtlToggle(P, -0.88, -0.19, {
+    id: 'lampSw', on: true, prompt: 'Panel lamps',
+    act: function (on) { C.lamps = on; PK.consoleLamps = on; sfx('click'); }
+  });
+  var mode = pkCtlRotary(P, -0.57, -0.19, {
+    id: 'mode', n: 3, pos: S.auto ? 1 : 0, r: 0.040, names: ['MANUAL', 'AUTO', 'TEST'],
+    prompt: 'Mode selector',
+    act: function (pos) {
+      C.mode = pos;
+      if (pos === 2) { pkSetAuto(false); toast('Mode: test run', ''); }
+      else pkSetAuto(pos === 1);
+    }
+  });
+  var stop = pkCtlMushroom(P, 0.80, 0.175, {
+    id: 'estop', r: 0.070, prompt: 'Emergency stop',
+    act: function () { pkStop(); },
+    release: function () { pkReset(); }
+  });
+  var lever = pkCtlLever(P, 1.03, -0.045, {
+    id: 'throttle', len: 0.215, col: 'black', prompt: 'Pull the dispatch lever',
+    act: function () { if (!pkCtlGuard()) return; if (C.mode === 2) pkTestRun(); else pkDispatch(); }
+  });
+
+  C.parts = { gauges: gauges, lamps: lamps, buttons: buttons, toggles: toggles, mode: mode, stop: stop, lever: lever };
+
+  // ── the desk keeps itself in step with the ride ──
+  var airT = 0;
+  pkCtlLive({
+    tick: function (dt) {
+      var R = PK.ride, live = C.on;
+      airT += dt;
+      var wantAir = (R.state === 'dispatch' || R.state === 'running') ? 5.9 : 6.9;
+      C.air += (wantAir - C.air) * Math.min(1, dt * 0.8);
+      if (airT > 0.25) { airT = 0; }
+      // the mode knob follows the game when AUTO is set elsewhere
+      if (C.mode !== 2 && mode.pos !== (S.auto ? 1 : 0)) mode.set(S.auto ? 1 : 0, true);
+      // lamps
+      lamps.power.on = live && !PK.closed;
+      lamps.gate.on = live && PK.gates.length > 0 && !!PK.gates[0].open;
+      lamps.bars.on = live && (R.barsWant > 0.5);
+      lamps.fault.on = live && (!!R.fault || (S.wear || 0) >= 90);
+      // button lamps say what is ready to press
+      var ready = live && !R.fault;
+      buttons.gates.setLit(ready && (R.state === 'idle' || R.state === 'unload'));
+      buttons.barsDown.setLit(ready && R.barsWant < 0.5);
+      buttons.barsUp.setLit(ready && R.barsWant > 0.5);
+      buttons.dispatch.setLit(ready && (R.state === 'ready' || (R.state === 'loading' && R.riders > 0)));
+      buttons.reset.setLit(live && !!R.fault);
+      buttons.test.setLit(ready && R.state === 'idle');
+      buttons.maint.setLit(live && (S.wear || 0) > 0);
+      if (toggles.powerSw.on !== C.on) toggles.powerSw.set(C.on);
+      if (toggles.lampSw.on !== C.lamps) toggles.lampSw.set(C.lamps);
+      // the stop stays latched while the ride is faulted
+      if (stop.latched !== !!R.fault) { stop.latched = !!R.fault; }
+    }
+  });
+  // the console is a fixture of the room: it is solid so nobody walks through the doors
+  solid(CX - 1.36, CX + 1.36, CZ - 0.34, CZ + 0.34, 0, 0.95);
+  return C;
+}
+
+// ── The compact desk in a ride booth ────────────────────────────────
+// Four buttons, a bat switch, a mushroom and a load gauge on the booth's console: the screen
+// above still explains the ride, but the operator works it with hands, not a mouse.
+function pkBoothPanel(a, con) {
+  // The console lives in `con`'s frame, whose local +Z faces the operator.
+  var C = pkCtl(a);
+  var PW = 1.72, PH = 0.50, TILT = 0.50;
+  var TOP = 0.72;
+  var PY = TOP + (PH / 2) * Math.cos(TILT);
+  var PZ = (PH / 2) * Math.sin(TILT) + 0.06;
+
+  var B = [
+    ['gates', 'GATES', 'green', -0.18],
+    ['bars', 'BARS', 'amber', 0.04],
+    ['dispatch', 'DISPATCH', 'green', 0.26],
+    ['test', 'TEST', 'blue', 0.48]
+  ];
+  var P = pkCtlPanel({
+    w: PW, h: PH, x: 0, y: PY, z: PZ, tilt: -TILT, key: 'pk-booth-desk-' + a.id, parent: con,
+    draw: function (c, W, H) {
+      var R2 = pkCtlRuler(W, H, PW, PH); R2.c = c;
+      R2.box(-0.60, 0.0, 0.50, 0.44, 'rgba(0,0,0,0.26)', 0.005);
+      R2.box(0.09, 0.0, 1.00, 0.44, 'rgba(0,0,0,0.26)', 0.005);
+      R2.box(0.66, 0.0, 0.34, 0.44, 'rgba(0,0,0,0.26)', 0.005);
+      R2.engrave('PARK CO  ·  ' + a.name.toUpperCase(), -0.60, 0.205, 0.020);
+      R2.txt('LOAD', -0.70, -0.092, 0.019, '#aebcc4');
+      R2.txt('SPEED', -0.50, -0.092, 0.019, '#aebcc4');
+      for (var i = 0; i < B.length; i++) R2.txt(B[i][1], B[i][3], 0.192, 0.021, '#d6dee3');
+      R2.txt('AUTO', -0.18, -0.206, 0.018, '#aebcc4');
+      R2.txt('E-STOP', 0.04, -0.206, 0.018, '#d6dee3');
+      R2.txt('RESET', 0.26, -0.206, 0.018, '#aebcc4');
+      R2.txt('DISPATCH', 0.66, -0.206, 0.018, '#d6dee3');
+    }
+  });
+  var parts = { buttons: {} };
+  for (var i = 0; i < B.length; i++) {
+    var b = B[i];
+    parts.buttons[b[0]] = pkCtlBtn(P, b[3], 0.105, {
+      id: b[0], label: b[1], col: b[2], r: 0.034,
+      lampCol: b[2] === 'green' ? 0x5fd38d : b[2] === 'amber' ? 0xf0c04a : b[2] === 'blue' ? 0x5aa9ff : 0xe8e4d8,
+      prompt: 'Press ' + b[1],
+      act: function () {
+        var id = this.id;
+        if (C.fault && id !== 'gates') { sfx('bad'); toast('Reset ' + a.name + ' first', 'bad'); return; }
+        if (id === 'gates') return pkBoothGates(a);
+        if (id === 'bars') {
+          C.barsWant = C.barsWant > 0.5 ? 0 : 1;
+          sfx('click'); toast(a.name + ': restraints ' + (C.barsWant > 0.5 ? 'down' : 'up'), '');
+          screenDirtyAll(); return true;
+        }
+        if (id === 'dispatch') return pkBoothDispatch(a);
+        if (id === 'test') return pkBoothTest(a);
+      }
+    });
+  }
+  parts.auto = pkCtlToggle(P, -0.18, -0.135, {
+    id: 'auto', on: C.auto, prompt: 'Automatic cycle',
+    act: function () { pkBoothAuto(a); }
+  });
+  parts.stop = pkCtlMushroom(P, 0.04, -0.118, {
+    id: 'stop', r: 0.050, prompt: 'Emergency stop',
+    act: function () { pkBoothStop(a); }
+  });
+  parts.reset = pkCtlBtn(P, 0.26, -0.135, {
+    id: 'reset', label: 'RESET', col: 'white', r: 0.034, lampCol: 0xe8e4d8,
+    prompt: 'Reset after a stop',
+    act: function () { if (C.fault) { pkBoothStop(a); } else { sfx('click'); toast(a.name + ': nothing to reset', ''); } }
+  });
+  parts.lever = pkCtlLever(P, 0.66, -0.010, {
+    id: 'dispatchLever', len: 0.19, col: 'black', prompt: 'Pull the dispatch lever',
+    act: function () { pkBoothDispatch(a); }
+  });
+  parts.load = pkCtlGauge(P, -0.70, 0.025, {
+    id: 'load', label: '', unit: 'riders', min: 0, max: Math.max(4, a.seats.length), red: 0.92, ticks: 6, r: 0.075,
+    get: function () { return a.seats.length ? a.riders / a.seats.length : 0; }
+  });
+  parts.speed = pkCtlGauge(P, -0.50, 0.025, {
+    id: 'speed', label: '', unit: 'cycle', min: 0, max: 1, red: 0.94, ticks: 5, r: 0.075,
+    get: function () { return a.state === 'running' ? Math.min(1, (a.t || 0) / Math.max(1, a.run || 1)) : 0; }
+  });
+  pkCtlLive({
+    tick: function (dt) {
+      var live = !C.fault;
+      if (parts.auto.on !== C.auto) parts.auto.set(C.auto);
+      if (parts.stop.latched !== !!C.fault) parts.stop.latched = !!C.fault;
+      parts.buttons.gates.setLit(live && (a.state === 'idle' || a.state === 'unloading' || a.state === 'boarding'));
+      parts.buttons.dispatch.setLit(live && !PK.closed && (a.state === 'boarding' || a.state === 'ready') && !a.queue.length && !a.boarding && a.riders > 0);
+      parts.buttons.test.setLit(live && !PK.closed && a.state === 'idle' && !a.queue.length && !a.riders);
+    }
+  });
+  a.boothPanel = parts;
+  return parts;
+}
+
+// ── The park services cabinet ───────────────────────────────────────
+// The coaster desk is the coaster's. Everything that belongs to the whole park - a breaker per
+// ride, the park lights, the ticket window, the snack bar - lives on one steel switchboard on
+// the office wall, with a supply dial, a load dial, a lamp per circuit and a breaker per ride.
+var PK_CAB_RIDES = [
+  ['carousel', 'CAROUSEL'], ['teacups', 'TEACUPS'], ['ferris', 'FERRIS WHEEL'],
+  ['dodgems', 'DODGEMS'], ['droptower', 'DROP TOWER'], ['flume', 'LOG FLUME'],
+  ['haunted', 'HAUNTED HOUSE']
+];
+function pkBuildParkCabinet(px, py, pz, ry) {
+  pkCtlStart();
+  var C = pkCtlState();
+  if (C.cabinet) return C.cabinet;
+  var M = pkCtlM();
+  var PW = 1.34, PH = 1.26, CX = px === undefined ? -22.86 : px, CY = py === undefined ? 1.66 : py, CZ = pz === undefined ? 43.55 : pz;
+
+  // the enclosure hangs off a holder so the whole board can be moved as one item
+  var H = new THREE.Group();
+  H.position.set(CX, CY, CZ); H.rotation.order = 'YXZ';
+  H.rotation.y = ry === undefined ? Math.PI / 2 : ry; H.rotation.x = -0.055; scene.add(H);
+  pkBevelBox(PW + 0.16, PH + 0.16, 0.13, M.case, 0, 0, -0.105, H, 0.02);
+  pkBevelBox(PW + 0.24, 0.05, 0.22, M.face, 0, PH / 2 + 0.115, -0.045, H, 0.012);
+  // the conduit up into the roof, and a pair of hinges down the near edge
+  cyl(0.030, 0.62, MAT.steelDark, 0, PH / 2 + 0.44, -0.085, H, 10);
+  cyl(0.038, 0.03, MAT.steelDark, 0, PH / 2 + 0.13, -0.085, H, 10);
+  [0.36, -0.36].forEach(function (hy) {
+    pkBevelBox(0.05, 0.11, 0.06, MAT.chrome, -PW / 2 - 0.055, hy, -0.02, H, 0.008);
+  });
+
+  var P = pkCtlPanel({
+    w: PW, h: PH, x: 0, y: 0, z: 0, parent: H, key: 'pk-park-services',
+    draw: function (c, W, H2) {
+      var R2 = pkCtlRuler(W, H2, PW, PH); R2.c = c;
+      R2.engrave('PARK SERVICES', 0, 0.552, 0.033);
+      R2.txt('MAIN SWITCHBOARD   ·   STATION 01', 0, 0.512, 0.016, '#a6b4bc');
+      // three bays, ruled the way a real board is ruled
+      R2.box(-0.51, 0.01, 0.30, 1.00, 'rgba(0,0,0,0.20)', 0.005);
+      R2.box(-0.02, 0.01, 0.46, 1.00, 'rgba(0,0,0,0.20)', 0.005);
+      R2.box(0.48, 0.01, 0.32, 1.00, 'rgba(0,0,0,0.20)', 0.005);
+      R2.txt('SUPPLY', -0.51, 0.192, 0.018, '#a6b4bc');
+      R2.txt('LOAD', -0.51, -0.078, 0.018, '#a6b4bc');
+      R2.txt('MAINS', -0.51, -0.292, 0.017, '#a6b4bc');
+      R2.txt('PARK OPEN', -0.51, -0.452, 0.017, '#a6b4bc');
+      for (var i = 0; i < PK_CAB_RIDES.length; i++)
+        R2.txt(PK_CAB_RIDES[i][1], -0.028, 0.400 - i * 0.135, 0.021, '#eef2f4', 'left');
+      R2.txt('PARK LIGHTS', 0.48, 0.297, 0.018, '#d6dee3');
+      R2.txt('TICKET WINDOW', 0.48, 0.067, 0.018, '#d6dee3');
+      R2.txt('SNACK BAR', 0.48, -0.163, 0.018, '#d6dee3');
+      R2.txt('BREAKERS', 0.48, -0.310, 0.017, '#8f9ca4');
+      R2.txt('UP = OPEN', 0.48, -0.342, 0.017, '#8f9ca4');
+      R2.txt('DOWN = SHUT', 0.48, -0.374, 0.017, '#8f9ca4');
+      R2.txt('ISOLATE BEFORE SERVICE', 0.48, -0.448, 0.014, '#7d8a96');
+      // a hazard strip along the bottom lip
+      var hy = R2.Y(-0.588), hh = R2.L(0.022);
+      c.save();
+      c.beginPath(); c.rect(R2.X(-0.67), hy, R2.L(1.34), hh); c.clip();
+      c.fillStyle = '#151a1e'; c.fillRect(R2.X(-0.67), hy, R2.L(1.34), hh);
+      c.fillStyle = '#c9a227';
+      for (var hz = 0; hz < 40; hz++) {
+        var x0 = R2.X(-0.67) + hz * R2.L(0.046);
+        c.beginPath(); c.moveTo(x0, hy + hh); c.lineTo(x0 + R2.L(0.020), hy + hh);
+        c.lineTo(x0 + R2.L(0.020) + hh, hy); c.lineTo(x0 + hh, hy); c.closePath(); c.fill();
+      }
+      c.restore();
+    }
+  });
+
+  var parts = { rides: {}, lamps: {}, gauges: {} };
+  for (var i = 0; i < PK_CAB_RIDES.length; i++) {
+    var rid = PK_CAB_RIDES[i][0], ry2 = 0.400 - i * 0.135;
+    parts.rides[rid] = pkCtlToggle(P, -0.11, ry2, {
+      id: 'ride_' + rid, on: true, prompt: PK_CAB_RIDES[i][1] + ' breaker',
+      onName: 'open', offName: 'shut',
+      act: function (on) { return pkSetRideOpen(this.id.slice(5), on); }
+    });
+    parts.lamps[rid] = pkCtlLamp(P, -0.205, ry2, { id: 'lamp_' + rid, r: 0.011, col: 0x5fd38d });
+  }
+  parts.gauges.supply = pkCtlGauge(P, -0.51, 0.305, {
+    id: 'supply', label: 'SUPPLY', unit: 'volts', min: 0, max: 300, red: 0.88, ticks: 6, r: 0.093,
+    get: function () { return 0.82; }
+  });
+  parts.gauges.load = pkCtlGauge(P, -0.51, 0.035, {
+    id: 'load', label: 'LOAD', unit: 'amps', min: 0, max: 60, red: 0.85, ticks: 6, r: 0.093,
+    get: function () {
+      var n = 0;
+      for (var i = 0; i < PK_CAB_RIDES.length; i++) {
+        var at = PK.attrById && PK.attrById[PK_CAB_RIDES[i][0]];
+        if (at && at.open) n++;
+      }
+      return 0.10 + (n / PK_CAB_RIDES.length) * 0.72;
+    }
+  });
+  parts.lamps.mains = pkCtlLamp(P, -0.51, -0.245, { id: 'mains', r: 0.020, col: 0x5fd38d });
+  parts.lamps.park = pkCtlLamp(P, -0.51, -0.405, { id: 'park', r: 0.020, col: 0xf0c04a });
+
+  parts.lights = pkCtlToggle(P, 0.48, 0.38, {
+    id: 'parkLights', on: !!S.lights, prompt: 'Park lights', onName: 'on', offName: 'off',
+    act: function (on) {
+      if (on && !C.cab.lights) { sfx('bad'); toast('The park lights are not installed yet', 'bad'); return false; }
+      S.lights = on; PK.lights = on;
+      sfx('click'); toast('Park lights ' + (on ? 'on' : 'off'), on ? 'good' : '');
+      logEvent('Park lights ' + (on ? 'on' : 'off'), '');
+      screenDirtyAll(); hudDirty = true; return true;
+    }
+  });
+  parts.ticket = pkCtlToggle(P, 0.48, 0.15, {
+    id: 'ticket', on: !!S.clerk, prompt: 'Ticket window', onName: 'staffed', offName: 'shut',
+    act: function (on) {
+      if (on && !C.cab.clerk) { sfx('bad'); toast('No clerk on the payroll', 'bad'); return false; }
+      S.clerk = on; PK.clerk = on;
+      sfx('click'); toast('Ticket window ' + (on ? 'staffed' : 'shut'), on ? 'good' : '');
+      logEvent('Ticket window ' + (on ? 'staffed' : 'shut'), ''); screenDirtyAll(); hudDirty = true; return true;
+    }
+  });
+  parts.snack = pkCtlToggle(P, 0.48, -0.08, {
+    id: 'snack', on: !!S.snackOpen, prompt: 'Snack bar', onName: 'serving', offName: 'shut',
+    act: function (on) {
+      if (on && !C.cab.snack) { sfx('bad'); toast('The snack stand is not built yet', 'bad'); return false; }
+      S.snackOpen = on; PK.snackOpen = on;
+      sfx('click'); toast('Snack bar ' + (on ? 'serving' : 'shut'), on ? 'good' : '');
+      logEvent('Snack bar ' + (on ? 'open' : 'shut'), ''); screenDirtyAll(); hudDirty = true; return true;
+    }
+  });
+
+  pkCtlLive({
+    tick: function (dt) {
+      // a service counts as installed once the park has unlocked or opened it anywhere else
+      if (S.lights) C.cab.lights = true;
+      if (S.snackOpen || (PK.level || 1) >= 2) C.cab.snack = true;
+      if (S.clerk) C.cab.clerk = true;
+      for (var i = 0; i < PK_CAB_RIDES.length; i++) {
+        var rid = PK_CAB_RIDES[i][0], at = PK.attrById && PK.attrById[rid];
+        var open = at ? !!at.open : true;
+        if (parts.rides[rid].on !== open) parts.rides[rid].set(open);
+        parts.lamps[rid].on = !!at && open;
+      }
+      if (parts.lights.on !== !!S.lights) parts.lights.set(!!S.lights);
+      if (parts.ticket.on !== !!S.clerk) parts.ticket.set(!!S.clerk);
+      if (parts.snack.on !== !!S.snackOpen) parts.snack.set(!!S.snackOpen);
+      parts.lamps.mains.on = true;
+      parts.lamps.park.on = !PK.closed;
+    }
+  });
+
+  C.cabinet = parts;
+  return parts;
+}
+// press E, and the ride carries you: the camera sits in the seat, the mouse looks around and the
+// whole cycle runs. When the ride comes back you step off at the exit. On AUTO the ride drives
+// itself, so the player can simply get on and go; off AUTO it waits for the desk like everyone else.
+  // ── Riding ────────────────────────────────────────────────────────
+  // PK.playerRide: { kind:'attr'|'coaster', a, seat, started, yaw0, pitch0, eye, face }
+  // PK.playerWait: { a, coaster, x, z } - the player is at the gate, waiting for the ride to come round.
+  var PK_RV = new THREE.Vector3(), PK_RQ = new THREE.Quaternion(), PK_RQ2 = new THREE.Quaternion(), PK_RE = new THREE.Euler(0, 0, 0, 'YXZ');
+
+  function pkPlayerRides() { return !!PK.playerRide; }
+  function pkPlayerFreeAttrSeat(a) {
+    for (var i = 0; i < a.seats.length; i++) if (!a.seats[i].guest && !a.seats[i].player) return a.seats[i];
+    return null;
+  }
+  function pkPlayerFreeCoasterSeat() {
+    for (var i = 0; i < PK.seats.length; i++) if (!PK.seats[i].guest && !PK.seats[i].player) return PK.seats[i];
+    return null;
+  }
+  function pkPlayerRideJoin(a) {
+    if (PK.playerRide) return false;
+    var coaster = !a;
+    if (PK.playerWait && PK.playerWait.a === a && PK.playerWait.coaster === coaster) {
+      PK.playerWait = null; sfx('click'); toast('You step out of the line', ''); return true;
+    }
+    PK.playerWait = null;
+    if (coaster) {
+      if (PK.closed) return pkRefuse('The park is closed');
+      if (PK.ride.fault) return pkRefuse('The coaster is stopped');
+      var moving = PK.ride.state === 'ready' || PK.ride.state === 'dispatch' || PK.ride.state === 'running' || PK.ride.state === 'arrive';
+      var seat = pkPlayerFreeCoasterSeat();
+      if (moving || !seat) {
+        PK.playerWait = { a: null, coaster: true, x: player.x, z: player.z };
+        toast(moving ? 'Waiting for the train to come back' : 'The train is full - waiting in the line', '');
+        return true;
+      }
+      pkPlayerSeatCoaster(seat);
+      return true;
+    }
+    if (!a.open) return pkRefuse(a.name + ' is closed for the day');
+    if (a.ctl && a.ctl.fault) return pkRefuse('The ride is stopped');
+    var busy = a.state === 'ready' || a.state === 'running' || a.state === 'unloading';
+    var st = pkPlayerFreeAttrSeat(a);
+    if (busy || !st) {
+      PK.playerWait = { a: a, coaster: false, x: player.x, z: player.z };
+      toast(busy ? 'Waiting for ' + a.name + ' to come round' : a.name + ' is full - waiting in the line', '');
+      return true;
+    }
+    pkPlayerSeatAttr(a, st);
+    return true;
+  }
+  // The player's seat is marked with .player so the queue never fills it. That is the whole
+  // booking: no guest record, no invisible body - the camera is the rider.
+  function pkPlayerSeatAttr(a, seat) {
+    seat.player = true; a.riders++;
+    PK.playerRide = { kind: 'attr', a: a, seat: seat, started: a.state === 'running', yaw0: player.yaw, pitch0: player.pitch, eye: 1.30, face: Math.PI + (seat.ry || 0) };
+    if (a.state === 'idle') {
+      var C = pkCtl(a);
+      a.state = 'boarding'; a.t = 0; C.gates = true; C.barsWant = 0; a.boarding = 0;
+    }
+    sfx('unlock'); toast('Riding ' + a.name + ' - look around with the mouse', 'good');
+    hudDirty = true; screenDirtyAll();
+  }
+  function pkPlayerSeatCoaster(seat) {
+    seat.player = true; PK.ride.riders++;
+    PK.playerRide = { kind: 'coaster', a: null, seat: seat, started: false, yaw0: player.yaw, pitch0: player.pitch, eye: 1.24, face: Math.PI };
+    sfx('unlock'); toast('On the coaster - look around with the mouse', 'good');
+    hudDirty = true; screenDirtyAll();
+  }
+  function pkPlayerRideStepOff() {
+    var pr = PK.playerRide; if (!pr) return false;
+    var ex, ez;
+    if (pr.kind === 'coaster') {
+      pr.seat.player = false;
+      PK.ride.riders = Math.max(0, PK.ride.riders - 1);
+      var w = pkSeatWorld(pr.seat);
+      ex = clamp(w.x, 4.2, 9.8); ez = -3.2;
+    } else {
+      pr.seat.player = false;
+      pr.a.riders = Math.max(0, pr.a.riders - 1);
+      ex = pr.a.exit[0]; ez = pr.a.exit[1];
+      if (pr.a.state === 'boarding' && !pr.a.queue.length) { pr.a.state = 'idle'; pr.a.t = 0; pkCtl(pr.a).gates = false; }
+    }
+    var fy = pkFloor(ex, ez);
+    player.x = ex; player.z = ez; player.y = fy; player.vy = 0; player.grounded = true;
+    player.pitch = 0;
+    PK.playerRide = null;
+    sfx('putdown'); toast('Back on your feet', '');
+    hudDirty = true; screenDirtyAll();
+    return true;
+  }
+  // E while seated: step off when the ride is stopped or at the platform, never mid-cycle.
+  function pkPlayerRideExitTry() {
+    var pr = PK.playerRide; if (!pr) return false;
+    var ok;
+    if (pr.kind === 'coaster') ok = PK.ride.state === 'idle' || PK.ride.state === 'unload' || PK.ride.state === 'loading' || PK.ride.state === 'fault';
+    else ok = pr.a.state === 'idle' || pr.a.state === 'boarding' || pr.a.state === 'unloading';
+    if (!ok) { toast('Wait until the ride stops', ''); sfx('bad'); return true; }
+    return pkPlayerRideStepOff();
+  }
+  // one tick: the wait at the gate, then the watch for the end of the cycle
+  function pkPlayerTick(dt) {
+    var w = PK.playerWait;
+    if (w) {
+      if (Math.abs(player.x - w.x) > 4.5 || Math.abs(player.z - w.z) > 4.5) PK.playerWait = null;
+      else if (w.coaster) {
+        var seat = pkPlayerFreeCoasterSeat(), R = PK.ride;
+        if (seat && !R.fault && R.state !== 'ready' && R.state !== 'dispatch' && R.state !== 'running' && R.state !== 'arrive') {
+          PK.playerWait = null; pkPlayerSeatCoaster(seat);
+        }
+      } else {
+        var a = w.a, st = pkPlayerFreeAttrSeat(a);
+        if (st && !(a.ctl && a.ctl.fault) && a.state !== 'ready' && a.state !== 'running' && a.state !== 'unloading') {
+          PK.playerWait = null; pkPlayerSeatAttr(a, st);
+        }
+      }
+    }
+    var pr = PK.playerRide; if (!pr) return;
+    if (!pr.started) pr.started = pr.kind === 'coaster'
+      ? (PK.ride.state === 'dispatch' || PK.ride.state === 'running' || PK.ride.state === 'arrive')
+      : (pr.a.state === 'running');
+    var done = pr.kind === 'coaster'
+      ? (pr.started && (PK.ride.state === 'unload' || PK.ride.state === 'idle'))
+      : (pr.started && (pr.a.state === 'unloading' || pr.a.state === 'idle'));
+    if (done) pkPlayerRideStepOff();
+  }
+  // the camera: in the seat, carried by the car or the horse, the mouse looking around it
+  function pkPlayerRideOverride(dt) {
+    var pr = PK.playerRide; if (!pr) return false;
+    var q = PK_RQ, w = PK_RV;
+    if (pr.kind === 'coaster') {
+      var car = PK.cars[pr.seat.car];
+      car.updateMatrixWorld(true);
+      w.set(pr.seat.local.x, pr.seat.local.y, pr.seat.local.z);
+      car.localToWorld(w);
+      car.getWorldQuaternion(q);
+    } else {
+      var par = pr.seat.par;
+      par.updateMatrixWorld(true);
+      w.set(pr.seat.x || 0, pr.seat.y || 0, pr.seat.z || 0);
+      par.localToWorld(w);
+      par.getWorldQuaternion(q);
+    }
+    var up = new THREE.Vector3(0, pr.eye, 0.06).applyQuaternion(q);
+    camera.position.set(w.x + up.x, w.y + up.y, w.z + up.z);
+    var dy = yawWrap(player.yaw - pr.yaw0), dp = clamp(player.pitch - pr.pitch0, -1.25, 1.25);
+    PK_RQ2.setFromEuler(PK_RE.set(dp, dy + pr.face, 0));
+    camera.quaternion.copy(q).multiply(PK_RQ2);
+    return true;
+  }
+  // the lane fences are blockers only while the ride is open: no invisible walls round a shut ride
+  function pkLaneCollides(x, z) {
+    for (var i = 0; i < PK.lanes.length; i++) {
+      var L = PK.lanes[i];
+      if (!L.a.open) continue;
+      if (x > L.x0 - 0.10 && x < L.x1 + 0.10) {
+        if (z > L.zA - 0.14 && z < L.zA + 0.14) return true;
+        if (z > L.zB - 0.14 && z < L.zB + 0.14) return true;
+      }
+      // a closed boarding gate carries across the lane
+      if (!(L.a.ctl && L.a.ctl.gates) && x > L.gx - 0.14 && x < L.gx + 0.14 && z > L.zA && z < L.zB) return true;
+    }
+    return false;
+  }
+  // ── The coaster kit ───────────────────────────────────────────────
+  // A coaster is a closed curve sampled into frames that follow it: parallel transport keeps the train upright
+  // through a vertical loop, and a little bank rolls it into the turns. The same frames draw the rails, the ties,
+  // the spine and the legs, and one car builder serves every new coaster, so they all sit at the main line's standard.
+  var PK_CO_UP = new THREE.Vector3(), PK_CO_RIGHT = new THREE.Vector3(), PK_CO_M4 = new THREE.Matrix4();
+  var PK_CO_Q = new THREE.Quaternion();
+
+  function pkCoCurve(pts) {
+    return new THREE.CatmullRomCurve3(pts.map(function (p) { return new THREE.Vector3(p[0], p[1], p[2]); }), true, 'catmullrom', 0.5);
+  }
+  // the u of the track point nearest a world x/z: stations are found this way, never guessed
+  function pkCoUAt(curve, x, z) {
+    var best = 0, bd = Infinity;
+    for (var i = 0; i < 900; i++) {
+      var p = curve.getPointAt(i / 900), d = (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z);
+      if (d < bd) { bd = d; best = i; }
+    }
+    return best / 900;
+  }
+  // frames: position, tangent and 'up' at N points round the lap
+  function pkCoFrames(curve, N) {
+    var pts = [], tans = [], ups = [], i;
+    for (i = 0; i < N; i++) { pts.push(curve.getPointAt(i / N)); tans.push(curve.getTangentAt(i / N).normalize()); }
+    var up = new THREE.Vector3(0, 1, 0);
+    if (Math.abs(up.dot(tans[0])) > 0.92) up.set(1, 0, 0);
+    up.addScaledVector(tans[0], -up.dot(tans[0])).normalize();
+    ups.push(up.clone());
+    for (i = 1; i < N; i++) {
+      PK_CO_Q.setFromUnitVectors(tans[i - 1], tans[i]);
+      up.applyQuaternion(PK_CO_Q);
+      up.addScaledVector(tans[i], -up.dot(tans[i]));
+      if (up.lengthSq() < 1e-5) up.set(0, 1, 0).addScaledVector(tans[i], -tans[i].y);
+      up.normalize();
+      ups.push(up.clone());
+    }
+    // close the frame: spread the twist from the last sample back round to the first
+    PK_CO_Q.setFromUnitVectors(tans[N - 1], tans[0]);
+    var v = new THREE.Vector3().copy(ups[N - 1]).applyQuaternion(PK_CO_Q);
+    var cr = new THREE.Vector3().crossVectors(ups[0], v);
+    var tw = Math.atan2(cr.dot(tans[0]), ups[0].dot(v));
+    for (i = 0; i < N; i++) {
+      PK_CO_Q.setFromAxisAngle(tans[i], -tw * i / N);
+      ups[i].applyQuaternion(PK_CO_Q);
+    }
+    // bank into the turns; a loop's curvature is 'up', not 'left', so it never rolls there
+    // The bank is driven by the SIDEWAYS part of the bend only (continuous, not just its sign), then smoothed
+    // round the lap, so a loop (all bend is 'up') stays at zero roll and the rails run as clean curves.
+    var ds = curve.getLength() / N, angs = [], lefts = [];
+    for (i = 0; i < N; i++) {
+      var a = tans[(i - 1 + N) % N], b = tans[(i + 1) % N];
+      var kk = new THREE.Vector3().subVectors(b, a);
+      var left = new THREE.Vector3().crossVectors(ups[i], tans[i]).normalize();
+      lefts.push(left);
+      if (kk.lengthSq() < 1e-10) { angs.push(0); continue; }
+      var curv = Math.acos(clamp(a.dot(b), -1, 1)) / (2 * ds);
+      var lat = curv * kk.normalize().dot(left);              // signed sideways curvature
+      angs.push(Math.atan(clamp(lat * 13.5, -0.9, 0.9)));
+    }
+    for (var pass = 0; pass < 14; pass++) {
+      var prev = angs.slice();
+      for (i = 0; i < N; i++) angs[i] = prev[(i - 1 + N) % N] * 0.25 + prev[i] * 0.5 + prev[(i + 1) % N] * 0.25;
+    }
+    for (i = 0; i < N; i++) {
+      var ang = angs[i], left = lefts[i];
+      if (Math.abs(ang) < 0.004) continue;
+      var nu = ups[i].clone().multiplyScalar(Math.cos(ang)).addScaledVector(left, Math.sin(ang));
+      nu.addScaledVector(tans[i], -nu.dot(tans[i])).normalize();
+      ups[i].copy(nu);
+    }
+    return { p: pts, t: tans, up: ups, n: N };
+  }
+  function pkCoUpAt(F, u) {
+    var x = u * F.n, i0 = Math.floor(x) % F.n, i1 = (i0 + 1) % F.n, f = x - Math.floor(x);
+    PK_CO_UP.copy(F.up[i0]).lerp(F.up[i1], f).normalize();
+    return PK_CO_UP;
+  }
+  // ── The car ───────────────────────────────────────────────────────
+  // One 2-seat car: the running wheels sit on the rails (the car's origin is the rail line), the tub is
+  // glass-fibre over a steel frame, and the lap bar is a padded U that drops over both laps.
+  function pkCoCar(col, opt) {
+    opt = opt || {};
+    var g = new THREE.Group(); g.userData.dynamic = true; g.userData.keep = true;
+    var W = opt.w || 1.44, D = opt.d || 2.02;
+    var body = std({ color: col, roughness: 0.34, metalness: 0.14 });
+    var trim = std({ color: 0xf2f3f0, roughness: 0.5, metalness: 0.1 });
+    [[-0.56, 0.62], [0.56, 0.62], [-0.56, -0.62], [0.56, -0.62]].forEach(function (w) {
+      var wh = pkRoundCyl(0.15, 0.11, MAT.steelDark, w[0], 0, w[1], g, 10); wh.rotation.z = Math.PI / 2;
+      var hub = pkRoundCyl(0.055, 0.13, MAT.chrome, w[0], 0, w[1], g, 8); hub.rotation.z = Math.PI / 2;
+    });
+    pkBevelBox(W * 0.78, 0.13, D * 0.9, MAT.steelDark, 0, 0.17, 0, g, 0.02);
+    pkBevelBox(W - 0.08, 0.08, D - 0.1, body, 0, 0.27, 0, g, 0.03);
+    [-1, 1].forEach(function (sx) {
+      pkBevelBox(0.08, 0.5, D - 0.1, body, sx * (W / 2 - 0.04), 0.53, 0, g, 0.03);
+      pkRoundCyl(0.03, D - 0.2, MAT.chrome, sx * (W / 2 - 0.04), 0.79, 0, g, 8).rotation.x = Math.PI / 2;
+    });
+    [-1, 1].forEach(function (sz) {
+      pkBevelBox(W - 0.12, 0.5, 0.08, body, 0, 0.53, sz * (D / 2 - 0.04), g, 0.03);
+    });
+    // the nose and the tail caps
+    pkBevelBox(W * 0.78, 0.3, 0.2, body, 0, 0.42, D / 2 + 0.02, g, 0.06);
+    pkBevelBox(W * 0.82, 0.16, 0.16, trim, 0, 0.62, D / 2 + 0.02, g, 0.04);
+    // two seats, side by side; the platform-side one is filled first
+    [-0.31, 0.31].forEach(function (sx) {
+      pkBevelBox(0.5, 0.09, 0.6, MAT.seat, sx, 0.66, -0.06, g, 0.03);
+      pkBevelBox(0.5, 0.56, 0.11, MAT.seat, sx, 0.97, -0.4, g, 0.03);
+      pkBevelBox(0.34, 0.22, 0.1, body, sx, 1.3, -0.42, g, 0.03);
+    });
+    // lap bar: a padded U on a pivot behind the seats
+    var bar = new THREE.Group(); bar.position.set(0, 0.76, -0.55); g.add(bar);
+    pkRoundCyl(0.045, 0.94, MAT.steelDark, 0, 0.28, 0.62, bar, 8).rotation.z = Math.PI / 2;
+    pkRoundCyl(0.075, 0.7, MAT.rubberMat, 0, 0.28, 0.62, bar, 8).rotation.z = Math.PI / 2;
+    [-0.42, 0.42].forEach(function (sx) {
+      pkRod(sx, 0, 0, sx, 0.28, 0.62, 0.04, MAT.steelDark, bar, 6);
+    });
+    return { g: g, bar: bar, seats: [{ x: -0.31, y: -0.06, z: -0.02 }, { x: 0.31, y: -0.06, z: -0.02 }] };
+  }
+  // ── Placing the train ─────────────────────────────────────────────
+  function pkCoPlace(E, u0) {
+    for (var i = 0; i < E.cars.length; i++) {
+      var u = (u0 - i * E.gap / E.len + 1) % 1;
+      var p = E.curve.getPointAt(u), t = E.curve.getTangentAt(u).normalize();
+      pkCoUpAt(E.F, u);
+      PK_CO_RIGHT.crossVectors(PK_CO_UP, t).normalize();
+      PK_CO_M4.makeBasis(PK_CO_RIGHT, PK_CO_UP, t);
+      var car = E.cars[i].g;
+      car.position.copy(p);
+      car.quaternion.setFromRotationMatrix(PK_CO_M4);
+      car.updateMatrixWorld(true);
+    }
+  }
+  // The lap plan: a speed for every point (fast at the bottom, slow over the crest and through the station),
+  // integrated once so progress by time maps exactly back onto the track. The lap closes on the button.
+  function pkCoPlan(E, o) {
+    var K = 240, curve = E.curve, len = E.len, u0 = E.uPark, i;
+    var ys = [], ymin = Infinity, ymax = -Infinity;
+    for (i = 0; i <= K; i++) {
+      var y = curve.getPointAt((u0 + i / K) % 1).y;
+      ys.push(y);
+      if (y < ymin) ymin = y;
+      if (y > ymax) ymax = y;
+    }
+    var vMin = o.vMin || 5, vMax = o.vMax || 22, T = [0], S = len / K;
+    for (i = 1; i <= K; i++) {
+      var v = vMin + (vMax - vMin) * (ymax - ys[i]) / Math.max(0.5, ymax - ymin);
+      v = clamp(v, vMin, vMax);
+      var f0 = (i - 0.5) / K;
+      if (f0 < 0.05 || f0 > 0.95) v *= 0.5;
+      T[i] = T[i - 1] + S / v;
+    }
+    var M = 240, uOfF = [];
+    for (var k = 0; k <= M; k++) {
+      var tt = (k / M) * T[K], j = 1;
+      while (j < K && T[j] < tt) j++;
+      var t0 = T[j - 1], t1 = T[j], f = t1 > t0 ? (tt - t0) / (t1 - t0) : 0;
+      uOfF.push((u0 + (j - 1 + f) / K) % 1);
+    }
+    E.uOfF = uOfF;
+    E.run = Math.max(12, Math.round(T[K] * 10) / 10);
+  }
+  function pkCoRun(at) {
+    var E = at.extra;
+    if (!E || !E.uOfF || !E.uOfF.length) return;
+    var f = at.state === 'running' ? clamp(at.t / at.run, 0, 1) : 0;
+    var k = Math.max(0, Math.min(240, Math.round(f * 240)));
+    pkCoPlace(E, E.uOfF[k]);
+  }
+  // ── The track ─────────────────────────────────────────────────────
+  function pkCoTrackBuild(g, E, o) {
+    o = o || {};
+    var N = E.F.n, i, gauge = o.gauge || 1.12, M = pkMats();
+    var railMat = o.railMat || MAT.chrome, spineMat = o.spineMat || M.white, tieMat = o.tieMat || MAT.steelDark;
+    var railA = [], railB = [], spine = [];
+    for (i = 0; i < N; i++) {
+      var p = E.F.p[i], up = E.F.up[i], t = E.F.t[i];
+      var right = new THREE.Vector3().crossVectors(up, t).normalize();
+      railA.push(p.clone().addScaledVector(right, gauge / 2).addScaledVector(up, 0.08));
+      railB.push(p.clone().addScaledVector(right, -gauge / 2).addScaledVector(up, 0.08));
+      spine.push(p.clone().addScaledVector(up, -0.56));
+    }
+    [railA, railB].forEach(function (rp) {
+      var c = new THREE.CatmullRomCurve3(rp, true, 'catmullrom', 0.5);
+      var m = new THREE.Mesh(new THREE.TubeGeometry(c, N, 0.075, 6, true), railMat);
+      m.castShadow = true; m.receiveShadow = true; g.add(m);
+    });
+    var sp = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(spine, true, 'catmullrom', 0.5), N, 0.15, 10, true), spineMat);
+    sp.castShadow = true; sp.receiveShadow = true; g.add(sp);
+    // ties
+    var tieN = Math.max(8, Math.round(E.len / 1.7));
+    for (i = 0; i < tieN; i++) {
+      var u = i / tieN;
+      var pp = E.curve.getPointAt(u), tt = E.curve.getTangentAt(u).normalize();
+      pkCoUpAt(E.F, u);
+      var rr = new THREE.Vector3().crossVectors(PK_CO_UP, tt).normalize();
+      var tie = box(1.32, 0.07, 0.2, tieMat, 0, 0, 0, g, { r: 0.01 });
+      tie.position.copy(pp).addScaledVector(PK_CO_UP, 0.01);
+      PK_CO_M4.makeBasis(rr, PK_CO_UP, tt);
+      tie.quaternion.setFromRotationMatrix(PK_CO_M4);
+      // truss: a strut from each rail down to the spine, so the track reads as a triangular lattice
+      var sp0 = pp.clone().addScaledVector(PK_CO_UP, -0.56);
+      [-1, 1].forEach(function (sd) {
+        var rp0 = pp.clone().addScaledVector(rr, sd * gauge / 2).addScaledVector(PK_CO_UP, 0.08);
+        pkRod(rp0.x, rp0.y, rp0.z, sp0.x, sp0.y, sp0.z, 0.035, spineMat, g, 6);
+      });
+    }
+    // legs: a column wherever the track is off the ground and not standing on its head
+    var step = Math.max(1, Math.round(N * 5.4 / E.len)), last = null;
+    for (i = 0; i < N; i += step) {
+      var p2 = E.F.p[i], t2 = E.F.t[i];
+      if (Math.abs(t2.y) > 0.72 || p2.y < 1.5) continue;
+      if (last && dist2(p2.x, p2.z, last.x, last.z) < 10) continue;
+      if (o.skip && o.skip(p2.x, p2.z, p2.y)) continue;
+      var h = p2.y - 0.6;
+      if (h < 0.8) continue;
+      cyl(0.16, h, o.supMat || MAT.steel, p2.x, h / 2, p2.z, g, 8);
+      box(0.62, 0.2, 0.62, M.stone, p2.x, 0.1, p2.z, g);
+      box(0.34, 0.26, 0.34, o.supMat || MAT.steel, p2.x, h + 0.05, p2.z, g);
+      solid(p2.x - 0.24, p2.x + 0.24, p2.z - 0.24, p2.z + 0.24, 0, h);
+      last = p2;
+    }
+  }
+  // ── The station ───────────────────────────────────────────────────
+  // A kerbed platform, a row of boom gates that rise off the platform edge, and a cantilevered canopy
+  // carrying the name. The lane's own gate is the barrier; these are the gates at the train itself.
+  function pkCoGates(g, xs, z, C) {
+    xs.forEach(function (x) {
+      pkRoundCyl(0.09, 1.06, MAT.steelDark, x, 0.53, z, g, 8);
+      var boom = new THREE.Group(); boom.position.set(x, 0.92, z); g.add(boom);
+      box(0.92, 0.09, 0.07, MAT.hazard, 0.46, 0, 0, boom, { r: 0.02 });
+      box(0.92, 0.05, 0.05, MAT.steel, 0.46, -0.2, 0, boom);
+      for (var i = 0; i < 4; i++) box(0.04, 0.22, 0.04, MAT.steel, 0.12 + i * 0.24, -0.11, 0, boom);
+      box(0.1, 0.14, 0.1, MAT.red, 0.9, 0, 0, boom);
+      C.gateObjs.push(function (t) { boom.rotation.z = t * Math.PI / 2.1; });
+    });
+  }
+  function pkCoCanopy(g, x0, x1, zSouth, depth, label, th) {
+    var i, x;
+    for (i = 0; i < 4; i++) {
+      x = x0 + 0.45 + (x1 - x0 - 0.9) * i / 3;
+      pkRoundCyl(0.085, 3.0, MAT.steelDark, x, 1.5, zSouth, g, 8);
+      pkRod(x, 3.0, zSouth, x, 3.0, zSouth - depth + 0.2, 0.05, MAT.steel, g, 6);
+      solid(x - 0.14, x + 0.14, zSouth - 0.14, zSouth + 0.14, 0, 3.0);
+    }
+    var mid = (x0 + x1) / 2;
+    box(x1 - x0, 0.1, depth, pkMats().roof, mid, 3.06, zSouth - depth / 2, g);
+    box(x1 - x0, 0.06, depth - 0.3, std({ color: th.a, roughness: 0.6 }), mid, 3.12, zSouth - depth / 2, g);
+    box(x1 - x0, 0.34, 0.1, MAT.steelDark, mid, 3.02, zSouth + 0.02, g);
+    pkSign3D([label], Math.min(4.8, x1 - x0 - 1.2), 0.28, mid, 3.02, zSouth + 0.08, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
+    [-1, 1].forEach(function (sx) {
+      pkRoundCyl(0.16, 0.22, MAT.bulb, mid + sx * (x1 - x0) / 4, 2.86, zSouth - 0.6, g, 10);
+    });
+  }
+  // a coaster platform: kerb, deck, edge stripe, a plant tub and a lamp at each end
+  function pkCoPlatform(g, x0, x1, zN, zS, th) {
+    box(x1 - x0, 0.12, zS - zN, pkMats().kerb, (x0 + x1) / 2, 0.06, (zN + zS) / 2, g);
+    box(x1 - x0 - 0.12, 0.07, zS - zN - 0.12, pkMats().pavers, (x0 + x1) / 2, 0.145, (zN + zS) / 2, g);
+    box(x1 - x0, 0.03, 0.16, MAT.hazard, (x0 + x1) / 2, 0.17, zN + 0.08, g);
+    [x0 + 0.5, x1 - 0.5].forEach(function (x) {
+      pkRoundCyl(0.26, 0.5, MAT.stone, x, 0.25, zS - 0.4, g, 12);
+      pkRoundCyl(0.3, 0.08, MAT.stone, x, 0.52, zS - 0.4, g, 12);
+      pkRoundCyl(0.04, 2.5, MAT.steelDark, x, 1.25, zS - 0.34, g, 8);
+      pkRoundCyl(0.17, 0.24, MAT.bulb, x, 2.6, zS - 0.34, g, 10);
+    });
+  }
+  // a lone support tower for the steep stretches the sampler rightly refuses: a column beside the
+  // track with a rod out to the spine
+  function pkCoBrace(g, x, z, h, tx, ty, tz, mat) {
+    cyl(0.17, h, mat, x, h / 2, z, g, 8);
+    box(0.62, 0.2, 0.62, pkMats().stone, x, 0.1, z, g);
+    solid(x - 0.24, x + 0.24, z - 0.24, z + 0.24, 0, h);
+    pkRod(x, h - 0.12, z, tx, ty, tz, 0.07, mat, g, 6);
+  }
+  // ── The Serpent ───────────────────────────────────────────────────
+  // A double looper in the north-east corner: out of the station, up the lift, down the first drop
+  // and straight into two vertical loops, then home along the trees.
+  var PK_SERPENT_PTS = [
+    [47.5, 1.05, -70], [53.5, 1.05, -70], [59.5, 1.05, -70],
+    [63.5, 2.2, -70.6], [65.1, 6, -72], [65.5, 11, -74.5], [64, 14.8, -77.5],
+    [61.5, 12, -80.2], [58.5, 5.5, -81.2],
+    [56.9, 2.5, -81.6], [54.2, 3.12, -81.6], [52.22, 5.1, -81.6], [51.5, 7.8, -81.6],
+    [52.22, 10.5, -81.6], [54.2, 12.48, -81.6], [56.9, 13.2, -81.6], [59.6, 12.48, -81.6],
+    [61.58, 10.5, -81.6], [62.3, 7.8, -81.6], [61.58, 5.1, -81.6], [59.6, 3.12, -81.6],
+    [56.5, 2.45, -81.7], [54.1, 2.6, -82.6], [52.1, 2.85, -83.9],
+    [50.1, 3.3, -84.1], [48.05, 3.85, -84.1], [46.55, 5.35, -84.1], [46.0, 7.4, -84.1],
+    [46.55, 9.45, -84.1], [48.05, 10.95, -84.1], [50.1, 11.5, -84.1], [52.15, 10.95, -84.1],
+    [53.65, 9.45, -84.1], [54.2, 7.4, -84.1], [53.65, 5.35, -84.1], [52.15, 3.85, -84.1],
+    [49.7, 3.35, -84.0], [47.4, 3.5, -83.6], [45.7, 4.6, -82.4], [44.8, 6.0, -80.3],
+    [45.0, 5.6, -77.7], [46.0, 4.4, -75.3], [46.9, 2.6, -72.7]
+  ];
+  function pkBuildSerpent(p) {
+    var th = PK_THEME.serpent, M = pkMats(), i;
+    var g = new THREE.Group(); scene.add(g);
+    var curve = pkCoCurve(PK_SERPENT_PTS), len = curve.getLength(), F = pkCoFrames(curve, 520);
+    var E = { curve: curve, len: len, F: F, gap: 2.35, cars: [], uPark: pkCoUAt(curve, 57.4, -70), uOfF: [], run: 30 };
+    var seats = [], cols = [0x2f8f6f, 0xf0c04a, 0x1f6f55, 0xf0c04a, 0x2f8f6f];
+    for (i = 0; i < 5; i++) {
+      var car = pkCoCar(cols[i]);
+      scene.add(car.g);
+      E.cars.push(car);
+      car.seats.forEach(function (s) {
+        seats.push({ par: car.g, x: s.x, y: s.y, z: s.z, ry: 0, guest: null });
+      });
+    }
+    var spineMat = std({ color: 0xeef2f1, roughness: 0.4, metalness: 0.35 });
+    var supMat = std({ color: 0x2c7a63, roughness: 0.55, metalness: 0.25 });
+    pkCoTrackBuild(g, E, {
+      spineMat: spineMat, supMat: supMat, tieMat: std({ color: 0x35514b, roughness: 0.7 }),
+      skip: function (x, z) { return z > -71.6 && x > 46 && x < 60; }
+    });
+    pkCoBrace(g, 66.2, -73.2, 9.6, 65.2, 9.4, -73.8, supMat);
+    pkCoPlan(E, { vMin: 4.5, vMax: 22 });
+    // the station: platform, boom gates, canopy
+    pkCoPlatform(g, 47.0, 58.6, -69.35, -66.85, th);
+    var a = pkAttr({
+      id: 'serpent', name: 'The Serpent', x: p.x, z: p.z,
+      qx: p.q[0], qz: p.q[1], qdx: -1, g: g, seats: seats,
+      board: 11, run: E.run, unload: 6, exit: [53.0, -67.6],
+      extra: E, tickRun: function (at) { pkCoRun(at); }
+    });
+    var C = pkCtl(a);
+    E.a = a;
+    pkCoGates(g, [57.4, 55.05, 52.7, 50.35, 48.0], -69.42, C);
+    pkCoCanopy(g, 47.9, 58.5, -66.95, 2.3, 'THE SERPENT', th);
+    E.cars.forEach(function (c) {
+      C.barObjs.push(function (b) { c.bar.rotation.x = -1.35 * (1 - b); });
+    });
+    pkCoPlace(E, E.uPark);
+    return a;
+  }
+  // ── Baron's Drop ─────────────────────────────────────────────────
+  // A dive coaster in the south-east: a long lift, a slow turn at the top, a straight vertical drop
+  // into a tunnel mouth in the rockery, then a loop and a sweeping run home.
+  var PK_BARON_PTS = [
+    [48, 0.95, 15.5], [53, 0.95, 15.5], [58, 0.95, 15.5],
+    [60.8, 1.6, 15.7], [62.4, 4.5, 16.4], [63.4, 10, 17.3], [63.6, 16.5, 18.3], [62.6, 20.6, 19.6],
+    [60.2, 21.2, 20.9], [57.9, 21.1, 21.9], [56.2, 20.7, 22.5],
+    [56.0, 19.0, 22.55], [55.95, 12.0, 22.55], [55.9, 4.0, 22.55], [55.9, 1.6, 22.5],
+    [56.4, 1.15, 22.1], [57.6, 1.6, 20.8], [59.2, 3.0, 19.6], [60.4, 5.4, 18.6], [61.0, 6.2, 18.0],
+    [63.25, 6.8, 18.0], [64.9, 8.45, 18.0], [65.5, 10.7, 18.0], [64.9, 12.95, 18.0], [63.25, 14.6, 18.0],
+    [61.0, 15.2, 18.0], [58.75, 14.6, 18.0], [57.1, 12.95, 18.0], [56.5, 10.7, 18.0], [57.1, 8.45, 18.0],
+    [58.75, 6.8, 18.0], [60.7, 6.15, 18.0], [63.0, 5.6, 17.2], [64.0, 4.6, 16.2], [63.6, 3.4, 14.8],
+    [62.0, 2.6, 14.2], [59.5, 2.2, 14.4], [56.8, 2.0, 14.8], [54.0, 1.8, 15.2], [50.6, 1.3, 15.5]
+  ];
+  function pkBuildBaron(p) {
+    var th = PK_THEME.baron, i;
+    var g = new THREE.Group(); scene.add(g);
+    var curve = pkCoCurve(PK_BARON_PTS), len = curve.getLength(), F = pkCoFrames(curve, 500);
+    var E = { curve: curve, len: len, F: F, gap: 2.42, cars: [], uPark: pkCoUAt(curve, 56.8, 15.5), uOfF: [], run: 30 };
+    var seats = [], cols = [0x3a3f48, 0xd8c9a8, 0x3a3f48, 0xd8c9a8];
+    for (i = 0; i < 4; i++) {
+      var car = pkCoCar(cols[i], { w: 1.5, d: 2.1 });
+      scene.add(car.g);
+      E.cars.push(car);
+      car.seats.forEach(function (s) {
+        seats.push({ par: car.g, x: s.x, y: s.y, z: s.z, ry: 0, guest: null });
+      });
+    }
+    var spineMat = std({ color: 0x8a3b2c, roughness: 0.42, metalness: 0.3 });
+    var supMat = std({ color: 0xd0c2a4, roughness: 0.6, metalness: 0.15 });
+    pkCoTrackBuild(g, E, {
+      spineMat: spineMat, supMat: supMat, tieMat: std({ color: 0x352a24, roughness: 0.75 }),
+      skip: function (x, z) { return (x > 48 && x < 58.8 && z > 15.4 && z < 19.4); }
+    });
+    // the lift tower and the drop tower: two columns with rods out to the spine
+    pkCoBrace(g, 64.9, 17.3, 9.6, 63.5, 9.8, 17.4, supMat);
+    pkCoBrace(g, 54.6, 22.55, 18.4, 55.7, 18.2, 22.55, supMat);
+    pkCoBrace(g, 57.3, 22.55, 18.4, 56.1, 18.2, 22.55, supMat);
+    pkCoPlan(E, { vMin: 4, vMax: 24 });
+    // the tunnel mouth: a stone ring round the track, a dark bore, and the rockery heaped over it
+    var uT = pkCoUAt(curve, 56.9, 21.6);
+    var pT = curve.getPointAt(uT), tT = curve.getTangentAt(uT).normalize();
+    pkCoUpAt(F, uT);
+    var upT = PK_CO_UP.clone();
+    var ringMat = pkMatStone().clone(); ringMat.color.setHex(0x807a70);
+    var ring = new THREE.Mesh(new THREE.TorusGeometry(2.05, 0.32, 8, 24), ringMat);
+    ring.position.copy(pT).addScaledVector(upT, 1.6);
+    ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tT);
+    ring.castShadow = true; ring.receiveShadow = true; g.add(ring);
+    // the bore is a short tube into the rock, not a flat black disc, so the mouth reads as a hole
+    var bore = new THREE.Mesh(new THREE.CylinderGeometry(1.70, 1.70, 1.7, 24, 1, true), std({ color: 0x161310, roughness: 1, side: THREE.DoubleSide }));
+    bore.position.copy(ring.position).addScaledVector(tT, 1.1);
+    bore.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tT);
+    g.add(bore);
+    var dark = new THREE.Mesh(new THREE.CircleGeometry(1.70, 24), std({ color: 0x0b0908, roughness: 1, side: THREE.DoubleSide }));
+    dark.position.copy(ring.position).addScaledVector(tT, 1.96);
+    dark.quaternion.copy(ring.quaternion);
+    g.add(dark);
+    // the rockery: faceted boulders heaped over the bore - a wide base course from the ground,
+    // then a stacked course round the ring itself. A rock that would reach into the mouth is
+    // pushed out to the side, so the bore stays clear.
+    var rightT = new THREE.Vector3().crossVectors(upT, tT).normalize();
+    [[1.45, -2.3, 1.2], [1.5, 2.5, 1.4], [1.25, -3.1, 3.4], [1.35, 3.0, 3.6],
+     [1.1, -2.0, 5.6], [1.2, 2.3, 5.8], [1.4, 0.3, 6.8], [1.0, -3.6, 2.3],
+     [1.05, 3.5, 2.5], [0.95, -3.9, 4.6], [1.0, 3.7, 4.4]].forEach(function (rk) {
+      var lat = rk[1], t = rk[2], rr = rk[0] * 1.45;
+      if (Math.abs(lat) - rr < 2.0 && t < 4.8) lat = (lat < 0 ? -1 : 1) * (2.0 + rr);
+      pkBoulder(pT.x + tT.x * t + rightT.x * lat, pT.z + tT.z * t + rightT.z * lat, rk[0], g);
+    });
+    // a stacked course round the ring, so the ring is the mouth of a pile rather than a ring
+    // standing on its own: the flanks tuck against it and the cap overhangs the top of the hole
+    function ringRock(lat, up, into, r) {
+      var tg = new THREE.Group();
+      tg.position.set(ring.position.x + rightT.x * lat + tT.x * into,
+                      ring.position.y + up,
+                      ring.position.z + rightT.z * lat + tT.z * into);
+      g.add(tg);
+      pkBoulder(0, 0, r, tg);
+    }
+    ringRock(-3.5, -2.1, 0.35, 1.35); ringRock(3.5, -2.1, 0.35, 1.35);
+    ringRock(-2.2, -2.3, 0.9, 1.15); ringRock(2.2, -2.3, 0.9, 1.15);
+    ringRock(-2.9, 1.35, 0.5, 1.1); ringRock(2.9, 1.35, 0.5, 1.1);
+    ringRock(-1.5, 2.5, 0.75, 0.95); ringRock(1.55, 2.45, 0.75, 0.95);
+    ringRock(0.15, 2.35, 0.6, 1.0);
+    ringRock(-4.2, -1.8, 1.4, 1.5); ringRock(4.2, -1.8, 1.4, 1.5);
+    ringRock(-0.4, -0.3, 3.2, 2.0);
+    // sunken rocks at the foot, so the pile meets the pavement rather than stopping in mid air
+    [[-4.9, 0.6, 0.8], [4.9, 1.0, 0.85], [-5.4, 3.0, 0.7], [5.5, 3.4, 0.75], [-4.6, 5.6, 0.7], [4.7, 5.9, 0.72]].forEach(function (rk) {
+      pkBoulder(pT.x + tT.x * rk[1] + rightT.x * rk[0], pT.z + tT.z * rk[1] + rightT.z * rk[0], rk[2], g, 0);
+    });
+    // the station: platform, boom gates, canopy
+    pkCoPlatform(g, 48.5, 57.9, 16.35, 18.55, th);
+    var a = pkAttr({
+      id: 'baron', name: "Baron's Drop", x: p.x, z: p.z,
+      qx: p.q[0], qz: p.q[1], qdx: -1, g: g, seats: seats,
+      board: 10, run: E.run, unload: 6, exit: [52.4, 17.4],
+      extra: E, tickRun: function (at) { pkCoRun(at); }
+    });
+    var C = pkCtl(a);
+    E.a = a;
+    pkCoGates(g, [56.8, 54.4, 52.0, 49.6], 16.3, C);
+    pkCoCanopy(g, 48.7, 57.7, 18.5, 2.0, "BARON'S DROP", th);
+    E.cars.forEach(function (c) {
+      C.barObjs.push(function (b) { c.bar.rotation.x = -1.35 * (1 - b); });
+    });
+    pkCoPlace(E, E.uPark);
+    return a;
+  }
+  // ── Registering the plots ────────────────────────────────────────
+  // Pushed at load time, before the trees are scattered and before the dressing runs, so the planting
+  // keeps clear, the dressing dresses them, and the booth pass gives them the standard cabins.
+  PK_PLOTS.push(
+    { id: 'serpent', name: 'The Serpent', x: 55, z: -77.5, r: 12.5, q: [44.5, -65], level: 12, pad: 0.93 },
+    { id: 'baron', name: "Baron's Drop", x: 57, z: 19, r: 12, q: [48, 19], level: 13, pad: 0.82 },
+    { id: 'nocturne', name: 'Nocturne', x: -50, z: -86.75, r: 13.5, q: [-59.1, -76.4], qdx: 1, level: 14, pad: 0.02 },
+    { id: 'wreck', name: 'The Wreck', x: -20, z: -86.75, r: 13.5, q: [-29.1, -76.4], qdx: 1, level: 15, pad: 0.02 },
+    { id: 'moonwood', name: 'Moonwood', x: 30, z: -86.75, r: 13.5, q: [39.1, -76.4], qdx: -1, level: 16, pad: 0.02 }
+  );
+  // the kids' area on the west lawn
+  PK_PLOTS.push(
+    { id: 'kround', name: 'Little Roundabout', x: -60, z: 20, r: 6, q: [-49, 20], level: 17, pad: 1.1 },
+    { id: 'kpots', name: 'Wobbly Pots', x: -60, z: 30, r: 5.5, q: [-49, 30], level: 18, pad: 1.1 },
+    { id: 'kpuffin', name: 'Puffin Line', x: -60, z: 40, r: 7.5, q: [-52.5, 44.5], level: 19, pad: 1.05 }
+  );
+  PK_THEME.kround = { a: 0xb8452f, b: 0xf4f1e6, ground: 0x8fae6a, name: 'Little Roundabout' };
+  PK_THEME.kpots = { a: 0x2f7f8f, b: 0xf0c04a, ground: 0x8fae6a, name: 'Wobbly Pots' };
+  PK_THEME.kpuffin = { a: 0x8a6a4a, b: 0xf0c04a, ground: 0x9ab07a, name: 'Puffin Line' };
+  PK_THEME.serpent = { a: 0x2f8f6f, b: 0xf0c04a, ground: 0x9aab8c, name: 'The Serpent', noBunting: true, noDecor: true };
+  PK_THEME.baron = { a: 0x8a3b2c, b: 0xd8c9a8, ground: 0xa89a8a, name: "Baron's Drop", noBunting: true, noDecor: true };
+  PK_THEME.nocturne = { a: 0x8f7bd6, b: 0xd8dcff, ground: 0x767b93, name: 'Nocturne', noBunting: true, noDecor: true };
+  PK_THEME.wreck = { a: 0xd8a24a, b: 0x6a4f33, ground: 0x8a7c66, name: 'The Wreck', noBunting: true, noDecor: true };
+  PK_THEME.moonwood = { a: 0x8fd3c7, b: 0xc9a06a, ground: 0x7c7058, name: 'Moonwood', noBunting: true, noDecor: true };
+  // the spurs from the North Promenade up to the queues
+  PK_ROUTES.push(
+    [35, -60, 35, -65, 4.2], [35, -65, 41, -65, 4.2],
+    [-46.5, -60, -31, -60, 5],
+    [-46.5, -60, -46.5, -76.4, 3.4], [-16.5, -60, -16.5, -76.4, 3.4], [26.5, -60, 26.5, -76.4, 3.4],
+    [-35.5, 3, -35.5, 44, 3.4]
+  );
+  PK_KEEP.push([35.5, -62.5, 5.5], [42.5, -65.5, 5], [-45, 40, 6.5]);
+
+  function pkCoastersBuild() {
+    var makers = {
+      serpent: pkBuildSerpent, baron: pkBuildBaron,
+      nocturne: pkBuildIndoor, wreck: pkBuildIndoor, moonwood: pkBuildIndoor,
+      kround: pkBuildKiddie, kpots: pkBuildKiddie, kpuffin: pkBuildPuffin
+    };
+    PK_PLOTS.forEach(function (p) {
+      var mk = makers[p.id];
+      if (!mk) return;
+      var a = mk(p);
+      a.level = p.level;
+      a.plot = p;
+      a.open = true;
+      if (S.rides) S.rides[p.id] = true;
+    });
+    pkBuildPlayhouse();
+  }
+  // built before the standard pass, so the booth pass finds them and the flat rides are untouched
+  var _pkBuildAttractionsCo = pkBuildAttractions;
+  pkBuildAttractions = function () {
+    pkCoastersBuild();
+    _pkBuildAttractionsCo();
+  };
+
+  // ── The indoor coasters ───────────────────────────────────────────
+  // Three show buildings along the north wall. Each has a wide portal on the promenade side, a queue
+  // lane outside under its portico, a station just inside the portal, a lift up the far side, a
+  // descending helix round the centrepiece, and a glazed control cabin at the back corner looking
+  // over the platform, so the booth hardware sits with the ride instead of out on the promenade.
+  var PK_INDOOR = {
+    nocturne: { name: 'Nocturne', box: [-62, -38, -94.5, -79], portal: 'w', wall: 0x2b2e3d, band: 0x8f7bd6, trim: 0x40465e, roof: 0x1d2030, sign: '#b9a7f0', ground: 0x767b93, centre: 'moon' },
+    wreck:    { name: 'The Wreck', box: [-32, -8, -94.5, -79], portal: 'w', wall: 0x5b5348, band: 0xd8a24a, trim: 0x4a443c, roof: 0x3b3630, sign: '#e8bd6a', ground: 0x8a7c66, centre: 'ship' },
+    moonwood: { name: 'Moonwood', box: [18, 42, -94.5, -79], portal: 'e', wall: 0x6b5340, band: 0x8fd3c7, trim: 0x4f4132, roof: 0x4a3a2c, sign: '#9fe0d4', ground: 0x7c7058, centre: 'tree' }
+  };
+  // one circuit serves all three: station along the wall by the portal, up the far side, a descending
+  // helix round the middle piece, then home to the platform
+  function pkIndoorPts(cfg) {
+    var b = cfg.box, X0 = b[0], X1 = b[1], CZ = (b[2] + b[3]) / 2;
+    var s = cfg.portal === 'w' ? 1 : -1, AX = s > 0 ? X0 : X1;
+    var zS = CZ + 3.4, CXh = AX + s * 13, CZH = CZ - 2.9;
+    var pts = [[AX + s * 1.2, 1.0, zS], [AX + s * 7.7, 1.0, zS], [AX + s * 14.2, 1.0, zS]];
+    // out of the station and up the far side
+    pts.push([AX + s * 16.4, 1.8, zS - 1.6], [AX + s * 20.2, 4.4, CZ - 1.0], [AX + s * 18.4, 6.8, CZH - 3.4], [AX + s * 16.6, 6.9, CZH - 3.4]);
+    // the helix: two and a quarter turns round the centre, descending
+    for (var k = 0; k <= 30; k++) {
+      var f = k / 30, a = -Math.PI / 2 - f * 4.5 * Math.PI;
+      pts.push([CXh + Math.cos(a) * 3.4, 6.9 - f * 5.4, CZH + Math.sin(a) * 3.4]);
+    }
+    pts.push([CXh - 5.0, 1.35, CZ - 0.6], [CXh - 7.4, 1.15, CZ + 0.8], [CXh - 9.2, 1.0, CZ + 2.4]);
+    return pts;
+  }
+  // the shell: four walls with the portal cut in, a gable roof, the marquee and a portico over the
+  // queue, a paved apron and the run of interior floor
+  function pkIndoorShell(g, cfg) {
+    var b = cfg.box, X0 = b[0], X1 = b[1], Z0 = b[2], Z1 = b[3], CX = (X0 + X1) / 2, CZ = (Z0 + Z1) / 2;
+    var H = 9.0, PW = 5.8, PH = 4.0, i, x;
+    var s = cfg.portal === 'w' ? 1 : -1, AX = s > 0 ? X0 : X1;
+    var wall = std({ color: cfg.wall, roughness: 0.85, metalness: 0.04 });
+    var band = std({ color: cfg.band, roughness: 0.5, metalness: 0.3 });
+    var trim = std({ color: cfg.trim, roughness: 0.7, metalness: 0.15 });
+    var P0 = AX + s * 0.6, P1 = P0 + s * PW, pLo = Math.min(P0, P1), pHi = Math.max(P0, P1);
+    // the floor inside is theme-tinted rather than a dark slab, so the hall reads as a place
+    var floorCol = new THREE.Color(cfg.ground).multiplyScalar(0.42);
+    box(X1 - X0 - 0.4, 0.06, Z1 - Z0 - 0.4, std({ color: floorCol, roughness: 0.92 }), CX, 0.03, CZ, g);
+    box(X1 - X0 + 1.4, 0.05, 3.4, std({ color: 0x6e6a64, roughness: 0.95 }), CX, 0.025, Z1 + 1.8, g);
+    // walls
+    box(X1 - X0, H, 0.6, wall, CX, H / 2, Z0, g);
+    solid(X0, X1, Z0 - 0.3, Z0 + 0.3, 0, H);
+    box(0.6, H, Z1 - Z0, wall, X0, H / 2, CZ, g);
+    solid(X0 - 0.3, X0 + 0.3, Z0, Z1, 0, H);
+    box(0.6, H, Z1 - Z0, wall, X1, H / 2, CZ, g);
+    solid(X1 - 0.3, X1 + 0.3, Z0, Z1, 0, H);
+    box(pLo - X0, H, 0.6, wall, (X0 + pLo) / 2, H / 2, Z1, g);
+    box(X1 - pHi, H, 0.6, wall, (pHi + X1) / 2, H / 2, Z1, g);
+    box(PW, H - PH, 0.6, wall, (pLo + pHi) / 2, PH + (H - PH) / 2, Z1, g);
+    solid(X0, pLo, Z1 - 0.3, Z1 + 0.3, 0, H);
+    solid(pHi, X1, Z1 - 0.3, Z1 + 0.3, 0, H);
+    solid(pLo, pHi, Z1 - 0.3, Z1 + 0.3, PH, H);
+    // the inside of the shell: a timber wainscot, pilasters, cross beams and a ceiling. The outside
+    // has order; without this the inside is four flat planes and a dark gable overhead.
+    box(X1 - X0 - 0.6, 1.35, 0.05, trim, CX, 0.68, Z0 + 0.33, g);
+    box(0.05, 1.35, Z1 - Z0 - 0.6, trim, X0 + 0.33, 0.68, CZ, g);
+    box(0.05, 1.35, Z1 - Z0 - 0.6, trim, X1 - 0.33, 0.68, CZ, g);
+    for (i = 0; i < 5; i++) {
+      x = X0 + 2.4 + (X1 - X0 - 4.8) * i / 4;
+      box(0.24, 6.4, 0.1, trim, x, 3.2, Z0 + 0.34, g);
+    }
+    for (i = 0; i < 4; i++) {
+      var zi = Z0 + 2.6 + (Z1 - Z0 - 5.2) * i / 3;
+      box(0.1, 6.4, 0.24, trim, X0 + 0.34, 3.2, zi, g);
+      box(0.1, 6.4, 0.24, trim, X1 - 0.34, 3.2, zi, g);
+    }
+    for (i = 0; i < 5; i++) {
+      box(X1 - X0 - 0.8, 0.22, 0.28, trim, CX, 8.45, Z0 + 3 + (Z1 - Z0 - 6) * i / 4, g);
+    }
+    var hallCeil = box(X1 - X0 - 0.6, 0.1, Z1 - Z0 - 0.6, std({ color: cfg.roof, roughness: 0.9 }), CX, 8.75, CZ, g);
+    hallCeil.castShadow = false;
+    // band course and pilasters
+    box(X1 - X0 + 0.4, 0.5, 0.16, band, CX, 6.6, Z1 + 0.36, g);
+    box(X1 - X0 + 0.4, 0.5, 0.16, band, CX, 6.6, Z0 - 0.36, g);
+    for (i = 0; i <= 4; i++) {
+      x = X0 + 2.0 + (X1 - X0 - 4.0) * i / 4;
+      box(0.5, H, 0.5, trim, x, H / 2, Z1 + 0.42, g);
+      box(0.5, H, 0.5, trim, x, H / 2, Z0 - 0.42, g);
+    }
+    // the portal: jambs, lintel, the marquee, the portico
+    box(0.5, PH + 0.6, 0.55, trim, P0 + s * 0.25, (PH + 0.6) / 2, Z1 + 0.3, g);
+    box(0.5, PH + 0.6, 0.55, trim, P1 - s * 0.25, (PH + 0.6) / 2, Z1 + 0.3, g);
+    box(PW + 1.5, 0.62, 0.6, band, (pLo + pHi) / 2, PH + 0.45, Z1 + 0.3, g);
+    pkSign3D([cfg.name.toUpperCase()], Math.min(6.8, PW + 1.8), 0.46, (pLo + pHi) / 2, PH + 1.3, Z1 + 0.46, 0, { bg: '#151a20', fg: cfg.sign }, g);
+    box(PW + 3.4, 0.22, 3.5, pkMats().roof, (pLo + pHi) / 2, 4.78, Z1 + 1.75, g);
+    box(PW + 3.4, 0.5, 0.16, band, (pLo + pHi) / 2, 4.62, Z1 + 3.42, g);
+    [pLo - 0.5, pHi + 0.5].forEach(function (px) {
+      box(0.34, 4.7, 0.34, trim, px, 2.35, Z1 + 1.1, g);
+      solid(px - 0.24, px + 0.24, Z1 + 0.86, Z1 + 1.34, 0, 4.7);
+    });
+    // roof
+    pkGableRoof(X1 - X0 + 1.2, Z1 - Z0 + 1.6, 2.2, std({ color: cfg.roof, roughness: 0.8 }), trim, CX, H, CZ, g, 0.45);
+    box(X1 - X0 - 3, 0.8, 1.4, std({ color: cfg.roof, roughness: 0.8 }), CX, H + 2.2, CZ, g);
+  }
+  // the piece the helix winds around
+  function pkIndoorCentre(g, cfg, CX, CZ) {
+    var i, a;
+    if (cfg.centre === 'moon') {
+      pkRoundCyl(1.5, 6.4, std({ color: 0x232637, roughness: 0.9 }), CX, 3.2, CZ, g, 18);
+      pkRoundCyl(1.95, 0.4, std({ color: 0x2f3350, roughness: 0.8 }), CX, 6.6, CZ, g, 18);
+      sphere(1.45, std({ color: 0xe8ecff, roughness: 0.5 }), CX, 7.3, CZ, g);
+      for (i = 0; i < 12; i++) {
+        a = i / 12 * Math.PI * 2;
+        sphere(0.11 + (i % 3) * 0.05, MAT.bulb, CX + Math.cos(a) * 2.7, 6.1 + (i % 4) * 0.5, CZ + Math.sin(a) * 2.7, g);
+      }
+    } else if (cfg.centre === 'ship') {
+      var hull = new THREE.Group(); hull.position.set(CX, 0, CZ); hull.rotation.set(0.06, 0.5, 0.32); g.add(hull);
+      pkBevelBox(3.0, 2.2, 7.0, std({ color: 0x6a4f33, roughness: 0.85 }), 0, 1.5, 0, hull, 0.12);
+      pkBevelBox(2.7, 1.5, 6.4, std({ color: 0x543d27, roughness: 0.9 }), 0, 2.6, 0, hull, 0.08);
+      pkRoundCyl(0.16, 6.4, std({ color: 0x4a341f, roughness: 0.85 }), 0, 5.2, -1.2, hull, 8);
+      pkRoundCyl(0.14, 5.2, std({ color: 0x4a341f, roughness: 0.85 }), 0.4, 4.6, 1.6, hull, 8);
+      box(3.4, 0.12, 1.1, std({ color: 0xc9c2b0, roughness: 0.8 }), 0, 4.4, -1.2, hull);
+      for (i = 0; i < 6; i++) {
+        a = i / 6 * Math.PI * 2;
+        box(0.9 + (i % 3) * 0.15, 0.7, 0.9, std({ color: [0x5a4a36, 0x6e5a40, 0x4e4030][i % 3], roughness: 0.9 }), CX + Math.cos(a) * 3.4, 0.35, CZ + Math.sin(a) * 3.4, g);
+      }
+    } else {
+      pkRoundCyl(1.15, 5.8, std({ color: 0x4e3a26, roughness: 0.92 }), CX, 2.9, CZ, g, 12);
+      // the crown is kept inside the helix: ring 1.45 m + crown 1.45-1.67 m stays under the 3.4 m
+      // rail, and the whole crown sits below the ceiling beams
+      for (i = 0; i < 7; i++) {
+        a = i / 7 * Math.PI * 2;
+        sphere(1.45 + (i % 2) * 0.22, std({ color: [0x3e5a3a, 0x476340, 0x35502f][i % 3], roughness: 0.95 }), CX + Math.cos(a) * 1.45, 5.9 + (i % 3) * 0.35, CZ + Math.sin(a) * 1.45, g);
+      }
+      // the hanging lamps: the cord is brass and reads against the dark, and the shade has a warm
+      // core, so they are lamps rather than white cubes in mid air
+      var shade = std({ color: 0xfff3d6, emissive: 0xffdda0, emissiveIntensity: 0.55, roughness: 0.55 });
+      for (i = 0; i < 5; i++) {
+        a = i / 5 * Math.PI * 2 + 0.4;
+        var lx = CX + Math.cos(a) * 2.45, lz = CZ + Math.sin(a) * 2.45;
+        pkRoundCyl(0.032, 1.1, MAT.brass || MAT.gold, lx, 4.95, lz, g, 6);
+        pkRoundCyl(0.19, 0.26, shade, lx, 4.35, lz, g, 10);
+      }
+    }
+  }
+  // the control cabin: a glazed corner room set back from the platform, with the booth console and its
+  // status board inside, so the hardware sits with the ride
+  function pkIndoorCabin(g, cfg, a) {
+    var b = cfg.box, CZ = (b[2] + b[3]) / 2, s = cfg.portal === 'w' ? 1 : -1;
+    var CXh = (s > 0 ? b[0] : b[1]) + s * 13, cx = CXh - s * 6.6, cz = -90.5;
+    var trim = std({ color: cfg.trim, roughness: 0.7, metalness: 0.15 });
+    var glass = std({ color: 0x9fc6cc, roughness: 0.1, metalness: 0.2, transparent: true, opacity: 0.34 });
+    var rg = new THREE.Group(); rg.position.set(cx, 0, cz); rg.rotation.y = s > 0 ? 0 : Math.PI; g.add(rg);
+    box(3.6, 0.12, 3.6, std({ color: 0x2e2e34, roughness: 0.95 }), 0, 0.06, 0, rg);
+    box(3.6, 2.9, 0.24, trim, 0, 1.45, -1.68, rg);            // back wall
+    box(0.24, 2.9, 3.6, trim, -1.68, 1.45, 0, rg);            // west wall, carries the board
+    box(0.24, 2.9, 3.6, trim, 1.68, 1.45, 0, rg);             // east wall
+    box(1.8, 0.95, 0.24, trim, -0.9, 0.47, 1.68, rg);         // window parapet
+    box(1.8, 1.8, 0.08, glass, -0.9, 1.9, 1.68, rg);
+    box(1.56, 0.7, 0.08, glass, 0.75, 2.55, 1.68, rg);        // the light over the door
+    [0.0, 1.5].forEach(function (dx) { box(0.22, 2.9, 0.3, trim, dx, 1.45, 1.68, rg); });
+    box(1.56, 0.5, 0.3, trim, 0.75, 2.65, 1.68, rg);          // door head
+    // the doorway is the open half of the south side, the window the other half
+    solid(cx - Math.max(0, s * 1.8), cx - Math.min(0, s * 1.8), cz + 1.56, cz + 1.8, 0, 0.96);
+    solid(cx - 1.8, cx + 1.8, cz - 1.8, cz - 1.56, 0, 2.9);
+    solid(cx - 1.8, cx - 1.56, cz - 1.8, cz + 1.8, 0, 2.9);
+    solid(cx + 1.56, cx + 1.8, cz - 1.8, cz + 1.8, 0, 2.9);
+    // the desk and its panel face the operator, who watches the platform through the window
+    var con = new THREE.Group(); con.position.set(-0.2, 0, -0.3); con.rotation.y = Math.PI; rg.add(con);
+    pkBoothPanel(a, con);
+    solid(cx - 1.05, cx + 0.6, cz - 0.9, cz + 0.4, 0, 0.95);
+    var screen = touchScreen({
+      w: 380, h: 320, pw: 0.94, ph: 0.80, x: -1.62, y: 1.62, z: 0.15, ry: Math.PI / 2, parent: rg, title: a.name,
+      draw: function (ctx, sc) {
+        var C = pkCtl(a);
+        scBg(ctx, sc.w, sc.h);
+        scHead(ctx, sc.w, a.name.toUpperCase(), pkBoothStatus(a, C));
+        scText(ctx, 16, 62, 'ON RIDE', '#a0acb8');
+        scText(ctx, 16, 88, a.riders + ' / ' + a.seats.length, a.riders ? '#5fd38d' : '#eef1f5');
+        scText(ctx, 200, 62, 'QUEUE', '#a0acb8');
+        scText(ctx, 200, 88, String(a.queue.length), a.queue.length ? '#f0c04a' : '#eef1f5');
+        scText(ctx, 16, 122, 'GATES  ' + (C.gates ? 'OPEN' : 'CLOSED'), C.gates ? '#5fd38d' : '#a0acb8');
+        scText(ctx, 16, 152, 'RESTRAINTS  ' + (C.barsWant > 0.5 ? 'DOWN' : 'UP'), C.barsWant > 0.5 ? '#5fd38d' : '#a0acb8');
+        scText(ctx, 16, 182, 'AUTO  ' + (C.auto ? 'ON' : 'OFF'), C.auto ? '#5fd38d' : '#a0acb8');
+        scText(ctx, 16, 212, 'CYCLE  ' + a.run.toFixed(1) + 's', '#eef1f5');
+        scText(ctx, 16, 242, 'CONTROL ROOM  ' + (C.fault ? 'RESET' : 'READY'), C.fault ? '#ff6b5e' : '#8f98a4');
+      }
+    });
+    a.booth = rg;
+    a.boothScreen = screen;
+  }
+  // a whole indoor coaster: shell, centrepiece, track, station, cabin
+  function pkBuildIndoor(p) {
+    var cfg = PK_INDOOR[p.id], th = PK_THEME[p.id], i;
+    var b = cfg.box, CZ = (b[2] + b[3]) / 2, zS = CZ + 3.4;
+    var s = cfg.portal === 'w' ? 1 : -1, AX = s > 0 ? b[0] : b[1];
+    var CXh = AX + s * 13, cabX = CXh - s * 6.6;
+    var g = new THREE.Group(); scene.add(g);
+    pkIndoorShell(g, cfg);
+    pkIndoorCentre(g, cfg, CXh, CZ - 2.9);
+    var curve = pkCoCurve(pkIndoorPts(cfg)), len = curve.getLength(), F = pkCoFrames(curve, 460);
+    var E = { curve: curve, len: len, F: F, gap: 2.4, cars: [], uPark: pkCoUAt(curve, AX + s * 10.8, zS), uOfF: [], run: 30 };
+    var seats = [], cols = [cfg.band, 0xece6d8, cfg.band, 0xece6d8];
+    for (i = 0; i < 4; i++) {
+      var car = pkCoCar(cols[i], { w: 1.46, d: 2.05 });
+      scene.add(car.g);
+      E.cars.push(car);
+      car.seats.forEach(function (st) {
+        seats.push({ par: car.g, x: st.x, y: st.y, z: st.z, ry: 0, guest: null });
+      });
+    }
+    pkCoTrackBuild(g, E, {
+      spineMat: std({ color: cfg.band, roughness: 0.4, metalness: 0.3 }),
+      supMat: std({ color: cfg.trim, roughness: 0.6, metalness: 0.2 }),
+      tieMat: std({ color: 0x2a2a30, roughness: 0.8 }),
+      skip: function (x, z) {
+        if (z > -83.4 && z < -79.0) return true;                                     // the station and platform
+        return z > -92.6 && z < -88.3 && x > cabX - 2.4 && x < cabX + 2.4;           // the control cabin
+      }
+    });
+    pkCoPlan(E, { vMin: 4.5, vMax: 19 });
+    // the station inside: kerbed platform, the boom gates at the car doors, hanging lamps
+    pkCoPlatform(g, Math.min(AX + s * 0.6, AX + s * 14.8), Math.max(AX + s * 0.6, AX + s * 14.8), -82.8, -80.2, th);
+    var stationShade = std({ color: 0xfff3d6, emissive: 0xffdda0, emissiveIntensity: 0.5, roughness: 0.55 });
+    [AX + s * 3, AX + s * 8, AX + s * 13].forEach(function (lx) {
+      pkRoundCyl(0.045, 3.0, MAT.gold, lx, 7.25, -81.5, g, 6);
+      pkRoundCyl(0.34, 0.24, stationShade, lx, 5.75, -81.5, g, 12);
+    });
+    // the station and the hall are lit, so the train and the platform are not silhouettes
+    [3.5, 8.5, 13.5].forEach(function (lx) {
+      var pl = new THREE.PointLight(0xffe3b0, 0.9, 12, 2);
+      pl.position.set(AX + s * lx, 3.0, -81.5); g.add(pl);
+    });
+    var hallLight = new THREE.PointLight(0xfff0d0, 0.75, 22, 2);
+    hallLight.position.set(CXh, 5.8, CZ - 1.5); g.add(hallLight);
+    var a = pkAttr({
+      id: p.id, name: cfg.name, x: p.x, z: p.z,
+      qx: p.q[0], qz: p.q[1], qdx: s, g: g, seats: seats,
+      board: 11, run: E.run, unload: 6, exit: [AX + s * 1.3, -81.6],
+      extra: E, tickRun: function (at) { pkCoRun(at); }
+    });
+    var C = pkCtl(a);
+    E.a = a;
+    pkCoGates(g, [AX + s * 10.8, AX + s * 8.4, AX + s * 6.0, AX + s * 3.6], -82.85, C);
+    E.cars.forEach(function (c) {
+      C.barObjs.push(function (bb) { c.bar.rotation.x = -1.35 * (1 - bb); });
+    });
+    pkCoPlace(E, E.uPark);
+    pkIndoorCabin(g, cfg, a);
+    return a;
+  }
+
+  // ── The kids' area ────────────────────────────────────────────────
+  // Three gentle rides on the west lawn: a little roundabout, a pot-and-teapot spinner and the Puffin
+  // Line, a hand-cranked pedal train on its own small oval of track.
+  function pkBuildKiddie(p) {
+    var M = pkMats(), g = new THREE.Group(); g.position.set(p.x, 0, p.z); scene.add(g);
+    var isPot = p.id === 'kpots', seats = [], pots = [], i, a;
+    var R = isPot ? 3.5 : 3.1, deck = std({ color: isPot ? 0x2f7f8f : 0xb8452f, roughness: 0.7 });
+    pkRoundCyl(R + 0.95, 0.22, M.stone, 0, 0.11, 0, g, 40);
+    pkRoundCyl(R + 0.6, 0.3, deck, 0, 0.3, 0, g, 40);
+    var spin = pkMover(g, 0, 0.44, 0);
+    pkRoundCyl(R, 0.16, std({ color: 0xe8dfc8, roughness: 0.8 }), 0, 0.08, 0, spin, 40);
+    pkRoundCyl(0.26, 2.5, std({ color: 0x3d3a35, roughness: 0.6, metalness: 0.3 }), 0, 1.35, 0, spin, 12);
+    if (isPot) {
+      sphere(0.7, deck, 0, 2.0, 0, spin);
+      sphere(0.42, std({ color: 0xf2ead6, roughness: 0.8 }), 0, 2.6, 0, spin);
+      pkRoundCyl(0.09, 0.8, deck, 0.85, 2.15, 0, spin, 8).rotation.z = -0.6;
+      for (i = 0; i < 8; i++) {
+        a = i / 8 * Math.PI * 2;
+        var pot = pkMover(spin, Math.sin(a) * 2.45, 0, Math.cos(a) * 2.45);
+        pkRoundCyl(0.56, 0.62, std({ color: i % 2 ? 0xf0c04a : 0xd2622f, roughness: 0.6 }), 0, 0.33, 0, pot, 14);
+        pkRing(0.6, 0.07, std({ color: 0xf4f1e6, roughness: 0.7 }), 0, 0.62, 0, pot, 16);
+        pots.push(pot);
+        seats.push({ par: pot, x: 0, y: 0.78, z: 0, ry: 0, guest: null });
+      }
+    } else {
+      for (i = 0; i < 6; i++) {
+        a = i / 6 * Math.PI * 2;
+        var px = Math.sin(a) * 2.3, pz = Math.cos(a) * 2.3, ry = Math.atan2(Math.cos(a), -Math.sin(a));
+        pkRoundCyl(0.05, 2.3, std({ color: 0xd9d2c2, roughness: 0.4, metalness: 0.4 }), px, 1.35, pz, spin, 8);
+        var hg = pkMover(spin, px, 0, pz), body = std({ color: i % 2 ? 0xf4f1e6 : 0x4d7a9b, roughness: 0.6 });
+        pkBevelBox(1.0, 0.46, 0.4, body, 0, 1.18, 0, hg, 0.14);
+        pkBevelBox(0.34, 0.42, 0.3, body, 0, 1.5, 0.42, hg, 0.1);
+        pkBevelBox(0.5, 0.3, 0.26, body, 0, 1.36, 0.6, hg, 0.08);
+        [-0.35, 0.35].forEach(function (lx) {
+          [-0.14, 0.14].forEach(function (lz) {
+            pkRoundCyl(0.06, 0.85, std({ color: 0x6b5a3e, roughness: 0.8 }), lx, 0.5, lz, hg, 6);
+          });
+        });
+        hg.rotation.y = ry;
+        seats.push({ par: spin, x: px, y: 1.42, z: pz, ry: ry, guest: null });
+      }
+    }
+    pkRoundCyl(R + 0.5, 0.14, std({ color: 0xf4f1e6, roughness: 0.75 }), 0, 2.9, 0, spin, 40);
+    var cone = new THREE.Mesh(new THREE.ConeGeometry(R + 0.75, 0.9, 40, 1), deck);
+    cone.position.y = 3.4; spin.add(cone);
+    sphere(0.28, M.gold, 0, 3.95, 0, spin);
+    pkFuse(spin);
+    return pkAttr({
+      id: p.id, name: p.name, x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats,
+      board: isPot ? 8 : 6, run: isPot ? 18 : 22, unload: 5,
+      tickRun: function (at, dt, k) {
+        spin.rotation.y += dt * 0.6 * k;
+        for (var q = 0; q < pots.length; q++) pots[q].rotation.y -= dt * 1.1 * k;
+      }
+    });
+  }
+  // the Puffin Line: a slow pedal train on a small oval, built on the coaster kit so it loads,
+  // runs and parks like the big rides
+  function pkBuildPuffin(p) {
+    var th = PK_THEME[p.id], i, s;
+    var g = new THREE.Group(); scene.add(g);
+    var pts = [[-65.5, 0.4, 40.0], [-64.0, 0.4, 36.6], [-60.0, 0.4, 36.2], [-56.0, 0.4, 36.6], [-54.5, 0.4, 40.0],
+      [-56.0, 0.4, 43.4], [-60.0, 0.4, 43.7], [-64.0, 0.4, 43.4], [-65.5, 0.4, 40.0]];
+    var curve = pkCoCurve(pts), len = curve.getLength(), F = pkCoFrames(curve, 300);
+    var E = { curve: curve, len: len, F: F, gap: 2.2, cars: [], uPark: pkCoUAt(curve, -61.2, 43.6), uOfF: [], run: 34 };
+    var seats = [], cols = [0xf0c04a, 0xd2622f];
+    for (i = 0; i < 2; i++) {
+      var car = pkCoCar(cols[i], { w: 1.2, d: 1.7 });
+      scene.add(car.g);
+      E.cars.push(car);
+      car.seats.forEach(function (st) {
+        seats.push({ par: car.g, x: st.x, y: st.y, z: st.z, ry: 0, guest: null });
+      });
+    }
+    pkCoTrackBuild(g, E, {
+      spineMat: std({ color: 0x8a6a4a, roughness: 0.75 }),
+      supMat: std({ color: 0x4a443c, roughness: 0.7 }),
+      tieMat: std({ color: 0x59503f, roughness: 0.85 }),
+      skip: function () { return true; }
+    });
+    pkCoPlan(E, { vMin: 1.6, vMax: 4.4 });
+    for (s = 0.9; s < len; s += 1.7) {
+      var q = curve.getPointAt(s / len);
+      pkRoundCyl(0.055, q.y, std({ color: 0x4a443c, roughness: 0.8 }), q.x, q.y / 2, q.z, g, 6);
+    }
+    pkCoPlatform(g, -63.5, -56.5, 43.9, 45.3, th);
+    for (i = 0; i < 6; i++) {
+      var qa = i / 6 * Math.PI * 2;
+      pkRoundCyl(0.34, 0.42, std({ color: 0x7a6a52, roughness: 0.85 }), -60 + Math.sin(qa) * 6.6, 0.21, 40 + Math.cos(qa) * 4.6, g, 12);
+      sphere(0.3, std({ color: 0x4d7a3a, roughness: 0.95 }), -60 + Math.sin(qa) * 6.6, 0.5, 40 + Math.cos(qa) * 4.6, g);
+    }
+    var a = pkAttr({
+      id: p.id, name: p.name, x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats,
+      board: 4, run: E.run, unload: 5, extra: E, tickRun: function (at) { pkCoRun(at); }
+    });
+    var C = pkCtl(a);
+    E.a = a;
+    pkCoGates(g, [-61.2, -59.0], 43.95, C);
+    E.cars.forEach(function (c) { C.barObjs.push(function (bb) { c.bar.rotation.x = -1.35 * (1 - bb); }); });
+    pkCoPlace(E, E.uPark);
+    return a;
+  }
+  // the acorn playhouse: a sandpit, a little tower and a slide, for the ones too small to queue
+  function pkBuildPlayhouse() {
+    var g = new THREE.Group(); g.position.set(-45, 0, 40); scene.add(g);
+    var wood = std({ color: 0x8a6a4a, roughness: 0.85 }), leaf = std({ color: 0x4d7a3a, roughness: 0.9 });
+    pkRoundCyl(4.6, 0.12, std({ color: 0xd8c49a, roughness: 0.98 }), 0, 0.06, 0, g, 32);
+    pkRing(4.7, 0.15, wood, 0, 0.12, 0, g, 32);
+    pkRoundCyl(1.5, 3.2, std({ color: 0x9a8a6a, roughness: 0.9 }), -1.4, 1.6, -1.2, g, 18);
+    var cap = new THREE.Mesh(new THREE.ConeGeometry(1.95, 1.3, 18, 1), leaf);
+    cap.position.set(-1.4, 3.85, -1.2); cap.castShadow = true; g.add(cap);
+    pkRoundCyl(0.42, 0.5, std({ color: 0xf4f1e6, roughness: 0.8 }), -1.4, 1.7, 0.15, g, 12);
+    pkLocalSolid(g, -2.9, 0.1, -2.7, 0.3, 0, 3.4);
+    var sx, sz;
+    for (sx = 0; sx < 2; sx++) for (sz = 0; sz < 2; sz++) pkRoundCyl(0.1, 1.5, wood, 1.4 + sx * 1.6, 0.75, 0.6 + sz * 1.6, g, 8);
+    box(2.0, 0.12, 2.0, wood, 2.2, 1.5, 1.4, g);
+    box(2.0, 0.5, 0.08, wood, 2.2, 1.75, 0.42, g);
+    var slide = box(0.95, 0.1, 3.2, std({ color: 0xf0c04a, roughness: 0.5 }), 3.1, 0.85, 2.6, g);
+    slide.rotation.x = 0.42;
+    pkLocalSolid(g, 1.3, 3.1, -0.2, 2.4, 0, 1.6);
+    pkLocalSolid(g, 2.6, 3.7, 1.9, 4.3, 0, 0.9);
+    box(1.9, 0.09, 0.5, wood, -3.4, 0.45, 2.6, g);
+    pkLocalSolid(g, -4.4, -2.4, 2.2, 3.0, 0, 0.6);
+    pkFuse(g);
+  }
+  CO.boot(GAME);
+})();

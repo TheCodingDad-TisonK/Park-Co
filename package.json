@@ -1,0 +1,64 @@
+{
+  "name": "park-co",
+  "productName": "Park Co",
+  "version": "0.1.1",
+  "description": "Run a small theme park: sell the tickets, work the rides, keep the queue moving.",
+  "main": "main.js",
+  "author": "",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev-link",
+    "serve": "node node_modules/co-engine/tools/serve.js",
+    "build": "node node_modules/co-engine/tools/vendor-three.js && node node_modules/co-engine/tools/build-game.js && node node_modules/co-engine/tools/sync-version.js",
+    "check": "node node_modules/co-engine/tools/build-game.js --check && node node_modules/co-engine/tools/sync-version.js && node node_modules/co-engine/tools/lint-gate.js game && node node_modules/co-engine/tools/check-syntax.js",
+    "test": "npm run check && electron tests/smoke.js",
+    "visual": "electron tests/visual.js",
+    "brand": "electron node_modules/co-engine/tools/render-brand.js",
+    "installer": "npm run check && npm run brand && node node_modules/co-engine/tools/verify-icon.js && electron-builder --win nsis --x64 --publish never"
+  },
+  "dependencies": {
+    "co-engine": "github:TheCodingDad-TisonK/Co-Engine#v0.13.1"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.thecodingdad.parkco",
+    "productName": "Park Co",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "index.html",
+      "game/**/*",
+      "vendor/**/*",
+      "package.json",
+      "co.json",
+      "!node_modules/co-engine/{editor,template,docs,vendor,tests,engine,tools}/**",
+      "!node_modules/co-engine/*.md"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "artifactName": "Park-Co-Setup-${version}.exe"
+    }
+  }
+}

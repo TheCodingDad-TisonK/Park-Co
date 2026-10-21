@@ -1,0 +1,11 @@
+{
+  "name": "Park Co",
+  "title": "Park Co",
+  "out": "game/game.js",
+  "src": "src",
+  "engine": "node_modules/co-engine/engine",
+  "page": "index.html",
+  "versionGlobal": "PARK_VERSION",
+  "background": "#0b0f14",
+  "pictures": "Park Co"
+}
