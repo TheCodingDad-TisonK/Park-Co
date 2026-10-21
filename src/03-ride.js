@@ -574,10 +574,13 @@
     if (!PK.curve) return;
     for (var i = 0; i < PK.cars.length; i++) pkPlaceCar(PK.cars[i], (PK.ride.u - i * PK.carGap / PK.len + 1) % 1);
   }
+  // the speed at any point of the lap, from the same physics as the kit coasters (station tyres, a chain lift at
+  // 2.4 m/s, the drop with friction after the crest, the brake run home), worked out once from the station
   function pkSpeedAt(u) {
-    if (u >= PK.liftU[0] && u <= PK.liftU[1]) return 4.0;
-    var p = PK.curve.getPointAt(u);
-    return clamp(Math.sqrt(Math.max(1, 2 * 9.81 * (15.5 - p.y))), 4, 26);
+    var P = PK.prof;
+    if (!P) P = PK.prof = pkCoProfile(PK.curve, PK.len, PK.stationU, { lift: PK.liftU });
+    var f = ((u - PK.stationU + 1) % 1) * P.K, k = Math.min(P.K - 1, Math.floor(f)), r = f - k;
+    return Math.max(0.4, P.V[k] + (P.V[k + 1] - P.V[k]) * r);         // never quite 0, or the train could not pull away
   }
   // ── Seating ───────────────────────────────────────────────────────
   function pkBlobOf(g) {
@@ -854,7 +857,7 @@
       else { R.v = pkSpeedAt(R.u); R.u = (R.u + R.v * dt / PK.len) % 1; }
     } else if (R.state === 'arrive') {
       var d2 = (PK.stationU - R.u + 1) % 1;
-      R.v = Math.max(1.0, Math.min(R.v, Math.sqrt(2 * 4 * d2 * PK.len)));
+      R.v = Math.max(0.35, Math.min(pkSpeedAt(R.u), Math.sqrt(2 * 4 * d2 * PK.len)));
       R.u = (R.u + R.v * dt / PK.len) % 1;
       if (d2 * PK.len < 0.4) { R.u = PK.stationU; R.v = 0; pkArrive(); }
     }

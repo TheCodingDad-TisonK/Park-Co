@@ -329,6 +329,20 @@ module.exports = `
     const moved = Math.hypot(E.cars[0].g.position.x - x0, E.cars[0].g.position.z - z0);
     a.state = 'idle'; a.t = 0; T.pkAttrTick(a, 0.016);
     ok(moved > 4 && E.cars[0].g.position.y < 1.2, 'the Puffin Line crawls its oval: ' + moved.toFixed(1) + ' m round'); }
+  // speeds as real rides go: every coaster's top speed from its own drop, a lift at chain speed, a slow wheel, a true free fall;
+  // and every coaster's lift ridden upright (the track's roll is held to the world's up, not wound in by the turns)
+  { const kmh = (v) => Math.round(v * 3.6), top = {};
+    ['serpent', 'baron', 'nocturne', 'wreck', 'moonwood'].forEach((id) => { top[id] = kmh(T.PK.attrById[id].extra.vTop); });
+    const P = T.pkCoProfile(T.PK.curve, T.PK.len, T.PK.stationU, { lift: T.PK.liftU }), main = kmh(Math.max.apply(null, P.V));
+    ok(top.serpent > 50 && top.serpent < 80 && top.baron > 55 && top.baron < 85 && top.nocturne > 25 && top.nocturne < 45 && main > 40 && main < 65,
+      'coaster top speeds are real-world: coaster ' + main + ', ' + JSON.stringify(top) + ' km/h');
+    ok(Math.abs(T.pkSpeedAt((T.PK.liftU[0] + T.PK.liftU[1]) / 2) - 2.4) < 0.01 && T.PK.attrById.ferris.run >= 40 && T.PK.attrById.droptower.run >= 18,
+      'the lift climbs at chain speed, the wheel turns slowly, the tower holds before it drops');
+    let worst = 0;
+    ['serpent', 'nocturne', 'wreck', 'moonwood'].forEach((id) => { const E = T.PK.attrById[id].extra, F = E.F, L = T.pkCoProfile(E.curve, E.len, E.uPark);
+      for (let j = L.lift[0]; j <= L.lift[1]; j++) { const i = Math.round(((E.uPark + j / L.K) % 1) * F.n) % F.n, t = F.t[i];
+        if (Math.abs(t.y) < 0.85) worst = Math.max(worst, Math.acos(Math.min(1, F.up[i].y / Math.sqrt(1 - t.y * t.y))) * 57.3); } });
+    ok(worst < 30, 'every lift is ridden upright (worst roll on a lift ' + worst.toFixed(0) + ' deg)'); }
   // the level ladder and the prices
   ok(T.PK_LEVELS.length === 5 && T.PK_LEVELS[0].name === 'The gate' && T.PK_LEVELS[4].unlock === 'lights', 'the level ladder runs from the gate to the park lights');
   ok(T.pkPrice(5) === 30 && T.pkPrice(-100) === 5 && T.pkPrice(1000) === 200, 'the ticket price clamps 5 to 200');
