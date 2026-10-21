@@ -4416,6 +4416,7 @@
   function pkRideWord() {
     var R = PK.ride;
     if (R.fault) return 'stopped';
+    if (!S.coasterKey) return 'locked';
     return { idle: 'waiting', loading: 'boarding', ready: 'ready', dispatch: 'dispatching', running: 'running', arrive: 'arriving', unload: 'unloading' }[R.state] || R.state;
   }
   // ── The ground, the gate and the midway ───────────────────────────
@@ -4724,7 +4725,7 @@
     powered: function () { return !!PK.lights && (S.time >= 18 || S.time < 7); },
     freshState: function () {
       return { day: 1, time: 9, bank: 500, level: 1, log: [], ledger: [], stats: { earned: 0, spent: 0 }, layout: {}, custom: [], hdoors: {},
-        ticketPrice: 25, snackPrice: 6, auto: false, ctlAuto: {}, cycles: 0, xp: 0, clerk: true, operator: false, snackOpen: false, train2: false, lights: false,   // the starter clerk works day one for free
+        ticketPrice: 25, snackPrice: 6, auto: false, ctlAuto: {}, ctlKey: {}, coasterKey: false, cycles: 0, xp: 0, clerk: true, operator: false, snackOpen: false, train2: false, lights: false,   // the starter clerk works day one for free
         wear: 0, rides: {}, today: { tickets: 0, snacks: 0, rides: 0, earned: 0 } };
     },
     // a day one save from before the starter clerk gets one too; later days keep the park they earned
@@ -4864,6 +4865,7 @@
   // the coaster queue: one lane, one guest to a slot. A guest joins at the back, stands on their slot, and shuffles up as the
   // line drains. PK.queue is the line, front first; gu.qslot is where in it they stand.
   function pkQueueJoin(gu) {
+    if (!S.coasterKey) return false;     // the coaster is locked: its line is closed
     if (gu.state === 'walkQueue' || gu.state === 'queue' || gu.state === 'board' || gu.state === 'seated') return false;
     if (PK.queue.indexOf(gu) >= 0) return false;
     if (PK.queue.length >= PK_QUEUE_SLOTS.length) return false;
@@ -5710,8 +5712,20 @@
     }
     return false;
   }
+  // the coaster's operator key: ON unlocks the coaster and its desk; OFF locks them (not while the train is out)
+  function pkSetCoasterKey(on) {
+    var R = PK.ride;
+    if (!on && (R.state === 'dispatch' || R.state === 'running' || R.state === 'arrive' || R.riders)) { sfx('bad'); toast('Not with the train out or riders aboard', 'bad'); return false; }
+    S.coasterKey = !!on;
+    if (!on) { PK.gates.forEach(function (gt) { gt.open = false; }); if (R.state === 'loading' || R.state === 'ready' || R.state === 'unload') R.state = 'idle'; }
+    toast(S.coasterKey ? 'The coaster: operator key ON - unlocked' : 'The coaster: operator key OFF - locked', S.coasterKey ? 'good' : '');
+    logEvent(S.coasterKey ? 'The coaster unlocked' : 'The coaster locked', '');
+    screenDirtyAll(); hudDirty = true;
+    return true;
+  }
   function pkOpenGates() {
     var R = PK.ride;
+    if (!S.coasterKey) return pkRefuse('The coaster is locked - turn the operator key on');
     if (PK.closed) return pkRefuse('The park is closed');
     if (R.fault) return pkRefuse('The ride is stopped');
     if (R.state === 'dispatch' || R.state === 'running' || R.state === 'arrive') return pkRefuse('Not while the train is moving');
@@ -5739,6 +5753,7 @@
   }
   function pkBarsDown() {
     var R = PK.ride;
+    if (!S.coasterKey) return pkRefuse('The coaster is locked - turn the operator key on');
     if (R.fault) return pkRefuse('The ride is stopped');
     if (R.state !== 'loading' && R.state !== 'ready') return pkRefuse('Open the gates and load first');
     if (pkStillBoarding()) return pkRefuse('Let the riders sit first');
@@ -5774,6 +5789,7 @@
   }
   function pkDispatch() {
     var R = PK.ride;
+    if (!S.coasterKey) return pkRefuse('The coaster is locked - turn the operator key on');
     if (PK.closed && R.riders === 0) return pkRefuse('The park is closed');
     if (R.fault) return pkRefuse('The ride is stopped');
     if (R.state !== 'ready') return pkRefuse('Restraints first, then dispatch');
@@ -5791,6 +5807,7 @@
   function pkTestRun() {
     // a test run: send the empty train round from the screen, without needing the gates and the bars first
     var R = PK.ride;
+    if (!S.coasterKey) return pkRefuse('The coaster is locked - turn the operator key on');
     if (PK.closed) return pkRefuse('The park is closed');
     if (R.fault) return pkRefuse('The ride is stopped');
     if (R.state === 'dispatch' || R.state === 'running' || R.state === 'arrive') return pkRefuse('Not while the train is moving');
@@ -5862,7 +5879,7 @@
     });
     if (R.fault) { R.v = 0; pkPlaceTrain(); return; }
     // the ride runs itself when AUTO is on, or when an operator is on the payroll
-    if ((pkCoasterAuto() || S.operator) && !R.fault) {
+    if ((pkCoasterAuto() || S.operator) && !R.fault && S.coasterKey) {
       R.autoT -= dt;
       if (R.autoT <= 0) {
         R.autoT = 1.4;
@@ -6146,7 +6163,7 @@
   function pkAttrBegin(a) {
     if (a.state !== 'idle' && a.state !== 'unloading') return;
     var C = pkCtl(a);
-    if (C.maint) return;                 // locked out at the cabinet: nobody boards
+    if (C.maint || !C.key) return;       // locked out at the cabinet, or the operator key off: nobody boards
     a.state = 'boarding'; a.t = 0; C.gates = true; C.barsWant = 0;
     pkAttrReslot(a);
     a.boarding = 0;
@@ -6156,7 +6173,7 @@
   function pkAttrStart(a) {
     var C = pkCtl(a);
     // the line holds the ride only while it can still board: gates shut or seats full, whoever is left waits for the next cycle
-    if (C.fault || C.maint || (a.queue.length && C.gates && pkAttrHasSeat(a)) || a.riders <= 0 || pkAttrWalkers(a)) return false;
+    if (C.fault || C.maint || !C.key || (a.queue.length && C.gates && pkAttrHasSeat(a)) || a.riders <= 0 || pkAttrWalkers(a)) return false;
     a.state = 'running'; a.t = 0; C.gates = false; C.barsWant = 1;
     sfx('bell');
     if (a.start) a.start(a);
@@ -6217,7 +6234,7 @@
   // ── Who picks which ride ─────────────────────────────────────────
   function pkAttrPick(gu) {
     var open = [];
-    for (var i = 0; i < PK.attractions.length; i++) { var at = PK.attractions[i]; if (at.open && !(at.ctl && at.ctl.fault) && at.queue.length < at.seats.length * 2) open.push(at); }
+    for (var i = 0; i < PK.attractions.length; i++) { var at = PK.attractions[i]; if (at.open && at.ctl && at.ctl.key && !at.ctl.fault && !at.ctl.maint && at.queue.length < at.seats.length * 2) open.push(at); }   // nobody queues for a locked ride
     if (!open.length) return false;
     // the shortest line wins, with a little spread so the crowd is not one queue
     open.sort(function (a, b) { return a.queue.length - b.queue.length; });
@@ -6225,7 +6242,7 @@
     return pkAttrQueueJoin(gu, pick);
   }
   function pkGuestPickRide(gu) {
-    var coasterOk = PK.ride.state !== 'fault';
+    var coasterOk = PK.ride.state !== 'fault' && !!S.coasterKey;
     var anyOpen = false;
     for (var i = 0; i < PK.attractions.length; i++) if (PK.attractions[i].open) { anyOpen = true; break; }
     if (coasterOk && (!anyOpen || randf(0, 1) < 0.45)) {
@@ -7945,6 +7962,7 @@ function pkCtl(a) {
     fault: '',         // fault string; stops everything when set
     lamps: [],         // lamp meshes above the booth window
     maint: false,      // the cabinet's key switch in MAINT: the ride will not board or run
+    key: false,        // the operator key on the desk: OFF (the start) locks the ride and its desk; ON unlocks them
     auto: true         // AUTO: the ride runs its own gates, restraints, start
   };
   return C;
@@ -7980,6 +7998,7 @@ function pkCtlLoad(a) {
   // the booth's AUTO setting remembers where it was left
   var C = pkCtl(a);
   if (S.ctlAuto && typeof S.ctlAuto[a.id] === 'boolean') C.auto = S.ctlAuto[a.id];
+  C.key = !!(S.ctlKey && S.ctlKey[a.id]);
 }
 
 // ── The desk, worked from the booth screen ─────────────────────────
@@ -7994,7 +8013,21 @@ function pkBoothRefuse(msg) {
   return false;
 }
 
+// the operator key: ON unlocks the ride and its desk, OFF locks them (not while the ride is running or carrying riders)
+function pkSetRideKey(a, on) {
+  var C = pkCtl(a);
+  if (!on && (a.state === 'running' || a.riders)) { sfx('bad'); toast('Not with riders aboard ' + a.name, 'bad'); return false; }
+  C.key = !!on;
+  if (!S.ctlKey) S.ctlKey = {};
+  S.ctlKey[a.id] = C.key;
+  if (!C.key) { C.gates = false; a.manualStart = false; if (a.state === 'boarding' || a.state === 'ready') { a.state = 'idle'; a.t = 0; } }
+  toast(a.name + (C.key ? ': operator key ON - unlocked' : ': operator key OFF - locked'), C.key ? 'good' : '');
+  logEvent(a.name + (C.key ? ' unlocked' : ' locked'), '');
+  screenDirtyAll(); hudDirty = true;
+  return true;
+}
 function pkBoothStatus(a, C) {
+  if (!C.key) return 'KEY OFF · RIDE LOCKED';
   if (C.fault) return 'E-STOP · RESET REQUIRED';
   if (C.maint) return 'MAINTENANCE · KEY IN MAINT';
   if (PK.closed && !a.riders) return 'PARK CLOSED';
@@ -8016,6 +8049,7 @@ function pkBoothStatus(a, C) {
 // that is boarding puts it back to idle.
 function pkBoothGates(a) {
   var C = pkCtl(a);
+  if (!C.key) return pkBoothRefuse(a.name + ' is locked - turn the operator key on');
   if (C.fault) return pkBoothRefuse('Reset ' + a.name + ' first');
   if (C.maint) return pkBoothRefuse(a.name + ' is locked out - turn the key to RUN');
   if (a.state === 'running') return pkBoothRefuse('Not while ' + a.name + ' is running');
@@ -8037,6 +8071,7 @@ function pkBoothGates(a) {
 
 function pkBoothDispatch(a) {
   var C = pkCtl(a);
+  if (!C.key) return pkBoothRefuse(a.name + ' is locked - turn the operator key on');
   if (C.fault) return pkBoothRefuse('Reset ' + a.name + ' first');
   if (C.maint) return pkBoothRefuse(a.name + ' is locked out - turn the key to RUN');
   if (a.state !== 'boarding' && a.state !== 'ready') return pkBoothRefuse(a.state === 'idle' ? 'Board the guests first' : a.name + ' is ' + a.state);
@@ -8080,6 +8115,7 @@ function pkBoothStop(a) {
 function pkBoothTest(a) {
   // A test run is only safe from idle: it sends an empty car, never riders.
   var C = pkCtl(a);
+  if (!C.key) return pkBoothRefuse(a.name + ' is locked - turn the operator key on');
   if (C.fault) return pkBoothRefuse('Reset ' + a.name + ' first');
   if (C.maint) return pkBoothRefuse(a.name + ' is locked out - turn the key to RUN');
   if (a.state !== 'idle') return pkBoothRefuse(a.name + ' must be idle for a test run');
@@ -8099,6 +8135,7 @@ function pkBoothTest(a) {
 
 function pkBoothAuto(a) {
   var C = pkCtl(a);
+  if (!C.key) return pkBoothRefuse(a.name + ' is locked - turn the operator key on');
   if (PK.closed) return pkBoothRefuse('The park is closed');
   C.auto = !C.auto;
   if (C.auto) a.manualStart = false;
@@ -8140,7 +8177,7 @@ pkBuildAttractions = function () {
 var _pkTestApi = GAME.T;
 GAME.T = function () {
   var o = _pkTestApi();
-  o.pkBoothTest = pkBoothTest; o.pkBoothGates = pkBoothGates; o.pkBoothDispatch = pkBoothDispatch; o.pkBoothStop = pkBoothStop; o.pkBoothAuto = pkBoothAuto; o.pkBoothStatus = pkBoothStatus; o.pkCtl = pkCtl; o.pkBkFloorAt = pkBkFloorAt; o.pkBkWait = pkBkWait; o.pkBkDoors = PK_BK_DOORS; o.pkBkDoorBlocks = pkBkDoorBlocks; o.pkBkSit = pkBkSit; o.pkBkStand = pkBkStand; o.pkBkSitting = function () { return PK_SIT; };
+  o.pkBoothTest = pkBoothTest; o.pkBoothGates = pkBoothGates; o.pkBoothDispatch = pkBoothDispatch; o.pkBoothStop = pkBoothStop; o.pkBoothAuto = pkBoothAuto; o.pkBoothStatus = pkBoothStatus; o.pkCtl = pkCtl; o.pkSetRideKey = pkSetRideKey; o.pkSetCoasterKey = pkSetCoasterKey; o.pkBkFloorAt = pkBkFloorAt; o.pkBkWait = pkBkWait; o.pkBkDoors = PK_BK_DOORS; o.pkBkDoorBlocks = pkBkDoorBlocks; o.pkBkSit = pkBkSit; o.pkBkStand = pkBkStand; o.pkBkSitting = function () { return PK_SIT; };
   return o;
 };
 // String lights across the midway on their own masts, a popcorn cart and a balloon seller by the hub fountain.
@@ -9442,6 +9479,35 @@ function pkCtlMushroom(g, x, y, o) {
   return api;
 }
 
+// the operator keyswitch: a brass bezel, a barrel and a key with its tag standing in it. The key turns a quarter turn
+// clockwise from OFF to ON; o.act(on) may refuse (return false) and the key turns back.
+function pkCtlKey(g, x, y, o) {
+  o = o || {};
+  var M = pkCtlM(), brass = pkMats().brass || pkMats().gold;
+  var bez = new THREE.Mesh(roundCylGeo(0.032, 0.034, 0.012, 20), brass); bez.rotation.x = Math.PI / 2; bez.position.set(x, y, 0.006); g.add(bez);
+  var bar = new THREE.Mesh(roundCylGeo(0.022, 0.022, 0.014, 18), M.well); bar.rotation.x = Math.PI / 2; bar.position.set(x, y, 0.012); g.add(bar);
+  var piv = new THREE.Group(); piv.position.set(x, y, 0.02); piv.userData.dynamic = true; g.add(piv);
+  var blade = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.026, 0.02), brass); blade.position.z = 0.008; piv.add(blade);
+  var bow = new THREE.Mesh(roundCylGeo(0.018, 0.018, 0.006, 16), brass); bow.rotation.x = Math.PI / 2; bow.position.set(0, 0, 0.026); bow.scale.set(1, 1, 1); piv.add(bow);
+  var hole = new THREE.Mesh(roundCylGeo(0.005, 0.005, 0.008, 8), M.well); hole.rotation.x = Math.PI / 2; hole.position.set(0, 0.009, 0.026); piv.add(hole);
+  var tag = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.03, 0.003), M.caps[o.tag || 'red']); tag.position.set(0, -0.03, 0.03); tag.rotation.z = 0.12; piv.add(tag);
+  var on = !!o.on, target = on ? -Math.PI / 2 : 0; piv.rotation.z = target;
+  var api = {
+    id: o.id, on: on,
+    set: function (v) { api.on = !!v; target = api.on ? -Math.PI / 2 : 0; },
+    turn: function () {
+      var want = !api.on; api.set(want); sfx('click');
+      if (o.act && o.act(want) === false) api.set(!want);
+    }
+  };
+  pkCtlLive({ tick: function (dt) { piv.rotation.z += (target - piv.rotation.z) * Math.min(1, dt * 12); } });
+  hitBox(0.08, 0.08, 0.07, x, y, 0.03, {
+    prompt: function () { return (o.label || 'Operator key') + ': ' + (api.on ? 'ON - turn it off' : 'OFF - turn it on'); },
+    use: function () { api.turn(); }
+  }, g);
+  return api;
+}
+
 // an indicator lamp in a bezel
 function pkCtlLamp(g, x, y, o) {
   o = o || {};
@@ -9514,6 +9580,7 @@ function pkCtlState() {
 }
 function pkCtlGuard() {
   var C = pkCtlState();
+  if (!S.coasterKey) { sfx('bad'); toast('The coaster is locked - turn the operator key on', 'bad'); return false; }
   if (!C.on) { sfx('bad'); toast('The console is dead - turn the power on', 'bad'); return false; }
   return true;
 }
@@ -9590,6 +9657,8 @@ function pkBuildCoasterConsole(at) {
       R2.txt('DISPATCH', 1.03, -0.258, 0.024, '#d6dee3');
       R2.txt('PULL', 1.03, -0.228, 0.016, '#8f9ca4');
       // a hazard band along the bottom edge
+      R2.txt('OPERATOR KEY', 0.60, -0.262, 0.016, '#e8c86a');
+      R2.txt('OFF', 0.555, -0.12, 0.013, '#aebcc4'); R2.txt('ON', 0.65, -0.12, 0.013, '#5fd38d');
       var hy = R2.Y(-0.322), hh = R2.L(0.028);
       c.save();
       c.beginPath(); c.rect(R2.X(-1.30), hy, R2.L(2.60), hh); c.clip();
@@ -9670,13 +9739,16 @@ function pkBuildCoasterConsole(at) {
     act: function () { if (!pkCtlGuard()) return; if (C.mode === 2) pkTestRun(); else pkDispatch(); }
   });
 
-  C.parts = { gauges: gauges, lamps: lamps, buttons: buttons, toggles: toggles, mode: mode, stop: stop, lever: lever };
+  var key = pkCtlKey(P, 0.60, -0.175, { id: 'opKey', on: !!S.coasterKey, label: 'Coaster operator key',
+    act: function (on) { return pkSetCoasterKey(on); } });
+  C.parts = { gauges: gauges, lamps: lamps, buttons: buttons, toggles: toggles, mode: mode, stop: stop, lever: lever, key: key };
 
   // ── the desk keeps itself in step with the ride ──
   var airT = 0;
   pkCtlLive({
     tick: function (dt) {
-      var R = PK.ride, live = C.on;
+      var R = PK.ride, live = C.on && !!S.coasterKey;
+      if (key.on !== !!S.coasterKey) key.set(!!S.coasterKey);
       airT += dt;
       var wantAir = (R.state === 'dispatch' || R.state === 'running') ? 5.9 : 6.9;
       C.air += (wantAir - C.air) * Math.min(1, dt * 0.8);
@@ -9741,6 +9813,8 @@ function pkBoothPanel(a, con) {
       R2.txt('E-STOP', 0.04, -0.206, 0.018, '#d6dee3');
       R2.txt('RESET', 0.26, -0.206, 0.018, '#aebcc4');
       R2.txt('DISPATCH', 0.66, -0.206, 0.018, '#d6dee3');
+      R2.txt('OPERATOR KEY', -0.60, -0.232, 0.014, '#e8c86a');
+      R2.txt('OFF', -0.645, -0.135, 0.012, '#aebcc4'); R2.txt('ON', -0.555, -0.135, 0.012, '#5fd38d');
     }
   });
   var parts = { buttons: {} };
@@ -9756,6 +9830,7 @@ function pkBoothPanel(a, con) {
         if (id === 'gates') return pkBoothGates(a);
         if (id === 'bars') {
           C.barsWant = C.barsWant > 0.5 ? 0 : 1;
+          if (!C.key) { sfx('bad'); toast(a.name + ' is locked - turn the operator key on', 'bad'); return; }
           sfx('click'); toast(a.name + ': restraints ' + (C.barsWant > 0.5 ? 'down' : 'up'), '');
           screenDirtyAll(); return true;
         }
@@ -9781,6 +9856,8 @@ function pkBoothPanel(a, con) {
     id: 'dispatchLever', len: 0.19, col: 'black', prompt: 'Pull the dispatch lever',
     act: function () { pkBoothDispatch(a); }
   });
+  parts.key = pkCtlKey(P, -0.60, -0.175, { id: 'opKey', on: !!C.key, label: a.name + ' operator key',
+    act: function (on) { return pkSetRideKey(a, on); } });
   parts.load = pkCtlGauge(P, -0.70, 0.025, {
     id: 'load', label: '', unit: 'riders', min: 0, max: Math.max(4, a.seats.length), red: 0.92, ticks: 6, r: 0.075,
     get: function () { return a.seats.length ? a.riders / a.seats.length : 0; }
@@ -9791,7 +9868,8 @@ function pkBoothPanel(a, con) {
   });
   pkCtlLive({
     tick: function (dt) {
-      var live = !C.fault;
+      var live = !C.fault && !!C.key;
+      if (parts.key.on !== !!C.key) parts.key.set(!!C.key);
       if (parts.auto.on !== C.auto) parts.auto.set(C.auto);
       if (parts.stop.latched !== !!C.fault) parts.stop.latched = !!C.fault;
       parts.buttons.gates.setLit(live && (a.state === 'idle' || a.state === 'unloading' || a.state === 'boarding'));
@@ -11227,6 +11305,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // ── The ride's state, as lamps and words ─────────────────────────
   function pkBkWord(a) {
     var C = pkCtl(a);
+    if (!C.key) return 'CLOSED';
     if (C.maint) return 'MAINTENANCE';
     if (C.fault) return 'STOPPED';
     if (!a.open) return 'CLOSED';
@@ -11260,6 +11339,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       if (C.fault) on[2] = blink;
       else if (C.maint) on[1] = blink;
       else if (C.bkTest) on = [true, true, true];
+      else if (!C.key) on = [false, false, false];
       else if (a.state === 'running') on[2] = true;
       else if (a.state === 'boarding' || a.state === 'unloading' || a.state === 'ready') on[1] = true;
       else on[0] = a.open && !PK.closed;

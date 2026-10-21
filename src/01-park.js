@@ -77,6 +77,7 @@
   function pkRideWord() {
     var R = PK.ride;
     if (R.fault) return 'stopped';
+    if (!S.coasterKey) return 'locked';
     return { idle: 'waiting', loading: 'boarding', ready: 'ready', dispatch: 'dispatching', running: 'running', arrive: 'arriving', unload: 'unloading' }[R.state] || R.state;
   }
   // ── The ground, the gate and the midway ───────────────────────────
@@ -385,7 +386,7 @@
     powered: function () { return !!PK.lights && (S.time >= 18 || S.time < 7); },
     freshState: function () {
       return { day: 1, time: 9, bank: 500, level: 1, log: [], ledger: [], stats: { earned: 0, spent: 0 }, layout: {}, custom: [], hdoors: {},
-        ticketPrice: 25, snackPrice: 6, auto: false, ctlAuto: {}, cycles: 0, xp: 0, clerk: true, operator: false, snackOpen: false, train2: false, lights: false,   // the starter clerk works day one for free
+        ticketPrice: 25, snackPrice: 6, auto: false, ctlAuto: {}, ctlKey: {}, coasterKey: false, cycles: 0, xp: 0, clerk: true, operator: false, snackOpen: false, train2: false, lights: false,   // the starter clerk works day one for free
         wear: 0, rides: {}, today: { tickets: 0, snacks: 0, rides: 0, earned: 0 } };
     },
     // a day one save from before the starter clerk gets one too; later days keep the park they earned

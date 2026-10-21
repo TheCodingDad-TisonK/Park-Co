@@ -347,6 +347,35 @@ function pkCtlMushroom(g, x, y, o) {
   return api;
 }
 
+// the operator keyswitch: a brass bezel, a barrel and a key with its tag standing in it. The key turns a quarter turn
+// clockwise from OFF to ON; o.act(on) may refuse (return false) and the key turns back.
+function pkCtlKey(g, x, y, o) {
+  o = o || {};
+  var M = pkCtlM(), brass = pkMats().brass || pkMats().gold;
+  var bez = new THREE.Mesh(roundCylGeo(0.032, 0.034, 0.012, 20), brass); bez.rotation.x = Math.PI / 2; bez.position.set(x, y, 0.006); g.add(bez);
+  var bar = new THREE.Mesh(roundCylGeo(0.022, 0.022, 0.014, 18), M.well); bar.rotation.x = Math.PI / 2; bar.position.set(x, y, 0.012); g.add(bar);
+  var piv = new THREE.Group(); piv.position.set(x, y, 0.02); piv.userData.dynamic = true; g.add(piv);
+  var blade = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.026, 0.02), brass); blade.position.z = 0.008; piv.add(blade);
+  var bow = new THREE.Mesh(roundCylGeo(0.018, 0.018, 0.006, 16), brass); bow.rotation.x = Math.PI / 2; bow.position.set(0, 0, 0.026); bow.scale.set(1, 1, 1); piv.add(bow);
+  var hole = new THREE.Mesh(roundCylGeo(0.005, 0.005, 0.008, 8), M.well); hole.rotation.x = Math.PI / 2; hole.position.set(0, 0.009, 0.026); piv.add(hole);
+  var tag = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.03, 0.003), M.caps[o.tag || 'red']); tag.position.set(0, -0.03, 0.03); tag.rotation.z = 0.12; piv.add(tag);
+  var on = !!o.on, target = on ? -Math.PI / 2 : 0; piv.rotation.z = target;
+  var api = {
+    id: o.id, on: on,
+    set: function (v) { api.on = !!v; target = api.on ? -Math.PI / 2 : 0; },
+    turn: function () {
+      var want = !api.on; api.set(want); sfx('click');
+      if (o.act && o.act(want) === false) api.set(!want);
+    }
+  };
+  pkCtlLive({ tick: function (dt) { piv.rotation.z += (target - piv.rotation.z) * Math.min(1, dt * 12); } });
+  hitBox(0.08, 0.08, 0.07, x, y, 0.03, {
+    prompt: function () { return (o.label || 'Operator key') + ': ' + (api.on ? 'ON - turn it off' : 'OFF - turn it on'); },
+    use: function () { api.turn(); }
+  }, g);
+  return api;
+}
+
 // an indicator lamp in a bezel
 function pkCtlLamp(g, x, y, o) {
   o = o || {};
@@ -419,6 +448,7 @@ function pkCtlState() {
 }
 function pkCtlGuard() {
   var C = pkCtlState();
+  if (!S.coasterKey) { sfx('bad'); toast('The coaster is locked - turn the operator key on', 'bad'); return false; }
   if (!C.on) { sfx('bad'); toast('The console is dead - turn the power on', 'bad'); return false; }
   return true;
 }
@@ -495,6 +525,8 @@ function pkBuildCoasterConsole(at) {
       R2.txt('DISPATCH', 1.03, -0.258, 0.024, '#d6dee3');
       R2.txt('PULL', 1.03, -0.228, 0.016, '#8f9ca4');
       // a hazard band along the bottom edge
+      R2.txt('OPERATOR KEY', 0.60, -0.262, 0.016, '#e8c86a');
+      R2.txt('OFF', 0.555, -0.12, 0.013, '#aebcc4'); R2.txt('ON', 0.65, -0.12, 0.013, '#5fd38d');
       var hy = R2.Y(-0.322), hh = R2.L(0.028);
       c.save();
       c.beginPath(); c.rect(R2.X(-1.30), hy, R2.L(2.60), hh); c.clip();
@@ -575,13 +607,16 @@ function pkBuildCoasterConsole(at) {
     act: function () { if (!pkCtlGuard()) return; if (C.mode === 2) pkTestRun(); else pkDispatch(); }
   });
 
-  C.parts = { gauges: gauges, lamps: lamps, buttons: buttons, toggles: toggles, mode: mode, stop: stop, lever: lever };
+  var key = pkCtlKey(P, 0.60, -0.175, { id: 'opKey', on: !!S.coasterKey, label: 'Coaster operator key',
+    act: function (on) { return pkSetCoasterKey(on); } });
+  C.parts = { gauges: gauges, lamps: lamps, buttons: buttons, toggles: toggles, mode: mode, stop: stop, lever: lever, key: key };
 
   // ── the desk keeps itself in step with the ride ──
   var airT = 0;
   pkCtlLive({
     tick: function (dt) {
-      var R = PK.ride, live = C.on;
+      var R = PK.ride, live = C.on && !!S.coasterKey;
+      if (key.on !== !!S.coasterKey) key.set(!!S.coasterKey);
       airT += dt;
       var wantAir = (R.state === 'dispatch' || R.state === 'running') ? 5.9 : 6.9;
       C.air += (wantAir - C.air) * Math.min(1, dt * 0.8);
@@ -646,6 +681,8 @@ function pkBoothPanel(a, con) {
       R2.txt('E-STOP', 0.04, -0.206, 0.018, '#d6dee3');
       R2.txt('RESET', 0.26, -0.206, 0.018, '#aebcc4');
       R2.txt('DISPATCH', 0.66, -0.206, 0.018, '#d6dee3');
+      R2.txt('OPERATOR KEY', -0.60, -0.232, 0.014, '#e8c86a');
+      R2.txt('OFF', -0.645, -0.135, 0.012, '#aebcc4'); R2.txt('ON', -0.555, -0.135, 0.012, '#5fd38d');
     }
   });
   var parts = { buttons: {} };
@@ -661,6 +698,7 @@ function pkBoothPanel(a, con) {
         if (id === 'gates') return pkBoothGates(a);
         if (id === 'bars') {
           C.barsWant = C.barsWant > 0.5 ? 0 : 1;
+          if (!C.key) { sfx('bad'); toast(a.name + ' is locked - turn the operator key on', 'bad'); return; }
           sfx('click'); toast(a.name + ': restraints ' + (C.barsWant > 0.5 ? 'down' : 'up'), '');
           screenDirtyAll(); return true;
         }
@@ -686,6 +724,8 @@ function pkBoothPanel(a, con) {
     id: 'dispatchLever', len: 0.19, col: 'black', prompt: 'Pull the dispatch lever',
     act: function () { pkBoothDispatch(a); }
   });
+  parts.key = pkCtlKey(P, -0.60, -0.175, { id: 'opKey', on: !!C.key, label: a.name + ' operator key',
+    act: function (on) { return pkSetRideKey(a, on); } });
   parts.load = pkCtlGauge(P, -0.70, 0.025, {
     id: 'load', label: '', unit: 'riders', min: 0, max: Math.max(4, a.seats.length), red: 0.92, ticks: 6, r: 0.075,
     get: function () { return a.seats.length ? a.riders / a.seats.length : 0; }
@@ -696,7 +736,8 @@ function pkBoothPanel(a, con) {
   });
   pkCtlLive({
     tick: function (dt) {
-      var live = !C.fault;
+      var live = !C.fault && !!C.key;
+      if (parts.key.on !== !!C.key) parts.key.set(!!C.key);
       if (parts.auto.on !== C.auto) parts.auto.set(C.auto);
       if (parts.stop.latched !== !!C.fault) parts.stop.latched = !!C.fault;
       parts.buttons.gates.setLit(live && (a.state === 'idle' || a.state === 'unloading' || a.state === 'boarding'));

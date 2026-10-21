@@ -22,6 +22,7 @@ function pkCtl(a) {
     fault: '',         // fault string; stops everything when set
     lamps: [],         // lamp meshes above the booth window
     maint: false,      // the cabinet's key switch in MAINT: the ride will not board or run
+    key: false,        // the operator key on the desk: OFF (the start) locks the ride and its desk; ON unlocks them
     auto: true         // AUTO: the ride runs its own gates, restraints, start
   };
   return C;
@@ -57,6 +58,7 @@ function pkCtlLoad(a) {
   // the booth's AUTO setting remembers where it was left
   var C = pkCtl(a);
   if (S.ctlAuto && typeof S.ctlAuto[a.id] === 'boolean') C.auto = S.ctlAuto[a.id];
+  C.key = !!(S.ctlKey && S.ctlKey[a.id]);
 }
 
 // ── The desk, worked from the booth screen ─────────────────────────
@@ -71,7 +73,21 @@ function pkBoothRefuse(msg) {
   return false;
 }
 
+// the operator key: ON unlocks the ride and its desk, OFF locks them (not while the ride is running or carrying riders)
+function pkSetRideKey(a, on) {
+  var C = pkCtl(a);
+  if (!on && (a.state === 'running' || a.riders)) { sfx('bad'); toast('Not with riders aboard ' + a.name, 'bad'); return false; }
+  C.key = !!on;
+  if (!S.ctlKey) S.ctlKey = {};
+  S.ctlKey[a.id] = C.key;
+  if (!C.key) { C.gates = false; a.manualStart = false; if (a.state === 'boarding' || a.state === 'ready') { a.state = 'idle'; a.t = 0; } }
+  toast(a.name + (C.key ? ': operator key ON - unlocked' : ': operator key OFF - locked'), C.key ? 'good' : '');
+  logEvent(a.name + (C.key ? ' unlocked' : ' locked'), '');
+  screenDirtyAll(); hudDirty = true;
+  return true;
+}
 function pkBoothStatus(a, C) {
+  if (!C.key) return 'KEY OFF · RIDE LOCKED';
   if (C.fault) return 'E-STOP · RESET REQUIRED';
   if (C.maint) return 'MAINTENANCE · KEY IN MAINT';
   if (PK.closed && !a.riders) return 'PARK CLOSED';
@@ -93,6 +109,7 @@ function pkBoothStatus(a, C) {
 // that is boarding puts it back to idle.
 function pkBoothGates(a) {
   var C = pkCtl(a);
+  if (!C.key) return pkBoothRefuse(a.name + ' is locked - turn the operator key on');
   if (C.fault) return pkBoothRefuse('Reset ' + a.name + ' first');
   if (C.maint) return pkBoothRefuse(a.name + ' is locked out - turn the key to RUN');
   if (a.state === 'running') return pkBoothRefuse('Not while ' + a.name + ' is running');
@@ -114,6 +131,7 @@ function pkBoothGates(a) {
 
 function pkBoothDispatch(a) {
   var C = pkCtl(a);
+  if (!C.key) return pkBoothRefuse(a.name + ' is locked - turn the operator key on');
   if (C.fault) return pkBoothRefuse('Reset ' + a.name + ' first');
   if (C.maint) return pkBoothRefuse(a.name + ' is locked out - turn the key to RUN');
   if (a.state !== 'boarding' && a.state !== 'ready') return pkBoothRefuse(a.state === 'idle' ? 'Board the guests first' : a.name + ' is ' + a.state);
@@ -157,6 +175,7 @@ function pkBoothStop(a) {
 function pkBoothTest(a) {
   // A test run is only safe from idle: it sends an empty car, never riders.
   var C = pkCtl(a);
+  if (!C.key) return pkBoothRefuse(a.name + ' is locked - turn the operator key on');
   if (C.fault) return pkBoothRefuse('Reset ' + a.name + ' first');
   if (C.maint) return pkBoothRefuse(a.name + ' is locked out - turn the key to RUN');
   if (a.state !== 'idle') return pkBoothRefuse(a.name + ' must be idle for a test run');
@@ -176,6 +195,7 @@ function pkBoothTest(a) {
 
 function pkBoothAuto(a) {
   var C = pkCtl(a);
+  if (!C.key) return pkBoothRefuse(a.name + ' is locked - turn the operator key on');
   if (PK.closed) return pkBoothRefuse('The park is closed');
   C.auto = !C.auto;
   if (C.auto) a.manualStart = false;
@@ -217,6 +237,6 @@ pkBuildAttractions = function () {
 var _pkTestApi = GAME.T;
 GAME.T = function () {
   var o = _pkTestApi();
-  o.pkBoothTest = pkBoothTest; o.pkBoothGates = pkBoothGates; o.pkBoothDispatch = pkBoothDispatch; o.pkBoothStop = pkBoothStop; o.pkBoothAuto = pkBoothAuto; o.pkBoothStatus = pkBoothStatus; o.pkCtl = pkCtl; o.pkBkFloorAt = pkBkFloorAt; o.pkBkWait = pkBkWait; o.pkBkDoors = PK_BK_DOORS; o.pkBkDoorBlocks = pkBkDoorBlocks; o.pkBkSit = pkBkSit; o.pkBkStand = pkBkStand; o.pkBkSitting = function () { return PK_SIT; };
+  o.pkBoothTest = pkBoothTest; o.pkBoothGates = pkBoothGates; o.pkBoothDispatch = pkBoothDispatch; o.pkBoothStop = pkBoothStop; o.pkBoothAuto = pkBoothAuto; o.pkBoothStatus = pkBoothStatus; o.pkCtl = pkCtl; o.pkSetRideKey = pkSetRideKey; o.pkSetCoasterKey = pkSetCoasterKey; o.pkBkFloorAt = pkBkFloorAt; o.pkBkWait = pkBkWait; o.pkBkDoors = PK_BK_DOORS; o.pkBkDoorBlocks = pkBkDoorBlocks; o.pkBkSit = pkBkSit; o.pkBkStand = pkBkStand; o.pkBkSitting = function () { return PK_SIT; };
   return o;
 };
