@@ -466,8 +466,9 @@
       seats.push({ par: car, x: 0.5, y: 0.52 - 0.76, z: 0, ry: -Math.PI / 2, guest: null, gon: gon });
     }
     pkFuse(wheel);
-    var a = pkAttr({ id: 'ferris', name: 'Ferris wheel', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats, board: 10, run: 26, unload: 6,
-      // one turn per ride, eased in and out, so every cabin is back at the platform when it stops
+    var a = pkAttr({ id: 'ferris', name: 'Ferris wheel', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats, board: 10, run: 45, unload: 6,
+      // one slow turn per ride (about 1.3 rpm, a walking pace at the rim, as a real wheel goes), eased in and out, so every
+      // cabin is back at the platform when it stops
       start: function (at) { at.extra.a0 = wheel.rotation.x; },
       tickRun: function (at, dt) {
         if (at.state === 'running') { var f = clamp(at.t / at.run, 0, 1); wheel.rotation.x = (at.extra.a0 || 0) + Math.PI * 2 * (f - Math.sin(Math.PI * 2 * f) / (Math.PI * 2)); }
@@ -519,7 +520,7 @@
       pkFuse(c);
       seats.push({ par: c, x: -0.3, y: 0.66 - 0.76, z: -0.25, ry: 0, guest: null, car: c });
       seats.push({ par: c, x: 0.3, y: 0.66 - 0.76, z: -0.25, ry: 0, guest: null, car: c });
-      cars.push({ g: c, vx: randf(-2, 2), vz: randf(-1.5, 1.5), t: randf(0, 4) });
+      cars.push({ g: c, vx: randf(-1.3, 1.3), vz: randf(-1.0, 1.0), t: randf(0, 4) });
     }
     var a = pkAttr({ id: 'dodgems', name: 'Dodgems', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats, board: 10, run: 26, unload: 6,
       tickRun: function (at, dt, k) {
@@ -527,7 +528,7 @@
         for (var i = 0; i < cs.length; i++) {
           var c = cs[i];
           c.t -= dt;
-          if (c.t <= 0) { c.t = randf(1.1, 2.8); c.vx = randf(-2.6, 2.6); c.vz = randf(-2.0, 2.0); }
+          if (c.t <= 0) { c.t = randf(1.4, 3.2); c.vx = randf(-1.7, 1.7); c.vz = randf(-1.3, 1.3); }   // a bumper car's pace, up to ~8 km/h
           var x = c.g.position.x + c.vx * dt * k, z = c.g.position.z + c.vz * dt * k;
           if (x < -5.9 || x > 5.9) { c.vx *= -1; x = clamp(x, -5.9, 5.9); }
           if (z < -3.8 || z > 3.8) { c.vz *= -1; z = clamp(z, -3.8, 3.8); }
@@ -594,14 +595,15 @@
       seats.push({ par: sg, x: 0, y: 0.17 - 0.76, z: 0.02, ry: 0, guest: null, harness: hn });
     }
     pkFuse(car);
-    var a = pkAttr({ id: 'droptower', name: 'Drop tower', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats, board: 10, run: 16, unload: 5,
+    var a = pkAttr({ id: 'droptower', name: 'Drop tower', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats, board: 10, run: 21, unload: 5,
+      // up at 2 m/s, three seconds' hold at the top, a true free fall to 10 m (64 km/h), then the magnetic brakes take it
+      // to a stop at the bottom at about 2 g: no bounce, real brakes do not bounce
       tickRun: function (at, dt) {
-        var t = at.state === 'running' ? at.t : 99, y;
-        if (t < 9) y = 2.2 + (t / 9) * 24.0;
-        else if (t < 11.4) y = 26.2;
-        else if (t < 12.1) y = 26.2 - ((t - 11.4) / 0.7) * 23.0;
-        else if (t < 12.5) y = 3.2 + ((t - 12.1) / 0.4) * 4.5;
-        else if (t < 13.3) y = 7.7 - ((t - 12.5) / 0.8) * 5.5;
+        var t = at.state === 'running' ? at.t : 99, y, fall = Math.sqrt(2 * 16.2 / 9.81), vB = 9.81 * fall, aB = vB * vB / (2 * 7.8);
+        if (t < 12) { var e = t / 12; y = 2.2 + 24.0 * (e < 0.04 ? e * e / 0.08 / 0.96 : e > 0.96 ? 1 - (1 - e) * (1 - e) / 0.08 / 0.96 : (e - 0.02) / 0.96); }
+        else if (t < 15) y = 26.2;
+        else if (t < 15 + fall) { var tf = t - 15; y = 26.2 - 0.5 * 9.81 * tf * tf; }
+        else if (t < 15 + fall + vB / aB) { var tb = t - 15 - fall; y = 10 - (vB * tb - 0.5 * aB * tb * tb); }
         else y = 2.2;
         car.position.y = y;
       } });

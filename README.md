@@ -63,8 +63,9 @@ Pull the lever and the coaster runs itself: gates, restraints, dispatch, round a
 | `13-gardens.js` | the food plazas and the North Promenade's gardens |
 | `14-controls.js` | the control hardware: buttons, bat switches, selectors, levers, stops, lamps and gauges, and the desks |
 | `15-rider.js` | the player's own turn on the rides |
-| `16-coasters.js` | the coaster kit, The Serpent, Baron's Drop, the three indoor coasters and the kids' rides |
+| `16-coasters.js` | the coaster kit (track frames rolled by the felt force, speeds by physics), The Serpent, Baron's Drop, the three indoor coasters and the kids' rides |
 | `17-booths.js` | the operator booths and their kit, shared with the indoor coasters' cabins |
+| `18-hq.js` | Park Co HQ: Guest Services, Operations and the owner's office over three floors |
 | `99-boot.js` | `CO.boot(GAME)` |
 
 The engine's contract, every hook and every page element, is in the engine repo under `docs/ENGINE.md`. `//@` lines at column 0 are notes for the reader and are left out of the build.
