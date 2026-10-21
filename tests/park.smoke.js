@@ -305,10 +305,13 @@ module.exports = `
       tilt = Math.max(tilt, Math.abs(car.quaternion.x) + Math.abs(car.quaternion.z));
     }
     a.state = 'idle'; a.t = 0; a.riders = 0; T.pkAttrTick(a, 0.016);
-    ok(maxY > 5.5 && tilt > 0.05, a.name + ' flies its circuit: peak y ' + maxY.toFixed(1) + ', tilt ' + tilt.toFixed(2));
+    ok(maxY > 10 && tilt > 0.05 && E.len > 110, a.name + ' flies its circuit: ' + E.len.toFixed(0) + ' m, lift to ' + maxY.toFixed(1) + ' m, tilt ' + tilt.toFixed(2));
     ok(E.cars[0].g.position.y < 2.5, a.name + ' parks back at the station');
     ok(a.booth && a.boothScreen && a.seats.length === 8 && a.riders === 0, a.name + ' has its own control cabin');
   });
+  // the halls are the big ones: back wall at z -110.5 (the old one at -94.5 is gone), the north fence behind them at -118
+  { const x = [-50, -20, 30], back = x.every((xx) => T.collides(xx, -110.5)), old = x.some((xx) => T.collides(xx + 7, -94.5)), fence = T.collides(-50, -118) && !T.collides(-50, -114);
+    ok(back && !old && fence, 'the indoor halls run back to z -110.5 and the north fence stands at -118 (back ' + back + ', old wall ' + old + ', fence ' + fence + ')'); }
   // the cabin doors open off the end of the platform: walk the player in from the platform (a west hall and an east one)
   [[-62, 1, 'nocturne'], [42, -1, 'moonwood']].forEach(function (c) {
     var x0 = c[0] + c[1] * 14.3, s = []; for (var uu = 14.3; uu < 16.6; uu += 0.3) s.push(uu.toFixed(1) + ':' + (T.collides(c[0] + c[1] * uu, -80.9) ? 1 : 0));
@@ -337,7 +340,7 @@ module.exports = `
   { const kmh = (v) => Math.round(v * 3.6), top = {};
     ['serpent', 'baron', 'nocturne', 'wreck', 'moonwood'].forEach((id) => { top[id] = kmh(T.PK.attrById[id].extra.vTop); });
     const P = T.pkCoProfile(T.PK.curve, T.PK.len, T.PK.stationU, { lift: T.PK.liftU }), main = kmh(Math.max.apply(null, P.V));
-    ok(top.serpent > 50 && top.serpent < 80 && top.baron > 55 && top.baron < 85 && top.nocturne > 25 && top.nocturne < 45 && main > 40 && main < 65,
+    ok(top.serpent > 50 && top.serpent < 80 && top.baron > 55 && top.baron < 85 && top.nocturne > 30 && top.nocturne < 55 && main > 40 && main < 65,
       'coaster top speeds are real-world: coaster ' + main + ', ' + JSON.stringify(top) + ' km/h');
     ok(Math.abs(T.pkSpeedAt((T.PK.liftU[0] + T.PK.liftU[1]) / 2) - 2.4) < 0.01 && T.PK.attrById.ferris.run >= 40 && T.PK.attrById.droptower.run >= 18,
       'the lift climbs at chain speed, the wheel turns slowly, the tower holds before it drops');

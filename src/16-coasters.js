@@ -176,7 +176,8 @@
   // v² grows by 2g for every metre it falls and loses a little to wheel friction and air over every metre it covers.
   // Booster tyres keep it from ever stalling, and a brake run brings it home to a slow roll and a stop at the platform.
   // The lift is the sustained climb up to the lap's highest point, found from the track (o.lift overrides it, as
-  // [u0, u1]); o.pedal gives a kiddie train its steady pace instead. Returns the speed and the time at K+1 even steps.
+  // [u0, u1]); o.pedal gives a kiddie train its steady pace instead. o.rollIn stretches the final slow roll to that many metres
+  // before the stop (2.5 by default), for a station entered round a tight turn. Returns the speed and the time at K+1 even steps.
   function pkCoProfile(curve, len, u0, o) {
     o = o || {};
     var K = Math.max(240, Math.ceil(len / 0.3)), S = len / K, ys = [], i, g = 9.81;
@@ -191,7 +192,7 @@
       while (l0 > 1 && ys[l0 - 1] < ys[l0] - 1e-4) l0--;                // back down the climb to where it starts
       if (c - l0 > 4) lift = [l0, c];
     }
-    var vSt = o.vStation || 2.5, vChain = o.vChain || 2.4, mu = 0.022, drag = 0.0009, V = [0];
+    var vSt = o.vStation || 2.5, vChain = o.vChain || 2.4, mu = 0.022, drag = 0.0009, V = [0], dIn = o.rollIn || 2.5;
     for (i = 1; i <= K; i++) {
       var v, s = i * S, d = len - s;
       if (o.pedal) v = o.pedal;
@@ -204,7 +205,8 @@
       }
       if (s < 4) v = Math.min(v, Math.max(0.5, Math.sqrt(2 * 0.9 * s)));  // pulling away from the platform
       v = Math.min(v, Math.sqrt(4 + 2 * 4 * d));                          // the brake run
-      if (d < 2.5) v = Math.min(v, Math.max(0.35, Math.sqrt(2 * 0.8 * d)));   // and the roll in to the stop
+      if (d < dIn) v = Math.min(v, Math.max(0.35, Math.sqrt(2 * 0.8 * d)));   // and the roll in to the stop
+      else if (o.rollIn) v = Math.min(v, Math.sqrt(2 * 0.8 * dIn + 2 * 4 * (d - dIn)));   // braked down to meet it
       V.push(v);
     }
     var T = [0];
@@ -519,9 +521,9 @@
   PK_PLOTS.push(
     { id: 'serpent', name: 'The Serpent', x: 55, z: -77.5, r: 12.5, q: [44.5, -65], level: 12, pad: 0.93 },
     { id: 'baron', name: "Baron's Drop", x: 57, z: 19, r: 12, q: [58.6, 19], qdx: 1, level: 13, pad: 0.82, boothAt: [67.4, 9.8] },   // the line runs east from the gate: the train comes home up the west side
-    { id: 'nocturne', name: 'Nocturne', x: -50, z: -86.75, r: 13.5, q: [-59.1, -76.4], qdx: 1, level: 14, pad: 0.02 },
-    { id: 'wreck', name: 'The Wreck', x: -20, z: -86.75, r: 13.5, q: [-29.1, -76.4], qdx: 1, level: 15, pad: 0.02 },
-    { id: 'moonwood', name: 'Moonwood', x: 30, z: -86.75, r: 13.5, q: [39.1, -76.4], qdx: -1, level: 16, pad: 0.02 }
+    { id: 'nocturne', name: 'Nocturne', x: -50, z: -94.75, r: 16, q: [-59.1, -76.4], qdx: 1, level: 14, pad: 0.02 },
+    { id: 'wreck', name: 'The Wreck', x: -20, z: -94.75, r: 16, q: [-29.1, -76.4], qdx: 1, level: 15, pad: 0.02 },
+    { id: 'moonwood', name: 'Moonwood', x: 30, z: -94.75, r: 16, q: [39.1, -76.4], qdx: -1, level: 16, pad: 0.02 }
   );
   // the kids' area on the west lawn
   PK_PLOTS.push(
@@ -572,73 +574,105 @@
   };
 
   // ── The indoor coasters ───────────────────────────────────────────
-  // Three show buildings along the north wall. Each has a wide portal on the promenade side, a queue
-  // lane outside under its portico, a station just inside the portal and a glazed control cabin at the
-  // end of the platform, so the booth hardware sits with the ride instead of out on the promenade.
-  // Each runs its own circuit round its own centrepiece: Nocturne dives, humps and spirals down round
-  // the moon; The Wreck flies a figure-eight with the ship in one loop; Moonwood runs camelbacks along
-  // the back wall and ducks under the tree's crown.
+  // Three show buildings along the north wall, 24 m wide, 31.5 m deep and 14 m tall. Each has a wide portal on the promenade
+  // side, a queue lane outside under its portico, a station just inside the portal and a glazed control cabin at the end of
+  // the platform, so the booth hardware sits with the ride instead of out on the promenade. All three climb an 11 m chain
+  // lift up the far wall and dive along the back; then each runs its own circuit round its own centrepiece: Nocturne
+  // U-turns up to the moon and spirals a turn and a half down round it; The Wreck flies a figure-eight with the ship in one
+  // loop, high through the crossing the first time and low the second; Moonwood runs a camelback up the portal side and
+  // three quarters round the trunk under the crown, back under its own way in.
   var PK_INDOOR = {
-    nocturne: { name: 'Nocturne', box: [-62, -38, -94.5, -79], portal: 'w', wall: 0x2b2e3d, band: 0x8f7bd6, trim: 0x40465e, roof: 0x1d2030, sign: '#b9a7f0', ground: 0x767b93, centre: 'moon', at: [5.0, -89.0] },
-    wreck:    { name: 'The Wreck', box: [-32, -8, -94.5, -79], portal: 'w', wall: 0x5b5348, band: 0xd8a24a, trim: 0x4a443c, roof: 0x3b3630, sign: '#e8bd6a', ground: 0x8a7c66, centre: 'ship', at: [13.0, -89.2] },
-    moonwood: { name: 'Moonwood', box: [18, 42, -94.5, -79], portal: 'e', wall: 0x6b5340, band: 0x8fd3c7, trim: 0x4f4132, roof: 0x4a3a2c, sign: '#9fe0d4', ground: 0x7c7058, centre: 'tree', at: [11.5, -88.6] }
+    nocturne: { name: 'Nocturne', box: [-62, -38, -110.5, -79], portal: 'w', wall: 0x2b2e3d, band: 0x8f7bd6, trim: 0x40465e, roof: 0x1d2030, sign: '#b9a7f0', ground: 0x767b93, centre: 'moon', at: [12.8, -96.4] },
+    wreck:    { name: 'The Wreck', box: [-32, -8, -110.5, -79], portal: 'w', wall: 0x5b5348, band: 0xd8a24a, trim: 0x4a443c, roof: 0x3b3630, sign: '#e8bd6a', ground: 0x8a7c66, centre: 'ship', at: [13.8, -95.0] },
+    moonwood: { name: 'Moonwood', box: [18, 42, -110.5, -79], portal: 'e', wall: 0x6b5340, band: 0x8fd3c7, trim: 0x4f4132, roof: 0x4a3a2c, sign: '#9fe0d4', ground: 0x7c7058, centre: 'tree', at: [10.0, -95.7] }
   };
-  // the circuits are laid out in the hall's own frame: u is metres in from the portal wall (the hall is mirrored for an east
-  // portal), z is the world z. The inside of the hall is u 0.3..23.7, z -94.2..-79.3; the track keeps to u 1.4..22.3,
-  // z -92.75..-83.3 and below 6.5 m, under the ceiling beams. Every circuit shares the station: the brake run down the portal
-  // side, the turn in, the platform straight along z -83.35 and the turn out at its far end. Checked clear of itself
-  // (2.5 m between passes stacked over each other, 1.9 m side by side) and of the control cabin at u 14.6..19.6, z > -82.6.
-  function pkIndoorArc(cu, cz, r, a0, a1, y0, y1, n, out, yf) {
-    for (var k = 0; k <= n; k++) { var f = k / n, a = a0 + (a1 - a0) * f; out.push([cu + r * Math.cos(a), yf ? yf(f) : y0 + (y1 - y0) * f, cz - r * Math.sin(a)]); }
-    return out;
-  }
-  function pkIndoorStation(p, fromHelix) {
-    if (!fromHelix) p.push([1.75, 1.0, -88.0]);
-    p.push([2.0, 1.0, -85.4], [3.3, 1.0, -83.5], [6.0, 1.0, -83.35], [9.0, 1.0, -83.35], [12.0, 1.0, -83.35], [14.6, 1.0, -83.5]);
-    return p;
-  }
+  var PK_HALL_H = 14.0, PK_HALL_CEIL = 13.5;
+  // The circuits are laid out in the hall's own frame: u is metres in from the portal wall (the hall is mirrored for an east
+  // portal), z is the world z. The inside of the hall is u 0.3..23.7, z -110.2..-79.3; the track keeps to u 1.4..22.3,
+  // z -108.7..-83.2 and below 11.1 m, under the ceiling beams. Every circuit shares the station (the platform straight along
+  // z -83.35 from u 3.3, dead level) and the lift. The points are laid offline from straights and arcs in plan with a height
+  // profile of vertical arcs, then sampled every 1.2 m along the track: checked clear of itself (2.5 m between passes stacked
+  // over each other, 1.9 m side by side), of the control cabin at u 14.6..19.6, z > -82.6, and under 4.5 g at the speeds
+  // pkCoProfile gives (with the 12 m station roll-in).
   var PK_INDOOR_LAYOUT = {
-    // up the far wall, a dive and a camelback along the back, then a turn and a quarter down round the moon, out onto the brakes
-    moon: function () {
-      var p = pkIndoorStation([], true);
-      p.push([16.6, 1.15, -84.5], [18.4, 1.8, -86.3], [19.5, 3.0, -88.3], [19.7, 4.6, -90.2], [19.0, 6.0, -91.9], [17.2, 6.4, -92.6]);
-      p.push([15.0, 4.6, -92.6], [13.0, 3.0, -92.5], [11.0, 4.6, -92.4], [9.0, 6.0, -92.3]);
-      return pkIndoorArc(5.0, -89.0, 3.0, Math.PI / 2 + 0.2, 3 * Math.PI, 6.2, 1.1, 26, p);
-    },
-    // up the far wall, then a figure-eight across the hall: high through the crossing the first time, low the second
-    ship: function () {
-      var p = pkIndoorStation([]);
-      p.push([16.6, 1.15, -84.5], [18.6, 1.9, -86.5], [19.6, 3.4, -88.7], [19.5, 5.0, -90.8], [18.2, 6.2, -92.3], [16.2, 6.4, -92.6]);
-      var key = [[0.75, 6.4], [1.0, 6.4], [1.25, 5.6], [1.5, 5.0], [1.75, 4.5], [1.9, 3.9], [2.0, 3.2], [2.25, 2.2], [2.5, 1.7], [2.7, 1.4]];
-      function yAt(t) { var q = t / Math.PI; for (var i = 1; i < key.length; i++) if (q <= key[i][0]) { var f = (q - key[i - 1][0]) / (key[i][0] - key[i - 1][0]); return key[i - 1][1] + (key[i][1] - key[i - 1][1]) * f; } return 1.4; }
-      for (var k = 0; k <= 36; k++) { var t = Math.PI * (0.75 + 1.95 * k / 36); p.push([10.0 + 6.0 * Math.sin(t), yAt(t), -89.2 + 2.6 * Math.sin(2 * t)]); }
-      p.push([12.4, 1.2, -92.5], [9.0, 1.0, -92.6], [5.4, 1.0, -92.55], [3.2, 1.0, -92.0], [2.0, 1.0, -90.6]);
-      return p;
-    },
-    // up the far wall, camelbacks along the back, down the near side and round the trunk under the crown
-    tree: function () {
-      var p = pkIndoorStation([]);
-      p.push([16.6, 1.15, -84.5], [18.4, 1.8, -86.3], [19.5, 3.0, -88.3], [19.7, 4.4, -90.3], [19.0, 5.5, -92.0], [17.0, 5.6, -92.6]);
-      p.push([14.4, 3.9, -92.6], [12.2, 4.8, -92.6], [9.8, 5.0, -92.6], [7.2, 4.5, -92.6], [5.4, 4.6, -92.5], [4.2, 4.4, -91.2], [4.5, 3.8, -89.6], [5.0, 2.6, -88.2], [6.4, 1.6, -86.5], [8.7, 1.4, -86.1]);
-      pkIndoorArc(11.5, -88.6, 2.5, -Math.PI / 2 + 0.3, Math.PI / 2, 1.4, 1.4, 14, p);
-      p.push([9.0, 1.3, -91.25], [6.0, 1.15, -91.3], [3.4, 1.0, -90.8], [2.1, 1.0, -89.6]);
-      return p;
-    }
+    moon: [
+      [3.3, 1, -83.35], [4.5, 1, -83.35], [5.71, 1, -83.35], [6.92, 1, -83.35], [8.12, 1, -83.35], [9.32, 1, -83.35],
+      [10.53, 1, -83.35], [11.73, 1, -83.35], [12.94, 1, -83.35], [14.14, 1, -83.35], [15.35, 1, -83.4], [16.52, 1, -83.68],
+      [17.6, 1.06, -84.19], [18.55, 1.29, -84.9], [19.29, 1.7, -85.75], [19.84, 2.25, -86.67], [20.2, 2.82, -87.66], [20.38, 3.39, -88.71],
+      [20.4, 3.96, -89.77], [20.4, 4.53, -90.83], [20.4, 5.1, -91.89], [20.4, 5.67, -92.95], [20.4, 6.25, -94.01], [20.4, 6.82, -95.07],
+      [20.4, 7.39, -96.13], [20.4, 7.96, -97.2], [20.4, 8.53, -98.26], [20.4, 9.1, -99.32], [20.4, 9.67, -100.38], [20.4, 10.24, -101.44],
+      [20.34, 10.78, -102.52], [20.07, 11, -103.66], [19.55, 10.81, -104.72], [18.93, 10.22, -105.55], [18.37, 9.31, -106.09], [18.03, 8.21, -106.35],
+      [17.65, 7.02, -106.6], [17.11, 6.01, -106.88], [16.36, 5.11, -107.16], [15.45, 4.36, -107.35], [14.4, 3.78, -107.4], [13.26, 3.39, -107.4],
+      [12.07, 3.21, -107.4], [10.86, 3.24, -107.4], [9.68, 3.48, -107.4], [8.53, 3.83, -107.4], [7.38, 4.18, -107.4], [6.23, 4.54, -107.4],
+      [5.08, 4.89, -107.4], [3.94, 5.24, -107.23], [2.92, 5.6, -106.71], [2.13, 5.95, -105.89], [1.63, 6.3, -104.85], [1.51, 6.66, -103.71],
+      [1.76, 7.01, -102.59], [2.35, 7.37, -101.61], [3.24, 7.72, -100.88], [4.34, 7.97, -100.47], [5.54, 8, -100.4], [6.74, 8, -100.4],
+      [7.95, 8, -100.4], [9.15, 8, -100.4], [10.35, 8, -100.4], [11.56, 8, -100.4], [12.76, 8, -100.4], [13.95, 7.89, -100.22],
+      [15.02, 7.72, -99.72], [15.9, 7.54, -98.92], [16.5, 7.36, -97.9], [16.78, 7.18, -96.75], [16.7, 7, -95.57], [16.29, 6.82, -94.45],
+      [15.56, 6.64, -93.52], [14.6, 6.46, -92.83], [13.47, 6.28, -92.46], [12.28, 6.1, -92.44], [11.14, 5.92, -92.77], [10.15, 5.74, -93.41],
+      [9.39, 5.56, -94.32], [8.92, 5.38, -95.42], [8.81, 5.2, -96.6], [9.04, 5.02, -97.76], [9.61, 4.84, -98.8], [10.46, 4.67, -99.63],
+      [11.51, 4.49, -100.19], [12.68, 4.31, -100.39], [13.85, 4.13, -100.25], [14.94, 3.95, -99.77], [15.83, 3.77, -99], [16.47, 3.59, -97.99],
+      [16.77, 3.41, -96.84], [16.73, 3.23, -95.66], [16.34, 3.05, -94.54], [15.63, 2.87, -93.58], [14.68, 2.69, -92.87], [13.56, 2.51, -92.48],
+      [12.38, 2.33, -92.4], [11.19, 2.15, -92.4], [9.99, 1.97, -92.4], [8.8, 1.79, -92.4], [7.61, 1.61, -92.4], [6.42, 1.44, -92.4],
+      [5.23, 1.26, -92.4], [4.05, 1.08, -92.3], [2.97, 1, -91.77], [2.19, 1, -90.87], [1.83, 1, -89.73], [1.8, 1, -88.53],
+      [1.8, 1, -87.32], [1.8, 1, -86.12], [1.8, 1, -84.91], [2.23, 1, -83.83]
+    ],
+    ship: [
+      [3.3, 1, -83.35], [4.5, 1, -83.35], [5.7, 1, -83.35], [6.9, 1, -83.35], [8.1, 1, -83.35], [9.3, 1, -83.35],
+      [10.5, 1, -83.35], [11.71, 1, -83.35], [12.91, 1, -83.35], [14.11, 1, -83.35], [15.3, 1, -83.4], [16.47, 1, -83.66],
+      [17.56, 1.05, -84.17], [18.51, 1.28, -84.86], [19.26, 1.68, -85.7], [19.81, 2.23, -86.61], [20.18, 2.83, -87.58], [20.37, 3.43, -88.61],
+      [20.4, 4.03, -89.65], [20.4, 4.62, -90.69], [20.4, 5.22, -91.73], [20.4, 5.82, -92.77], [20.4, 6.42, -93.81], [20.4, 7.01, -94.85],
+      [20.4, 7.61, -95.9], [20.4, 8.21, -96.94], [20.4, 8.8, -97.98], [20.4, 9.4, -99.02], [20.4, 10, -100.06], [20.4, 10.6, -101.11],
+      [20.38, 10.96, -102.24], [20.15, 10.92, -103.41], [19.73, 10.43, -104.41], [19.31, 9.6, -105.08], [19.01, 8.32, -105.46], [18.76, 7.28, -105.73],
+      [18.32, 6.25, -106.13], [17.67, 5.35, -106.58], [16.82, 4.62, -107], [15.79, 4.09, -107.3], [14.64, 3.78, -107.4], [13.44, 3.7, -107.4],
+      [12.25, 3.82, -107.4], [11.06, 3.97, -107.4], [9.87, 4.12, -107.4], [8.67, 4.27, -107.4], [7.48, 4.42, -107.4], [6.29, 4.57, -107.4],
+      [5.11, 4.72, -107.3], [4, 4.88, -106.89], [3.04, 5.03, -106.17], [2.33, 5.18, -105.23], [1.91, 5.33, -104.12], [1.81, 5.48, -102.94],
+      [2.06, 5.63, -101.78], [2.61, 5.78, -100.73], [3.44, 5.93, -99.88], [4.47, 6.08, -99.3], [5.63, 6.23, -99.02], [6.82, 6.38, -99.02],
+      [8.01, 6.54, -99.05], [9.2, 6.69, -99.08], [10.39, 6.84, -99.11], [11.58, 6.99, -99.14], [12.77, 7.14, -99.17], [13.96, 7.29, -99.18],
+      [15.13, 7.4, -98.98], [16.19, 7.29, -98.44], [17.05, 7.02, -97.65], [17.66, 6.74, -96.65], [17.96, 6.46, -95.53], [17.95, 6.17, -94.37],
+      [17.62, 5.89, -93.25], [16.99, 5.62, -92.27], [16.13, 5.33, -91.5], [15.07, 5.05, -91], [13.93, 4.78, -90.8], [12.77, 4.49, -90.92],
+      [11.7, 4.21, -91.37], [10.78, 3.93, -92.08], [10.1, 3.65, -93.03], [9.7, 3.37, -94.12], [9.61, 3.09, -95.28], [9.7, 2.81, -96.44],
+      [9.79, 2.53, -97.61], [9.87, 2.25, -98.77], [9.96, 1.97, -99.94], [10.05, 1.69, -101.1], [10.14, 1.42, -102.27], [10.18, 1.26, -103.45],
+      [9.94, 1.24, -104.62], [9.38, 1.23, -105.68], [8.54, 1.22, -106.53], [7.49, 1.21, -107.11], [6.33, 1.2, -107.38], [5.13, 1.19, -107.3],
+      [4.01, 1.18, -106.89], [3.04, 1.17, -106.18], [2.33, 1.15, -105.22], [1.9, 1.14, -104.11], [1.79, 1.13, -102.92], [1.79, 1.12, -101.72],
+      [1.79, 1.11, -100.51], [1.79, 1.1, -99.31], [1.79, 1.09, -98.11], [1.79, 1.07, -96.91], [1.79, 1.06, -95.71], [1.79, 1.05, -94.51],
+      [1.79, 1.04, -93.31], [1.79, 1.03, -92.11], [1.79, 1.02, -90.91], [1.79, 1.01, -89.71], [1.79, 1, -88.51], [1.79, 1, -87.31],
+      [1.79, 1, -86.11], [1.79, 1, -84.91], [2.23, 1, -83.82]
+    ],
+    tree: [
+      [3.3, 1, -83.35], [4.5, 1, -83.35], [5.71, 1, -83.35], [6.91, 1, -83.35], [8.12, 1, -83.35], [9.32, 1, -83.35],
+      [10.53, 1, -83.35], [11.73, 1, -83.35], [12.94, 1, -83.35], [14.14, 1, -83.35], [15.34, 1, -83.4], [16.52, 1, -83.68],
+      [17.6, 1.06, -84.19], [18.54, 1.29, -84.9], [19.29, 1.7, -85.74], [19.84, 2.25, -86.66], [20.2, 2.82, -87.66], [20.38, 3.39, -88.7],
+      [20.4, 3.96, -89.76], [20.4, 4.53, -90.82], [20.4, 5.1, -91.89], [20.4, 5.67, -92.95], [20.4, 6.24, -94.01], [20.4, 6.81, -95.07],
+      [20.4, 7.38, -96.13], [20.4, 7.95, -97.19], [20.4, 8.52, -98.25], [20.4, 9.09, -99.31], [20.4, 9.66, -100.37], [20.4, 10.23, -101.44],
+      [20.34, 10.78, -102.51], [20.07, 11, -103.65], [19.56, 10.78, -104.71], [18.97, 10.14, -105.5], [18.52, 9.24, -105.95], [18.23, 7.72, -106.2],
+      [17.97, 6.8, -106.39], [17.46, 5.75, -106.7], [16.75, 4.85, -107.03], [15.83, 4.12, -107.29], [14.76, 3.58, -107.4], [13.6, 3.28, -107.4],
+      [12.4, 3.2, -107.4], [11.2, 3.35, -107.4], [10.04, 3.65, -107.4], [8.87, 3.97, -107.4], [7.71, 4.28, -107.4], [6.55, 4.6, -107.4],
+      [5.39, 4.92, -107.39], [4.25, 5.23, -107.17], [3.25, 5.55, -106.6], [2.48, 5.87, -105.74], [2.01, 6.18, -104.68], [1.9, 6.5, -103.53],
+      [1.9, 6.81, -102.36], [1.9, 7.13, -101.2], [1.9, 7.38, -100.02], [1.9, 7.35, -98.82], [1.9, 7.08, -97.65], [1.9, 6.79, -96.48],
+      [1.9, 6.49, -95.31], [2.09, 6.2, -94.16], [2.63, 5.91, -93.13], [3.47, 5.61, -92.33], [4.53, 5.32, -91.84], [5.69, 5.06, -91.7],
+      [6.89, 5, -91.7], [8.1, 5, -91.7], [9.3, 5, -91.7], [10.5, 5, -91.73], [11.65, 4.88, -92.06], [12.64, 4.66, -92.7],
+      [13.4, 4.43, -93.6], [13.86, 4.21, -94.69], [14, 3.99, -95.86], [13.77, 3.76, -97.01], [13.22, 3.54, -98.06], [12.4, 3.31, -98.9],
+      [11.36, 3.09, -99.45], [10.2, 2.87, -99.69], [9.03, 2.64, -99.57], [7.94, 2.42, -99.12], [7.03, 2.19, -98.38], [6.38, 1.97, -97.39],
+      [6.04, 1.75, -96.26], [6, 1.52, -95.08], [6, 1.4, -93.88], [6, 1.37, -92.68], [6, 1.33, -91.47], [5.98, 1.29, -90.27],
+      [5.62, 1.25, -89.13], [4.85, 1.22, -88.22], [3.79, 1.18, -87.67], [2.77, 1.14, -87.05], [2.07, 1.1, -86.08], [1.8, 1.06, -84.91],
+      [2.23, 1.02, -83.82]
+    ]
   };
   // the ride's circuit, from its layout, into world space
   function pkIndoorPts(cfg) {
     var s = cfg.portal === 'w' ? 1 : -1, AX = s > 0 ? cfg.box[0] : cfg.box[1];
-    return PK_INDOOR_LAYOUT[cfg.centre]().map(function (q) { return [AX + s * q[0], q[1], q[2]]; });
+    return PK_INDOOR_LAYOUT[cfg.centre].map(function (q) { return [AX + s * q[0], q[1], q[2]]; });
   }
-  // the shell: four walls with the portal cut in, a gable roof, the marquee and a portico over the
-  // queue, a paved apron and the run of interior floor
+  // the shell: four walls with the portal cut in, a gable roof, a show facade (name board, marquee lights, the ride's emblem
+  // and blind arches), a portico over the queue, a paved apron and the run of interior floor
   function pkIndoorShell(g, cfg) {
     var b = cfg.box, X0 = b[0], X1 = b[1], Z0 = b[2], Z1 = b[3], CX = (X0 + X1) / 2, CZ = (Z0 + Z1) / 2;
-    var H = 9.0, PW = 5.8, PH = 4.0, i, x;
+    var H = PK_HALL_H, PW = 5.8, PH = 4.0, i, x;
     var s = cfg.portal === 'w' ? 1 : -1, AX = s > 0 ? X0 : X1;
     var wall = std({ color: cfg.wall, roughness: 0.85, metalness: 0.04 });
     var band = std({ color: cfg.band, roughness: 0.5, metalness: 0.3 });
     var trim = std({ color: cfg.trim, roughness: 0.7, metalness: 0.15 });
+    var glow = std({ color: cfg.band, emissive: cfg.band, emissiveIntensity: 0.6, roughness: 0.4 });
     var P0 = AX + s * 0.6, P1 = P0 + s * PW, pLo = Math.min(P0, P1), pHi = Math.max(P0, P1);
     // the floor inside is theme-tinted rather than a dark slab, so the hall reads as a place
     var floorCol = new THREE.Color(cfg.ground).multiplyScalar(0.42);
@@ -657,38 +691,65 @@
     solid(X0, pLo, Z1 - 0.3, Z1 + 0.3, 0, H);
     solid(pHi, X1, Z1 - 0.3, Z1 + 0.3, 0, H);
     solid(pLo, pHi, Z1 - 0.3, Z1 + 0.3, PH, H);
-    // the inside of the shell: a timber wainscot, pilasters, cross beams and a ceiling. The outside
-    // has order; without this the inside is four flat planes and a dark gable overhead.
+    // the inside of the shell: a timber wainscot, pilasters, cross beams and a ceiling. The outside has order; without this
+    // the inside is four flat planes and a dark gable overhead.
     box(X1 - X0 - 0.6, 1.35, 0.05, trim, CX, 0.68, Z0 + 0.33, g);
     box(0.05, 1.35, Z1 - Z0 - 0.6, trim, X0 + 0.33, 0.68, CZ, g);
     box(0.05, 1.35, Z1 - Z0 - 0.6, trim, X1 - 0.33, 0.68, CZ, g);
     for (i = 0; i < 5; i++) {
       x = X0 + 2.4 + (X1 - X0 - 4.8) * i / 4;
-      box(0.24, 6.4, 0.1, trim, x, 3.2, Z0 + 0.34, g);
+      box(0.24, 11.0, 0.1, trim, x, 5.5, Z0 + 0.34, g);
     }
-    for (i = 0; i < 4; i++) {
-      var zi = Z0 + 2.6 + (Z1 - Z0 - 5.2) * i / 3;
-      box(0.1, 6.4, 0.24, trim, X0 + 0.34, 3.2, zi, g);
-      box(0.1, 6.4, 0.24, trim, X1 - 0.34, 3.2, zi, g);
+    for (i = 0; i < 7; i++) {
+      var zi = Z0 + 2.6 + (Z1 - Z0 - 5.2) * i / 6;
+      box(0.1, 11.0, 0.24, trim, X0 + 0.34, 5.5, zi, g);
+      box(0.1, 11.0, 0.24, trim, X1 - 0.34, 5.5, zi, g);
     }
-    for (i = 0; i < 5; i++) {
-      box(X1 - X0 - 0.8, 0.22, 0.28, trim, CX, 8.45, Z0 + 3 + (Z1 - Z0 - 6) * i / 4, g);
+    for (i = 0; i < 8; i++) {
+      box(X1 - X0 - 0.8, 0.26, 0.3, trim, CX, PK_HALL_CEIL - 0.3, Z0 + 3 + (Z1 - Z0 - 6) * i / 7, g);
     }
-    var hallCeil = box(X1 - X0 - 0.6, 0.1, Z1 - Z0 - 0.6, std({ color: cfg.roof, roughness: 0.9 }), CX, 8.75, CZ, g);
+    var hallCeil = box(X1 - X0 - 0.6, 0.1, Z1 - Z0 - 0.6, std({ color: cfg.roof, roughness: 0.9 }), CX, PK_HALL_CEIL, CZ, g);
     hallCeil.castShadow = false;
-    // band course and pilasters
+    // band courses (the lower one carries the marquee bulbs) and pilasters
     box(X1 - X0 + 0.4, 0.5, 0.16, band, CX, 6.6, Z1 + 0.36, g);
     box(X1 - X0 + 0.4, 0.5, 0.16, band, CX, 6.6, Z0 - 0.36, g);
+    box(X1 - X0 + 0.6, 0.6, 0.3, trim, CX, H - 0.3, Z1 + 0.42, g);
+    box(X1 - X0 + 0.6, 0.6, 0.3, trim, CX, H - 0.3, Z0 - 0.42, g);
     for (i = 0; i <= 4; i++) {
       x = X0 + 2.0 + (X1 - X0 - 4.0) * i / 4;
       box(0.5, H, 0.5, trim, x, H / 2, Z1 + 0.42, g);
       box(0.5, H, 0.5, trim, x, H / 2, Z0 - 0.42, g);
     }
+    for (i = 0; i <= 6; i++) {                                                    // the long sides get pilasters too
+      var zp = Z0 + 2.0 + (Z1 - Z0 - 4.0) * i / 6;
+      box(0.5, H, 0.5, trim, X0 - 0.42, H / 2, zp, g);
+      box(0.5, H, 0.5, trim, X1 + 0.42, H / 2, zp, g);
+    }
+    box(0.16, 0.5, Z1 - Z0 + 0.4, band, X0 - 0.36, 6.6, CZ, g);
+    box(0.16, 0.5, Z1 - Z0 + 0.4, band, X1 + 0.36, 6.6, CZ, g);
+    // the show front: blind arches between the pilasters, the name board across the top, the emblem over the portal side
+    // and a line of marquee bulbs along the band course
+    for (i = 0; i < 4; i++) {
+      x = X0 + 2.0 + (X1 - X0 - 4.0) * (i + 0.5) / 4;
+      box(3.2, 4.2, 0.1, std({ color: new THREE.Color(cfg.wall).multiplyScalar(0.6), roughness: 0.9 }), x, 9.6, Z1 + 0.33, g);
+      box(3.5, 0.18, 0.18, band, x, 11.8, Z1 + 0.38, g);
+    }
+    var boardX = CX + s * 2.2;
+    box(13.6, 2.3, 0.3, std({ color: 0x151a20, roughness: 0.6 }), boardX, 10.0, Z1 + 0.48, g);
+    box(14.0, 0.14, 0.34, band, boardX, 11.2, Z1 + 0.5, g);
+    box(14.0, 0.14, 0.34, band, boardX, 8.8, Z1 + 0.5, g);
+    pkSign3D([cfg.name.toUpperCase()], 12.6, 1.5, boardX, 10.0, Z1 + 0.66, 0, { bg: '#151a20', fg: cfg.sign }, g);
+    var emX = AX + s * 3.5;
+    var disc = pkRoundCyl(2.0, 0.3, band, emX, 10.0, Z1 + 0.5, g, 28); disc.rotation.x = Math.PI / 2;
+    var inner = pkRoundCyl(1.62, 0.34, std({ color: 0x151a20, roughness: 0.6 }), emX, 10.0, Z1 + 0.52, g, 28); inner.rotation.x = Math.PI / 2;
+    pkIndoorEmblem(g, cfg, emX, 10.0, Z1 + 0.72, glow);
+    for (i = 0; i < 26; i++) sphere(0.1, MAT.bulb, X0 + 0.8 + (X1 - X0 - 1.6) * i / 25, 6.95, Z1 + 0.46, g);
     // the portal: jambs, lintel, the marquee, the portico
     box(0.5, PH + 0.6, 0.55, trim, P0 + s * 0.25, (PH + 0.6) / 2, Z1 + 0.3, g);
     box(0.5, PH + 0.6, 0.55, trim, P1 - s * 0.25, (PH + 0.6) / 2, Z1 + 0.3, g);
     box(PW + 1.5, 0.62, 0.6, band, (pLo + pHi) / 2, PH + 0.45, Z1 + 0.3, g);
     pkSign3D([cfg.name.toUpperCase()], Math.min(6.8, PW + 1.8), 0.46, (pLo + pHi) / 2, PH + 1.3, Z1 + 0.46, 0, { bg: '#151a20', fg: cfg.sign }, g);
+    for (i = 0; i < 9; i++) sphere(0.09, MAT.bulb, pLo - 0.4 + (PW + 0.8) * i / 8, PH + 0.86, Z1 + 0.62, g);
     box(PW + 3.4, 0.22, 3.5, pkMats().roof, (pLo + pHi) / 2, 4.78, Z1 + 1.75, g);
     box(PW + 3.4, 0.5, 0.16, band, (pLo + pHi) / 2, 4.62, Z1 + 3.42, g);
     [pLo - 0.5, pHi + 0.5].forEach(function (px) {
@@ -696,49 +757,136 @@
       solid(px - 0.24, px + 0.24, Z1 + 0.86, Z1 + 1.34, 0, 4.7);
     });
     // roof
-    pkGableRoof(X1 - X0 + 1.2, Z1 - Z0 + 1.6, 2.2, std({ color: cfg.roof, roughness: 0.8 }), trim, CX, H, CZ, g, 0.45);
-    box(X1 - X0 - 3, 0.8, 1.4, std({ color: cfg.roof, roughness: 0.8 }), CX, H + 2.2, CZ, g);
+    pkGableRoof(X1 - X0 + 1.2, Z1 - Z0 + 1.6, 3.4, std({ color: cfg.roof, roughness: 0.8 }), trim, CX, H, CZ, g, 0.45);
+    box(X1 - X0 - 3, 0.8, 1.4, std({ color: cfg.roof, roughness: 0.8 }), CX, H + 3.4, CZ, g);
+    // the fairy-tale silhouette, after the Efteling halls: a stepped Dutch gable rising over the front with a lit round window,
+    // and a round tower with a pointed roof at each front corner
+    var steps = [12.0, 9.6, 7.2, 4.8, 2.4];
+    steps.forEach(function (w, k) {
+      box(w, 1.25, 0.7, wall, CX, H + 0.62 + k * 1.25, Z1 + 0.05, g);
+      box(w + 0.3, 0.16, 0.86, trim, CX, H + 1.25 + k * 1.25, Z1 + 0.05, g);
+    });
+    sphere(0.22, pkMats().gold, CX, H + steps.length * 1.25 + 0.4, Z1 + 0.05, g);
+    var ocu = pkRoundCyl(1.1, 0.2, glow, CX, H + 2.5, Z1 + 0.45, g, 24); ocu.rotation.x = Math.PI / 2;
+    var ocuRim = pkRoundCyl(1.32, 0.16, trim, CX, H + 2.5, Z1 + 0.4, g, 24); ocuRim.rotation.x = Math.PI / 2;
+    var coneMat = std({ color: new THREE.Color(cfg.roof).lerp(new THREE.Color(cfg.band), 0.35), roughness: 0.6, metalness: 0.2 });
+    // the far corner stands a full tower on the ground; the portal corner, where the portico is, carries an oriel turret
+    // corbelled out from 7 m up, so the queue passes under it
+    var farX = s > 0 ? X1 : X0;
+    [[farX, 0, 1.5], [AX, 7.4, 1.2]].forEach(function (T) {
+      var tx = T[0], y0 = T[1], r = T[2], top = H + 3.0;
+      pkRoundCyl(r, top - y0, wall, tx, (top + y0) / 2, Z1, g, 16);
+      if (y0 > 0) {
+        var corbel = new THREE.Mesh(new THREE.ConeGeometry(r, 1.8, 16, 1), trim);
+        corbel.rotation.x = Math.PI; corbel.position.set(tx, y0 - 0.9, Z1); corbel.castShadow = true; g.add(corbel);
+      } else {
+        solid(tx - r, tx + r, Z1 - r, Z1 + r, 0, top);
+        pkRoundCyl(r + 0.12, 0.3, band, tx, 6.6, Z1, g, 16);
+      }
+      pkRoundCyl(r + 0.2, 0.4, trim, tx, top, Z1, g, 16);
+      for (var w2 = 0; w2 < 2; w2++) box(0.46, 1.3, 0.12, glow, tx, 9.4 + w2 * 3.4, Z1 + r - 0.02, g);
+      var cone = new THREE.Mesh(new THREE.ConeGeometry(r + 0.45, 4.0 + r, 16, 1), coneMat);
+      cone.position.set(tx, top + 0.2 + (4.0 + r) / 2, Z1); cone.castShadow = true; g.add(cone);
+      pkRoundCyl(0.05, 1.0, pkMats().gold, tx, top + 4.7 + r, Z1, g, 6);
+      sphere(0.16, pkMats().gold, tx, top + 5.25 + r, Z1, g);
+    });
+    pkIndoorTheme(g, cfg, X0, X1, Z0, Z1, glow);
   }
-  // the piece the helix winds around
+  // the ride's emblem in the disc on the front: a crescent moon, a ship's wheel, a tree
+  function pkIndoorEmblem(g, cfg, x, y, z, glow) {
+    var i, a;
+    if (cfg.centre === 'moon') {
+      var m = pkRoundCyl(1.2, 0.12, std({ color: 0xe8ecff, emissive: 0xc8d0ff, emissiveIntensity: 0.4, roughness: 0.5 }), x - 0.25, y, z, g, 24); m.rotation.x = Math.PI / 2;
+      var cut = pkRoundCyl(1.05, 0.14, std({ color: 0x151a20, roughness: 0.6 }), x + 0.3, y + 0.25, z + 0.03, g, 24); cut.rotation.x = Math.PI / 2;
+      for (i = 0; i < 5; i++) { a = i / 5 * Math.PI * 2 + 0.3; sphere(0.08, MAT.bulb, x + Math.cos(a) * 1.3, y + Math.sin(a) * 1.3, z + 0.05, g); }
+    } else if (cfg.centre === 'ship') {
+      var hub = pkRoundCyl(0.3, 0.16, glow, x, y, z, g, 14); hub.rotation.x = Math.PI / 2;
+      for (i = 0; i < 8; i++) {
+        a = i / 8 * Math.PI * 2;
+        pkRod(x, y, z, x + Math.cos(a) * 1.4, y + Math.sin(a) * 1.4, z, 0.06, glow, g, 6);
+        sphere(0.13, glow, x + Math.cos(a) * 1.5, y + Math.sin(a) * 1.5, z, g);
+      }
+      for (i = 0; i < 24; i++) { a = i / 24 * Math.PI * 2; sphere(0.07, glow, x + Math.cos(a) * 1.05, y + Math.sin(a) * 1.05, z, g); }
+    } else {
+      box(0.28, 1.4, 0.12, std({ color: 0x8a6a4a, roughness: 0.8 }), x, y - 0.6, z, g);
+      [[0, 0.5, 0.7], [-0.55, 0.15, 0.5], [0.55, 0.15, 0.5], [-0.3, 0.85, 0.45], [0.3, 0.85, 0.45]].forEach(function (c) { sphere(c[2], glow, x + c[0], y + c[1], z, g); });
+    }
+  }
+  // the hall's own sky: Nocturne has a starfield on its ceiling, The Wreck a sea floor and lanterns, Moonwood fireflies and
+  // undergrowth. Everything here keeps to the ceiling, the walls or the middle of the centrepiece, clear of the track.
+  function pkIndoorTheme(g, cfg, X0, X1, Z0, Z1, glow) {
+    var rng = pkRng(cfg.centre === 'moon' ? 501 : cfg.centre === 'ship' ? 502 : 503), i;
+    var s = cfg.portal === 'w' ? 1 : -1, AX = s > 0 ? X0 : X1, cx = AX + s * cfg.at[0], cz = cfg.at[1];
+    if (cfg.centre === 'moon') {
+      var star = std({ color: 0xf4f6ff, emissive: 0xdfe6ff, emissiveIntensity: 1.0, roughness: 0.4 });
+      for (i = 0; i < 70; i++) sphere(0.05 + rng() * 0.07, star, X0 + 1 + rng() * (X1 - X0 - 2), PK_HALL_CEIL - 0.08, Z0 + 1 + rng() * (Z1 - Z0 - 3), g);
+    } else if (cfg.centre === 'ship') {
+      // the sea floor round the wreck, inside its loop of track
+      var sea = pkRoundCyl(3.0, 0.04, std({ color: 0x1f4f5a, emissive: 0x0f3a46, emissiveIntensity: 0.35, roughness: 0.3 }), cx, 0.08, cz, g, 28);
+      sea.receiveShadow = true;
+      var lamp = std({ color: 0xffd28a, emissive: 0xffb84a, emissiveIntensity: 0.8, roughness: 0.5 });
+      for (i = 0; i < 6; i++) {
+        var lz = Z0 + 3 + (Z1 - Z0 - 8) * i / 5;
+        [X0 + 0.55, X1 - 0.55].forEach(function (lx) { pkRoundCyl(0.16, 0.34, lamp, lx, 4.2, lz, g, 10); box(0.06, 0.5, 0.06, MAT.steelDark, lx, 4.6, lz, g); });
+      }
+    } else {
+      var fly = std({ color: 0xe8ffb0, emissive: 0xcfff70, emissiveIntensity: 1.0, roughness: 0.4 });
+      for (i = 0; i < 40; i++) sphere(0.05, fly, X0 + 1 + rng() * (X1 - X0 - 2), 11.6 + rng() * 1.6, Z0 + 1 + rng() * (Z1 - Z0 - 6), g);
+      var leaf = [0x2f4a2a, 0x3a5a33, 0x2a4226];
+      for (i = 0; i < 7; i++) { var a = i / 7 * Math.PI * 2; sphere(0.55 + rng() * 0.3, std({ color: leaf[i % 3], roughness: 0.95 }), cx + Math.cos(a) * 2.2, 0.35, cz + Math.sin(a) * 2.2, g); }
+    }
+  }
+  // the piece the circuit winds round, at the centre of its helix, loop or ring
   function pkIndoorCentre(g, cfg, CX, CZ) {
     var i, a;
     if (cfg.centre === 'moon') {
-      pkRoundCyl(1.5, 6.4, std({ color: 0x232637, roughness: 0.9 }), CX, 3.2, CZ, g, 18);
-      pkRoundCyl(1.95, 0.4, std({ color: 0x2f3350, roughness: 0.8 }), CX, 6.6, CZ, g, 18);
-      sphere(1.45, std({ color: 0xe8ecff, roughness: 0.5 }), CX, 7.3, CZ, g);
-      // the stars ride on the moon's collar, inside the helix (the track runs at 3 m round the column)
-      for (i = 0; i < 12; i++) {
-        a = i / 12 * Math.PI * 2;
-        sphere(0.09 + (i % 3) * 0.04, MAT.bulb, CX + Math.cos(a) * 1.75, 6.85 + (i % 4) * 0.12, CZ + Math.sin(a) * 1.75, g);
+      // inside the helix (the rail runs at 4 m round it, from 8 m down): a column with a lit collar and the moon on top
+      pkRoundCyl(1.7, 8.2, std({ color: 0x232637, roughness: 0.9 }), CX, 4.1, CZ, g, 20);
+      pkRoundCyl(2.0, 0.4, std({ color: 0x2f3350, roughness: 0.8 }), CX, 8.4, CZ, g, 20);
+      sphere(2.3, std({ color: 0xe8ecff, emissive: 0x9aa4d8, emissiveIntensity: 0.25, roughness: 0.5 }), CX, 10.9, CZ, g);
+      for (i = 0; i < 16; i++) {
+        a = i / 16 * Math.PI * 2;
+        sphere(0.09 + (i % 3) * 0.04, MAT.bulb, CX + Math.cos(a) * 1.85, 8.65 + (i % 4) * 0.1, CZ + Math.sin(a) * 1.85, g);
       }
+      var moonLight = new THREE.PointLight(0xc8d4ff, 0.7, 14, 2); moonLight.position.set(CX, 7.5, CZ); g.add(moonLight);
     } else if (cfg.centre === 'ship') {
-      // the wreck lies in the figure-eight's east loop, run aground along it, small enough for the train to fly round
-      var hull = new THREE.Group(); hull.position.set(CX, 0, CZ); hull.rotation.set(0.06, Math.PI / 2 + 0.12, 0.3); hull.scale.setScalar(0.42); g.add(hull);
+      // the wreck lies inside the figure-eight's wreck loop (radius 4.2), run aground, the train flying round it
+      var hull = new THREE.Group(); hull.position.set(CX, 0, CZ); hull.rotation.set(0.06, Math.PI / 2 + 0.5, 0.26); hull.scale.setScalar(0.8); g.add(hull);
       pkBevelBox(3.0, 2.2, 7.0, std({ color: 0x6a4f33, roughness: 0.85 }), 0, 1.5, 0, hull, 0.12);
       pkBevelBox(2.7, 1.5, 6.4, std({ color: 0x543d27, roughness: 0.9 }), 0, 2.6, 0, hull, 0.08);
       pkRoundCyl(0.16, 6.4, std({ color: 0x4a341f, roughness: 0.85 }), 0, 5.2, -1.2, hull, 8);
       pkRoundCyl(0.14, 5.2, std({ color: 0x4a341f, roughness: 0.85 }), 0.4, 4.6, 1.6, hull, 8);
       box(3.4, 0.12, 1.1, std({ color: 0xc9c2b0, roughness: 0.8 }), 0, 4.4, -1.2, hull);
+      box(2.6, 1.6, 0.05, std({ color: 0xc9c2b0, roughness: 0.85, side: THREE.DoubleSide }), 0, 6.2, -1.2, hull);
+      sphere(0.25, std({ color: 0xffd28a, emissive: 0xffb84a, emissiveIntensity: 0.9 }), 0, 3.6, 3.1, hull);
       for (i = 0; i < 6; i++) {
         a = i / 6 * Math.PI * 2;
-        box(0.5 + (i % 3) * 0.1, 0.4, 0.5, std({ color: [0x5a4a36, 0x6e5a40, 0x4e4030][i % 3], roughness: 0.9 }), CX + Math.cos(a) * 1.9, 0.2, CZ + Math.sin(a) * 1.25, g);
+        box(0.5 + (i % 3) * 0.1, 0.4, 0.5, std({ color: [0x5a4a36, 0x6e5a40, 0x4e4030][i % 3], roughness: 0.9 }), CX + Math.cos(a) * 2.4, 0.2, CZ + Math.sin(a) * 1.6, g);
       }
     } else {
-      pkRoundCyl(1.15, 5.8, std({ color: 0x4e3a26, roughness: 0.92 }), CX, 2.9, CZ, g, 12);
-      // the crown is kept inside the helix: ring 1.45 m + crown 1.45-1.67 m stays under the 3.4 m
-      // rail, and the whole crown sits below the ceiling beams
-      for (i = 0; i < 7; i++) {
-        a = i / 7 * Math.PI * 2;
-        sphere(1.45 + (i % 2) * 0.22, std({ color: [0x3e5a3a, 0x476340, 0x35502f][i % 3], roughness: 0.95 }), CX + Math.cos(a) * 1.45, 5.9 + (i % 3) * 0.35, CZ + Math.sin(a) * 1.45, g);
+      // the trunk in the middle of the ring (radius 4); the crown spreads over the ring, its underside above the train
+      pkRoundCyl(1.2, 9.4, std({ color: 0x4e3a26, roughness: 0.92 }), CX, 4.7, CZ, g, 14);
+      for (i = 0; i < 4; i++) {
+        a = i / 4 * Math.PI * 2 + 0.4;
+        var root = pkRoundCyl(0.35, 2.2, std({ color: 0x4e3a26, roughness: 0.92 }), CX + Math.cos(a) * 1.4, 0.4, CZ + Math.sin(a) * 1.4, g, 8);
+        root.rotation.set(Math.sin(a) * 1.1, 0, -Math.cos(a) * 1.1);
       }
-      // the hanging lamps: the cord is brass and reads against the dark, and the shade has a warm
-      // core, so they are lamps rather than white cubes in mid air
+      var greens = [0x3e5a3a, 0x476340, 0x35502f];
+      for (i = 0; i < 9; i++) {
+        a = i / 9 * Math.PI * 2;
+        sphere(1.7 + (i % 2) * 0.25, std({ color: greens[i % 3], roughness: 0.95 }), CX + Math.cos(a) * 3.4, 9.6 + (i % 3) * 0.35, CZ + Math.sin(a) * 3.4, g);
+      }
+      for (i = 0; i < 4; i++) {
+        a = i / 4 * Math.PI * 2 + 0.6;
+        sphere(1.8, std({ color: greens[i % 3], roughness: 0.95 }), CX + Math.cos(a) * 1.3, 11.4, CZ + Math.sin(a) * 1.3, g);
+      }
+      // the hanging lamps under the crown: brass cords, a warm core
       var shade = std({ color: 0xfff3d6, emissive: 0xffdda0, emissiveIntensity: 0.55, roughness: 0.55 });
       for (i = 0; i < 5; i++) {
         a = i / 5 * Math.PI * 2 + 0.4;
-        var lx = CX + Math.cos(a) * 2.45, lz = CZ + Math.sin(a) * 2.45;
-        pkRoundCyl(0.032, 1.1, MAT.brass || MAT.gold, lx, 4.95, lz, g, 6);
-        pkRoundCyl(0.19, 0.26, shade, lx, 4.35, lz, g, 10);
+        var lx = CX + Math.cos(a) * 2.2, lz = CZ + Math.sin(a) * 2.2;
+        pkRoundCyl(0.032, 1.4, MAT.brass || MAT.gold, lx, 7.6, lz, g, 6);
+        pkRoundCyl(0.19, 0.26, shade, lx, 6.85, lz, g, 10);
       }
     }
   }
@@ -826,13 +974,13 @@
   // a whole indoor coaster: shell, centrepiece, track, station, cabin
   function pkBuildIndoor(p) {
     var cfg = PK_INDOOR[p.id], th = PK_THEME[p.id], i;
-    var b = cfg.box, CZ = (b[2] + b[3]) / 2, zS = CZ + 3.4;
+    var b = cfg.box, CZ = (b[2] + b[3]) / 2, zS = -83.35, RIDE = { rollIn: 12 };   // the platform straight; a slow roll in round the tight turn
     var s = cfg.portal === 'w' ? 1 : -1, AX = s > 0 ? b[0] : b[1];
     var g = new THREE.Group(); scene.add(g);
     pkIndoorShell(g, cfg);
     pkIndoorCentre(g, cfg, AX + s * cfg.at[0], cfg.at[1]);
     var curve = pkCoCurve(pkIndoorPts(cfg)), len = curve.getLength(), uP = pkCoUAt(curve, AX + s * 12.0, zS);
-    var F = pkCoFrames(curve, 460, pkCoProfile(curve, len, uP), uP);
+    var F = pkCoFrames(curve, 560, pkCoProfile(curve, len, uP, RIDE), uP);
     var E = { curve: curve, len: len, F: F, gap: 2.4, cars: [], uPark: uP, uOfF: [], run: 30 };
     pkCoLevel(F, curve, E.uPark, 3 * 2.4 + 1.4, 1.4);
     var seats = [], cols = [cfg.band, 0xece6d8, cfg.band, 0xece6d8];
@@ -850,12 +998,12 @@
       tieMat: std({ color: 0x2a2a30, roughness: 0.8 }),
       skip: function (x, z) { return z > -84.2; }                                     // the station, the platform and the cabin
     });
-    pkCoPlan(E);
+    pkCoPlan(E, RIDE);
     // the station inside: kerbed platform, the boom gates at the car doors, hanging lamps
     pkCoPlatform(g, Math.min(AX + s * 0.6, AX + s * 14.8), Math.max(AX + s * 0.6, AX + s * 14.8), -82.8, -80.2, th);
     var stationShade = std({ color: 0xfff3d6, emissive: 0xffdda0, emissiveIntensity: 0.5, roughness: 0.55 });
     [AX + s * 3, AX + s * 8, AX + s * 13].forEach(function (lx) {
-      pkRoundCyl(0.045, 3.0, MAT.gold, lx, 7.25, -81.5, g, 6);
+      pkRoundCyl(0.045, PK_HALL_CEIL - 5.9, MAT.gold, lx, (PK_HALL_CEIL + 5.9) / 2, -81.5, g, 6);
       pkRoundCyl(0.34, 0.24, stationShade, lx, 5.75, -81.5, g, 12);
     });
     // the station and the hall are lit, so the train and the platform are not silhouettes
@@ -863,8 +1011,8 @@
       var pl = new THREE.PointLight(0xffe3b0, 0.9, 12, 2);
       pl.position.set(AX + s * lx, 3.0, -81.5); g.add(pl);
     });
-    var hallLight = new THREE.PointLight(0xfff0d0, 0.75, 22, 2);
-    hallLight.position.set(AX + s * 12, 5.8, CZ - 1.5); g.add(hallLight);
+    var hallLight = new THREE.PointLight(0xfff0d0, 0.85, 30, 2);
+    hallLight.position.set(AX + s * 12, 9.5, CZ - 1.5); g.add(hallLight);
     var a = pkAttr({
       id: p.id, name: cfg.name, x: p.x, z: p.z,
       qx: p.q[0], qz: p.q[1], qdx: s, g: g, seats: seats,
