@@ -122,8 +122,17 @@ lamps, rich colour, planting and ornament, a themed entrance for every ride. Eac
       yard and spots up to the flume; five forecourt copies covered the kids' garden). The ground is laid from code on one
       plan: Station Square stops at the yard fence, the snack apron sits under the snack stand, the HQ has a step out to the
       forecourt, the kids' lane is shown again, and the coaster's yard is a garden (lawn, beds, shrubs, a gravel service path)
-- [ ] 11. Odd-angle audit of the whole park: overlaps, floating things, odd placement — and fix them
-- [ ] 12. Ferris wheel / Baron's Drop pads overlap by ~1 m
+- [x] 10c. Editor: every piece of a ride's dressing is its own item (your ask, 21 Oct): the gateway, each bunting run, the
+      decoration, and the flat rides' station fence, entrance and exit can each be selected, moved, turned, copied or
+      deleted on their own (the pad and the queue lane stay with the ride: guests walk the lane). The ticket offices are
+      editable items now too
+- [x] 10d. Editor: leaving Scene mode for Game mode puts you down where the scene camera was (on the floor under it, facing
+      the way it faced, nudged off any wall), not back where you started (your ask, 21 Oct). Only with the editor attached
+- [x] 11. Odd-angle audit: a sweep for overlapping things and screenshots round the park. Found and fixed: every small
+      prop built as a group (lamps, benches, bins, beds, hedges, stalls, booths) left its collision behind when moved or
+      deleted in the editor, an invisible wall; they now take it with them. The route lamps and benches no longer land on
+      each other (three did). The stray paving was 10b. The kids' rides' pads overlap on purpose (one patch)
+- [x] 12. Ferris wheel / Baron's Drop: the ferris pad is smaller (1.15 of its radius, was 1.25), clear grass between them
 - [ ] 13. Cleanup: delete old installers in `dist/` and the Desktop zip (the zip is an 18 Oct backup that
       git does not have — your call), move the old TODO-*.md files and one-off probes out of the root
 - [ ] 14. New installer (0.2.0) so the Desktop shortcut runs the new park

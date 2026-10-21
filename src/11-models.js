@@ -211,7 +211,7 @@ function pkFlowerBedBetter(x, z, w, d) {
 // pendant lamp. Outside: the self-service machine on the outer wall, and the line forms in front of the window.
 var PK_TK = { W: 4.6, D: 3.6, H: 3.0, T: 0.18 };
 function pkTicketBoothBetter(b, i) {
-  var g = new THREE.Group(); g.userData.dynamic = true; g.position.set(b.x, 0, b.z); scene.add(g);
+  var g = new THREE.Group(); g.position.set(b.x, 0, b.z); scene.add(g);   // an editor item like any building (its door and machine move with it)
   var side = b.x < 0 ? 1 : -1;                                        // toward the gate path (x = 0)
   var K = PK_TK, HW = K.W / 2, HD = K.D / 2, T = K.T, H = K.H;
   var cream = pkMatPlasterRich(), wood = pkMatWoodRich();

@@ -17,7 +17,7 @@
   var PK_PLOTS = [
     { id: 'carousel',  name: 'Carousel',     x: -34, z: 20, r: 8.5,  q: [-22, 20],  level: 2 },
     { id: 'teacups',   name: 'Teacups',      x: -56, z: 3,  r: 7.2,  q: [-44, 3],   level: 4, boothSide: -1 },   // the south side is the kids' lane
-    { id: 'ferris',    name: 'Ferris wheel', x: 34,  z: 20, r: 9.5,  q: [22, 20],   level: 6 },
+    { id: 'ferris',    name: 'Ferris wheel', x: 34,  z: 20, r: 9.5,  q: [22, 20],   level: 6, pad: 1.15 },   // the pad stops short of Baron's Drop
     { id: 'dodgems',   name: 'Dodgems',      x: 56,  z: 3,  r: 8.2,  q: [44, 3],    level: 8 },
     { id: 'droptower', name: 'Drop tower',   x: -54, z: -52, r: 6.5, q: [-44, -52], level: 9 },
     { id: 'flume',     name: 'Log flume',    x: 54,  z: -32, r: 9.0, q: [46.4, -24], level: 10 },
@@ -484,6 +484,25 @@
     }
   };
   // the engine pulls the fog in to 70 m every frame; a park this wide needs to be seen across it
+  // In the editor, leaving Scene mode for Game mode puts you down where the scene camera was, not back where you started: on the
+  // floor under it (the ground, or a floor of the building you flew into), facing the way it faced, nudged to the nearest spot
+  // you can stand on if it was inside a wall. Not while riding; and in the game's own photo mode (no editor) you go back as before.
+  hook('photo', function (on) {
+    if (on || !CO.editor || typeof photo !== 'object' || PK.playerRide) return;
+    if (typeof PK_SIT !== 'undefined' && PK_SIT && typeof pkBkStand === 'function') pkBkStand();
+    var x = photo.x, z = photo.z, best = null;
+    player.y = 0;
+    for (var r = 0; r <= 8 && !best; r += 0.5) {
+      for (var k = 0; k < (r ? 16 : 1); k++) {
+        var a = k / 16 * Math.PI * 2, px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
+        player.y = floorY(px, pz, photo.y);
+        if (!collides(px, pz)) { best = [px, pz]; break; }
+      }
+    }
+    if (!best) { player.y = 0; return; }
+    player.x = best[0]; player.z = best[1]; player.y = floorY(best[0], best[1], photo.y);
+    player.yaw = photo.yaw; player.pitch = 0;
+  });
   hook('lighting', function (day, dawn, overcast, power) {
     if (scene.fog) { scene.fog.near = 210 - (overcast || 0) * 60; scene.fog.far = 540 - (overcast || 0) * 200; }
   });

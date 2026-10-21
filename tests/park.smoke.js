@@ -457,6 +457,19 @@ module.exports = `
     b.door.setNow(0); const shut = T.collides(b.x + side * 2.2, b.z - 0.65);
     ok(inside && shut, 'a ticket office is walked into through its door (at ' + (T.player.x - b.x).toFixed(1) + ', ' + (T.player.z - b.z).toFixed(1) + '), and the shut door blocks');
     T.player.x = px0; T.player.z = pz0; T.player.y = py0; }
+  // in the editor, leaving Scene mode lands you under the scene camera (on the ground, out of any wall), not back at the start
+  { const ph = T.photo, keep = { x: T.player.x, z: T.player.z, y: T.player.y, ed: T.CO.editor }, was = { x: ph.x, y: ph.y, z: ph.z, yaw: ph.yaw };
+    T.CO.editor = T.CO.editor || { on: false }; ph.x = 30; ph.y = 25; ph.z = -40; ph.yaw = 1.0; T.runHooks('photo', false);
+    const landed = Math.hypot(T.player.x - 30, T.player.z + 40) < 3 && T.player.y < 0.5 && !T.collides(T.player.x, T.player.z) && Math.abs(T.player.yaw - 1.0) < 1e-6;
+    ph.x = -50; ph.y = 8; ph.z = -94.75; T.runHooks('photo', false);           // over the middle of a wall: nudged off it
+    const free = !T.collides(T.player.x, T.player.z) && Math.hypot(T.player.x + 50, T.player.z + 94.75) < 8.5;
+    if (keep.ed === undefined) delete T.CO.editor; T.player.x = keep.x; T.player.z = keep.z; T.player.y = keep.y; Object.assign(ph, was);
+    ok(landed && free, 'leaving Scene mode in the editor lands you under the camera (' + landed + ', off walls ' + free + ')'); }
+  // the rides' dressing is made of editor items of their own: a gateway, the station's fence, entrance and exit, a decoration
+  { const sc = T.CO.three.scene, kinds = {}; sc.children.forEach((o) => { const k = o.userData && o.userData.worldItem; if (k) kinds[k] = (kinds[k] || 0) + 1; });
+    const fence = sc.children.find((o) => o.userData && o.userData.worldItem === 'ride fence');
+    ok(kinds['ride gateway'] >= 16 && kinds['ride fence'] === 7 && kinds['ride entrance'] === 7 && kinds['ride exit'] === 7 && kinds['ride decoration'] >= 16 && fence && fence.userData.solids.length > 10,
+      'every ride dressing piece is its own editor item, its solids with it: ' + JSON.stringify(kinds)); }
   // the save round trip
   T.save(); { const raw = JSON.parse(localStorage.getItem('park-co-slot1')); ok(!!raw && raw.bank === S.bank && raw.ticketPrice === S.ticketPrice && raw.auto === S.auto && raw.xp === T.PK.xp, 'save wrote the slot: ' + JSON.stringify({ bank: raw && raw.bank, s: S.bank, failed: !!T.save.failed })); }
   // the pure layer

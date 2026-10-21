@@ -18,6 +18,9 @@
     var col = new THREE.Color(c).lerp(new THREE.Color(0xffffff), 0.45);
     return (PK_PADS[c] = std({ map: pkMats().paverTex, color: col.getHex(), roughness: 0.9 }));
   }
+  // a piece of a ride's dressing as an editor item of its own: build(g) lays it into g, and the editor can then select, move,
+  // turn, copy or delete it on its own instead of the whole ride's dressing at once
+  function pkDressItem(kind, build) { return worldItem(kind, function () { var g = new THREE.Group(); parentOf(null).add(g); build(g); return g; }); }
   function pkDressAll() {
     PK.attractions.forEach(function (a) {
       var th = PK_THEME[a.id], p = a.plot; if (!th || !p) return;
@@ -29,16 +32,16 @@
       pkPavedDisc(padR + 0.55, pkMats().kerb, p.x, padY - 0.001, p.z, dg, 2.4);   // a stone lip round the pad
       // bunting along the three sides away from the midway (a big coaster plot hangs its own)
       if (!th.noBunting) {
-        pkBunting(p.x - p.r - 1.2, p.z - p.r - 1.2, p.x + p.r + 1.2, p.z - p.r - 1.2, th, dg);
-        pkBunting(p.x + side * (p.r + 1.2), p.z - p.r - 1.2, p.x + side * (p.r + 1.2), p.z + p.r + 1.2, th, dg);
-        pkBunting(p.x - p.r - 1.2, p.z - p.r - 1.2, p.x - p.r - 1.2, p.z + p.r + 1.2, th, dg);
+        pkDressItem('bunting', function (g) { pkBunting(p.x - p.r - 1.2, p.z - p.r - 1.2, p.x + p.r + 1.2, p.z - p.r - 1.2, th, g); });
+        pkDressItem('bunting', function (g) { pkBunting(p.x + side * (p.r + 1.2), p.z - p.r - 1.2, p.x + side * (p.r + 1.2), p.z + p.r + 1.2, th, g); });
+        pkDressItem('bunting', function (g) { pkBunting(p.x - p.r - 1.2, p.z - p.r - 1.2, p.x - p.r - 1.2, p.z + p.r + 1.2, th, g); });
       }
       // the gateway over the queue, facing the midway
-      pkGatewayBetter(p.q[0], p.q[1], th.name, th, side, dg);   // centred on the switchbacks, its posts just outside them
-      // the line itself: a fenced lane behind the arch with a boarding gate
+      pkDressItem('ride gateway', function (g) { pkGatewayBetter(p.q[0], p.q[1], th.name, th, side, g); });   // centred on the switchbacks, its posts just outside them
+      // the line itself: a fenced lane behind the arch with a boarding gate. It stays with the ride (the guests walk its slots)
       pkQueueLaneBetter(a, th, dg);
       // the ride's own station round it: the fence, the entrance porch and the exit
-      pkFlatStation(a, th, dg);
+      pkFlatStation(a, th);
       // planters by the gateway and two lamps, where the plot has the room for them
       if (!th.noDecor) {
         pkBedIn(p.q[0] + side * 2.8, p.q[1] - 2.6, dg);
@@ -46,7 +49,7 @@
         lampPost(p.q[0] - side * 1.2, p.q[1] - 3.8, 0, 4.5);
         lampPost(p.q[0] - side * 1.2, p.q[1] + 3.8, 0, 4.5);
       }
-      pkSignature(a, p, th, dg);
+      pkDressItem('ride decoration', function (g) { pkSignature(a, p, th, g); });
     });
   }
   // one triangular pennant, top edge along local x, hanging down: shared by every flag on the cord
@@ -184,7 +187,7 @@
   // channel) and the haunted manor (its porch) have their stations already.
   // the fence radius, and 'arch' where something overhead (a ride's own canopy, the arena's eaves) leaves no room for a roof
   var PK_FLAT_STATIONS = { kround: [5.0, 'arch'], kpots: [5.3, 'arch'], carousel: [8.6], teacups: [7.4], ferris: [10.2], dodgems: [10.0, 'arch'], droptower: [6.2] };
-  function pkFlatStation(a, th, parent) {
+  function pkFlatStation(a, th) {
     var S = PK_FLAT_STATIONS[a.id]; if (!S) return;
     var R = S[0], arch = S[1] === 'arch';
     var p = a.plot, cx = p.x, cz = p.z, L = pkAttrLane(a), i;
@@ -203,7 +206,10 @@
       var x = cx + Math.cos(ang) * R, z = cz + Math.sin(ang) * R;
       return Math.abs(x - bx) < 2.3 && Math.abs(z - bz) < 2.3;
     };
-    // the ring: posts every metre and a bit, a top rail, a lower rail and a band in the ride's colour, laid as chords
+    // the ring: posts every metre and a bit, a top rail, a lower rail and a band in the ride's colour, laid as chords. Each part of
+    // the station (the fence, the entrance, the exit) is an editor item of its own, built inside it so its solids go with it
+    var postMat = std({ color: th.a, roughness: 0.55, metalness: 0.1 }), roofMat = std({ color: th.b, roughness: 0.6, metalness: 0.1 });
+    pkDressItem('ride fence', function (parent) {
     var n = Math.max(16, Math.round(2 * Math.PI * R / 1.2)), prev = null;
     for (i = 0; i <= n; i++) {
       var ang = i / n * 2 * Math.PI, x = cx + Math.cos(ang) * R, z = cz + Math.sin(ang) * R, here = !open(ang);
@@ -217,9 +223,10 @@
       }
       prev = here ? [x, z] : null;
     }
+    });
     // the entrance porch: four posts in the ride's colour astride the fence, a pointed roof, the name, lanterns
     var ex = cx + Math.cos(aIn) * R, ez = cz + Math.sin(aIn) * R, out = [Math.cos(aIn), Math.sin(aIn)], tg = [-Math.sin(aIn), Math.cos(aIn)];
-    var postMat = std({ color: th.a, roughness: 0.55, metalness: 0.1 }), roofMat = std({ color: th.b, roughness: 0.6, metalness: 0.1 });
+    pkDressItem('ride entrance', function (parent) {
     var PH = arch ? 2.25 : 2.6, depth = arch ? 0 : 0.75;
     [[-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(function (s) {
       if (arch && s[1] > 0) return;                                          // an arch stands on two posts
@@ -240,8 +247,10 @@
       pkSign3D([th.name.toUpperCase()], 2.6, 0.36, 0, -0.32, 0.98, 0, { bg: '#151a20', fg: '#f5d38a' }, porch);
     }
     [-1, 1].forEach(function (s) { pkRoundCyl(0.11, 0.24, glowMat(0xfff2c0, 1.0), s * 1.3, -0.3, arch ? 0.15 : 0.9, porch, 10); });
+    });
     // the exit: two posts, an EXIT board facing out, and the riders come off just outside it
     var xx = cx + Math.cos(aOut) * R, xz = cz + Math.sin(aOut) * R, o2 = [Math.cos(aOut), Math.sin(aOut)], t2 = [-Math.sin(aOut), Math.cos(aOut)];
+    pkDressItem('ride exit', function (parent) {
     [-1, 1].forEach(function (s) {
       var px = xx + t2[0] * s * 1.05, pz = xz + t2[1] * s * 1.05;
       pkRoundCyl(0.07, 2.2, postMat, px, 1.1, pz, parent, 8); sphere(0.09, gold, px, 2.24, pz, parent);
@@ -250,6 +259,7 @@
     var exitSign = new THREE.Group(); exitSign.position.set(xx, 2.05, xz); exitSign.rotation.y = Math.atan2(o2[0], o2[1]); parent.add(exitSign);
     box(2.3, 0.1, 0.1, postMat, 0, 0.12, 0, exitSign);
     pkSign3D(['EXIT'], 1.2, 0.34, 0, -0.14, 0.07, 0, { bg: '#1d5c3a', fg: '#ffffff' }, exitSign);
+    });
     a.exit = [xx + o2[0] * 1.3, xz + o2[1] * 1.3];
     a.station = { r: R, entry: [ex, ez], exit: [xx, xz] };
   }
