@@ -141,7 +141,85 @@
   function pkBkBatten(parent, x, y, z, ry, len) {
     var g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry || 0; parent.add(g);
     pkBevelBox(len || 1.2, 0.05, 0.12, pkBkStd({ color: 0xe6e3da, roughness: 0.5 }), 0, 0, 0, g, 0.01);
-    box((len || 1.2) - 0.08, 0.02, 0.07, glowMat(0xf4f7ff, 1.3), 0, -0.032, 0, g);
+    var tube = box((len || 1.2) - 0.08, 0.02, 0.07, glowMat(0xf4f7ff, 1.3), 0, -0.032, 0, g);
+    g.userData.tube = tube.material;
+    return g;
+  }
+
+  // ── The lights and the switch ─────────────────────────────────────
+  // a room's lights: the battens' tubes and a real lamp under them, on or off together. The lamp is a point light the engine
+  // counts in its budget like every other; off, it is dark.
+  function pkBkLights(id, parent, battens, x, y, z) {
+    var pl = new THREE.PointLight(0xfff2dc, 0, 7, 2); pl.position.set(x, y, z); parent.add(pl);
+    var L = { id: id, mats: battens.map(function (b) { return b.userData.tube; }), pl: pl, on: false,
+      set: function (on) {
+        L.on = !!on;
+        L.mats.forEach(function (m) { m.emissiveIntensity = L.on ? 1.3 : 0.04; });
+        pl.intensity = L.on ? 0.9 : 0;
+        if (!S.boothLights) S.boothLights = {}; S.boothLights[id] = L.on;
+      } };
+    L.set(!!(S.boothLights && S.boothLights[id]));
+    return L;
+  }
+  // a light switch: a plate on the wall with a rocker that flips, and E flips it
+  function pkBkSwitch(parent, x, y, z, ry, L, label) {
+    var g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry || 0; parent.add(g);
+    pkBevelBox(0.09, 0.13, 0.012, pkBkStd({ color: 0xf2efe6, roughness: 0.45 }), 0, 0, 0.006, g, 0.004);
+    var rk = new THREE.Group(); rk.position.z = 0.014; rk.userData.dynamic = true; g.add(rk);
+    box(0.035, 0.06, 0.012, pkBkStd({ color: 0xe8e4d8, roughness: 0.4 }), 0, 0, 0.004, rk);
+    var dot = sphere(0.005, glowMat(0xf0a040, 1.2), 0, -0.042, 0.012, g);
+    function show() { rk.rotation.x = L.on ? -0.28 : 0.28; dot.visible = !L.on; }   // the little locator glows when the lights are off
+    show();
+    hitBox(0.14, 0.18, 0.08, 0, 0, 0.03, {
+      prompt: function () { return (L.on ? 'Lights off' : 'Lights on') + (label ? ' - ' + label : ''); },
+      use: function () { L.set(!L.on); show(); sfx('click'); }
+    }, g);
+    return g;
+  }
+
+  // ── The time clock ────────────────────────────────────────────────
+  // a clock-in terminal by the door: a beige case, an LCD with the time and who is on duty, a card slot and a rack of cards.
+  // E clocks you in as the ride's operator (one shift at a time: clocking in elsewhere clocks you out there first) and the HUD
+  // says where you are on duty; E again clocks you out with the length of the shift and the cycles you ran. While you are on
+  // duty at a ride, every dispatch you make there yourself earns a little more.
+  function pkDutyCycles(id) { return id === 'coaster' ? (S.cycles || 0) : ((PK.attrById[id] && PK.attrById[id].cycles) || 0); }
+  function pkClockIn(id, name) {
+    if (PK.duty && PK.duty.id === id) return pkClockOut();
+    if (PK.duty) pkClockOut();
+    PK.duty = { id: id, name: name, since: S.time, day: S.day, cyc0: pkDutyCycles(id) };
+    sfx('ok'); toast('Clocked in at ' + name + ' - ' + fmtTime(S.time), 'good'); logEvent('Clocked in at ' + name, '');
+    hudDirty = true; screenDirtyAll(); return true;
+  }
+  function pkClockOut() {
+    var D = PK.duty; if (!D) return false;
+    var hrs = (S.day - D.day) * 24 + S.time - D.since, h = Math.floor(hrs), m = Math.round((hrs - h) * 60), cyc = pkDutyCycles(D.id) - D.cyc0;
+    PK.duty = null;
+    sfx('click'); toast('Clocked out of ' + D.name + ' - ' + h + 'h ' + (m < 10 ? '0' : '') + m + 'm, ' + cyc + ' cycles', ''); logEvent('Clocked out of ' + D.name + ' after ' + h + 'h ' + m + 'm', '');
+    hudDirty = true; screenDirtyAll(); return true;
+  }
+  function pkOnDutyAt(id) { return !!PK.duty && PK.duty.id === id; }
+  function pkBkTimeClock(parent, x, y, z, ry, id, name) {
+    var g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry || 0; parent.add(g);
+    var beige = pkBkStd({ color: 0xd9d2bf, roughness: 0.55 });
+    pkBevelBox(0.26, 0.34, 0.12, beige, 0, 0, 0.06, g, 0.02);
+    box(0.12, 0.012, 0.03, MAT.black, 0, -0.1, 0.122, g);                       // the card slot
+    var sc = touchScreen({ w: 160, h: 90, pw: 0.18, ph: 0.1, x: 0, y: 0.07, z: 0.122, parent: g, title: name + ': the time clock',
+      draw: function (c, s) {
+        c.fillStyle = '#9fb48a'; c.fillRect(0, 0, s.w, s.h);
+        c.fillStyle = '#1d2a16'; c.font = 'bold 30px monospace'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(fmtTime(S.time), s.w / 2, 30);
+        c.font = 'bold 14px monospace'; c.fillText(pkOnDutyAt(id) ? 'ON DUTY' : (PK.duty ? 'ELSEWHERE' : 'CLOCK IN'), s.w / 2, 68);
+      } });
+    PK_BK_LIVE.push({ sc: sc, g: g, every: 1.0 });
+    // the card rack beside it, a card in each slot
+    pkBevelBox(0.14, 0.3, 0.05, pkBkStd({ color: 0x8a949b, roughness: 0.5, metalness: 0.4 }), 0.22, 0.0, 0.03, g, 0.01);
+    for (var k = 0; k < 4; k++) box(0.08, 0.1, 0.006, pkBkStd({ color: [0xf2efe6, 0xe8d79a, 0xf2efe6, 0xc9e0f0][k], roughness: 0.8 }), 0.22, 0.09 - k * 0.065, 0.06, g);
+    hitBox(0.3, 0.38, 0.16, 0, 0, 0.08, {
+      prompt: function () {
+        if (pkOnDutyAt(id)) { var hrs = (S.day - PK.duty.day) * 24 + S.time - PK.duty.since; return 'Clock out of ' + name + ' (on duty ' + Math.floor(hrs) + 'h ' + Math.round((hrs % 1) * 60) + 'm)'; }
+        return 'Clock in at ' + name;
+      },
+      use: function () { pkClockIn(id, name); }
+    }, g);
     return g;
   }
 
@@ -617,7 +695,8 @@
     pkBevelBox(W - 0.3, 0.8, 0.03, timber, 0, F + 0.46, bz0 + 0.085, g, 0.01);
     pkBevelBox(W - 0.28, 0.04, 0.05, MAT.trim, 0, F + 0.88, bz0 + 0.09, g, 0.008);
     box(W - 0.2, 0.04, D - 0.2, inner, 0, F + WH - 0.02, 0, g);
-    pkBkBatten(g, 0, F + WH - 0.07, -0.25, 0, 1.4);
+    var boothBatten = pkBkBatten(g, 0, F + WH - 0.07, -0.25, 0, 1.4);
+    a.boothLights = pkBkLights(a.id, g, [boothBatten], 0, F + WH - 0.4, -0.25);
 
     // the desk under the front window, the ride's panel on it, the chair behind
     var con = new THREE.Group(); con.position.set(0, F, HD - 0.5); con.rotation.y = Math.PI; g.add(con);
@@ -665,14 +744,15 @@
     });
     var dx = ds * (HW - 0.55);                                              // the door end of the back wall
     pkBkClock(g, dx, F + 2.05, bw + 0.02, 0, 0.15);
-    pkBkIntercom(g, dx + ds * 0.02, F + 1.45, bw, 0);
+    a.boothClock = pkBkTimeClock(g, dx + ds * 0.02, F + 1.45, bw, 0, a.id, a.name);
     pkBkKeyBox(g, dx - ds * 0.05, F + 0.98 + 0.12, bw, 0);
     pkBkClipboard(g, ds * 0.42, F + 1.55, bw + 0.012, 0);
     pkBkFirstAid(g, -ds * (HW - 0.45), F + 2.05, bw, 0);
     var shelf = -ds * (HW - 0.45);
     pkBevelBox(0.5, 0.03, 0.2, timber, shelf, F + 1.0, bw + 0.1, g, 0.006);
     pkBkRadio(g, shelf + 0.06, F + 1.015, bw + 0.1, 0);
-    pkBkVest(g, ds * (HW - T - 0.06), F + 1.85, DZ - DW / 2 - 0.3, -ds * Math.PI / 2);
+    pkBkVest(g, -ds * (HW - T - 0.06), F + 1.85, -1.25, ds * Math.PI / 2);                       // on the far wall, by the back
+    pkBkSwitch(g, ds * (HW - T - 0.01), F + 1.1, DZ - DW / 2 - 0.2, -ds * Math.PI / 2, a.boothLights, a.name);   // by the door, inside
     pkRoundCyl(0.14, 0.32, pkBkStd({ color: 0x39424a, roughness: 0.8 }), -ds * 0.95, F + 0.16, -0.65, g, 12);   // the bin
 
     // ── collision: the plinth is a step, the walls are solid, the doorway, the steps and the floor stay walkable ──

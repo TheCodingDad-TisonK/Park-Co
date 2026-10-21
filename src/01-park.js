@@ -39,7 +39,7 @@
     queue: [], spawnT: 0, nextId: 1, today: { tickets: 0, snacks: 0, rides: 0, earned: 0 },
     attractions: [], attrById: {}, plots: {}, rides: {}, lanes: [],
     playerRide: null, playerWait: null,
-    lastMin: -1, lastDay: 1, level: 1, xp: 0, clerk: false, operator: false, snackOpen: false, train2: false, lights: false,
+    lastMin: -1, lastDay: 1, level: 1, xp: 0, clerk: false, operator: false, snackOpen: false, train2: false, lights: false, duty: null,
     served: 0, refused: 0, screen: null, snack: null, closed: false
   };
   // ── The tables the park reads ─────────────────────────────────────
@@ -416,7 +416,7 @@
       var r = $('h-ride');
       if (r) {
         var pr = PK.playerRide, on = pr ? (pr.kind === 'coaster' ? 'the coaster' : pr.a && pr.a.name) : '';
-        r.textContent = (on ? 'Riding ' + on + ' · ' : '') + 'Coaster: ' + pkRideWord() + (pkCoasterAuto() ? ' (auto)' : '') + ' · ' + pkOpenCount() + ' of ' + (PK.attractions.length + 1) + ' rides open';
+        r.textContent = (PK.duty ? 'On duty at ' + PK.duty.name + ' · ' : '') + (on ? 'Riding ' + on + ' · ' : '') + 'Coaster: ' + pkRideWord() + (pkCoasterAuto() ? ' (auto)' : '') + ' · ' + pkOpenCount() + ' of ' + (PK.attractions.length + 1) + ' rides open';
       }
     },
     panel: function (kind, tab) { return pkPanel(kind, tab); },

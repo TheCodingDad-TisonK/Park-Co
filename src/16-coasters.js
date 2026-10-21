@@ -714,10 +714,12 @@
     solid(Math.min(xf, xf - s * 0.36), Math.max(xf, xf - s * 0.36), cz - 0.3, cz + 0.7, 0, 2.0);
     pkBkMonitors(a, k, 0, 1.95, K.z0 + 0.36 - cz, 0, 0.32);
     pkBkClock(k, -s * 1.15, 2.2, K.z1 - 0.09 - cz, Math.PI, 0.14);
-    pkBkIntercom(k, -s * 1.2, 1.5, K.z1 - 0.08 - cz, Math.PI);
+    a.boothClock = pkBkTimeClock(k, -s * 1.2, 1.5, K.z1 - 0.08 - cz, Math.PI, a.id, a.name);
     pkBkKeyBox(k, s * 1.2, 2.05, K.z1 - 0.08 - cz, Math.PI);
     pkBkChair(k, 0.1, -0.35, Math.PI, 0);   // facing the desk under the long window
-    pkBkBatten(k, 0, H - 0.17, 0.2, 0, 1.4);
+    var cabBatten = pkBkBatten(k, 0, H - 0.17, 0.2, 0, 1.4);
+    a.boothLights = pkBkLights(a.id, k, [cabBatten], 0, H - 0.5, 0.2);
+    pkBkSwitch(k, (xn - cx) + s * 0.1, 1.2, (d1 - cz) + 0.25, s * Math.PI / 2, a.boothLights, a.name);
     pkBkStack(a, k, s * 1.3, H + 0.02, 0.9);
     pkBkCamera(k, -s * (W / 2 + 0.02), H - 0.3, K.z0 - cz + 0.3, s * Math.PI / 2 + Math.PI, 0.5);
     // the status board on the back wall, facing the operator
