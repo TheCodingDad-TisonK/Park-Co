@@ -109,7 +109,15 @@ lamps, rich colour, planting and ornament, a themed entrance for every ride. Eac
       plinth under the slate spires, side windows with flower boxes, a real door with a lantern over it. Inside: the counter
       under the front window (till, ticket printer, bell, the window's screen), a chair, a safe, shelves of ticket rolls, a
       noticeboard, a wall clock, a pendant lamp. The machine is on the outer wall
-- [~] 10. One big coaster that runs partly indoors and partly outdoors
+- [x] 10. The Mountain King, the indoor/outdoor coaster, in the south-east corner the park now takes in (the fence east of the
+      car park moves from z 30 to z 71; the East Walk runs on south to it). A castle hall (34 x 29 m, 13 m, four towers
+      with spires, battlements, a stepped gable over the west door) holds the station, a control cabin and the dark finale.
+      The chain lift carries you out through a portal high in the north wall to 20.5 m, then a drop into a 14.9 m loop, a
+      high turnaround, camelbacks, the block brake, and back in through a low portal to spiral down round the Mountain King
+      on his throne among glowing crystals. 269 m, 68 km/h, 53 s, at most 4.7 g
+- [ ] 10b. The paths and the ground corrected across the whole park (your answer, 21 Oct: "the entire pathing and ground should
+      be corrected, it's still all over the place"): every paved area, route and plaza laid on one plan, no stray slabs,
+      overlaps or gaps, the coaster yard included (the three editor-placed apron copies go)
 - [ ] 11. Odd-angle audit of the whole park: overlaps, floating things, odd placement — and fix them
 - [ ] 12. Ferris wheel / Baron's Drop pads overlap by ~1 m
 - [ ] 13. Cleanup: delete old installers in `dist/` and the Desktop zip (the zip is an 18 Oct backup that
@@ -118,9 +126,3 @@ lamps, rich colour, planting and ornament, a themed entrance for every ride. Eac
 
 ## Waiting on you
 
-- [ ] "The controls of the coaster seem messed up": in my tests the console works end to end (gates,
-      load, bars, dispatch, home, AUTO). What exactly looks wrong?
-- [ ] The coaster yard is paved wall to wall by three copies of the station apron you (or an earlier session) placed in the
-      editor (`00-world.js`: wc-mvhzvjn6-14, wc-mvhzv6j3-13, wc-mvgv2tw3-6). Keep the paving, or turn the yard into a garden
-      under the coaster (lawn, beds, a pond under the loop) in the Efteling way? I left it alone
-- [ ] Play it hands-on: everything here is checked by the smoke suite and screenshots, not by playing
