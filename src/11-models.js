@@ -203,61 +203,93 @@ function pkFlowerBedBetter(x, z, w, d) {
   return g;
 }
 
-// ── Ticket booth: proper counter, canopy, window frames, sign depth ────
+// ── The ticket offices ─────────────────────────────────────────────
+// A little ticket office either side of the gate, a proper building you can walk into: a brick plinth, cream walls with
+// timber framing, side windows with flower boxes, a door on the side toward the gate path with a lantern over it, and the
+// slate spire on top (part 20). Inside: the counter under the front window with the till, the ticket printer, the bell and
+// the window's screen; a chair to sit and serve from; a safe, shelves of ticket rolls, the noticeboard, a wall clock and a
+// pendant lamp. Outside: the self-service machine on the outer wall, and the line forms in front of the window.
+var PK_TK = { W: 4.6, D: 3.6, H: 3.0, T: 0.18 };
 function pkTicketBoothBetter(b, i) {
   var g = new THREE.Group(); g.userData.dynamic = true; g.position.set(b.x, 0, b.z); scene.add(g);
-  var side = b.x < 0 ? 1 : -1;
-  var plaster = pkMatPlasterRich();
-  // the kiosk: a solid back and sides, a base and a header at the front, and a glazed window between
-  pkBevelBox(3.2, 2.9, 0.22, plaster, 0, 1.45, -1.5, g, 0.04);
-  pkBevelBox(0.22, 2.9, 3.2, plaster, -1.6, 1.45, 0, g, 0.04);
-  pkBevelBox(0.22, 2.9, 3.2, plaster, 1.6, 1.45, 0, g, 0.04);
-  pkBevelBox(3.2, 0.95, 0.2, plaster, 0, 0.475, 1.5, g, 0.04);    // the base under the window
-  pkBevelBox(3.2, 0.7, 0.24, plaster, 0, 2.35, 1.5, g, 0.04);     // the header over it
-  pkBevelBox(2.98, 0.9, 0.03, pkMatGlassRich(), 0, 1.45, 1.51, g, 0.01);
-  // a projecting counter, with a till and a bell
-  pkBevelBox(3.5, 0.09, 0.52, pkMatWoodRich(), 0, 0.965, 1.68, g, 0.03);
-  // the self-service ticket machine beside the counter on the outer side: a cabinet, a lit screen, a card slot. It sells
-  // when nobody staffs the window (part 02, pkGuestMachine); its screen blinks green as it does
-  var mx = -side * 2.25, mg = new THREE.Group(); mg.position.set(mx, 0, 1.9); g.add(mg);
-  pkBevelBox(0.62, 1.55, 0.46, std({ color: 0x21402e, roughness: 0.6, metalness: 0.2 }), 0, 0.78, 0, mg, 0.05);
-  pkBevelBox(0.66, 0.1, 0.5, std({ color: 0xc9a227, roughness: 0.35, metalness: 0.8 }), 0, 1.6, 0, mg, 0.03);
-  var mScr = std({ color: 0x0b1a12, emissive: 0x5fd38d, emissiveIntensity: 0.35, roughness: 0.3 });
-  pkBevelBox(0.42, 0.3, 0.02, mScr, 0, 1.22, 0.235, mg, 0.01);
-  pkBevelBox(0.16, 0.03, 0.02, MAT.steelDark, 0, 0.98, 0.235, mg, 0.005);
-  sign(['TICKETS'], 0.5, 0.12, 0, 1.47, 0.24, 0, { bg: '#21402e', fg: '#f6e2a6' }, mg);
-  b.machine = { blink: 0, mat: mScr };
-  animate(function (dt) { var m = b.machine; if (m.blink > 0) m.blink -= dt; m.mat.emissiveIntensity = m.blink > 0 && Math.sin(m.blink * 18) > 0 ? 1.4 : 0.35; });
-  solid(b.x + mx - 0.32, b.x + mx + 0.32, b.z + 1.66, b.z + 2.14, 0, 1.6);
-  pkBevelBox(0.3, 0.04, 0.12, MAT.steelDark, -0.4, 0.92, 1.86, g, 0.01);
+  var side = b.x < 0 ? 1 : -1;                                        // toward the gate path (x = 0)
+  var K = PK_TK, HW = K.W / 2, HD = K.D / 2, T = K.T, H = K.H;
+  var cream = pkMatPlasterRich(), wood = pkMatWoodRich();
+  var timber = std({ color: 0x5a3e28, roughness: 0.8 }), brick = std({ color: 0x9a5b45, roughness: 0.9 });
+  var glass = std({ color: 0x9fc6cc, roughness: 0.1, metalness: 0.2, transparent: true, opacity: 0.32 });
+  var iron = std({ color: 0x1f2a24, roughness: 0.45, metalness: 0.55 }), gold = std({ color: 0xc9a227, roughness: 0.35, metalness: 0.8 });
+  // the floor and the plinth
+  pkPaved(K.W - 0.2, K.D - 0.2, std({ color: 0x8a6a4a, roughness: 0.8, map: (MAT.wood && MAT.wood.map) || null }), 0, 0.035, 0, 0.9, g);
+  var ceil = box(K.W - 0.2, 0.04, K.D - 0.2, std({ color: 0xf1e6cc, roughness: 0.9 }), 0, H - 0.04, 0, g); ceil.castShadow = false;
+  // walls: the back, the outer side (with a window), the door side (with the door and a window), the front (the counter window)
+  var DZ0 = -1.15, DZ1 = -0.15, SW0 = 0.15, SW1 = 1.25;                    // the door, and the side window, along z
+  var wallZ = function (x, z0, z1, y0, y1) { box(T, y1 - y0, z1 - z0, cream, x, (y0 + y1) / 2, (z0 + z1) / 2, g); };
+  box(K.W, H, T, cream, 0, H / 2, -HD + T / 2, g);                                        // back
+  [-side, side].forEach(function (sx) {
+    var x = sx * (HW - T / 2), door = sx === side;
+    if (door) { wallZ(x, -HD, DZ0, 0, H); wallZ(x, DZ0, DZ1, 2.08, H); wallZ(x, DZ1, SW0, 0, H); }
+    else wallZ(x, -HD, SW0, 0, H);
+    wallZ(x, SW0, SW1, 0, 1.05); wallZ(x, SW0, SW1, 2.15, H); wallZ(x, SW1, HD, 0, H);  // the side window
+    box(0.03, 1.1, SW1 - SW0 - 0.06, glass, x, 1.6, (SW0 + SW1) / 2, g);
+    // a flower box under the side window, outside
+    box(0.28, 0.22, SW1 - SW0, wood, x + sx * 0.22, 0.95, (SW0 + SW1) / 2, g);
+    for (var f = 0; f < 4; f++) sphere(0.09, std({ color: [0xd94f6a, 0xf3c84a, 0xf4f1e6, 0xd94f6a][f], roughness: 0.9 }), x + sx * 0.22, 1.1, SW0 + 0.15 + f * 0.27, g);
+  });
+  box(K.W, 0.95, T, cream, 0, 0.475, HD - T / 2, g);                                     // under the front window
+  box(K.W, H - 2.3, T, cream, 0, 2.3 + (H - 2.3) / 2, HD - T / 2, g);                    // over it
+  box(K.W - 0.4, 1.3, 0.03, glass, 0, 1.62, HD - T / 2, g);
+  [-HW + 0.1, -0.75, 0.75, HW - 0.1].forEach(function (x) { box(0.1, 1.35, 0.14, timber, x, 1.62, HD - T / 2, g); });
+  // the brick plinth and the timber framing outside, so it reads as a little house
+  [[0, -HD - 0.04, K.W + 0.16, 0.08], [0, HD + 0.04, K.W + 0.16, 0.08]].forEach(function (p) { box(p[2], 0.45, p[3], brick, p[0], 0.225, p[1], g); });
+  [-HW - 0.04, HW + 0.04].forEach(function (x) { box(0.08, 0.45, K.D, brick, x, 0.225, 0, g); });
+  [[0, -HD - 0.02, K.W + 0.1, 0.05], [0, HD + 0.02, K.W + 0.1, 0.05]].forEach(function (fr) { box(fr[2], 0.12, fr[3], timber, fr[0], H - 0.06, fr[1], g); box(fr[2], 0.12, fr[3], timber, fr[0], 0.95, fr[1], g); });
+  [-HW - 0.02, HW + 0.02].forEach(function (x) { box(0.05, 0.12, K.D + 0.1, timber, x, H - 0.06, 0, g); box(0.05, H, 0.12, timber, x, H / 2, -HD, g); box(0.05, H, 0.12, timber, x, H / 2, HD, g); });
+  // the door: a real one (E opens it), a lantern over it and a step
+  var dx = side * (HW - T / 2);
+  b.door = pkBkDoor(g, dx - side * 0.02, 0.0, DZ1, Math.PI, side * 1.55, DZ1 - DZ0, 2.04, { leaf: wood, glass: glass, kick: iron }, 'the ticket office door');
+  box(0.4, 0.08, 1.2, std({ color: 0x8a8580, roughness: 0.9 }), dx + side * 0.25, 0.04, (DZ0 + DZ1) / 2, g);
+  pkRoundCyl(0.02, 0.3, iron, dx + side * 0.25, 2.45, DZ1 + 0.3, g, 6);
+  pkBevelBox(0.2, 0.3, 0.2, std({ color: 0xffe2a0, emissive: 0xffc966, emissiveIntensity: 1.1, roughness: 0.3 }), dx + side * 0.25, 2.2, DZ1 + 0.3, g, 0.02);
+  // the roof slab and its trim (the spire over it is part 20's)
+  pkBevelBox(K.W + 0.5, 0.16, K.D + 0.5, MAT.roof, 0, H + 0.08, 0, g, 0.04);
+  pkBevelBox(K.W + 0.6, 0.22, K.D + 0.6, MAT.trim, 0, H + 0.2, 0, g, 0.02);
+  // the fascia and the name over the window
+  pkSign3D(['TICKETS'], 2.6, 0.5, 0, H - 0.32, HD + 0.06, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
+  pkSign3D(['ADULTS ' + money(S.ticketPrice)], 1.4, 0.28, -1.4, H - 0.32, HD + 0.06, 0, { bg: '#0d1216', fg: '#eef1f5' }, g);
+  // outside: the counter shelf under the window, the bell
+  pkBevelBox(K.W - 0.2, 0.08, 0.42, wood, 0, 0.98, HD + 0.2, g, 0.03);
+  pkRoundCyl(0.05, 0.07, MAT.chrome, -1.3, 1.055, HD + 0.2, g, 12);
+  // inside: the counter under the window, the till, the ticket printer, the screen, a chair
+  pkBevelBox(K.W - 0.5, 0.9, 0.55, wood, 0, 0.45, HD - 0.45, g, 0.03);
+  pkBevelBox(K.W - 0.4, 0.06, 0.62, std({ color: 0x3a2a1c, roughness: 0.6 }), 0, 0.93, HD - 0.45, g, 0.02);
   var tillM = std({ color: 0x2a3138, roughness: 0.55 });
-  pkBevelBox(0.36, 0.18, 0.3, tillM, 1.05, 1.1, 1.64, g, 0.03);
-  pkBevelBox(0.22, 0.03, 0.15, MAT.black, 1.05, 1.21, 1.64, g, 0.01);
-  pkRoundCyl(0.05, 0.07, MAT.chrome, -1.0, 1.045, 1.66, g, 12);
-  // inside: a noticeboard, a shelf of ticket rolls, a stool and a warm lamp
-  pkBevelBox(1.5, 0.9, 0.05, pkMatWoodRich(), 0.6, 1.65, -1.38, g, 0.02);
-  pkBevelBox(1.4, 0.8, 0.01, std({ color: 0xe8e2d2, roughness: 0.92 }), 0.6, 1.65, -1.35, g, 0.004);
-  pkBevelBox(1.3, 0.06, 0.28, pkMatWoodRich(), -0.95, 1.55, -1.32, g, 0.01);
-  [-1.2, -0.95, -0.7].forEach(function (rx) { pkRoundCyl(0.05, 0.1, MAT.trim, rx, 1.63, -1.32, g, 10); });
-  pkRoundCyl(0.17, 0.5, std({ color: 0x2b333a, roughness: 0.8 }), -1.1, 0.25, -0.85, g, 12);
-  box(0.42, 0.05, 0.42, std({ color: 0x2b333a, roughness: 0.8 }), -1.1, 0.55, -0.85, g);
-  box(0.54, 0.03, 0.54, MAT.trim, 0, 2.87, 0, g);
-  sphere(0.09, glowMat(0xffe9b0, 0.9), 0, 2.79, 0, g);
-  // the roof, the fascia and the name over the window
-  pkBevelBox(3.9, 0.16, 3.9, MAT.roof, 0, 3.02, 0, g, 0.04);
-  pkBevelBox(4.0, 0.24, 4.0, MAT.trim, 0, 3.14, 0, g, 0.02);
-  pkBevelBox(3.6, 0.3, 0.05, MAT.trim, 0, 2.82, 1.84, g, 0.02);
-  pkSign3D(['TICKETS'], 2.5, 0.58, 0, 2.82, 1.88, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
-  pkSign3D(['ADULTS ' + money(S.ticketPrice)], 1.5, 0.3, -0.78, 2.13, 1.64, 0, { bg: '#0d1216', fg: '#eef1f5' }, g);
-  // the window under the glass: a small counter display and the serve action
-  var win = hitBox(3.0, 1.4, 0.7, 0, 1.45, 1.55, {
+  pkBevelBox(0.36, 0.18, 0.3, tillM, 0.95, 1.05, HD - 0.45, g, 0.03);
+  pkBevelBox(0.22, 0.03, 0.15, MAT.black, 0.95, 1.16, HD - 0.4, g, 0.01);
+  pkBevelBox(0.26, 0.16, 0.24, std({ color: 0xe8e2d2, roughness: 0.6 }), 0.45, 1.04, HD - 0.5, g, 0.03);       // the printer
+  pkBevelBox(0.12, 0.01, 0.16, std({ color: 0xf5b53d, roughness: 0.7 }), 0.45, 1.13, HD - 0.36, g, 0.003);      // a ticket
+  pkBkChair(g, 0, HD - 1.25, 0, 0);                                                                              // facing the window
+  // the back: shelves of ticket rolls, the noticeboard, the safe, a wall clock
+  pkBevelBox(1.4, 0.06, 0.3, wood, -1.3, 1.55, -HD + 0.3, g, 0.01);
+  pkBevelBox(1.4, 0.06, 0.3, wood, -1.3, 1.95, -HD + 0.3, g, 0.01);
+  for (var r = 0; r < 5; r++) { pkRoundCyl(0.06, 0.1, std({ color: [0xf5b53d, 0x8fc3ff, 0xf4f1e6][r % 3], roughness: 0.7 }), -1.8 + r * 0.25, 1.63, -HD + 0.3, g, 10); pkRoundCyl(0.06, 0.1, std({ color: [0x8fc3ff, 0xf4f1e6, 0xf5b53d][r % 3], roughness: 0.7 }), -1.8 + r * 0.25, 2.03, -HD + 0.3, g, 10); }
+  pkBevelBox(1.2, 0.8, 0.05, wood, 0.6, 1.7, -HD + T + 0.03, g, 0.02);
+  pkBevelBox(1.1, 0.7, 0.01, std({ color: 0xe8e2d2, roughness: 0.92 }), 0.6, 1.7, -HD + T + 0.06, g, 0.004);
+  [[0.3, 1.85], [0.7, 1.6], [0.95, 1.85]].forEach(function (n) { pkBevelBox(0.2, 0.25, 0.01, std({ color: 0xf5d38a, roughness: 0.9 }), n[0], n[1], -HD + T + 0.075, g, 0.002); });
+  var safe = std({ color: 0x3b4148, roughness: 0.45, metalness: 0.6 });
+  pkBevelBox(0.6, 0.7, 0.55, safe, side * (HW - 0.55), 0.4, -HD + 0.45, g, 0.03);
+  pkRoundCyl(0.08, 0.03, MAT.chrome, side * (HW - 0.55), 0.48, -HD + 0.74, g, 14).rotation.x = Math.PI / 2;
+  pkBkClock(g, -1.3, 2.45, -HD + T + 0.02, 0, 0.14);
+  // the pendant lamp
+  pkRoundCyl(0.015, 0.45, iron, 0, H - 0.22, 0, g, 6);
+  pkRoundCyl(0.2, 0.18, std({ color: 0xfff3d6, emissive: 0xffdda0, emissiveIntensity: 0.7, roughness: 0.55 }), 0, H - 0.52, 0, g, 12);
+  // the window: serve from inside at the counter (or from the chair), and the window's screen on the counter
+  var win = hitBox(K.W - 0.4, 1.3, 0.9, 0, 1.62, HD - 0.15, {
     prompt: function () { var q = PK.booths[i] ? PK.booths[i].queue.length : 0; return q ? 'Serve the guest at the window (' + q + ' waiting)' : 'The ticket window'; },
     use: function () { pkServe(i); }
   }, g);
   win.userData.pkWindow = i;
-  pkBevelBox(0.14, 0.34, 0.14, MAT.steelDark, -1.22, 1.15, 1.7, g, 0.02);
   var sc = touchScreen({
-    w: 300, h: 220, pw: 0.56, ph: 0.4, x: -1.22, y: 1.46, z: 1.76, parent: g, title: 'Ticket window',
+    w: 300, h: 220, pw: 0.56, ph: 0.4, x: -1.3, y: 1.22, z: HD - 0.62, ry: Math.PI, parent: g, title: 'Ticket window',
     draw: function (ctx, s) {
       scBg(ctx, s.w, s.h); scHead(ctx, s.w, 'TICKETS', 'Day ' + S.day);
       ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
@@ -266,18 +298,36 @@ function pkTicketBoothBetter(b, i) {
       ctx.fillStyle = '#eef1f5'; ctx.font = 'bold 20px ' + SCREEN_THEME.font;
       ctx.fillText('Waiting  ' + (PK.booths[i] ? PK.booths[i].queue.length : 0), 16, 152);
       ctx.fillStyle = '#a0acb8'; ctx.font = '13px ' + SCREEN_THEME.font;
-      ctx.fillText('Sold today  ' + PK.today.tickets, 16, 178);
-      ctx.fillText('Serve at the window', 16, 202);
+      ctx.fillText('Sold today  ' + PK.today.tickets + (PK.today.machine ? '  (machine ' + PK.today.machine + ')' : ''), 16, 178);
+      ctx.fillText(S.clerk ? 'The clerk serves' : 'Serve at the window', 16, 202);
     }
   });
+  // outside: the self-service machine on the outer wall, toward the front
+  var mx = -side * (HW + 0.45), mg = new THREE.Group(); mg.position.set(mx, 0, HD - 0.5); mg.rotation.y = -side * Math.PI / 2 * 0; g.add(mg);
+  pkBevelBox(0.62, 1.55, 0.46, std({ color: 0x21402e, roughness: 0.6, metalness: 0.2 }), 0, 0.78, 0, mg, 0.05);
+  pkBevelBox(0.66, 0.1, 0.5, gold, 0, 1.6, 0, mg, 0.03);
+  var mScr = std({ color: 0x0b1a12, emissive: 0x5fd38d, emissiveIntensity: 0.35, roughness: 0.3 });
+  pkBevelBox(0.42, 0.3, 0.02, mScr, 0, 1.22, 0.235, mg, 0.01);
+  pkBevelBox(0.16, 0.03, 0.02, MAT.steelDark, 0, 0.98, 0.235, mg, 0.005);
+  sign(['TICKETS'], 0.5, 0.12, 0, 1.47, 0.24, 0, { bg: '#21402e', fg: '#f6e2a6' }, mg);
+  b.machine = { blink: 0, mat: mScr };
+  animate(function (dt) { var m = b.machine; if (m.blink > 0) m.blink -= dt; m.mat.emissiveIntensity = m.blink > 0 && Math.sin(m.blink * 18) > 0 ? 1.4 : 0.35; });
+  solid(b.x + mx - 0.32, b.x + mx + 0.32, b.z + HD - 0.74, b.z + HD - 0.26, 0, 1.6);
   // the queue sign on a post, at the head of the line
-  pkRoundCyl(0.05, 1.9, MAT.steelDark, side * 1.55, 0.95, 2.4, g, 8);
-  pkSign3D(['QUEUE HERE'], 1.3, 0.28, side * 1.55, 1.9, 2.4, 0, { bg: '#0d1216', fg: '#eef1f5' }, g);
-  PK.booths.push({ i: i, x: b.x, z: b.z, turnstile: b.turnstile, queue: [], screen: sc, g: g, machine: b.machine });
-  solid(b.x - 1.72, b.x + 1.72, b.z - 1.62, b.z - 1.38, 0, 3.0);
-  solid(b.x - 1.72, b.x - 1.48, b.z - 1.62, b.z + 1.62, 0, 3.0);
-  solid(b.x + 1.48, b.x + 1.72, b.z - 1.62, b.z + 1.62, 0, 3.0);
-  solid(b.x - 1.72, b.x + 1.72, b.z + 1.38, b.z + 1.78, 0, 1.0);
+  pkRoundCyl(0.05, 1.9, MAT.steelDark, side * 1.9, 0.95, HD + 1.0, g, 8);
+  pkSign3D(['QUEUE HERE'], 1.3, 0.28, side * 1.9, 1.9, HD + 1.0, 0, { bg: '#0d1216', fg: '#eef1f5' }, g);
+  PK.booths.push({ i: i, x: b.x, z: b.z, turnstile: b.turnstile, queue: [], screen: sc, g: g, machine: b.machine, door: b.door });
+  // the walls are solid, the doorway is not (the door blocks while shut), the counter inside is solid, the front is solid
+  var X = function (x) { return b.x + x; }, Zw = function (z) { return b.z + z; };
+  solid(X(-HW), X(HW), Zw(-HD), Zw(-HD + T), 0, H);
+  solid(X(-HW), X(HW), Zw(HD - T - 0.6), Zw(HD + 0.42), 0, 1.0);                          // the front wall and the counters
+  solid(X(-HW), X(HW), Zw(HD - T), Zw(HD), 0, H);
+  [-side, side].forEach(function (sx) {
+    var x0 = X(sx * HW - (sx > 0 ? T : 0)), x1 = x0 + T;
+    if (sx === side) { solid(x0, x1, Zw(-HD), Zw(DZ0), 0, H); solid(x0, x1, Zw(DZ1), Zw(HD), 0, H); }
+    else solid(x0, x1, Zw(-HD), Zw(HD), 0, H);
+  });
+  solid(X(side * (HW - 0.55) - 0.32), X(side * (HW - 0.55) + 0.32), Zw(-HD + 0.15), Zw(-HD + 0.75), 0, 0.8);   // the safe
   return g;
 }
 
