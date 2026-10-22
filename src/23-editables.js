@@ -29,6 +29,12 @@
     });
     return n;
   }
+  // A prop raised off the ground (h, or standing on an upper floor) lifts its meshes but the engine lays its solids from the
+  // ground up: a bed on HQ's top floor left an invisible block in the doorway below. Its solids go up with it.
+  hook('propBuilt', function (id, inst) {
+    var dy = inst && inst.g ? inst.g.position.y : 0; if (!dy) return;
+    solids.forEach(function (s) { if (s.prop === id && !s.pkLifted) { s.y0 += dy; s.y1 += dy; s.pkLifted = true; } });
+  });
   var _pkEditablesBuild = GAME.buildWorld;
   GAME.buildWorld = function (loaded) {
     var r = _pkEditablesBuild.apply(this, arguments);

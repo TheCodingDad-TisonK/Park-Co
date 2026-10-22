@@ -570,8 +570,8 @@
       var a = mk(p);
       a.level = p.level;
       a.plot = p;
-      a.open = true;
-      if (S.rides) S.rides[p.id] = true;
+      a.open = pkRideSavedOpen(p.id);
+      if (S.rides) S.rides[p.id] = a.open;
     });
     pkBuildPlayhouse();
   }
@@ -961,6 +961,7 @@
     pkBkChair(k, 0.1, -0.35, Math.PI, 0);   // facing the desk under the long window
     var cabBatten = pkBkBatten(k, 0, H - 0.17, 0.2, 0, 1.4);
     a.boothLights = pkBkLights(a.id, k, [cabBatten], 0, H - 0.5, 0.2);
+    a.boothLights.setPower(!!a.open);
     pkBkSwitch(k, (xn - cx) + s * 0.1, 1.2, (d1 - cz) + 0.25, s * Math.PI / 2, a.boothLights, a.name);
     pkBkStack(a, k, s * 1.3, H + 0.02, 0.9);
     pkBkCamera(k, -s * (W / 2 + 0.02), H - 0.3, K.z0 - cz + 0.3, s * Math.PI / 2 + Math.PI, 0.5);
@@ -968,13 +969,13 @@
     var screen = touchScreen({
       w: 380, h: 320, pw: 0.94, ph: 0.80, x: cx, y: 1.62, z: K.z1 - 0.1, ry: Math.PI, parent: g, title: a.name,
       draw: function (ctx, sc) {
-        var C = pkCtl(a);
+        var C = pkCtl(a), waiting = pkAttrWaiting(a);
         scBg(ctx, sc.w, sc.h);
         scHead(ctx, sc.w, a.name.toUpperCase(), pkBoothStatus(a, C));
         scText(ctx, 16, 62, 'ON RIDE', '#a0acb8');
         scText(ctx, 16, 88, a.riders + ' / ' + a.seats.length, a.riders ? '#5fd38d' : '#eef1f5');
         scText(ctx, 200, 62, 'QUEUE', '#a0acb8');
-        scText(ctx, 200, 88, String(a.queue.length), a.queue.length ? '#f0c04a' : '#eef1f5');
+        scText(ctx, 200, 88, String(waiting), waiting ? '#f0c04a' : '#eef1f5');
         scText(ctx, 16, 122, 'GATES  ' + (C.gates ? 'OPEN' : 'CLOSED'), C.gates ? '#5fd38d' : '#a0acb8');
         scText(ctx, 16, 152, 'RESTRAINTS  ' + (C.barsWant > 0.5 ? 'DOWN' : 'UP'), C.barsWant > 0.5 ? '#5fd38d' : '#a0acb8');
         scText(ctx, 16, 182, 'AUTO  ' + (C.auto ? 'ON' : 'OFF'), C.auto ? '#5fd38d' : '#a0acb8');
@@ -983,6 +984,7 @@
         scText(ctx, 16, 272, 'WAIT  ' + pkBkWait(a) + ' MIN', '#eef1f5');
       }
     });
+    pkPowerScreen(screen, function () { return !!a.open; });
     var anchor = new THREE.Group(); anchor.position.set(cx, 0, cz); g.add(anchor);
     a.booth = anchor;
     a.boothScreen = screen;

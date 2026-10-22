@@ -6,7 +6,7 @@
   var PK_GATE_Z = 30, PK_PLATFORM_Y = 0.6, PK_STATION_Z = -4.6, PK_KIDS_Z = 56;   // PK_KIDS_Z: the south fence of the kids' garden
   // the park is a long rectangle: the gate at the south, the coaster across the north, and rides either side of the midway
   var PK_PARK = { x0: -72, x1: 123, z0: -118, z1: 70 };   // z0 was -95: the north fence moved back for the bigger indoor halls; x1 was 72, out east for The Dragon and The Firebird
-  var PK_BOOTHS = [{ x: -9, z: 36, turnstile: -6 }, { x: 9, z: 36, turnstile: 6 }];
+  var PK_BOOTHS = [{ x: -9, z: 36, turnstile: -6, turnstiles: [-6, -2] }, { x: 9, z: 36, turnstile: 6, turnstiles: [2, 6] }];
   var PK_TURNSTILES = [-6, -2, 2, 6];
   // the coaster queue: a single lane beside the platform, fenced on both sides. Guests join at the back (PK_QUEUE_ENTRY,
   // south, off the midway), stand one to a slot, and shuffle toward the front (north) as the line moves. Slot 0 is the front.
@@ -39,7 +39,7 @@
     queue: [], spawnT: 0, nextId: 1, today: { tickets: 0, snacks: 0, rides: 0, earned: 0 },
     attractions: [], attrById: {}, plots: {}, rides: {}, lanes: [],
     playerRide: null, playerWait: null,
-    lastMin: -1, lastDay: 1, level: 1, xp: 0, clerk: false, operator: false, snackOpen: false, train2: false, lights: false, duty: null,
+    lastMin: -1, lastDay: 1, level: 1, xp: 0, clerk: false, operator: false, snackOpen: false, train2: false, lights: false, rideLights: false, duty: null,
     served: 0, refused: 0, screen: null, snack: null, closed: false
   };
   // ── The tables the park reads ─────────────────────────────────────
@@ -59,9 +59,64 @@
     showCard('h-card', '<b>Level ' + lv + '</b><br>' + esc(L.name) + '<br><span class="dc-sub">' + esc(L.note) + '</span>', 6);
     toast('Level ' + lv + ' - ' + L.name, 'good');
     if (L.unlock === 'snack') { PK.snackOpen = true; S.snackOpen = true; }
-    if (L.unlock === 'lights') { PK.lights = true; S.lights = true; }
+    if (L.unlock === 'lights') { PK.lights = true; S.lights = true; PK.rideLights = true; S.rideLights = true; }
     if (L.unlock && L.unlock !== 'snack' && L.unlock !== 'lights' && L.unlock !== 'clerk' && L.unlock !== 'operator') pkOpenRide(L.unlock);
     hudDirty = true;
+  }
+  // ── The park and ride lights ──────────────────────────────────────
+  // Two switches in the services cabinet: S.lights for the park (lamp posts, lanterns, gate downlights, string lights) and
+  // S.rideLights for the rides' own bulbs. The engine's lighting tick hands us its park power flag (the switch on and the sun
+  // down); the ride circuit follows its own switch and the same night hours, so a ride can be lit with the paths dark.
+  // Every glow lens (userData.glow) and every plainly emissive lamp surface is registered here once and split by where it is
+  // used: a material that only appears under a ride group is a ride light, everything else stays on the park circuit.
+  var PK_GLOW_PARK = null, PK_GLOW_RIDE = null, PK_GLOW_PARK_ON = null, PK_GLOW_RIDE_ON = null;
+  function pkGlowRideMat(o) {
+    for (var p = o; p && p !== scene; p = p.parent) if (p.userData && (p.userData.attr || p.userData.pkRideRoot)) return true;
+    return false;
+  }
+  function pkGlowCollect() {
+    var list = [], by = {};
+    scene.traverse(function (o) {
+      var m = o.material;
+      if (!m || Array.isArray(m) || !m.userData) return;
+      // a glowMat lens is a lamp; so is a plain emissive surface (lantern glass, a ride's ring light, a string of bulbs).
+      // Screens and signs (they carry an emissive map), water and transparent crystal stay out of the switches.
+      var glow = !!m.userData.glow;
+      var lit = !glow && m.emissive && m.emissive.getHex && m.emissive.getHex() !== 0 && (m.emissiveIntensity || 0) >= 0.5 && !m.emissiveMap && !m.transparent;
+      if (!glow && !lit) return;
+      var rec = by[m.uuid];
+      if (!rec) {
+        rec = by[m.uuid] = { m: m, park: false, ride: false };
+        list.push(rec);
+        if (m.userData.pkGlowBase === undefined) m.userData.pkGlowBase = typeof m.emissiveIntensity === 'number' ? m.emissiveIntensity : 1;
+      }
+      // a shared material can only follow one switch; if the park uses it too, it belongs to the park circuit
+      if (pkGlowRideMat(o)) rec.ride = true; else rec.park = true;
+    });
+    var park = [], ride = [];
+    for (var i = 0; i < list.length; i++) {
+      var r = list[i];
+      if (r.ride && !r.park) ride.push(r.m); else park.push(r.m);
+    }
+    PK_GLOW_PARK = park; PK_GLOW_RIDE = ride; PK_GLOW_PARK_ON = null; PK_GLOW_RIDE_ON = null;
+  }
+  function pkLightsApply(parkOn, rideOn) {
+    if (!PK_GLOW_PARK || !PK_GLOW_RIDE) pkGlowCollect();
+    var p = !!parkOn, r = !!rideOn;
+    if (PK_GLOW_PARK_ON !== p) {
+      PK_GLOW_PARK_ON = p;
+      for (var i = 0; i < PK_GLOW_PARK.length; i++) {
+        var m = PK_GLOW_PARK[i];
+        m.emissiveIntensity = p ? m.userData.pkGlowBase : 0;
+      }
+    }
+    if (PK_GLOW_RIDE_ON !== r) {
+      PK_GLOW_RIDE_ON = r;
+      for (var j = 0; j < PK_GLOW_RIDE.length; j++) {
+        var n = PK_GLOW_RIDE[j];
+        n.emissiveIntensity = r ? n.userData.pkGlowBase : 0;
+      }
+    }
   }
   // the platform sits south of the track, so the queue and the guests reach it without crossing the rails.
   // a short ramp at its south edge carries the player and the guests up the 0.6 m step.
@@ -73,7 +128,7 @@
   function pkOnPlatform(x, z) { return x > -10 && x < 10 && z > -3.6 && z < -0.6; }
   function pkInsidePark(x, z) { return x > PK_PARK.x0 && x < PK_PARK.x1 && z > PK_PARK.z0 && z < PK_PARK.z1; }
   function pkBoothSlot(bi, i) { var b = PK_BOOTHS[bi]; return { x: b.x, z: b.z + 2.7 + i * 1.1 }; }   // in front of the ticket office's counter
-  function pkCoasterAuto() { return !!S.auto || !!S.operator; }
+  function pkCoasterAuto() { return !!S.auto; }   // the switch alone: a hired operator puts it on AUTO (pkHire), it does not lock it there
   function pkRideWord() {
     var R = PK.ride;
     if (R.fault) return 'stopped';
@@ -394,16 +449,19 @@
       return false;
     },
     powered: function () { return !!PK.lights && (S.time >= 18 || S.time < 7); },
+    ridePowered: function () { return !!PK.rideLights && (S.time >= 18 || S.time < 7); },
     freshState: function () {
       return { day: 1, time: 9, bank: 500, level: 1, log: [], ledger: [], stats: { earned: 0, spent: 0 }, layout: {}, custom: [], hdoors: {},
-        ticketPrice: 25, snackPrice: 6, auto: false, ctlAuto: {}, ctlKey: {}, coasterKey: false, cycles: 0, xp: 0, clerk: true, operator: false, snackOpen: false, train2: false, lights: false,   // the starter clerk works day one for free
-        wear: 0, rides: {}, today: { tickets: 0, snacks: 0, rides: 0, earned: 0 } };
+        ticketPrice: 25, snackPrice: 6, auto: false, ctlAuto: {}, ctlKey: {}, coasterKey: false, cycles: 0, xp: 0, clerk: true, operator: false, snackOpen: false, train2: false, lights: false, rideLights: false,   // the starter clerk works day one for free
+        wear: 0, rides: {}, today: { tickets: 0, snacks: 0, rides: 0, earned: 0 }, gateOpen: true };
     },
     // a day one save from before the starter clerk gets one too; later days keep the park they earned
-    migrate: function (s) { if (s.day === 1 && !s.clerk) s.clerk = true; return s; },
+    // a save from before the gate was a switch of its own: open if the old automatic hours say it would have been
+    migrate: function (s) { if (s.day === 1 && !s.clerk) s.clerk = true; if (s.gateOpen === undefined) s.gateOpen = s.time >= 9 && s.time < 22; if (s.rideLights === undefined) s.rideLights = !!s.lights; return s; },
     buildWorld: function (loaded) {
       pkGround(); pkGate(); pkBooths(); pkOffice(); pkMidway(); pkBuildCoaster(); pkBuildOperatorRoom(); pkBuildSnack();
       pkBuildAttractions();
+      pkBuildCart(); pkBuildCartGate(); pkBuildTablet();
       pkDressAll();
       if (typeof pkThemeBuild === 'function') pkThemeBuild();   // part 12: the lands, the routes, the hub, the planting
       pkBuildNpcs();
@@ -437,7 +495,7 @@
     guideHtml: function () { return pkGuide(); },
     commands: {
       cash: function (n) { pay(+n || 0, 'dev'); return 'bank ' + money(S.bank); },
-      guests: function () { return PK.guests.length + ' guests, ' + PK.queue.length + ' in the coaster queue'; },
+      guests: function () { return PK.guests.length + ' guests, ' + pkQueueWaiting() + ' in the coaster queue'; },
       ride: function () { return 'ride ' + PK.ride.state + (S.auto ? ' (auto)' : ' (manual)') + ', ' + PK.ride.riders + ' riding, ' + S.cycles + ' cycles'; },
       ticket: function (n) { return 'adults ' + money(pkPrice(+n || 0)); },
       xp: function (n) { pkXp(+n || 0); return 'xp ' + PK.xp + ', level ' + PK.level; },
@@ -456,21 +514,31 @@
         pkQueueJoin: pkQueueJoin, pkQueueReslot: pkQueueReslot, pkPool: function () { return PK_POOL; }, pkLot: function () { return PK_LOT; }, pkLotArrive: pkLotArrive,
         pkOpenGates: pkOpenGates, pkCloseGates: pkCloseGates, pkGatesToggle: pkGatesToggle, pkBarsDown: pkBarsDown, pkBarsUp: pkBarsUp, pkStop: pkStop, pkReset: pkReset,
         pkTick: pkTick, pkPanel: pkPanel, pkPanelAct: pkPanelAct, pkGuide: pkGuide, pkTrack: function () { return PK.curve; }, pkTrain: function () { return PK.cars; },
+        pkGateReminders: pkGateReminders, pkGateToggle: pkGateToggle,
         pkCoasterAuto: pkCoasterAuto,
         pkSeats: function () { return PK.seats; }, pkCounts: function () { return { guests: PK.guests.length, queue: PK.queue.length, seats: PK.seats.length, cars: PK.cars.length, track: PK.len }; },
         pkBuildCoaster: pkBuildCoaster, pkBuildOperatorRoom: pkBuildOperatorRoom, pkBuildSnack: pkBuildSnack,
         pkBuildAttractions: pkBuildAttractions, pkOpenRide: pkOpenRide, pkOpenCount: pkOpenCount, pkRideList: pkRideList,
-        pkSetRideOpen: pkSetRideOpen,
+        pkSetRideOpen: pkSetRideOpen, pkCoasterOpen: pkCoasterOpen,
         pkOffice: pkOffice, pkService: pkService, pkFire: pkFire, pkAdminPanel: pkAdminPanel,
         pkAttractions: function () { return PK.attractions; }, pkAttraction: function (id) { return PK.attrById[id]; },
-        pkAttrQueueJoin: pkAttrQueueJoin, pkAttrQueueLeave: pkAttrQueueLeave,
+        pkAttrQueueJoin: pkAttrQueueJoin, pkAttrQueueLeave: pkAttrQueueLeave, pkAttrWaiting: pkAttrWaiting, pkQueueWaiting: pkQueueWaiting,
         pkPlayerRideJoin: pkPlayerRideJoin, pkPlayerRideStepOff: pkPlayerRideStepOff, pkPlayerRideExitTry: pkPlayerRideExitTry,
         pkPlayerRides: pkPlayerRides, pkPlayerTick: pkPlayerTick, pkLanes: function () { return PK.lanes; },
         pkAttrTick: pkAttrTick, pkAttrSeat: pkAttrSeat, pkAttrUnseatAll: pkAttrUnseatAll, pkAttrSlot: pkAttrSlot, pkAttrLanePath: pkAttrLanePath, pkLaneCollides: pkLaneCollides,
         pkTurnstiles: function () { return PK.turnstiles; }, pkGates: function () { return PK.gates; }, pkBooths: function () { return PK.booths; },
+        pkPickTurnstile: pkPickTurnstile,
         pkSnack: function () { return PK.snack; }, pkScreen: function () { return PK.screen; },
         pkConsole: function () { return PK.console; },
         pkCabinet: function () { return PK.console && PK.console.cabinet; },
+        pkLightsApply: pkLightsApply,
+        pkGlowCounts: function () { return { park: PK_GLOW_PARK ? PK_GLOW_PARK.length : 0, ride: PK_GLOW_RIDE ? PK_GLOW_RIDE.length : 0 }; },
+        pkGlowSample: function (kind) {
+          var a = kind === 'ride' ? PK_GLOW_RIDE : PK_GLOW_PARK;
+          if (!a) return -1;
+          for (var i = 0; i < a.length; i++) if (a[i].userData.pkGlowBase > 0) return a[i].emissiveIntensity;
+          return -1;
+        },
         pkNearestHuman: pkNearestHuman, pkLog: pkLog, pkNewDay: pkNewDay,
         pkHire: pkHire, pkSnackBuy: pkSnackBuy, pkSnackPrice: pkSnackPrice, pkRideLoad: pkRideLoad, pkPlaceTrain: pkPlaceTrain, pkSeatGuest: pkSeatGuest, pkUnseatGuest: pkUnseatGuest,
         spanCut: spanCut, lineWall: lineWall, roomFloor: roomFloor, troffer: troffer, highBay: highBay, fenceRun: fenceRun, tree: tree, lampPost: lampPost,
@@ -505,5 +573,7 @@
   });
   hook('lighting', function (day, dawn, overcast, power) {
     if (scene.fog) { scene.fog.near = 210 - (overcast || 0) * 60; scene.fog.far = 540 - (overcast || 0) * 200; }
+    var night = S.time >= 18 || S.time < 7;
+    pkLightsApply(!!power, !!PK.rideLights && night);
   });
   CO.setup({ canvas: 'co-canvas', save: 'park-co', game: GAME, spawn: { x: 0, z: 42, yaw: 0 }, sun: { box: 120, far: 320, mapSize: 2048, target: [0, 0, 0] }, lightBudget: 10, fog: { color: 0x9dbbd8, near: 210, far: 520 } });

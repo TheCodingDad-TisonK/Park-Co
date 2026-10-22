@@ -92,6 +92,7 @@
   }
   function pkTrack() {
     var M = pkMats(), g = new THREE.Group(); scene.add(g);
+    g.userData.pkRideRoot = true; PK.coasterG = g;   // the ride-light scan walks up to here, so the coaster's own lamps follow the ride switch
     // the kit's track on the coaster's own frames: deep blue spine and lattice, pale running rails, legs in steel grey,
     // none in the station, round the platform or the control room
     pkCoTrackBuild(g, { curve: PK.curve, len: PK.len, F: PK.F }, {
@@ -281,12 +282,13 @@
       draw: function (c, s) {
         c.fillStyle = '#0a0806'; c.fillRect(0, 0, s.w, s.h);
         c.fillStyle = 'rgba(255,170,40,0.05)'; for (var yy = 2; yy < s.h; yy += 4) for (var xx = 2; xx < s.w; xx += 4) c.fillRect(xx, yy, 2, 2);
-        var R = PK.ride, n = PK.queue.length, wait = Math.ceil(Math.ceil((n + 1) / Math.max(1, PK.seats.length)) * 75 / 60);
+        var R = PK.ride, n = pkQueueWaiting(), wait = Math.ceil(Math.ceil((n + 1) / Math.max(1, PK.seats.length)) * 75 / 60);
         c.textAlign = 'center'; c.textBaseline = 'middle';
         c.fillStyle = '#ffb03a'; c.font = 'bold 28px ' + SCREEN_THEME.font; c.fillText('THE COASTER', s.w / 2, 26);
         c.fillStyle = R.fault ? '#ff5a3c' : '#ffcf6a'; c.font = 'bold 24px ' + SCREEN_THEME.font;
         c.fillText(R.fault ? 'STOPPED' : PK.closed ? 'PARK CLOSED' : (n ? 'WAIT ' + wait + ' MIN' : 'NO WAIT · WALK ON'), s.w / 2, 68);
       } });
+    pkPowerScreen(qb, pkCoasterOpen);
     PK_BK_LIVE.push({ sc: qb, g: qbG, every: 1.0 });
 
     // ── inside ──
@@ -298,6 +300,7 @@
     box(0.04, 0.9, D - 0.4, wains, X1 - 0.12, 0.45, CZ); box(0.08, 0.06, D - 0.38, oak, X1 - 0.13, 0.92, CZ);
     var opBattens = [0.6, 2.1, 3.6].map(function (k) { return pkBkBatten(scene, X0 + 1.4 + (k / 3.6) * (W - 2.8), H - 0.06, CZ - 0.6, 0, 1.3); });
     PK.opLights = pkBkLights('coaster', scene, opBattens, CX, H - 0.5, CZ - 0.6);
+    PK.opLights.setPower(pkCoasterOpen());
     pkBkSwitch(scene, DX0 - 0.35, 1.2, Z1 - 0.11, Math.PI, PK.opLights, 'the control room');
     // the coaster desk under the long window, facing it: the operator works the ride with the platform and the train in
     // front of them; the status board hangs on the north wall at their right hand
@@ -355,7 +358,7 @@
         var rows = [
           ['GATES', PK.gates[0] && PK.gates[0].open ? 'OPEN' : 'CLOSED', PK.gates[0] && PK.gates[0].open ? '#5fd38d' : '#a0acb8'],
           ['RESTRAINTS', R.barsWant > 0.5 ? 'DOWN' : 'UP', R.barsWant > 0.5 ? '#5fd38d' : '#a0acb8'],
-          ['OPERATION', R.fault ? R.fault.toUpperCase() : (S.auto || S.operator ? 'AUTOMATIC' : 'MANUAL'), R.fault ? '#ff6b5e' : '#f5b53d'],
+          ['OPERATION', R.fault ? R.fault.toUpperCase() : (S.auto ? 'AUTOMATIC' : 'MANUAL'), R.fault ? '#ff6b5e' : '#f5b53d'],
           ['TRACK WEAR', Math.round(S.wear || 0) + ' %', (S.wear || 0) > 70 ? '#ff6b5e' : '#eef1f5']
         ];
         for (var i = 0; i < rows.length; i++) {
@@ -369,6 +372,7 @@
         scText(ctx, 16, 356, 'Level ' + PK.level + '   Tickets ' + PK.today.tickets + '   Snacks ' + PK.today.snacks, '#7d8a96', 13);
       }
     });
+    pkPowerScreen(PK.screen, pkCoasterOpen);
 
     // ── collision ──
     solid(X0 - 0.15, X0 + 0.15, Z0, Z1, 0, H);                       // west
@@ -404,6 +408,7 @@
         R2.txt('LAMP TEST', 0.27, -0.25, 0.013, '#aebcc4');
         R2.txt('ISOLATE BEFORE OPENING', 0, -0.425, 0.013, '#7d8a96');
       } });
+    pkCtlSetPower(P, pkCoasterOpen);
     function onLift() { var u = PK.ride.u; return PK.ride.state === 'running' && u >= PK.liftU[0] && u <= PK.liftU[1]; }
     pkCtlGauge(P, -0.21, 0.24, { id: 'liftA', unit: 'amps', min: 0, max: 200, red: 0.85, ticks: 5, r: 0.085, ease: 3, get: function () { return onLift() ? 0.62 + 0.04 * Math.sin(PK_BK_T * 6) : 0.04; } });
     pkCtlGauge(P, 0.21, 0.24, { id: 'chain', unit: 'm/s', min: 0, max: 6, red: 0.8, ticks: 6, r: 0.085, ease: 2, get: function () { return onLift() ? 0.66 : (PK.ride.state === 'running' ? 0.66 : 0); } });
@@ -436,9 +441,12 @@
       }
     }
     pkBevelBox(0.86, 0.2, 0.05, S2c(0x8a949b), 0, 0.32, 0.24, H2, 0.008);
-    box(0.03, 0.03, 0.01, glowMat(0x5fd38d, 1.4), 0.36, 0.32, 0.27, H2);
+    var plcPower = box(0.03, 0.03, 0.01, glowMat(0x5fd38d, 1.4), 0.36, 0.32, 0.27, H2);
     pkSign3D(['RIDE PLC'], 0.4, 0.1, 0, 1.88, 0.29, 0, { bg: '#1b232c', fg: '#e8e4d8' }, H2);
     pkCtlLive({ tick: function (dt) {
+      var live = pkCoasterOpen();
+      plcPower.material.emissiveIntensity = live ? 1.4 : 0;
+      if (!live) { for (var z = 0; z < leds.length; z++) leds[z].m.emissiveIntensity = 0; return; }
       var busy = PK.ride.state === 'running' ? 1 : (PK.ride.state === 'idle' ? 0.25 : 0.6);
       for (var i = 0; i < leds.length; i++) { var L = leds[i]; L.k += dt * L.f; L.m.emissiveIntensity = L.base ? 1.4 : (Math.sin(L.k) > 1 - busy * 1.6 ? 1.6 : 0.08); }
     } });
@@ -478,6 +486,7 @@
         c.textAlign = 'left'; c.fillStyle = R.fault ? '#ff6b5e' : '#d6dee3'; c.font = 'bold 12px ' + SCREEN_THEME.font;
         c.fillText((R.fault ? 'STOP  ' : '') + 'BLOCK ' + (tb + 1) + '   ' + (R.v || 0).toFixed(1) + ' m/s', 12, s.h - 10);
       } });
+    pkPowerScreen(sc, pkCoasterOpen);
     PK_BK_LIVE.push({ sc: sc, g: g, every: 0.25 });
     PK_MIMIC = sc;
   }
@@ -485,17 +494,18 @@
   function pkOpMonitors(x, z, ry) {
     var g = new THREE.Group(); g.position.set(x, 1.12, z); g.rotation.y = ry === undefined ? Math.PI / 2 : ry; scene.add(g);
     [-0.27, 0.27].forEach(function (dx) { pkRoundCyl(0.025, 0.2, pkMats().iron, dx, -0.22, -0.08, g, 6); pkBevelBox(0.22, 0.02, 0.16, pkMats().iron, dx, -0.32, -0.06, g, 0.006); });
-    pkBkMonitor(g, -0.27, 0, 0, 0.15, -0.05, 'CAM 1 · the coaster queue', function (c, s) {
+    var m1 = pkBkMonitor(g, -0.27, 0, 0, 0.15, -0.05, 'CAM 1 · the coaster queue', function (c, s) {
       c.fillStyle = '#071108'; c.fillRect(0, 0, s.w, s.h);
       c.fillStyle = '#8fe0a0'; c.font = 'bold 13px monospace'; c.textAlign = 'left'; c.fillText('CAM 1  QUEUE LANE', 8, 16);
       c.textAlign = 'right'; c.fillText(fmtTime(S.time), s.w - 8, 16);
-      var n = PK_QUEUE_SLOTS.length, q = PK.queue.length, bw = (s.w - 24) / n;
+      var n = PK_QUEUE_SLOTS.length, q = pkQueueWaiting(), bw = (s.w - 24) / n;
       for (var i = 0; i < n; i++) { c.strokeStyle = 'rgba(143,224,160,0.3)'; c.strokeRect(12 + i * bw, 60, bw - 4, 38); if (i < q) { c.fillStyle = '#cfe9d4'; c.beginPath(); c.arc(12 + i * bw + (bw - 4) / 2, 79, Math.min(9, bw / 3), 0, 6.283); c.fill(); } }
       c.fillStyle = '#8fe0a0'; c.textAlign = 'left'; c.font = '13px monospace'; c.fillText('IN LINE ' + q, 10, 132);
       if (Math.floor(PK_BK_T) % 2 === 0) { c.fillStyle = '#ff3b30'; c.beginPath(); c.arc(s.w - 14, 150, 5, 0, 6.283); c.fill(); }
       pkBkScanlines(c, s.w, s.h);
     });
-    pkBkMonitor(g, 0.27, 0, 0, -0.15, -0.05, 'CAM 2 · the platform', function (c, s) {
+    pkPowerScreen(m1, pkCoasterOpen);
+    var m2 = pkBkMonitor(g, 0.27, 0, 0, -0.15, -0.05, 'CAM 2 · the platform', function (c, s) {
       var R = PK.ride;
       c.fillStyle = '#070b11'; c.fillRect(0, 0, s.w, s.h);
       c.fillStyle = '#9fc6ff'; c.font = 'bold 13px monospace'; c.textAlign = 'left'; c.fillText('CAM 2  PLATFORM', 8, 16);
@@ -508,6 +518,7 @@
       c.font = '12px monospace'; c.fillText('BARS ' + (R.bars > 0.5 ? 'LOCKED' : 'OPEN') + '   GATES ' + (PK.gates[0] && PK.gates[0].open ? 'OPEN' : 'SHUT'), 10, 148);
       pkBkScanlines(c, s.w, s.h);
     });
+    pkPowerScreen(m2, pkCoasterOpen);
   }
   // the desk buttons and the AUTO lever are gone: the screen carries every control
   // ── The snack stand ───────────────────────────────────────────────
@@ -687,6 +698,7 @@
   // the coaster's operator key: ON unlocks the coaster and its desk; OFF locks them (not while the train is out)
   function pkSetCoasterKey(on) {
     var R = PK.ride;
+    if (on && !pkCoasterOpen()) { sfx('bad'); toast('The coaster breaker is off at the park board', 'bad'); return false; }
     if (!on && (R.state === 'dispatch' || R.state === 'running' || R.state === 'arrive' || R.riders)) { sfx('bad'); toast('Not with the train out or riders aboard', 'bad'); return false; }
     S.coasterKey = !!on;
     if (!on) { PK.gates.forEach(function (gt) { gt.open = false; }); if (R.state === 'loading' || R.state === 'ready' || R.state === 'unload') R.state = 'idle'; }
@@ -697,9 +709,11 @@
   }
   function pkOpenGates() {
     var R = PK.ride;
+    if (!pkCoasterOpen()) return pkRefuse('The coaster breaker is off at the park board');
     if (!S.coasterKey) return pkRefuse('The coaster is locked - turn the operator key on');
     if (PK.closed) return pkRefuse('The park is closed');
     if (R.fault) return pkRefuse('The ride is stopped');
+    if (!pkCoasterAuto() && R.state === 'unload' && (R.riders > 0 || R.bars > 0.05)) return pkRefuse('Raise the restraints to let the riders off');
     if (R.state === 'dispatch' || R.state === 'running' || R.state === 'arrive') return pkRefuse('Not while the train is moving');
     PK.gates.forEach(function (gt) { gt.open = true; });
     if (R.state === 'idle' || R.state === 'unload' || R.state === 'ready') R.state = 'loading';   // with the bars down too: back to boarding
@@ -713,8 +727,8 @@
     sfx('lock'); hudDirty = true; return true;
   }
   // one button for the gates: open to start boarding, close once the cars are full - whenever the train is in the station,
-  // line or no line, bars up or down. The state decides, not the gate leaf, so after the train comes home (gates already
-  // open, state unload) the next press lets the queue in.
+  // line or no line, bars up or down. The state decides, not the gate leaf, so after a manual train comes home and the
+  // restraints are up (state unload) the next press lets the queue in.
   function pkGatesToggle() {
     var R = PK.ride;
     if (R.fault) return pkRefuse('The ride is stopped');
@@ -725,6 +739,7 @@
   }
   function pkBarsDown() {
     var R = PK.ride;
+    if (!pkCoasterOpen()) return pkRefuse('The coaster breaker is off at the park board');
     if (!S.coasterKey) return pkRefuse('The coaster is locked - turn the operator key on');
     if (R.fault) return pkRefuse('The ride is stopped');
     if (R.state !== 'loading' && R.state !== 'ready') return pkRefuse('Open the gates and load first');
@@ -753,7 +768,7 @@
     if (which === 'clerk' && !S.clerk) return 'No clerk to let go';
     if (which === 'operator' && !S.operator) return 'No operator to let go';
     if (which === 'clerk') { S.clerk = false; PK.clerk = false; }
-    else if (which === 'operator') { S.operator = false; PK.operator = false; }
+    else if (which === 'operator') { S.operators = Math.max(0, pkOpCount() - 1); S.operator = PK.operator = S.operators > 0; }   // one at a time, the last hired first
     else return 'nobody';
     sfx('bad'); toast('Staff let go', 'bad'); logEvent('Staff let go', '');
     screenDirtyAll(); hudDirty = true;
@@ -816,14 +831,23 @@
     return true;
   }
   function pkArrive() {
-    var R = PK.ride, n = R.riders;
-    R.state = 'unload'; R.barsWant = 0; R.bars = 0;
-    PK.gates.forEach(function (gt) { gt.open = true; });
+    var R = PK.ride, n = R.riders, auto = pkCoasterAuto();
+    R.state = 'unload';
     S.cycles = (S.cycles || 0) + 1;
     PK.today.rides += n;
     if (n > 0) pkXp(1);
-    PK.seats.forEach(function (s) { if (s.guest) pkUnseatGuest(s.guest); });
-    R.riders = 0;
+    if (auto) {
+      // AUTO lets the riders off by itself: the restraints lift and the platform gates open
+      R.barsWant = 0; R.bars = 0;
+      PK.gates.forEach(function (gt) { gt.open = true; });
+      PK.seats.forEach(function (s) { if (s.guest) pkUnseatGuest(s.guest); });
+      R.riders = 0;
+    } else {
+      // MANUAL: the train stands with the bars still down and the gates still shut. Raising the
+      // restraints is the operator's next job, and the riders only step off once they are up.
+      R.barsWant = 1;
+      if (n > 0) toast('Train home - raise the restraints', '');
+    }
     sfx('bell'); logEvent('The train is back with ' + n + ' aboard', 'good');
     screenDirtyAll(); hudDirty = true;
   }
@@ -833,6 +857,11 @@
     // exactly as the booth lamps do: green idle, amber boarding/unloading, red running or fault
     var L = PK.opLamps;
     if (!L) return;
+    if (!pkCoasterOpen()) {
+      for (var i = 0; i < L.mats.length; i++) if (L.mats[i] && L.mats[i].emissive) L.mats[i].emissiveIntensity = 0;
+      if (L.beacon && L.beacon.emissive) L.beacon.emissiveIntensity = 0;
+      return;
+    }
     var st = PK.ride ? PK.ride.state : 'idle', fault = PK.ride && PK.ride.fault;
     var on = fault ? 0 : (st === 'running' ? 0 : (st === 'boarding' || st === 'loading' || st === 'ready' || st === 'unload' || st === 'dispatch' || st === 'arrive') ? 1 : 2);
     for (var i = 0; i < L.mats.length; i++) if (L.mats[i].emissive) L.mats[i].emissiveIntensity = i === on ? 1.8 : 0.12;
@@ -845,13 +874,25 @@
     PK.gates.forEach(function (gt) { gt.t += ((gt.open ? 1 : 0) - gt.t) * Math.min(1, dt * 4); gt.bar.rotation.z = gt.t * Math.PI / 2; });
     R.bars += (R.barsWant - R.bars) * Math.min(1, dt * 3);
     PK.cars.forEach(function (car) { car.userData.bars.forEach(function (b) { b.rotation.x = -1.3 * (1 - R.bars); }); });
-    // the turnstiles spin as they are passed
+    // once the operator has raised the restraints on a manual unload, the riders step off
+    if (R.state === 'unload' && R.riders > 0 && R.barsWant < 0.5 && R.bars < 0.05) {
+      PK.seats.forEach(function (s) { if (s.guest) pkUnseatGuest(s.guest); });
+      hudDirty = true; screenDirtyAll();
+    }
+    // the turnstiles spin as they are passed: each guest adds a third of a turn, and three arms are identical, so the
+    // arm group can be set back to zero once the whole turn is done without a visible snap
     PK.turnstiles.forEach(function (t) {
-      if (t.spin > 0) { t.spin -= dt * 3; t.arm.rotation.x += dt * 6; if (t.spin <= 0) { t.spin = 0; t.arm.rotation.x = 0; } }
+      if (t.spin > 0) {
+        var step = Math.min(t.spin, dt * 6.0);
+        t.spin -= step;
+        t.arm.rotation.y -= step;
+        if (t.spin <= 1e-4) { t.spin = 0; t.arm.rotation.y = 0; }
+      }
     });
+    if (!pkCoasterOpen()) { R.v = 0; pkPlaceTrain(); return; }
     if (R.fault) { R.v = 0; pkPlaceTrain(); return; }
-    // the ride runs itself when AUTO is on, or when an operator is on the payroll
-    if ((pkCoasterAuto() || S.operator) && !R.fault && S.coasterKey) {
+    // the ride runs itself when AUTO is on (an operator hired switches it on; MANUAL is still the player's to choose)
+    if (pkCoasterAuto() && !R.fault && S.coasterKey) {
       R.autoT -= dt;
       if (R.autoT <= 0) {
         R.autoT = 1.4;
@@ -859,7 +900,8 @@
         // the bars come down once someone is aboard and seated (a full train at once, else after eight seconds of boarding),
         // and a train readied with nobody aboard is put back to boarding once, not flapped
         var walking = pkStillBoarding();
-        if (R.state === 'idle' || R.state === 'unload') { if (!PK.closed) { pkOpenGates(); R.loadT = 0; } }
+        if (R.state === 'unload' && (R.riders > 0 || R.barsWant > 0.5)) R.barsWant = 0;
+        else if (R.state === 'idle' || R.state === 'unload') { if (!PK.closed) { pkOpenGates(); R.loadT = 0; } }
         else if (R.state === 'loading') { R.loadT += 1.4; if (R.riders > 0 && !walking && (pkSeatsFull() || R.loadT > 8)) pkBarsDown(); }
         else if (R.state === 'ready') {
           if (R.riders === 0) { pkBarsUp(); R.loadT = 0; }
@@ -885,15 +927,19 @@
     pkPlaceTrain();
   }
   // ── Staff ─────────────────────────────────────────────────────────
+  // one clerk; up to four ride operators, who work the rides in shifts (part 26). S.operator stays true while any is hired
+  var PK_OPS_MAX = 4;
+  function pkOpCount() { return typeof S.operators === 'number' ? S.operators : (S.operator ? 1 : 0); }
+  function pkWages() { return (S.clerk ? 40 : 0) + 60 * pkOpCount(); }
   function pkHire(which) {
     if (which !== 'clerk' && which !== 'operator') return 'No such role';
     var cost = which === 'clerk' ? 400 : 600;
     if (which === 'clerk' && S.clerk) return 'A clerk already works the window';
-    if (which === 'operator' && S.operator) return 'An operator already runs the ride';
+    if (which === 'operator' && pkOpCount() >= PK_OPS_MAX) return 'Four operators already work the rides';
     if (S.bank < cost || S.bank < 0) { sfx('bad'); toast('Not enough money', 'bad'); return 'Not enough money'; }
     pay(-cost, which === 'clerk' ? 'Ticket clerk' : 'Ride operator');
     if (which === 'clerk') { S.clerk = true; PK.clerk = true; }
-    else { S.operator = true; PK.operator = true; }
+    else { S.operators = pkOpCount() + 1; S.operator = true; PK.operator = true; if (!S.auto) { S.auto = true; PK.ride.autoT = 0; } }   // the operators keep the coaster on AUTO
     sfx('cash'); logEvent((which === 'clerk' ? 'Ticket clerk' : 'Ride operator') + ' hired', 'good');
     screenDirtyAll(); hudDirty = true;
     return 'Hired';

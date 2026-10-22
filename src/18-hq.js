@@ -393,12 +393,12 @@
             c.fillText('TICKET LINES  ' + PK.booths.map(function (b) { return b.queue.length; }).join(' / '), 8, 50);
             c.fillText('SOLD TODAY    ' + PK.today.tickets, 8, 74); c.fillText('IN THE PARK   ' + PK.guests.length, 8, 98);
           } else if (!L[1].length) {
-            var R = PK.ride; c.fillText('STATE   ' + pkRideWord().toUpperCase(), 8, 50); c.fillText('QUEUE   ' + PK.queue.length, 8, 74); c.fillText('RIDERS  ' + R.riders, 8, 98); c.fillText('SPEED   ' + (R.v || 0).toFixed(1) + ' m/s', 8, 122);
+            var R = PK.ride; c.fillText('STATE   ' + pkRideWord().toUpperCase(), 8, 50); c.fillText('QUEUE   ' + pkQueueWaiting(), 8, 74); c.fillText('RIDERS  ' + R.riders, 8, 98); c.fillText('SPEED   ' + (R.v || 0).toFixed(1) + ' m/s', 8, 122);
           } else L[1].forEach(function (id, j) {
             var a = PK.attrById[id]; if (!a) return;
             var w = a.ctl && a.ctl.fault ? 'STOP' : a.ctl && a.ctl.maint ? 'MAINT' : (a.state || '').toUpperCase().slice(0, 7);
             c.fillStyle = a.ctl && (a.ctl.fault || a.ctl.maint) ? '#ff6b5e' : '#8fe0a0';
-            c.fillText((a.name.toUpperCase() + '            ').slice(0, 15) + ' ' + (w + '        ').slice(0, 8) + ' Q' + a.queue.length, 8, 46 + j * 22);
+            c.fillText((a.name.toUpperCase() + '            ').slice(0, 15) + ' ' + (w + '        ').slice(0, 8) + ' Q' + pkAttrWaiting(a), 8, 46 + j * 22);
           });
           if (Math.floor(PK_BK_T + i) % 2 === 0) { c.fillStyle = '#ff3b30'; c.beginPath(); c.arc(s.w - 12, s.h - 12, 4, 0, 6.283); c.fill(); }
           pkBkScanlines(c, s.w, s.h);

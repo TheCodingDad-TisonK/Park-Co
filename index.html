@@ -32,10 +32,31 @@
   .dc-ta { width: 100%; min-height: 120px; background: rgba(0,0,0,0.3); color: var(--text); border: 1px solid var(--line); border-radius: 8px; font: 12px Consolas, monospace; }
   .dc-sub { color: var(--muted); }
   [hidden] { display: none !important; }
+  #dc-splash { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: var(--bg); transition: opacity 0.6s ease; }
+  #dc-splash.out { opacity: 0; pointer-events: none; }
+  #dc-splash img { width: min(360px, 60vw); height: auto; }
+  #dc-splash-track { width: 220px; height: 4px; border-radius: 4px; overflow: hidden; background: rgba(255,255,255,0.08); }
+  #dc-splash-bar { width: 35%; height: 100%; border-radius: 4px; background: var(--amber); animation: dc-splash-bar 1.3s ease-in-out infinite; }
+  #dc-splash-tip { position: relative; width: 260px; height: 18px; color: var(--muted); font-size: 13px; text-align: center; }
+  #dc-splash-tip span { position: absolute; inset: 0; opacity: 0; animation: dc-splash-tip 9.6s infinite; }
+  #dc-splash-tip span:nth-child(1) { animation-name: dc-splash-tip-0; }
+  #dc-splash-tip span:nth-child(2) { animation-name: dc-splash-tip-1; }
+  #dc-splash-tip span:nth-child(3) { animation-name: dc-splash-tip-2; }
+  #dc-splash-tip span:nth-child(4) { animation-name: dc-splash-tip-3; }
+  @keyframes dc-splash-bar { 0% { transform: translateX(-130%); } 100% { transform: translateX(330%); } }
+  @keyframes dc-splash-tip-0 { 0%, 2% { opacity: 0; } 4%, 21% { opacity: 1; } 23%, 100% { opacity: 0; } }
+  @keyframes dc-splash-tip-1 { 0%, 27% { opacity: 0; } 29%, 46% { opacity: 1; } 48%, 100% { opacity: 0; } }
+  @keyframes dc-splash-tip-2 { 0%, 52% { opacity: 0; } 54%, 71% { opacity: 1; } 73%, 100% { opacity: 0; } }
+  @keyframes dc-splash-tip-3 { 0%, 77% { opacity: 0; } 79%, 96% { opacity: 1; } 98%, 100% { opacity: 0; } }
 </style>
 </head>
 <body>
 <canvas id="co-canvas"></canvas>
+<div id="dc-splash">
+  <img src="game/wordmark.png" alt="Park Co">
+  <div id="dc-splash-track"><div id="dc-splash-bar"></div></div>
+  <div id="dc-splash-tip"><span>Laying the paths</span><span>Raising the coaster</span><span>Hanging the lights</span><span>Opening the gate</span></div>
+</div>
 <div id="dc-start" class="dc-overlay dim" data-co-menus style="visibility:hidden"><div class="card"><h1>Park Co</h1><p id="dc-start-stats"></p><p id="dc-start-note" class="dc-sub"></p><button id="dc-start-btn" class="dc-btn primary">Enter</button></div></div>
 <div id="dc-hud" hidden>
   <div class="top"><span id="h-day">Day 1</span><span id="h-clock">09:00</span><span id="h-cash">$0</span><span id="h-guests">0 in the park</span><span id="h-ride">Coaster: waiting</span></div>

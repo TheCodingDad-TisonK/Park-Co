@@ -25,7 +25,7 @@
     var gu = {
       id: PK.nextId++, g: g,
       rec: { x: x, z: z, yaw: Math.PI, path: [], speed: randf(1.3, 1.9) },
-      state: 'toBooth', ticket: false, booth: -1, seat: null, attr: null, slot: -1, qslot: -1, rides: 0, pose: 'sit',
+      state: 'toBooth', ticket: false, booth: -1, turn: undefined, seat: null, attr: null, slot: -1, qslot: -1, rides: 0, pose: 'sit',
       hunger: randf(30, 90), ate: false, mood: 'neutral', t: 0
     };
     PK.guests.push(gu);
@@ -37,13 +37,29 @@
     return best;
   }
   function pkPickBooth() {
-    var best = 0, bl = 1e9;
-    for (var i = 0; i < PK.booths.length; i++) { var n = PK.booths[i].queue.length; if (n < bl) { bl = n; best = i; } }
-    return best;
+    // the shorter line, and a coin toss when both are empty: tie-breaking to the west window sent every guest through one
+    // turnstile and left the east booth looking closed
+    var best = [], bl = 1e9;
+    for (var i = 0; i < PK.booths.length; i++) {
+      var n = PK.booths[i].queue.length;
+      if (n < bl) { bl = n; best = [i]; } else if (n === bl) best.push(i);
+    }
+    return best[Math.floor(Math.random() * best.length)];
   }
   function pkTurnstileAt(x) {
     for (var i = 0; i < PK.turnstiles.length; i++) if (Math.abs(PK.turnstiles[i].x - x) < 0.6) return PK.turnstiles[i];
     return null;
+  }
+  // the two gates beside this booth, picking the one that has seen fewer guests so both arms in the bank keep working
+  function pkPickTurnstile(bi) {
+    var b = PK.booths[bi] || PK.booths[0];
+    var xs = (b && b.turnstiles) || [b ? b.turnstile : 0];
+    var best = xs[0], bestPass = Infinity;
+    for (var i = 0; i < xs.length; i++) {
+      var t = pkTurnstileAt(xs[i]), p = t ? t.pass : Infinity;
+      if (p < bestPass) { bestPass = p; best = xs[i]; }
+    }
+    return best;
   }
   function pkGo(gu, x, z, next) {
     gu.rec.path = route({ x: gu.rec.x, z: gu.rec.z }, { x: x, z: z });
@@ -106,6 +122,12 @@
       }
     }
   }
+  // the line as a guest sees it: guests standing on a slot, not the ones still walking across the park to reach it
+  function pkQueueWaiting() {
+    var n = 0;
+    for (var i = 0; i < PK.queue.length; i++) if (PK.queue[i].state === 'queue') n++;
+    return n;
+  }
   // Waiting in a line for a ride that is locked (its operator key OFF) wears out: past the guest's patience they leave the
   // line, say so, and go and find something else. A ride that is open keeps its line; it is the lock nobody waits out.
   function pkGuestBored(gu, dt) {
@@ -145,6 +167,18 @@
     var rec = gu.rec, g = gu.g;
     gu.t += dt;
     var arrived = rec.path.length ? walkAlong(rec, rec.path, rec.speed, dt) : true;
+    // the gate is the only way in. While it is shut nobody still outside gets to start their day - not a guest who bought a
+    // ticket just before the shut, and not a party whose car pulled in a moment later. pkCloseGuests handles the moment the
+    // gate shuts; this also catches a loaded save and a car that unloads after it.
+    if (PK.closed && (gu.state === 'toBooth' || gu.state === 'walkBooth' || gu.state === 'boothQueue' || gu.state === 'toTurn' || gu.state === 'walkTurn')) {
+      if (gu.booth >= 0 && PK.booths[gu.booth]) {
+        var gq = PK.booths[gu.booth].queue, gi = gq.indexOf(gu);
+        if (gi >= 0) { gq.splice(gi, 1); screenDirtyAll(); }
+      }
+      gu.booth = -1; gu.ticket = false;
+      gu.state = 'leave';
+      pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
+    }
     if (gu.state === 'toBooth') {
       var b = pkPickBooth();
       gu.booth = b;
@@ -156,16 +190,18 @@
       // the window serves the front of the line; when nobody staffs it, the front of the line pays at the machine
       pkGuestMachine(gu, dt);
     } else if (gu.state === 'toTurn') {
-      var tb = PK.booths[gu.booth] || PK.booths[0];
-      if (!rec.path.length) pkGo(gu, tb.turnstile, PK_GATE_Z + 2, 'walkTurn');
+      if (gu.turn === undefined) { gu.turn = pkPickTurnstile(gu.booth); gu.turnSpun = false; }
+      if (!rec.path.length) pkGo(gu, gu.turn, PK_GATE_Z - 0.35, 'walkTurn');
     } else if (gu.state === 'walkTurn') {
-      if (arrived) {
-        var tb2 = PK.booths[gu.booth] || PK.booths[0];
-        var t = pkTurnstileAt(tb2.turnstile);
-        if (t) { t.spin = 1; t.pass++; }
+      // the arms turn when the guest reaches the bars, not when they are still two metres short: push the arm as the
+      // body passes through, and only then choose a ride
+      var t = pkTurnstileAt(gu.turn);
+      if (!gu.turnSpun && t && Math.hypot(rec.x - gu.turn, rec.z - PK_GATE_Z) <= 0.62) {
+        gu.turnSpun = true;
+        t.spin += Math.PI * 2 / 3; t.pass++;
         sfx('click');
-        pkGuestPickRide(gu);
       }
+      if (arrived) pkGuestPickRide(gu);
     } else if (gu.state === 'walkQueue') {
       if (arrived) gu.state = 'queue';
     } else if (gu.state === 'queue') {
@@ -268,7 +304,7 @@
     pay(S.ticketPrice, 'Ticket');
     PK.today.tickets++; PK.today.earned += S.ticketPrice;
     pkXp(1);
-    gu.ticket = true; gu.state = 'toTurn'; gu.booth = bi;
+    gu.ticket = true; gu.state = 'toTurn'; gu.booth = bi; gu.turn = undefined;
     b.queue.splice(b.queue.indexOf(gu), 1);
     if (machine) { say(gu.g, pick(['The machine, then', 'Card, beep, done', 'Got it!'])); PK.today.machine = (PK.today.machine || 0) + 1; }
     else { sfx('cash'); say(gu.g, 'One, please!'); toast('Ticket sold - ' + money(S.ticketPrice), 'good'); }
@@ -277,9 +313,10 @@
   }
   // ── The day ───────────────────────────────────────────────────────
   function pkNewDay() {
-    var wages = (S.clerk ? 40 : 0) + (S.operator ? 60 : 0);
+    var wages = pkWages();
     if (wages) pay(-wages, 'Wages');
     PK.today = S.today = { tickets: 0, snacks: 0, rides: 0, earned: 0 };
-    logEvent('Day ' + S.day + ' begins' + (wages ? ' - wages ' + money(wages) : ''), '');
+    S.gateOpen = false; PK.gateWarn = {};   // shut till you open it yourself; the reminders get their day back too
+    logEvent('Day ' + S.day + ' begins' + (wages ? ' - wages ' + money(wages) : '') + ' - the gate is shut', '');
     screenDirtyAll(); hudDirty = true;
   }

@@ -368,12 +368,19 @@
     return g;
   }
   // a litter bin: upgraded - turned body with domed hood, liner rim and foot pedal.
+  // a bin's top: a round rim on the drum and a low dome over it with a knob (it was a cylinder lying on its side, 0.8 m across,
+  // balanced on the bin like a drum)
+  var PK_BIN_DOME = null;
+  function pkBinLid(g, mat) {
+    pkRoundCyl(0.385, 0.05, mat, 0, 0.935, 0, g, 18);
+    var dome = new THREE.Mesh(PK_BIN_DOME || (PK_BIN_DOME = new THREE.SphereGeometry(0.37, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2)), mat);
+    dome.position.set(0, 0.955, 0); dome.scale.set(1, 0.42, 1); dome.castShadow = true; g.add(dome);
+    pkRoundCyl(0.05, 0.05, mat, 0, 1.13, 0, g, 10);
+  }
   function pkBin(x, z, parent) {
     var M = pkMats(), g = new THREE.Group(); g.position.set(x, 0, z); parentOf(parent).add(g);
     pkRoundCyl(0.36, 0.92, M.green, 0, 0.46, 0, g, 14);
-    pkBevelBox(0.42, 0.05, 0.42, M.iron, 0, 0.94, 0, g, 0.02);
-    var lid = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.4, 14), M.iron);
-    lid.position.set(0, 1.0, 0); lid.rotation.x = -Math.PI / 2; g.add(lid);
+    pkBinLid(g, M.iron);
     var pedal = pkBevelBox(0.22, 0.04, 0.12, M.iron, 0, 0.05, 0.42, g, 0.02);
     pedal.rotation.x = 0.25;
     pkRoundCyl(0.015, 0.1, M.iron, 0, 0.07, 0.48, g, 6);

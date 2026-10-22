@@ -148,17 +148,24 @@
 
   // ── The lights and the switch ─────────────────────────────────────
   // a room's lights: the battens' tubes and a real lamp under them, on or off together. The lamp is a point light the engine
-  // counts in its budget like every other; off, it is dark.
+  // counts in its budget like every other; off, it is dark. The switch remembers where it was left, but the room's breaker
+  // is upstream of it: with the breaker down the lamp stays dark until the supply comes back.
   function pkBkLights(id, parent, battens, x, y, z) {
     var pl = new THREE.PointLight(0xfff2dc, 0, 7, 2); pl.position.set(x, y, z); parent.add(pl);
-    var L = { id: id, mats: battens.map(function (b) { return b.userData.tube; }), pl: pl, on: false,
-      set: function (on) {
-        L.on = !!on;
+    var L = { id: id, mats: battens.map(function (b) { return b.userData.tube; }), pl: pl, on: false, power: true, want: false,
+      apply: function () {
+        L.on = L.want && L.power;
         L.mats.forEach(function (m) { m.emissiveIntensity = L.on ? 1.3 : 0.04; });
         pl.intensity = L.on ? 0.9 : 0;
-        if (!S.boothLights) S.boothLights = {}; S.boothLights[id] = L.on;
-      } };
-    L.set(!!(S.boothLights && S.boothLights[id]));
+      },
+      set: function (on) {
+        L.want = !!on;
+        if (!S.boothLights) S.boothLights = {}; S.boothLights[id] = L.want;
+        L.apply();
+      },
+      setPower: function (on) { L.power = !!on; L.apply(); } };
+    L.want = !!(S.boothLights && S.boothLights[id]);
+    L.apply();
     return L;
   }
   // a light switch: a plate on the wall with a rocker that flips, and E flips it
@@ -168,13 +175,78 @@
     var rk = new THREE.Group(); rk.position.z = 0.014; rk.userData.dynamic = true; g.add(rk);
     box(0.035, 0.06, 0.012, pkBkStd({ color: 0xe8e4d8, roughness: 0.4 }), 0, 0, 0.004, rk);
     var dot = sphere(0.005, glowMat(0xf0a040, 1.2), 0, -0.042, 0.012, g);
-    function show() { rk.rotation.x = L.on ? -0.28 : 0.28; dot.visible = !L.on; }   // the little locator glows when the lights are off
+    function show() { rk.rotation.x = L.on ? -0.28 : 0.28; dot.visible = L.power !== false && !L.on; }   // the little locator glows when the lights are off
     show();
+    pkCtlLive({ tick: show });
     hitBox(0.14, 0.18, 0.08, 0, 0, 0.03, {
-      prompt: function () { return (L.on ? 'Lights off' : 'Lights on') + (label ? ' - ' + label : ''); },
-      use: function () { L.set(!L.on); show(); sfx('click'); }
+      prompt: function () { return L.power === false ? 'No power to the lights - breaker off' : (L.on ? 'Lights off' : 'Lights on') + (label ? ' - ' + label : ''); },
+      use: function () {
+        if (L.power === false) { sfx('bad'); toast('No power - the breaker is off', 'bad'); return; }
+        L.set(!L.on); show(); sfx('click');
+      }
     }, g);
     return g;
+  }
+
+  // ── Ride power ─────────────────────────────────────────────────────
+  // A ride's breaker is the supply for its whole booth and its own hardware, not only its
+  // queue: off, the desk, cabinet, screens, monitors, room lights, time clock and signal
+  // tower all go dead, and the ride is forced into a safe state. The coaster has the same
+  // rule through its own breaker on the park board.
+  function pkRidePowered(id) {
+    if (id === 'coaster') return pkCoasterOpen();
+    var a = PK.attrById && PK.attrById[id];
+    return !!(a && a.open);
+  }
+  // every ride screen is a dead pane when its breaker is down: the wrapper paints the
+  // black glass once, while the normal draw owns the screen when the supply is back.
+  function pkPowerScreen(sc, onFn) {
+    if (!sc || sc.pkPower) return sc;
+    sc.pkPower = onFn;
+    var draw = sc.draw;
+    sc.draw = function (c, s) {
+      if (onFn && !onFn()) {
+        c.fillStyle = '#05080a'; c.fillRect(0, 0, s.w, s.h);
+        c.textAlign = 'center'; c.textBaseline = 'middle';
+        var font = (typeof SCREEN_THEME !== 'undefined' && SCREEN_THEME.font) ? SCREEN_THEME.font : 'monospace';
+        c.fillStyle = '#2a353d'; c.font = 'bold ' + Math.max(10, Math.round(s.h * 0.15)) + 'px ' + font;
+        c.fillText('NO POWER', s.w / 2, s.h / 2 - Math.round(s.h * 0.04));
+        c.fillStyle = '#1b242b'; c.font = Math.max(8, Math.round(s.h * 0.085)) + 'px ' + font;
+        c.fillText('BREAKER OFF', s.w / 2, s.h / 2 + Math.round(s.h * 0.14));
+        return;
+      }
+      draw(c, s);
+    };
+    sc.dirty = true;
+    return sc;
+  }
+  function pkRidePowerApply(id) {
+    var on = pkRidePowered(id);
+    if (id === 'coaster') {
+      if (PK.opLights) PK.opLights.setPower(on);
+      if (!on) {
+        var R = PK.ride;
+        if (R) R.v = 0;
+        PK.gates.forEach(function (gt) { gt.open = false; });
+        if (R) R.barsWant = 0;
+        if (PK.duty && PK.duty.id === 'coaster') pkClockOut();
+      }
+      screenDirtyAll(); hudDirty = true;
+      return on;
+    }
+    var a = PK.attrById && PK.attrById[id];
+    if (a) {
+      if (a.boothLights) a.boothLights.setPower(on);
+      if (!on) {
+        var C = a.ctl;
+        if (C) { C.gates = false; C.barsWant = 0; C.bkTest = false; }
+        a.manualStart = false;
+        if (PK.duty && PK.duty.id === id) pkClockOut();
+      }
+      pkCtlLamps(a);
+    }
+    screenDirtyAll(); hudDirty = true;
+    return on;
   }
 
   // ── The time clock ────────────────────────────────────────────────
@@ -184,6 +256,7 @@
   // duty at a ride, every dispatch you make there yourself earns a little more.
   function pkDutyCycles(id) { return id === 'coaster' ? (S.cycles || 0) : ((PK.attrById[id] && PK.attrById[id].cycles) || 0); }
   function pkClockIn(id, name) {
+    if (!pkRidePowered(id)) { sfx('bad'); toast(name + ' has no power - the breaker is off', 'bad'); return false; }
     if (PK.duty && PK.duty.id === id) return pkClockOut();
     if (PK.duty) pkClockOut();
     PK.duty = { id: id, name: name, since: S.time, day: S.day, cyc0: pkDutyCycles(id) };
@@ -207,18 +280,23 @@
       draw: function (c, s) {
         c.fillStyle = '#9fb48a'; c.fillRect(0, 0, s.w, s.h);
         c.fillStyle = '#1d2a16'; c.font = 'bold 30px monospace'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(fmtTime(S.time), s.w / 2, 30);
-        c.font = 'bold 14px monospace'; c.fillText(pkOnDutyAt(id) ? 'ON DUTY' : (PK.duty ? 'ELSEWHERE' : 'CLOCK IN'), s.w / 2, 68);
+        var opName = pkOpAt(id);   // an operator on shift here (part 26)
+        c.font = 'bold 14px monospace'; c.fillText(pkOnDutyAt(id) ? 'ON DUTY' : opName ? 'IN: ' + opName.toUpperCase() : (PK.duty ? 'ELSEWHERE' : 'CLOCK IN'), s.w / 2, 68);
       } });
+    var power = function () { return pkRidePowered(id); };
+    pkPowerScreen(sc, power);
+    g.userData.pkPower = power; g.userData.pkScreen = sc;
     PK_BK_LIVE.push({ sc: sc, g: g, every: 1.0 });
     // the card rack beside it, a card in each slot
     pkBevelBox(0.14, 0.3, 0.05, pkBkStd({ color: 0x8a949b, roughness: 0.5, metalness: 0.4 }), 0.22, 0.0, 0.03, g, 0.01);
     for (var k = 0; k < 4; k++) box(0.08, 0.1, 0.006, pkBkStd({ color: [0xf2efe6, 0xe8d79a, 0xf2efe6, 0xc9e0f0][k], roughness: 0.8 }), 0.22, 0.09 - k * 0.065, 0.06, g);
     hitBox(0.3, 0.38, 0.16, 0, 0, 0.08, {
       prompt: function () {
+        if (!power()) return 'No power - the time clock is dead';
         if (pkOnDutyAt(id)) { var hrs = (S.day - PK.duty.day) * 24 + S.time - PK.duty.since; return 'Clock out of ' + name + ' (on duty ' + Math.floor(hrs) + 'h ' + Math.round((hrs % 1) * 60) + 'm)'; }
         return 'Clock in at ' + name;
       },
-      use: function () { pkClockIn(id, name); }
+      use: function () { if (!power()) { sfx('bad'); toast('No power - the time clock is dead', 'bad'); return; } pkClockIn(id, name); }
     }, g);
     return g;
   }
@@ -276,7 +354,7 @@
   // the wait, in whole minutes: a full load per cycle, a cycle being boarding + run + unload
   function pkBkWait(a) {
     var cap = Math.max(1, a.seats.length), cyc = (a.board || 10) + (a.run || 20) + (a.unload || 5);
-    return Math.ceil(Math.ceil((a.queue.length + 1) / cap) * cyc / 60);
+    return Math.ceil(Math.ceil((pkAttrWaiting(a) + 1) / cap) * cyc / 60);
   }
 
   // ── The signal tower on the roof ──────────────────────────────────
@@ -297,7 +375,8 @@
     var C = pkCtl(a);
     pkCtlLive({ tick: function () {
       var blink = Math.floor(PK_BK_T * 2.5) % 2 === 0, on = [false, false, false];
-      if (C.fault) on[2] = blink;
+      if (!a.open) on = [false, false, false];
+      else if (C.fault) on[2] = blink;
       else if (C.maint) on[1] = blink;
       else if (C.bkTest) on = [true, true, true];
       else if (!C.key) on = [false, false, false];
@@ -337,12 +416,14 @@
         c.fillStyle = '#0a0806'; c.fillRect(0, 0, s.w, s.h);
         c.fillStyle = 'rgba(255,170,40,0.05)'; for (var yy = 2; yy < s.h; yy += 4) for (var xx = 2; xx < s.w; xx += 4) c.fillRect(xx, yy, 2, 2);
         var word = pkBkWord(a), open = word === 'OPEN' || word === 'BOARDING' || word === 'READY' || word === 'RIDE IN MOTION' || word === 'UNLOADING';
+        var waiting = pkAttrWaiting(a);
         c.textAlign = 'center'; c.textBaseline = 'middle';
         c.fillStyle = '#ffb03a'; c.font = 'bold 28px ' + SCREEN_THEME.font; c.fillText(a.name.toUpperCase(), s.w / 2, 26, s.w - 16);
         c.fillStyle = open ? '#ffcf6a' : '#ff5a3c'; c.font = 'bold 24px ' + SCREEN_THEME.font;
-        c.fillText(open ? (word === 'OPEN' && !a.queue.length ? 'NO WAIT · WALK ON' : 'WAIT ' + pkBkWait(a) + ' MIN · ' + word) : word, s.w / 2, 68, s.w - 16);
+        c.fillText(open ? (word === 'OPEN' && !waiting ? 'NO WAIT · WALK ON' : 'WAIT ' + pkBkWait(a) + ' MIN · ' + word) : word, s.w / 2, 68, s.w - 16);
       }
     });
+    pkPowerScreen(sc, function () { return !!a.open; });
     PK_BK_LIVE.push({ sc: sc, g: g, every: 1.0 });
     return sc;
   }
@@ -364,11 +445,11 @@
     var M = pkMats(), g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry || 0; parent.add(g);
     pkRoundCyl(0.02, 0.36, M.iron, 0, 0.42, -0.06, g, 6);
     box(sp * 2 + 0.4, 0.04, 0.04, M.iron, 0, 0.24, -0.06, g);
-    pkBkMonitor(g, -sp, 0.0, 0.0, 0.18, 0.22, 'CAM 1 · the queue', function (c, s) {
+    var m1 = pkBkMonitor(g, -sp, 0.0, 0.0, 0.18, 0.22, 'CAM 1 · the queue', function (c, s) {
       c.fillStyle = '#071108'; c.fillRect(0, 0, s.w, s.h);
       c.fillStyle = '#8fe0a0'; c.font = 'bold 13px monospace'; c.textAlign = 'left'; c.textBaseline = 'alphabetic';
       c.fillText('CAM 1  QUEUE', 8, 16); c.textAlign = 'right'; c.fillText(fmtTime(S.time), s.w - 8, 16);
-      var n = Math.max(6, Math.min(12, a.cap || 8)), q = a.queue.length, bw = (s.w - 24) / n;
+      var n = Math.max(6, Math.min(12, a.cap || 8)), q = pkAttrWaiting(a), bw = (s.w - 24) / n;
       c.strokeStyle = 'rgba(143,224,160,0.6)'; c.lineWidth = 1.5; c.strokeRect(10, 56, s.w - 20, 46);
       for (var i = 0; i < n; i++) {
         c.strokeStyle = 'rgba(143,224,160,0.25)'; c.strokeRect(12 + i * bw, 60, bw - 4, 38);
@@ -380,7 +461,8 @@
       if (Math.floor(PK_BK_T) % 2 === 0) { c.fillStyle = '#ff3b30'; c.beginPath(); c.arc(s.w - 14, 150, 5, 0, 6.283); c.fill(); }
       pkBkScanlines(c, s.w, s.h);
     });
-    pkBkMonitor(g, sp, 0.0, 0.0, -0.18, 0.22, 'CAM 2 · the ride', function (c, s) {
+    pkPowerScreen(m1, function () { return !!a.open; });
+    var m2 = pkBkMonitor(g, sp, 0.0, 0.0, -0.18, 0.22, 'CAM 2 · the ride', function (c, s) {
       c.fillStyle = '#070b11'; c.fillRect(0, 0, s.w, s.h);
       c.fillStyle = '#9fc6ff'; c.font = 'bold 13px monospace'; c.textAlign = 'left'; c.textBaseline = 'alphabetic';
       c.fillText('CAM 2  ' + a.name.toUpperCase().slice(0, 14), 8, 16);
@@ -399,6 +481,7 @@
       c.fillStyle = '#9fc6ff'; c.font = '12px monospace'; c.fillText('BARS ' + (C.bars > 0.5 ? 'LOCKED' : 'OPEN') + '   GATES ' + (C.gateT > 0.5 ? 'OPEN' : 'SHUT'), 10, s.h - 10);
       pkBkScanlines(c, s.w, s.h);
     });
+    pkPowerScreen(m2, function () { return !!a.open; });
     return g;
   }
 
@@ -435,7 +518,9 @@
         R.txt('ISOLATE BEFORE OPENING', 0, -0.495, 0.013, '#7d8a96');
       }
     });
+    pkCtlSetPower(P, function () { return !!a.open; });
     var parts = { lamps: {} };
+    parts.panel = P;
     parts.amps = pkCtlGauge(P, -0.2, 0.29, { id: 'amps', unit: 'amps', min: 0, max: 40, red: 0.85, ticks: 5, r: 0.085, ease: 4,
       get: function () { return C.fault ? 0 : 0.06 + C.spd * 0.62 + (C.spd > 0.05 ? 0.05 * Math.sin(PK_BK_T * 7.3) : 0); } });
     parts.volts = pkCtlGauge(P, 0.2, 0.29, { id: 'volts', unit: 'volts', min: 0, max: 500, red: 0.9, ticks: 5, r: 0.085, ease: 2,
@@ -461,6 +546,7 @@
         c.fillStyle = '#ff4a2e'; c.font = 'bold 30px monospace'; c.textAlign = 'center'; c.textBaseline = 'middle';
         var n = String(a.cycles || 0); while (n.length < 6) n = '0' + n; c.fillText(n, s.w / 2, s.h / 2 + 1);
       } });
+    pkPowerScreen(counter, function () { return !!a.open; });
     PK_BK_LIVE.push({ sc: counter, g: P, every: 1.0 });
     pkCtlLive({ tick: function (dt) {
       if (testT > 0) { testT -= dt; if (testT <= 0) C.bkTest = false; }
@@ -580,6 +666,7 @@
     a.booth = host || out.g;
     a.boothScreen = out.screen;
     a.boothFrame = { x: bx, z: bz, ry: ry, ds: ds };
+    a.boothG = out.g;   // the booth's own group: the frame follows it when the editor moves the booth (pkBkFrameSync)
     pkCtlLamps(a);
     PK_BOOTH[a.id] = a.booth;
     return a.booth;
@@ -698,6 +785,7 @@
     box(W - 0.2, 0.04, D - 0.2, inner, 0, F + WH - 0.02, 0, g);
     var boothBatten = pkBkBatten(g, 0, F + WH - 0.07, -0.25, 0, 1.4);
     a.boothLights = pkBkLights(a.id, g, [boothBatten], 0, F + WH - 0.4, -0.25);
+    a.boothLights.setPower(!!a.open);
 
     // the desk under the front window, the ride's panel on it, the chair behind
     var con = new THREE.Group(); con.position.set(0, F, HD - 0.5); con.rotation.y = Math.PI; g.add(con);
@@ -719,13 +807,13 @@
       w: 420, h: 300, pw: 1.0, ph: 0.72, x: -ds * 0.35, y: F + 1.5, z: bw + 0.02, ry: 0, parent: g, title: a.name,
       draw: function (ctx, s) {
         scBg(ctx, s.w, s.h);
-        var status = pkBoothStatus(a, C);
-        var statusCol = C.fault || C.maint ? '#ff6b5e' : (a.state === 'running' ? '#ff9d6b' : (a.state === 'idle' && !a.queue.length ? '#a0acb8' : '#5fd38d'));
+        var status = pkBoothStatus(a, C), waiting = pkAttrWaiting(a);
+        var statusCol = C.fault || C.maint ? '#ff6b5e' : (a.state === 'running' ? '#ff9d6b' : (a.state === 'idle' && !waiting ? '#a0acb8' : '#5fd38d'));
         scHead(ctx, s.w, a.name.toUpperCase(), status);
         scText(ctx, 16, 66, 'ON RIDE', '#a0acb8');
         scText(ctx, 16, 92, a.riders + ' / ' + a.seats.length, a.riders ? '#5fd38d' : '#eef1f5', 22);
         scText(ctx, 160, 66, 'QUEUE', '#a0acb8');
-        scText(ctx, 160, 92, String(a.queue.length), a.queue.length ? '#f0c04a' : '#eef1f5', 22);
+        scText(ctx, 160, 92, String(waiting), waiting ? '#f0c04a' : '#eef1f5', 22);
         scText(ctx, 290, 66, 'WAIT', '#a0acb8');
         scText(ctx, 290, 92, pkBkWait(a) + ' min', '#eef1f5', 22);
         var pills = [['GATES', C.gates ? 'OPEN' : 'SHUT', C.gates], ['BARS', C.barsWant > 0.5 ? 'DOWN' : 'UP', C.barsWant > 0.5], ['MODE', C.maint ? 'MAINT' : (C.auto ? 'AUTO' : 'MANUAL'), C.auto && !C.maint]];
@@ -743,6 +831,7 @@
         scText(ctx, 16, 268, 'Desk: gates, bars, dispatch, test, auto, stop.  Cabinet: key, lamp test, horn.', '#8b98a4', 12);
       }
     });
+    pkPowerScreen(screen, function () { return !!a.open; });
     var dx = ds * (HW - 0.55);                                              // the door end of the back wall
     pkBkClock(g, dx, F + 2.05, bw + 0.02, 0, 0.15);
     a.boothClock = pkBkTimeClock(g, dx + ds * 0.02, F + 1.45, bw, 0, a.id, a.name);
@@ -793,6 +882,19 @@
     return { g: g, screen: screen };
   }
 
+  // the frame a booth was built in is where its floor and steps are. Moved in the editor (a world edit, applied after the build,
+  // or a drag in the scene), the booth's group goes and the frame has to go with it, or the floor stays behind: an invisible
+  // step 0.45 m up on the path where the booth used to stand, that lifts whoever walks over it
+  var PK_BK_V2 = new THREE.Vector3(), PK_BK_Q = new THREE.Quaternion(), PK_BK_E = new THREE.Euler(0, 0, 0, 'YXZ'), PK_BK_SYNC_T = 0;
+  function pkBkFrameSync() {
+    PK.attractions.forEach(function (a) {
+      var f = a.boothFrame, g = a.boothG; if (!f || !g) return;
+      g.updateWorldMatrix(true, false); g.getWorldPosition(PK_BK_V2); g.getWorldQuaternion(PK_BK_Q); PK_BK_E.setFromQuaternion(PK_BK_Q, 'YXZ');
+      f.x = PK_BK_V2.x; f.z = PK_BK_V2.z; f.ry = PK_BK_E.y;
+    });
+  }
+  hook('boot', pkBkFrameSync);
+  pkCtlLive({ tick: function (dt) { PK_BK_SYNC_T -= dt; if (PK_BK_SYNC_T <= 0) { PK_BK_SYNC_T = 1; pkBkFrameSync(); } } });
   // the floor of a booth is up its steps: the player and the guests stand on it, and climb the steps to it
   function pkBkFloorAt(x, z) {
     for (var i = 0; i < PK.attractions.length; i++) {
