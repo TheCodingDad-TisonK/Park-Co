@@ -1,13 +1,12 @@
 //@ Park Co, part 04: the clock, the day, the panel and the guide
   // ── The clock and the day ─────────────────────────────────────────
   function pkTick(dt) {
-    var previousTime = S.time;
     S.time += dt / 60;   // a game minute a second
     var min = Math.floor(S.time * 60);
     if (min !== PK.lastMin) { PK.lastMin = min; hudDirty = true; }
-    var open = S.time >= 9 && S.time < 22;
-    var rolledDay = false;
-    if (S.time >= 24) { S.time -= 24; S.day++; PK.lastDay = S.day; pkNewDay(); open = S.time >= 9 && S.time < 22; rolledDay = true; }
+    if (S.time >= 24) { S.time -= 24; S.day++; PK.lastDay = S.day; pkNewDay(); }
+    // the gate is yours to work: open and shut it from the Dashboard (the PC or the tablet), not the clock
+    var open = !!S.gateOpen;
     var closing = !open;
     PK.closed = closing;
     // the guests arrive while the gate is open
@@ -20,15 +19,34 @@
         for (var i = 0; i < PK.booths.length; i++) if (PK.booths[i].queue.length) { pkServe(i); break; }
       }
     }
-    if (closing && (rolledDay || PK.timeWasOpen === true || (PK.timeWasOpen === undefined && previousTime >= 9 && previousTime < 22))) {
+    if (closing && PK.timeWasOpen === true) {
       pkCloseGuests();
       for (var ci = 0; ci < PK.attractions.length; ci++) PK.attractions[ci].manualStart = false;
     }
     PK.timeWasOpen = open;
+    pkGateReminders();
     pkRideTick(dt);
     for (var ai = 0; ai < PK.attractions.length; ai++) pkAttrTick(PK.attractions[ai], dt);
     pkGuestTick(dt);
     pkPlayerTick(dt);
+  }
+  // nudges about the gate: shut past 8:45 gets a word of warning, shut right at 9 gets a sharper one, open past 21:45
+  // gets a word to shut it, each once a day - and nothing past 22:00, because some nights run late on purpose
+  function pkGateReminders() {
+    var w = PK.gateWarn || (PK.gateWarn = {});
+    if (!S.gateOpen) {
+      if (!w.soon && S.time >= 8.75 && S.time < 9) { w.soon = true; toast('Opening time is close and the gate is still shut', ''); logEvent('Reminder: open the gate for 9', ''); }
+      if (!w.late && S.time >= 9) { w.late = true; toast('It is 9 and the gate is still shut', 'bad'); logEvent('The gate should be open by now', 'bad'); }
+    } else if (!w.close && S.time >= 21.75 && S.time < 22) {
+      w.close = true; toast('Closing time is close and the gate is still open', ''); logEvent('Reminder: shut the gate soon', '');
+    }
+  }
+  function pkGateToggle() {
+    S.gateOpen = !S.gateOpen;
+    toast(S.gateOpen ? 'The gate is open' : 'The gate is shut', S.gateOpen ? 'good' : '');
+    logEvent(S.gateOpen ? 'The gate opens' : 'The gate shuts', '');
+    hudDirty = true; screenDirtyAll();
+    return true;
   }
   function pkClosePark() {
     // Stop accepting new arrivals; let people already in the grounds finish
@@ -40,7 +58,7 @@
   function pkSyncSaved() {
     PK.xp = S.xp || 0; PK.level = pkLevel();
     PK.clerk = !!S.clerk; PK.operator = !!S.operator;
-    PK.snackOpen = !!S.snackOpen; PK.train2 = !!S.train2; PK.lights = !!S.lights;
+    PK.snackOpen = !!S.snackOpen; PK.train2 = !!S.train2; PK.lights = !!S.lights; PK.rideLights = !!S.rideLights;
     PK.today = S.today || (S.today = { tickets: 0, snacks: 0, rides: 0, earned: 0 });
     PK.lastDay = S.day;
     screenDirtyAll(); hudDirty = true;
@@ -66,10 +84,11 @@
         btn('service', '', 'Service (' + money(150) + ')', wear > 0 && S.bank >= 150 ? 'primary' : '') +
         btn('auto', '', pkCoasterAuto() ? 'AUTO on' : 'AUTO off', '');
     } else {
-      body = '<p>Ticket clerk: ' + (S.clerk ? 'hired' : 'not hired') + '<br>Ride operator: ' + (S.operator ? 'hired' : 'not hired') + '</p>' +
-        '<p>Wages ' + money((S.clerk ? 40 : 0) + (S.operator ? 60 : 0)) + ' a day</p>' +
+      body = '<p>Ticket clerk: ' + (S.clerk ? 'hired' : 'not hired') + '<br>Ride operators: ' + pkOpCount() + ' of ' + PK_OPS_MAX + '</p>' +
+        '<p>Wages ' + money(pkWages()) + ' a day</p>' +
         (S.clerk ? btn('fireClerk', '', 'Let the clerk go', '') : btn('hireClerk', '', 'Hire a clerk (' + money(400) + ')', '')) +
-        (S.operator ? btn('fireOperator', '', 'Let the operator go', '') : btn('hireOperator', '', 'Hire an operator (' + money(600) + ')', ''));
+        (pkOpCount() < PK_OPS_MAX ? btn('hireOperator', '', 'Hire an operator (' + money(600) + ')', '') : '') +
+        (pkOpCount() ? btn('fireOperator', '', 'Let an operator go', '') : '');
     }
     return { title: 'Park office', tabs: tabs, tab: tab, body: body };
   }
@@ -81,7 +100,7 @@
     var body = '';
     if (tab === 'park') {
       body = '<p>Day ' + S.day + ' - ' + fmtTime(S.time) + (PK.closed ? ' (closed)' : '') + '</p>' +
-        '<p>Guests in the park: ' + PK.guests.length + '<br>In the coaster queue: ' + PK.queue.length + '<br>Rides open: ' + pkOpenCount() + ' of ' + (PK.attractions.length + 1) + '</p>' +
+        '<p>Guests in the park: ' + PK.guests.length + '<br>In the coaster queue: ' + pkQueueWaiting() + '<br>Rides open: ' + pkOpenCount() + ' of ' + (PK.attractions.length + 1) + '</p>' +
         '<p>Tickets today: ' + PK.today.tickets + ' (' + money(PK.today.earned) + ')<br>Snacks today: ' + PK.today.snacks + '<br>Rides today: ' + PK.today.rides + '</p>' +
         '<p>Level ' + PK.level + ' - ' + esc(PK_LEVELS[PK.level - 1].name) + ' (' + PK.xp + ' xp)</p>' +
         btn('ticket5', '', 'Ticket +' + money(5), '') + btn('ticket-5', '', 'Ticket -' + money(5), '');
@@ -92,7 +111,7 @@
           : a.state === 'running' ? 'running'
           : a.state === 'boarding' ? 'boarding'
           : a.state === 'unloading' ? 'unloading'
-          : a.state + ', ' + a.queue.length + ' waiting';
+          : a.state + ', ' + pkAttrWaiting(a) + ' waiting';
         body += '<p>' + esc(a.name) + ': ' + esc(st) + (a.open ? ' - ' + a.cycles + ' cycles, ' + a.riders + ' aboard' : '') + '</p>';
       });
     } else if (tab === 'ride') {
@@ -102,10 +121,11 @@
         btn('stop', '', 'E-stop', '') + btn('auto', '', pkCoasterAuto() ? 'AUTO on' : 'AUTO off', '');
     } else if (tab === 'staff') {
       body = '<p>Ticket clerk: ' + (S.clerk ? 'hired' : 'not hired') + ' (' + money(400) + ')</p>' +
-        '<p>Ride operator: ' + (S.operator ? 'hired' : 'not hired') + ' (' + money(600) + ')</p>' +
-        '<p>A clerk serves the window. A hired ride operator takes over the coaster and all seven attraction rides.</p>' +
+        '<p>Ride operators: ' + pkOpCount() + ' of ' + PK_OPS_MAX + ' (' + money(600) + ' each, ' + money(60) + ' a day)</p>' +
+        '<p>A clerk serves the window. Operators work the rides in shifts: each walks to a booth, clocks in, runs the ride by hand for a few rounds, puts it back on AUTO, clocks out and moves on or takes a break. While any operator is hired the coaster runs itself.</p>' +
         (S.clerk ? btn('fireClerk', '', 'Let the clerk go', '') : btn('hireClerk', '', 'Hire a clerk', '')) +
-        (S.operator ? btn('fireOperator', '', 'Let the operator go', '') : btn('hireOperator', '', 'Hire an operator', ''));
+        (pkOpCount() < PK_OPS_MAX ? btn('hireOperator', '', 'Hire an operator', '') : '') +
+        (pkOpCount() ? btn('fireOperator', '', 'Let an operator go', '') : '');
     } else {
       body = pkGuide();
     }
@@ -134,6 +154,6 @@
       '<p><b>The window.</b> Your clerk sells tickets to the line on their own; stand at a window and press E to keep up with a rush (the screen on the counter sells too). The clerk costs ' + money(40) + ' a day from day 2.</p>' +
       '<p><b>The coaster.</b> In the operator room, east of the platform: <b>Gates</b> lifts the platform gates and the queue walks in one seat at a time, <b>Restraints</b> pulls the bars down over the riders, <b>Dispatch</b> sends the train. In the wrong order the screen refuses. An empty train can be sent as a test run. <b>E-stop</b> stops the ride; press it again to reset.</p>' +
       '<p><b>AUTO.</b> Switch AUTO on - on the screen in the operator room, or on any booth screen - and the coaster runs itself: gates, restraints, dispatch, round and round.</p>' +
-      '<p><b>The other rides.</b> The carousel, teacups, ferris wheel, dodgems, drop tower, log flume and haunted house run automatically when AUTO is on. Each has an operator booth beside it - walk in and use its screen to open gates, dispatch, E-stop, test-run or change AUTO. A hired operator runs these rides automatically. Guests need a ticket before riding.</p>' +
+      '<p><b>The other rides.</b> The carousel, teacups, ferris wheel, dodgems, drop tower, log flume and haunted house run automatically when AUTO is on. Each has an operator booth beside it - walk in and work its desk: gates, restraints, dispatch, E-stop, test-run and AUTO. On MANUAL nothing happens on its own: you open the gates, bring the bars down, dispatch, and after the ride raise the bars to let the riders off. Hired operators work the booths in shifts and leave each ride on AUTO when they go. Guests need a ticket before riding.</p>' +
       '<p><b>Levels.</b> Tickets, rides and snacks earn xp. Each level opens a service: the snack stand, a hire or the park lights.</p>';
   }

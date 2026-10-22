@@ -180,7 +180,7 @@
     PK.attractions.forEach(function (a) {
       if (a.ctl && a.ctl.fault) out.push([a.name + ' is stopped', '#ff6b5e']);
       else if (a.ctl && a.ctl.maint) out.push([a.name + ' is in maintenance', '#f0c04a']);
-      else if (a.queue.length >= 8) out.push([a.name + ': ' + a.queue.length + ' in the queue', '#f0c04a']);
+      else { var wq = pkAttrWaiting(a); if (wq >= 8) out.push([a.name + ': ' + wq + ' in the queue', '#f0c04a']); }
     });
     var tq = PK.booths.reduce(function (s, b) { return s + b.queue.length; }, 0);
     if (!S.clerk && tq >= 4) out.push(['No clerk: ' + tq + ' waiting at the windows', '#f0c04a']);
@@ -193,8 +193,13 @@
     pkPCTile(c, X + (tw + 10), Y, tw, 78, 'Guests', String(PK.guests.length), '#8fc3ff', 'in the park now');
     pkPCTile(c, X + (tw + 10) * 2, Y, tw, 78, 'Rides open', pkOpenCount() + ' / ' + (PK.attractions.length + 1), '#5fd38d', S.coasterKey ? 'coaster key on' : 'coaster key off');
     pkPCTile(c, X + (tw + 10) * 3, Y, tw, 78, 'Tickets', String(PK.today.tickets), '#eef1f5', 'rides ridden ' + PK.today.rides);
+    // the gate: yours to open and shut, not the clock
+    var gy = Y + 90;
+    pkPCPanel(c, X, gy, W, 34);
+    pkPCText(c, S.gateOpen ? 'The gate is open' : 'The gate is shut', X + 14, gy + 22, 14, S.gateOpen ? '#5fd38d' : '#ff8a5c', true);
+    pkPCBtn(sc, X + W - 150, gy + 5, 136, 24, S.gateOpen ? 'Shut the gate' : 'Open the gate', pkGateToggle, true, S.gateOpen ? '#ff8a5c' : '#5fd38d');
     // the bank through the day
-    var cy = Y + 90, cw = W * 0.6, ch = H - 90 - 46;
+    var cy = gy + 44, cw = W * 0.6, ch = H - 134 - 46;
     pkPCPanel(c, X, cy, cw, ch, 'The bank today');
     var pts = PK_PC.hist.filter(function (p) { return p.d === S.day; });
     if (pts.length > 1) {
@@ -231,7 +236,7 @@
     pkPCBtn(sc, X + lw - 150, Y + 84, 64, 30, '- 0.50', function () { pkSnackPrice(-0.5); });
     pkPCBtn(sc, X + lw - 78, Y + 84, 64, 30, '+ 0.50', function () { pkSnackPrice(0.5); });
     pkPCText(c, PK.snackOpen ? 'the snack stand is open' : 'the snack stand opens at level 2', X + 14, Y + 138, 11, '#8b98a4');
-    var ty = Y + 160, wages = (S.clerk ? 40 : 0) + (S.operator ? 60 : 0), st = S.stats || {};
+    var ty = Y + 160, wages = pkWages(), st = S.stats || {};
     pkPCPanel(c, X, ty, lw, H - 160, 'Today and all time');
     [['Earned today', money(PK.today.earned || 0), '#5fd38d'], ['Tickets / snacks', PK.today.tickets + ' / ' + PK.today.snacks, '#eef1f5'], ['Wages a day', money(wages), '#f0c04a'],
       ['Earned, all time', money(st.earned || 0), '#5fd38d'], ['Spent, all time', money(st.spent || 0), '#ff8a5c']].forEach(function (r, i) {
@@ -251,10 +256,10 @@
     });
   }
   function pkPCRideRows() {
-    var rows = [{ coaster: true, name: 'The coaster', state: pkRideWord(), queue: PK.queue.length, riders: PK.ride.riders, seats: PK.seats.length, cycles: S.cycles || 0, open: true, bad: !!PK.ride.fault }];
+    var rows = [{ coaster: true, name: 'The coaster', state: pkRideWord(), queue: pkQueueWaiting(), riders: PK.ride.riders, seats: PK.seats.length, cycles: S.cycles || 0, open: true, bad: !!PK.ride.fault }];
     PK.attractions.forEach(function (a) {
       var C = a.ctl || {}, w = C.fault ? 'stopped' : C.maint ? 'maintenance' : !a.open ? 'shut' : a.state;
-      rows.push({ a: a, name: a.name, state: w, queue: a.queue.length, riders: a.riders || 0, seats: a.seats.length, cycles: a.cycles || 0, open: !!a.open, bad: !!(C.fault || C.maint) });
+      rows.push({ a: a, name: a.name, state: w, queue: pkAttrWaiting(a), riders: a.riders || 0, seats: a.seats.length, cycles: a.cycles || 0, open: !!a.open, bad: !!(C.fault || C.maint) });
     });
     return rows;
   }
@@ -264,20 +269,20 @@
     var cols = [X + 32, X + 250, X + 400, X + 470, X + 560];
     ['RIDE', 'STATE', 'QUEUE', 'ON RIDE', 'CYCLES'].forEach(function (h, i) { pkPCText(c, h, cols[i], Y + 22, 11, '#8b98a4', true); });
     rows.slice(PK_PC.page * per, PK_PC.page * per + per).forEach(function (r, i) {
-      var y = Y + 36 + i * 38;
-      if (i % 2 === 0) { c.fillStyle = 'rgba(255,255,255,0.03)'; c.fillRect(X + 6, y, W - 12, 36); }
+      var y = Y + 34 + i * 34;
+      if (i % 2 === 0) { c.fillStyle = 'rgba(255,255,255,0.03)'; c.fillRect(X + 6, y, W - 12, 32); }
       c.fillStyle = r.bad ? '#ff6b5e' : !r.open ? '#6b7781' : (r.state === 'running' || r.state === 'boarding' || r.state === 'dispatching') ? '#ff9d6b' : '#5fd38d';
-      c.beginPath(); c.arc(X + 18, y + 18, 5, 0, 6.283); c.fill();
-      pkPCText(c, r.name, cols[0], y + 23, 14, '#eef1f5', true);
-      pkPCText(c, r.state, cols[1], y + 23, 13, r.bad ? '#ff6b5e' : '#c3ccd4');
-      pkPCText(c, String(r.queue), cols[2], y + 23, 13, r.queue >= 8 ? '#f0c04a' : '#c3ccd4');
-      pkPCText(c, r.riders + ' / ' + r.seats, cols[3], y + 23, 13, '#c3ccd4');
-      pkPCText(c, String(r.cycles), cols[4], y + 23, 13, '#c3ccd4');
+      c.beginPath(); c.arc(X + 18, y + 16, 5, 0, 6.283); c.fill();
+      pkPCText(c, r.name, cols[0], y + 21, 14, '#eef1f5', true);
+      pkPCText(c, r.state, cols[1], y + 21, 13, r.bad ? '#ff6b5e' : '#c3ccd4');
+      pkPCText(c, String(r.queue), cols[2], y + 21, 13, r.queue >= 8 ? '#f0c04a' : '#c3ccd4');
+      pkPCText(c, r.riders + ' / ' + r.seats, cols[3], y + 21, 13, '#c3ccd4');
+      pkPCText(c, String(r.cycles), cols[4], y + 21, 13, '#c3ccd4');
       if (r.coaster) {
         var auto = pkCoasterAuto();
-        pkPCBtn(sc, X + W - 236, y + 4, 104, 28, auto ? 'AUTO on' : 'AUTO off', function () { if (!S.operator) pkSetAuto(!S.auto); else toast('The operator runs the coaster', ''); }, auto);
-        pkPCBtn(sc, X + W - 124, y + 4, 112, 28, 'Service ' + Math.round(S.wear || 0) + '%', function () { pkService(); }, (S.wear || 0) > 0, '#f0c04a');
-      } else pkPCBtn(sc, X + W - 124, y + 4, 112, 28, r.open ? 'Shut it' : 'Open it', function () { pkSetRideOpen(r.a.id, !r.a.open); }, !r.open, '#5fd38d');
+        pkPCBtn(sc, X + W - 236, y + 3, 104, 26, auto ? 'AUTO on' : 'AUTO off', function () { pkSetAuto(!S.auto); }, auto);
+        pkPCBtn(sc, X + W - 124, y + 3, 112, 26, 'Service ' + Math.round(S.wear || 0) + '%', function () { pkService(); }, (S.wear || 0) > 0, '#f0c04a');
+      } else pkPCBtn(sc, X + W - 124, y + 3, 112, 26, r.open ? 'Shut it' : 'Open it', function () { pkSetRideOpen(r.a.id, !r.a.open); }, !r.open, '#5fd38d');
     });
     var py = Y + H - 40;
     pkPCText(c, 'Page ' + (PK_PC.page + 1) + ' of ' + pages + '   ·   ' + pkOpenCount() + ' of ' + rows.length + ' open', X + 16, py + 24, 13, '#8b98a4');
@@ -294,7 +299,7 @@
     });
     var by = Y + 90, bw = W * 0.62;
     pkPCPanel(c, X, by, bw, H - 90, 'The longest queues');
-    var q = [{ name: 'The coaster', n: PK.queue.length }].concat(PK.attractions.map(function (a) { return { name: a.name, n: a.queue.length }; })).sort(function (p, r) { return r.n - p.n; }).slice(0, 8);
+    var q = [{ name: 'The coaster', n: pkQueueWaiting() }].concat(PK.attractions.map(function (a) { return { name: a.name, n: pkAttrWaiting(a) }; })).sort(function (p, r) { return r.n - p.n; }).slice(0, 8);
     var top = Math.max(1, q[0] ? q[0].n : 1);
     q.forEach(function (r, i) {
       var y = by + 38 + i * 28;
@@ -309,33 +314,46 @@
       pkPCText(c, r[0], dx + 14, by + 50 + i * 30, 14, '#a0acb8'); pkPCText(c, String(r[1]), dx + dw - 14, by + 50 + i * 30, 15, '#eef1f5', true, 'right');
     });
   }
-  function pkPCRole(id) { return /^guard/.test(id) ? ['Security', '#8fc3ff'] : /^cashier/.test(id) ? ['Tickets', '#ff8a5c'] : /^(sweeper|gardener)/.test(id) ? ['Grounds', '#5fd38d'] : ['Staff', '#c3ccd4']; }
+  function pkPCRole(id) { return /^operator/.test(id) ? ['Rides', '#ffd166'] : /^guard/.test(id) ? ['Security', '#8fc3ff'] : /^cashier/.test(id) ? ['Tickets', '#ff8a5c'] : /^(sweeper|gardener)/.test(id) ? ['Grounds', '#5fd38d'] : ['Staff', '#c3ccd4']; }
   function pkPCWhere(x, z) { var best = '', bd = 1e9; for (var k in NPCS.spots) { var p = NPCS.spots[k], d = (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z); if (d < bd) { bd = d; best = k; } } return bd < 900 ? 'by the ' + pkPCWords(best).toLowerCase() : 'on the move'; }
   function pkPCStaff(c, sc, X, Y, W, H) {
     var cw = (W - 10) / 2;
-    [['clerk', 'Ticket clerk', 'Serves both ticket windows', 40, 400], ['operator', 'Ride operator', 'Runs the coaster and every ride', 60, 600]].forEach(function (r, i) {
-      var x = X + i * (cw + 10), on = !!S[r[0]];
-      pkPCPanel(c, x, Y, cw, 96);
-      pkPCText(c, r[1], x + 14, Y + 30, 17, '#eef1f5', true);
-      pkPCText(c, r[2] + '  ·  ' + money(r[3]) + ' a day', x + 14, Y + 52, 12, '#8b98a4');
-      pkPCText(c, on ? 'ON THE PAYROLL' : 'NOT HIRED', x + 14, Y + 80, 12, on ? '#5fd38d' : '#a0acb8', true);
-      pkPCBtn(sc, x + cw - 150, Y + 56, 136, 30, on ? 'Let go' : 'Hire (' + money(r[4]) + ')', function () {
-        var res = on ? pkFire(r[0]) : pkHire(r[0]);
-        if (res !== 'Hired' && res !== 'Let go' && typeof res === 'string') toast(res, 'bad');
-      }, !on, on ? '#ff8a5c' : '#5fd38d');
-    });
+    var said = function (res) { if (res !== 'Hired' && res !== 'Let go' && typeof res === 'string') toast(res, 'bad'); };
+    // the clerk: one, or none
+    pkPCPanel(c, X, Y, cw, 96);
+    pkPCText(c, 'Ticket clerk', X + 14, Y + 30, 17, '#eef1f5', true);
+    pkPCText(c, 'Serves both ticket windows  ·  ' + money(40) + ' a day', X + 14, Y + 52, 12, '#8b98a4');
+    pkPCText(c, S.clerk ? 'ON THE PAYROLL' : 'NOT HIRED', X + 14, Y + 80, 12, S.clerk ? '#5fd38d' : '#a0acb8', true);
+    pkPCBtn(sc, X + cw - 150, Y + 56, 136, 30, S.clerk ? 'Let go' : 'Hire (' + money(400) + ')', function () { said(S.clerk ? pkFire('clerk') : pkHire('clerk')); }, !S.clerk, S.clerk ? '#ff8a5c' : '#5fd38d');
+    // the operators: up to four, working the booths in shifts
+    var ox = X + cw + 10, n = pkOpCount();
+    pkPCPanel(c, ox, Y, cw, 96);
+    pkPCText(c, 'Ride operators  ' + n + ' / ' + PK_OPS_MAX, ox + 14, Y + 30, 17, '#eef1f5', true);
+    pkPCText(c, 'Shifts in the ride booths  ·  ' + money(60) + ' a day each', ox + 14, Y + 52, 12, '#8b98a4');
+    for (var k = 0; k < PK_OPS_MAX; k++) { c.fillStyle = k < n ? '#5fd38d' : 'rgba(255,255,255,0.14)'; c.beginPath(); c.arc(ox + 20 + k * 16, Y + 76, 5, 0, 6.283); c.fill(); }
+    pkPCBtn(sc, ox + cw - 232, Y + 60, 108, 28, 'Hire (' + money(600) + ')', function () { said(pkHire('operator')); }, n < PK_OPS_MAX, '#5fd38d');
+    pkPCBtn(sc, ox + cw - 116, Y + 60, 102, 28, 'Let one go', function () { said(pkFire('operator')); }, n > 0, '#ff8a5c');
     var ry = Y + 106;
     pkPCPanel(c, X, ry, W, H - 106, 'On duty now');
-    var list = npcList.filter(function (n) { return !n.gone && n.g.visible; });
+    var list = pkPCStaffNow();
     if (!list.length) pkPCText(c, 'Nobody is on duty: the staff work from 09:00 to 22:00.', X + 14, ry + 50, 13, '#8b98a4');
-    list.slice(0, 9).forEach(function (n, i) {
-      var y = ry + 46 + i * 26, role = pkPCRole(n.charId), st = n.leaving ? 'going home' : n.path && n.path.length ? 'walking' : 'at work';
-      c.fillStyle = role[1]; c.beginPath(); c.arc(X + 20, y - 4, 5, 0, 6.283); c.fill();
-      pkPCText(c, n.name, X + 34, y, 14, '#eef1f5', true);
-      pkPCText(c, role[0], X + 150, y, 13, role[1]);
-      pkPCText(c, pkPCWhere(n.x, n.z), X + 270, y, 13, '#c3ccd4');
-      pkPCText(c, st, X + W - 14, y, 13, '#8b98a4', false, 'right');
+    var colW = (W - 20) / 2;
+    list.slice(0, 14).forEach(function (n, i) {
+      var cx = X + 10 + Math.floor(i / 7) * colW, y = ry + 44 + (i % 7) * 30, role = pkPCRole(n.charId);
+      c.fillStyle = role[1]; c.beginPath(); c.arc(cx + 10, y - 4, 5, 0, 6.283); c.fill();
+      pkPCText(c, n.name, cx + 22, y, 14, '#eef1f5', true);
+      pkPCText(c, role[0], cx + 100, y, 12, role[1], true);
+      c.save(); c.font = '12px ' + SCREEN_THEME.font; var st = scFit(c, n.st, colW - 190); c.restore();
+      pkPCText(c, st, cx + 172, y, 12, '#c3ccd4');
     });
+  }
+  // everyone working now: the engine's staff and guards, and the ride operators (part 26), each with what they are doing
+  function pkPCStaffNow() {
+    var out = npcList.filter(function (n) { return !n.gone && n.g.visible; }).map(function (n) {
+      return { name: n.name, charId: n.charId, x: n.x, z: n.z, st: n.leaving ? 'going home' : (n.path && n.path.length ? 'walking, ' : '') + pkPCWhere(n.x, n.z) };
+    });
+    if (typeof PK_OPS !== 'undefined') PK_OPS.list.forEach(function (o) { out.push({ name: o.name, charId: 'operator', x: o.x, z: o.z, st: pkOpWords(o) }); });
+    return out;
   }
   // a camera: a stretch of the park from above, the paths and the rides, the guests and the staff on them, live
   var PK_PC_CAMS = [['GATE AND CAR PARK', -34, 34, 24, 74], ['MIDWAY AND STATION SQUARE', -30, 30, -10, 30], ['THE FAIRGROUND AND THE DARK WOODS', -72, -14, -78, 40], ['GARDENS, COASTER COUNTRY, EAST WALK', -36, 123, -118, -8]];
@@ -350,7 +368,7 @@
     c.fillStyle = 'rgba(200,190,160,0.32)'; c.fillRect(X(-7), Z(-4), 14 * k, 34 * k); c.fillRect(X(-17), Z(35), 34 * k, 18 * k); c.fillStyle = 'rgba(120,124,130,0.35)'; c.fillRect(X(-31), Z(53), 62 * k, 18 * k);
     PK.attractions.forEach(function (a) { var C = a.ctl || {}; c.strokeStyle = C.fault || C.maint ? '#ff6b5e' : a.open ? 'rgba(95,211,141,0.8)' : 'rgba(160,172,184,0.5)'; c.lineWidth = 1.5; c.beginPath(); c.arc(X(a.x), Z(a.z), Math.max(3, 5 * k), 0, 6.283); c.stroke(); });
     c.fillStyle = '#f5d36b'; PK.guests.forEach(function (g) { var r = g.rec; c.fillRect(X(r.x) - 1.5, Z(r.z) - 1.5, 3, 3); });
-    npcList.forEach(function (n) { if (n.gone || !n.g.visible) return; var role = pkPCRole(n.charId); c.fillStyle = role[1]; c.beginPath(); c.arc(X(n.x), Z(n.z), 3.2, 0, 6.283); c.fill(); });
+    pkPCStaffNow().forEach(function (n) { var role = pkPCRole(n.charId); c.fillStyle = role[1]; c.beginPath(); c.arc(X(n.x), Z(n.z), 3.2, 0, 6.283); c.fill(); });
     if (player) { c.strokeStyle = '#ffffff'; c.lineWidth = 1.5; c.beginPath(); c.arc(X(player.x), Z(player.z), 4, 0, 6.283); c.stroke(); }
     pkBkScanlines(c, x + w, y + h);
     c.restore();
@@ -364,7 +382,7 @@
     PK_PC_CAMS.forEach(function (cam, i) { pkPCCam(c, X + (i % 2) * (cw + 8), Y + Math.floor(i / 2) * (ch + 8), cw, ch, cam, i); });
     var guards = npcList.filter(function (n) { return !n.gone && /^guard/.test(n.charId); });
     var ly = Y + H - 12;
-    [['#f5d36b', 'guests'], ['#5fd38d', 'grounds'], ['#8fc3ff', 'guards'], ['#ff8a5c', 'tickets'], ['#ffffff', 'you']].forEach(function (k, i) { c.fillStyle = k[0]; c.beginPath(); c.arc(X + 8 + i * 84, ly - 4, 4, 0, 6.283); c.fill(); pkPCText(c, k[1], X + 18 + i * 84, ly, 12, '#a0acb8'); });
+    [['#f5d36b', 'guests'], ['#5fd38d', 'grounds'], ['#8fc3ff', 'guards'], ['#ff8a5c', 'tickets'], ['#ffd166', 'rides'], ['#ffffff', 'you']].forEach(function (k, i) { c.fillStyle = k[0]; c.beginPath(); c.arc(X + 8 + i * 74, ly - 4, 4, 0, 6.283); c.fill(); pkPCText(c, k[1], X + 18 + i * 74, ly, 12, '#a0acb8'); });
     pkPCText(c, guards.length ? guards.map(function (n) { return n.name; }).join(', ') + ' on patrol' : 'No guards on duty', X + W, ly, 12, '#8fc3ff', true, 'right');
   }
   function pkPCMail(c, sc, X, Y, W, H) {
@@ -385,6 +403,8 @@
     pkPCCam(c, 6, 6, sc.w - 12, sc.h - 12, ['THE WHOLE PARK', PK_PARK.x0, PK_PARK.x1, PK_PARK.z0, 74], 0);
   }
 
+  var _pkPCT = GAME.T;
+  GAME.T = function () { var t = _pkPCT(); t.PK_PC = PK_PC; return t; };
   // ── Live: the colour cycle, the fans, the bank's history, the lock ──
   animate(function (dt) {
     if (!PK_PC.sc) return;

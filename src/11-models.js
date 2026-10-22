@@ -59,9 +59,9 @@ function pkMatGlassRich() {
   return CO.material('pk-glass-rich', {
     size: 128, repeat: [1, 1],
     layers: [
-      { type: 'fill', color: '#b8c8d8', alpha: 0.85 }
+      { type: 'fill', color: '#dcecf5', alpha: 0.14 }
     ],
-    roughness: 0.15, metalness: 0.05, transparent: true, opacity: 0.85
+    roughness: 0.08, metalness: 0.04, transparent: true, opacity: 0.22
   });
 }
 function pkMatPlasterRich() {
@@ -174,9 +174,7 @@ function pkBenchBetter(x, z, rot) {
 function pkBinBetter(x, z) {
   var g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
   pkRoundCyl(0.36, 0.92, MAT.green, 0, 0.46, 0, g, 14);
-  pkBevelBox(0.42, 0.05, 0.42, MAT.steelDark, 0, 0.94, 0, g, 0.02);
-  var lid = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.4, 14), MAT.steelDark);
-  lid.position.set(0, 1.0, 0); lid.rotation.x = -Math.PI / 2; g.add(lid);
+  pkBinLid(g, MAT.steelDark);
   var pedal = pkBevelBox(0.22, 0.04, 0.12, MAT.steelDark, 0, 0.05, 0.42, g, 0.02);
   pedal.rotation.x = 0.25;
   pkRoundCyl(0.015, 0.1, MAT.steelDark, 0, 0.07, 0.48, g, 6);
@@ -216,7 +214,7 @@ function pkTicketBoothBetter(b, i) {
   var K = PK_TK, HW = K.W / 2, HD = K.D / 2, T = K.T, H = K.H;
   var cream = pkMatPlasterRich(), wood = pkMatWoodRich();
   var timber = std({ color: 0x5a3e28, roughness: 0.8 }), brick = std({ color: 0x9a5b45, roughness: 0.9 });
-  var glass = std({ color: 0x9fc6cc, roughness: 0.1, metalness: 0.2, transparent: true, opacity: 0.32 });
+  var glass = std({ color: 0xd8eef4, roughness: 0.07, metalness: 0.12, transparent: true, opacity: 0.18 });
   var iron = std({ color: 0x1f2a24, roughness: 0.45, metalness: 0.55 }), gold = std({ color: 0xc9a227, roughness: 0.35, metalness: 0.8 });
   // the floor and the plinth
   pkPaved(K.W - 0.2, K.D - 0.2, std({ color: 0x8a6a4a, roughness: 0.8, map: (MAT.wood && MAT.wood.map) || null }), 0, 0.035, 0, 0.9, g);
@@ -316,7 +314,7 @@ function pkTicketBoothBetter(b, i) {
   // the queue sign on a post, at the head of the line
   pkRoundCyl(0.05, 1.9, MAT.steelDark, side * 1.9, 0.95, HD + 1.0, g, 8);
   pkSign3D(['QUEUE HERE'], 1.3, 0.28, side * 1.9, 1.9, HD + 1.0, 0, { bg: '#0d1216', fg: '#eef1f5' }, g);
-  PK.booths.push({ i: i, x: b.x, z: b.z, turnstile: b.turnstile, queue: [], screen: sc, g: g, machine: b.machine, door: b.door });
+  PK.booths.push({ i: i, x: b.x, z: b.z, turnstile: b.turnstile, turnstiles: b.turnstiles, queue: [], screen: sc, g: g, machine: b.machine, door: b.door });
   // the walls are solid, the doorway is not (the door blocks while shut), the counter inside is solid, the front is solid
   var X = function (x) { return b.x + x; }, Zw = function (z) { return b.z + z; };
   solid(X(-HW), X(HW), Zw(-HD), Zw(-HD + T), 0, H);
@@ -412,21 +410,24 @@ function pkTurnstileBetter(x, z) {
   var steel = std({ color: 0xc2c7cd, roughness: 0.32, metalness: 0.78 });
   pkBevelBox(0.44, 0.92, 0.5, steel, 0, 0.46, 0, g, 0.03);         // the cabinet
   pkBevelBox(0.48, 0.05, 0.54, MAT.steelDark, 0, 0.945, 0, g, 0.02);
-  pkRoundCyl(0.055, 0.06, MAT.steelDark, 0, 0.98, 0, g, 12);
-  // three proper tripod arms off a low hub: a short bar with a ball on the end
-  var arm = new THREE.Group(); arm.position.set(0, 0.88, 0); g.add(arm);
+  // the hub stands above the cabinet cap, so the arms sweep at waist height instead of disappearing into the box
+  pkRoundCyl(0.055, 0.13, MAT.steelDark, 0, 1.005, 0, g, 12);
+  // three tripod arms lying flat in the XZ plane: a bar that reaches most of the way across the gap, with a ball on the
+  // end, a third of a turn apart. The old arms were only 0.42 m long and looked like a toy beside the cabinet.
+  var arm = new THREE.Group(); arm.position.set(0, 1.06, 0); g.add(arm);
+  var reach = 0.62;
   for (var i = 0; i < 3; i++) {
-    var a = new THREE.Group(); a.rotation.x = i * 2.0944; arm.add(a);
-    var bar = new THREE.Mesh(roundCylGeo(0.018, 0.014, 0.42, 8), MAT.chrome);
-    bar.rotation.x = Math.PI / 2; bar.position.z = 0.21; bar.castShadow = true; a.add(bar);
-    var knob = new THREE.Mesh(new THREE.SphereGeometry(0.026, 10, 8), MAT.chrome);
-    knob.position.z = 0.43; a.add(knob);
+    var a = new THREE.Group(); a.rotation.y = i * 2.0944; arm.add(a);
+    var bar = new THREE.Mesh(roundCylGeo(0.024, 0.019, reach, 8), MAT.chrome);
+    bar.rotation.x = Math.PI / 2; bar.position.z = reach / 2; bar.castShadow = true; a.add(bar);
+    var knob = new THREE.Mesh(new THREE.SphereGeometry(0.033, 10, 8), MAT.chrome);
+    knob.position.z = reach; a.add(knob);
   }
   // the reader on the cabinet, and a green pass light
   pkBevelBox(0.3, 0.16, 0.05, MAT.black, 0, 0.8, 0.26, g, 0.02);
   var led = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.02), glowMat(0x5fd38d, 1.1));
   led.position.set(0, 0.855, 0.29); g.add(led);
-  PK.turnstiles.push({ x: x, z: z, arm: arm, led: led, spin: 0, pass: 0 });
+  PK.turnstiles.push({ x: x, z: z, arm: arm, reach: reach, led: led, spin: 0, pass: 0 });
 }
 
 // ── Fence: proper posts with rails ─────────────────────────────────────

@@ -5,8 +5,17 @@ module.exports = `
   ok(!!T.renderer && !!T.scene && !!T.camera && T.CO.ready === true && typeof T.enter === 'function', 'CO.setup and CO.boot ran: renderer, scene, camera and the handle stand');
   ok(T.ui.started === false && !document.getElementById('dc-start').hidden, 'the start screen is up before enter');
   ok(/A small park/.test(document.getElementById('dc-start-stats').textContent) && /Slot 1/.test(document.getElementById('dc-start-note').textContent), 'the start screen chips and note come from the game');
+  // the welcome card blocks the world, closes with its button or the keyboard, and does not come back once it has been seen
+  { T.pkWelcomeOpen(); const el = document.getElementById('pk-welcome'), open = T.PK_WELCOME.open === true && !!el && !el.hidden && T.ui.blocked() === true;
+    T.pkWelcomeClose(); const closed = T.PK_WELCOME.open === false && el.hidden === true && S.welcomeSeen === true && T.ui.blocked() === false;
+    const key = (code) => T.GAME.key({ code: code, preventDefault: function () {} }) === true && T.PK_WELCOME.open === false;
+    T.pkWelcomeOpen(); const enter = key('Enter');
+    T.pkWelcomeOpen(); const space = key('Space');
+    T.pkWelcomeOpen(); const escape = T.GAME.escape() === true && T.PK_WELCOME.open === false;
+    ok(open && closed && enter && space && escape, 'the welcome card opens on a new park, blocks the world and closes with its button, Enter, Space or Esc'); }
   T.enter(); ok(T.ui.started === true && document.getElementById('dc-start').hidden && !document.getElementById('dc-hud').hidden, 'enter hides the start screen and shows the HUD');
   await wait(500);
+  ok(T.PK_WELCOME.open === false && S.welcomeSeen === true, 'the welcome card does not reopen after it has been seen');
   ok(T.counts().draws > 0 && T.counts().baked > 0, 'frames draw with the bake in: ' + JSON.stringify(T.counts()));
   // the save and the HUD
   ok(T.CO.save.key === 'park-co-slot1' && S.bank === 500 && S.day === 1 && S.ticketPrice === 25 && S.snackPrice === 6 && S.clerk === true, 'a fresh save on slot 1: bank ' + S.bank + ', clerk on');
@@ -99,10 +108,41 @@ module.exports = `
     ok(C.maint === false && a.state === 'boarding', 'back to RUN, the line boards: ' + a.state);
     C.gates = false; a.state = 'idle'; a.queue.length = 0; T.pkAttrUnseatAll(a); g.state = 'leave'; g.attr = null; }
   ok(!!T.PK.console && T.PK.console.parts.mode && T.PK.console.parts.stop, 'the control desk runs off the physical hardware');
-  ok(!!T.pkCabinet() && !!T.pkCabinet().rides.carousel && !!T.pkCabinet().gauges.load, 'the park switchboard has a breaker per ride and its own dials');
-  { const a = T.PK.attrById.carousel; a.state = 'idle'; a.riders = 0; a.queue.length = 0;
-    ok(T.pkSetRideOpen('carousel', false) === true && a.open === false, 'a breaker shuts a ride for the day');
-    ok(T.pkSetRideOpen('carousel', true) === true && a.open === true, 'and the same breaker opens it again'); }
+  ok(!!T.pkCabinet() && !!T.pkCabinet().rides.carousel && !!T.pkCabinet().rides.coaster && Object.keys(T.pkCabinet().rides).length === 19 && !!T.pkCabinet().gauges.load, 'the park switchboard has all 19 ride breakers, the coaster among them, and its own dials');
+  { const L = T.pkCabinet().lights, was = S.lights;
+    L.flip(); const on = L.on === true && S.lights === true && T.PK.lights === true;
+    L.flip(); const off = L.on === false && S.lights === false && T.PK.lights === false;
+    ok(was === false && on && off, 'the park lights switch is wired from the first day: on, then off'); }
+  { const sp = S.lights, sr = S.rideLights, pp = T.PK.lights, pr = T.PK.rideLights;
+    T.pkLightsApply(true, false); const counts = T.pkGlowCounts();
+    const parkOnly = T.pkGlowSample('park') > 0 && T.pkGlowSample('ride') === 0;
+    T.pkLightsApply(false, true); const rideOnly = T.pkGlowSample('park') === 0 && T.pkGlowSample('ride') > 0;
+    T.pkLightsApply(false, false);
+    S.lights = sp; S.rideLights = sr; T.PK.lights = pp; T.PK.rideLights = pr;
+    ok(counts.park > 0 && counts.ride > 0 && parkOnly && rideOnly, 'park lights and ride lights are separate circuits: ' + counts.park + ' park, ' + counts.ride + ' ride'); }
+  { const a = T.PK.attrById.carousel; a.state = 'idle'; a.riders = 0; a.queue.length = 0; T.pkAttrUnseatAll(a);
+    const L = a.boothLights; L.set(true);
+    const shut = T.pkSetRideOpen('carousel', false) === true && a.open === false && T.pkRidePowered('carousel') === false;
+    const dead = L.power === false && L.on === false && a.boothPanel.panel.userData.pkPower() === false && a.boothCabinet.panel.userData.pkPower() === false;
+    const screens = a.boothScreen.pkPower() === false && a.boothClock.userData.pkScreen.pkPower() === false;
+    const status = T.pkBoothStatus(a, T.pkCtl(a)) === 'NO POWER · BREAKER OFF';
+    const refused = T.pkBoothGates(a) === false && T.pkClockIn('carousel', a.name) === false && T.PK.duty === null;
+    T.pkCtlTick(0.2); T.pkCtlTick(0.2); T.pkCtlTick(0.2);
+    const dark = a.boothCabinet.lamps.POWER.mat.emissiveIntensity < 0.2 && a.boothCabinet.amps.cur < 0.2;
+    const back = T.pkSetRideOpen('carousel', true) === true && a.open === true && L.power === true && L.on === true && a.boothScreen.pkPower() === true;
+    L.set(false);
+    ok(shut && dead && screens && status && refused && dark && back, 'a breaker cuts the whole booth: desk, cabinet, screens, clock, lights and hardware'); }
+  { const R = T.PK.ride;
+    R.fault = ''; R.state = 'idle'; R.riders = 0; R.bars = 0; R.barsWant = 0; R.v = 0; R.u = T.PK.stationU;
+    T.PK.queue.length = 0; T.PK.seats.forEach((s) => s.guest = null); T.pkPlaceTrain();
+    T.PK.gates.forEach((g) => { g.open = false; });
+    T.pkSetCoasterKey(false); T.PK.opLights.set(true);
+    const shut = T.pkSetRideOpen('coaster', false) === true && T.pkCoasterOpen() === false && T.pkRidePowered('coaster') === false;
+    const dead = T.PK.opLights.power === false && T.PK.opLights.on === false && T.pkScreen().pkPower() === false && T.pkConsole().parts.panel.userData.pkPower() === false;
+    const refused = T.pkSetCoasterKey(true) === false && T.pkOpenGates() === false && T.pkClockIn('coaster', 'the coaster') === false;
+    const back = T.pkSetRideOpen('coaster', true) === true && T.pkCoasterOpen() === true && T.pkScreen().pkPower() === true && T.PK.opLights.power === true && T.PK.opLights.on === true && T.pkConsole().parts.panel.userData.pkPower() === true && T.pkSetCoasterKey(true) === true;
+    T.PK.opLights.set(false);
+    ok(shut && dead && refused && back, 'the coaster breaker cuts the operator room, the LIFT desk and the console, and the key cannot turn on without it'); }
   ok(T.solids.length > 20 && T.lampMeshes.length >= 10, 'the park left solids and lamp lenses behind: ' + T.solids.length + ' solids, ' + T.lampMeshes.length + ' lenses');
   ok(!!T.sky.dome && T.sky.clouds.length === 6, 'the sky stands: a dome and six clouds');
   // the platform, the ramp and the floor
@@ -121,11 +161,41 @@ module.exports = `
   { const a = T.PK.attrById.carousel, g1 = T.pkSpawnGuest(), g2 = T.pkSpawnGuest();
     g1.rec.x = g2.rec.x = a.qx; g1.rec.z = g2.rec.z = a.qz - 4;
     ok(T.pkAttrQueueJoin(g1, a) && T.pkAttrQueueJoin(g2, a) && g1.slot === 0 && g2.slot === 1, 'attraction guests reserve distinct queue slots before arriving');
+    ok(T.pkAttrWaiting(a) === 0 && a.queue.length === 2, 'the queue board counts nobody while both are still walking to the lane');
     g1.rec.x = a.qx; g1.rec.z = a.qz; g1.rec.path = []; g1.state = 'qwait';
-    T.pkAttrQueueLeave(g2, a); ok(a.queue.length === 1 && g1.slot === 0, 'removing an attraction guest compacts its queue');
+    T.pkAttrQueueLeave(g2, a); ok(a.queue.length === 1 && g1.slot === 0 && T.pkAttrWaiting(a) === 1, 'removing an attraction guest compacts its queue, and the one standing is counted');
     a.queue.length = 0; g1.attr = g2.attr = null; }
-  // the turnstile spins as it is passed
-  { const t = T.pkTurnstiles()[0]; t.spin = 1; T.pkRideTick(0.05); ok(t.arm.rotation.x > 0 && t.spin < 1, 'a turnstile spins as it is passed'); }
+  { const a = T.PK.attrById.dragon, keep = T.PK.guests.slice();
+    T.PK.guests.length = 0; a.state = 'idle'; a.queue.length = 0; a.riders = 0; T.pkAttrUnseatAll(a);
+    const g = T.pkSpawnGuest(); g.rec.x = 0; g.rec.z = 30; g.rec.path = []; g.rec.speed = 2.0;
+    const joined = T.pkAttrQueueJoin(g, a) === true;
+    let n = 0; while (g.state !== 'qwait' && n < 3000) { T.pkGuestTick(0.05); n++; }
+    const arrived = g.state === 'qwait' && n < 3000 && T.pkAttrWaiting(a) === 1;
+    T.pkAttrQueueLeave(g, a); g.state = 'gone'; T.pkGuestTick(0.01); T.PK.guests.push(...keep);
+    ok(joined && arrived, 'The Dragon queue fills from the gate: a guest walks the East Walk and stands on slot 0 (' + (n * 0.05).toFixed(1) + ' s)'); }
+  // the turnstile spins as it is passed, arms level at waist height, all four of them
+  { const t = T.pkTurnstiles()[0], s0 = Math.PI * 2 / 3;
+    const level = T.pkTurnstiles().every((q) => Math.abs(q.arm.position.y - 1.06) < 0.001 && q.reach >= 0.6 && q.arm.children.every((a) => Math.abs(a.rotation.x) < 0.001));
+    t.spin = s0; T.pkRideTick(0.05);
+    ok(level && t.arm.rotation.y < 0 && t.spin < s0, 'a turnstile spins as it is passed: arms 0.62 m long, level at 1.06 m, turning about Y'); }
+  { const keep = T.PK.guests.slice(); T.PK.guests.length = 0;
+    const t = T.pkTurnstiles()[0], gu = T.pkSpawnGuest();
+    gu.booth = 0; gu.turn = t.x; gu.turnSpun = false; gu.state = 'walkTurn';
+    gu.rec.x = t.x; gu.rec.z = t.z + 2; gu.rec.path = [{ x: t.x, z: t.z - 0.35 }]; gu.rec.speed = 1.5;
+    t.spin = 0; T.pkGuestTick(0.05); const early = t.spin === 0;
+    let k = 0; while (t.spin === 0 && k < 80) { T.pkGuestTick(0.05); k++; }
+    const atBars = t.spin > 0 && Math.abs(gu.rec.z - t.z) <= 0.7;
+    gu.state = 'gone'; T.pkGuestTick(0.01); T.PK.guests.push(...keep);
+    ok(early && atBars, 'the turnstile only turns as the guest reaches the bars, not two metres early'); }
+  { const b = T.PK.booths[0], xs = b.turnstiles || [];
+    const at = (x) => T.PK.turnstiles.filter((q) => Math.abs(q.x - x) < 0.6)[0];
+    const t1 = at(xs[0]), t2 = at(xs[1]);
+    if (t1 && t2) { const p1 = t1.pass, p2 = t2.pass;
+      t1.pass = 5; t2.pass = 0; const low2 = T.pkPickTurnstile(0) === xs[1];
+      t1.pass = 0; t2.pass = 5; const low1 = T.pkPickTurnstile(0) === xs[0];
+      t1.pass = p1; t2.pass = p2;
+      ok(xs.length === 2 && low2 && low1, 'a booth feeds two turnstiles and sends the next guest to the less used arm'); }
+    else ok(false, 'a booth has two turnstiles'); }
   // the booth test run: an empty car goes round on its own
   { const a = T.pkAttractions()[0]; a.queue.length = 0;
     a.riders = 0; a.tests = 0; a.state = 'idle';
@@ -139,7 +209,10 @@ module.exports = `
     const q1 = { id: -1, rec: { x: 7, z: 9, path: [], speed: 1.5 }, state: 'toTurn', qslot: -1, g: null };
     const q2 = { id: -2, rec: { x: 7, z: 9, path: [], speed: 1.5 }, state: 'toTurn', qslot: -1, g: null };
     ok(T.pkQueueJoin(q1) === true && T.pkQueueJoin(q2) === true, 'two guests join the coaster queue');
-    ok(T.PK.queue.length === 2 && q1.qslot === 0 && q2.qslot === 1 && q1.state === 'walkQueue', 'they line up on the first two slots');
+    const walk0 = T.pkQueueWaiting() === 0;
+    ok(T.PK.queue.length === 2 && q1.qslot === 0 && q2.qslot === 1 && q1.state === 'walkQueue' && walk0, 'they line up on the first two slots, and the board counts nobody while they walk there');
+    q1.state = 'queue'; q2.state = 'queue'; const stand2 = T.pkQueueWaiting() === 2; q1.state = 'walkQueue'; q2.state = 'walkQueue';
+    ok(stand2, 'the coaster queue board counts the guests standing on their slots');
     ok(T.pkQueueJoin(q2) === false, 'a guest already in line does not join twice');
     T.PK.queue.shift(); T.pkQueueReslot();
     ok(q2.qslot === 0 && q2.state === 'walkQueue', 'the second guest shuffles up to the front slot');
@@ -173,10 +246,14 @@ module.exports = `
     T.run(2); ok(R.state === 'running' && R.v > 0, 'the train is away: ' + R.state + ' at ' + R.v.toFixed(1) + ' m/s');
     const c0 = S.cycles || 0; let n = 0;
     while (R.state !== 'unload' && n < 4000) { T.pkRideTick(0.05); n++; }
-    ok(R.state === 'unload' && (S.cycles || 0) === c0 + 1 && R.riders === 0, 'the train comes home and the cycle counts: ' + n + ' ticks, ' + S.cycles + ' cycles');
-    ok(T.PK.seats.every((s) => !s.guest), 'every seat is empty again');
+    ok(R.state === 'unload' && (S.cycles || 0) === c0 + 1, 'the train comes home and the cycle counts: ' + n + ' ticks, ' + S.cycles + ' cycles');
+    ok(R.riders === 4 && R.barsWant > 0.5 && T.PK.seats.filter((s) => s.guest).length === 4, 'MANUAL holds the riders behind the bars when the train comes home');
+    ok(T.pkGatesToggle() === false && R.state === 'unload', 'Gates waits for the restraints on a manual unload');
+    ok(T.pkBarsUp() === true, 'the operator raises the restraints');
+    for (let k = 0; k < 40 && R.riders > 0; k++) T.pkRideTick(0.05);
+    ok(R.riders === 0 && T.PK.seats.every((s) => !s.guest), 'every seat is empty once the bars are up');
     ok(T.PK.guests.some((g) => g.state === 'off'), 'the riders are back on the platform');
-    ok(T.pkGates()[0].open === true && R.state === 'unload', 'the train comes home with the gates already open');
+    ok(T.pkGates()[0].open === false && R.state === 'unload', 'the gates stay shut while the riders are held');
     ok(T.pkGatesToggle() === true && R.state === 'loading' && T.pkGates()[0].open === true, 'Gates after unload lets the next queue in instead of shutting');
     ok(T.pkGatesToggle() === true && T.pkGates()[0].open === false && R.state === 'loading', 'and a second press closes them while boarding'); }
   // the e-stop
@@ -219,7 +296,8 @@ module.exports = `
     ok(R.riders === 3 && line.every((g) => g.state === 'seated'), 'they walk from the lane into a seat');
     ok(T.pkBarsDown() === true && T.pkDispatch() === true, 'restraints and dispatch after the walk-in');
     let n = 0; while (R.state !== 'unload' && n < 4000) { T.pkRideTick(0.05); n++; }
-    ok(R.state === 'unload' && T.pkGates()[0].open === true, 'home again, gates open for unload');
+    ok(R.state === 'unload' && T.pkGates()[0].open === false && R.riders === 3, 'home again, still held behind the bars with the gates shut');
+    T.pkBarsUp(); for (let k = 0; k < 40 && R.riders > 0; k++) T.pkRideTick(0.05);
     T.PK.guests.forEach((g) => { if (line.indexOf(g) >= 0 || g.state === 'off' || g.state === 'leave') { g.state = 'leave'; g.rec.path = []; g.seat = null; } });
     T.PK.queue.length = 0; T.PK.seats.forEach((s) => s.guest = null);
     const next = [];
@@ -411,7 +489,7 @@ module.exports = `
   document.getElementById('dc-panel-tabs').children[1].click(); ok(/rides open/.test(T.panelHtml()), 'the rides tab rerenders');
   document.getElementById('dc-panel-tabs').children[2].click(); ok(/The coaster/.test(T.panelHtml()), 'the coaster tab');
   { const a0 = S.auto; const oldOperator = S.operator; S.operator = false; T.pkPanelAct('auto'); ok(S.auto !== a0, 'AUTO panel action reaches the game'); T.pkPanelAct('auto'); ok(S.auto === a0, 'AUTO panel action toggles back'); S.operator = oldOperator;
-    S.operator = true; T.PK.operator = true; ok(T.pkCoasterAuto() === true, 'operator hire also runs the coaster automatically'); S.operator = false; T.PK.operator = false; }
+    S.auto = false; T.pay(1000, 'a test float'); ok(T.pkHire('operator') === 'Hired' && T.pkCoasterAuto() === true, 'an operator hired puts the coaster on AUTO'); T.pkSetAuto(false); ok(T.pkCoasterAuto() === false, 'and the coaster can still be taken to MANUAL'); T.pkFire('operator'); S.auto = a0; }
   document.getElementById('dc-panel-tabs').children[3].click(); ok(/Ticket clerk/.test(T.panelHtml()), 'the staff tab');
   { const before = S.bank; S.clerk = false; T.pkPanelAct('hireClerk'); T.pkPanelAct('hireClerk'); ok(S.clerk === true && S.bank === before - 400, 'staff hire action charges once despite duplicate click'); T.pkFire('clerk'); }
   T.closePanel(); ok(!T.ui.panelOpen, 'closed');
@@ -426,12 +504,13 @@ module.exports = `
     ok(desk === true && station === true && floor === false && midway === false, 'the coaster desk and the station desk are solid and the room floor stays walkable (' + desk + ', ' + station + ', ' + floor + ', ' + midway + ')'); }
   // the day rolls over and pays the wages
    { const d0 = S.day; S.operator = true; S.clerk = true; const w = (S.clerk ? 40 : 0) + (S.operator ? 60 : 0);
-        S.time = 22; T.setTime(22); for (let i = 0; i < 2520; i++) T.pkTick(0.05);
+        S.time = 22; T.setTime(22); S.gateOpen = false; for (let i = 0; i < 2520; i++) T.pkTick(0.05);
      const wage = S.ledger.find((e) => e.why === 'Wages');
     ok(S.day === d0 + 1 && !!wage && wage.n === -w && S.today === T.PK.today, 'midnight starts a new day and pays the wages: day ' + S.day + ', wages ' + (wage && wage.n)); }
   // cards, sound and the log
   T.showCard('h-card', '<b>Level 2</b>', 5); ok(!document.getElementById('h-card').hidden, 'a card shows'); T.tickCards(6); ok(document.getElementById('h-card').hidden, 'and times out');
   T.sfx('ok'); ok(T.sfxCount() >= 1, 'sfx plays');
+  ok(typeof T.SFX.pkCallBell === 'function' && T.SFX.pkCallBell.ringSeconds >= 2, 'the BELL button rings a call bell for at least two seconds');
   T.logEvent('the park opened', 'rare'); ok(S.log[0].msg === 'the park opened' && document.getElementById('h-feed').textContent.indexOf('the park opened') >= 0, 'logEvent writes the log and the feed');
   T.toast('hello', 'good'); { const tb = document.getElementById('h-toasts'); ok(tb.children.length >= 1 && tb.lastChild.textContent === 'hello', 'a toast shows'); }
   // the dev commands
@@ -482,6 +561,14 @@ module.exports = `
     b.door.setNow(0); const shut = T.collides(b.x + side * 2.2, b.z - 0.65);
     ok(inside && shut, 'a ticket office is walked into through its door (at ' + (T.player.x - b.x).toFixed(1) + ', ' + (T.player.z - b.z).toFixed(1) + '), and the shut door blocks');
     T.player.x = px0; T.player.z = pz0; T.player.y = py0; }
+  // the owner's PC: Park OS signs in on a tap, its dock opens the apps, and the apps' buttons work the park
+  { const P = T.PK_PC, sc = P.sc, draw = () => { sc.dirty = true; T.drawScreens(0.016); }, zone = (l) => sc.zones.find((z) => z.label === l);
+    P.awake = false; draw(); T.screenTap(sc, T.screenZoneAt(sc, 480, 210)); const woke = P.awake;
+    draw(); T.screenTap(sc, zone('Finance')); draw();
+    T.S.ticketPrice = 25; const p0 = T.S.ticketPrice; T.screenTap(sc, zone('+ 1')); const up = T.S.ticketPrice === p0 + 1; draw(); T.screenTap(sc, zone('- 1'));
+    T.screenTap(sc, zone('Rides')); draw(); const rows = sc.zones.filter((z) => z.label === 'Shut it' || z.label === 'Open it').length;
+    const apps = ['Dashboard', 'Guests', 'Staff', 'Security', 'Inbox'].every((a) => { T.screenTap(sc, zone(a)); try { draw(); return true; } catch (e) { return false; } });
+    ok(woke && up && T.S.ticketPrice === p0 && rows >= 7 && apps, 'Park OS: a tap signs in, Finance moves the ticket price (' + up + '), Rides lists ' + rows + ' ride buttons a page, every app draws'); }
   // in the editor, leaving Scene mode lands you under the scene camera (on the ground, out of any wall), not back at the start
   { const ph = T.photo, keep = { x: T.player.x, z: T.player.z, y: T.player.y, ed: T.CO.editor }, was = { x: ph.x, y: ph.y, z: ph.z, yaw: ph.yaw };
     T.CO.editor = T.CO.editor || { on: false }; ph.x = 30; ph.y = 25; ph.z = -40; ph.yaw = 1.0; T.runHooks('photo', false);
@@ -495,6 +582,23 @@ module.exports = `
     const fence = sc.children.find((o) => o.userData && o.userData.worldItem === 'ride fence');
     ok(kinds['ride gateway'] >= 16 && kinds['ride fence'] === 7 && kinds['ride entrance'] === 7 && kinds['ride exit'] === 7 && kinds['ride decoration'] >= 16 && fence && fence.userData.solids.length > 10,
       'every ride dressing piece is its own editor item, its solids with it: ' + JSON.stringify(kinds)); }
+  // the gate is yours: shut each new day, a reminder at 8:45 if it is still shut, a sharper one at 9, and - only if left
+  // open - one at 21:45 to shut it, never past 22:00 (some nights run late on purpose). The toast box caps at 3, so the
+  // log (capped far higher) is what counts here.
+  // S.log is capped at 60 entries, long since full by this point in the run, so a fresh push does not grow its length -
+  // whether a reminder fired is read from unshift always making a new object, never from the length
+  { const t0 = S.time, g0 = S.gateOpen, w0 = T.PK.gateWarn, top = () => S.log[0];
+    S.gateOpen = false; T.PK.gateWarn = {};
+    S.time = 8.7; T.pkGateReminders();
+    let prev = top(); S.time = 8.8; T.pkGateReminders(); const warned845 = top() !== prev && /open the gate/.test(top().msg);
+    prev = top(); S.time = 8.9; T.pkGateReminders(); const noRepeat845 = top() === prev;
+    prev = top(); S.time = 9.1; T.pkGateReminders(); const warned900 = top() !== prev && /should be open/.test(top().msg);
+    T.pkGateToggle(); const opened = S.gateOpen === true && /gate opens/.test(top().msg);
+    prev = top(); S.time = 21.8; T.pkGateReminders(); const warnedClose = top() !== prev && /shut the gate/.test(top().msg);
+    prev = top(); S.time = 23; T.pkGateReminders(); const noLateNag = top() === prev;
+    S.time = t0; S.gateOpen = g0; T.PK.gateWarn = w0;
+    ok(warned845 && noRepeat845 && warned900 && opened && warnedClose && noLateNag,
+      'the gate nags at 8:45 and 9 while shut, and at 21:45 if left open, never past 22:00'); }
   // the save round trip
   T.save(); { const raw = JSON.parse(localStorage.getItem('park-co-slot1')); ok(!!raw && raw.bank === S.bank && raw.ticketPrice === S.ticketPrice && raw.auto === S.auto && raw.xp === T.PK.xp, 'save wrote the slot: ' + JSON.stringify({ bank: raw && raw.bank, s: S.bank, failed: !!T.save.failed })); }
   // the pure layer

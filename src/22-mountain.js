@@ -196,8 +196,8 @@
     PK_PLOTS.forEach(function (p) {
       if (p.id !== 'mountain') return;
       var a = pkBuildMountain(p);
-      a.level = p.level; a.plot = p; a.open = true;
-      if (S.rides) S.rides[p.id] = true;
+      a.level = p.level; a.plot = p; a.open = pkRideSavedOpen(p.id);
+      if (S.rides) S.rides[p.id] = a.open;
     });
     _pkBuildAttractionsMK();
   };

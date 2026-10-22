@@ -318,6 +318,7 @@
     "mesh cylinder 2.6x0.04@-14,3,1.3": { hidden: true },
     "mesh plane 10x1.2@0,27.8,6": { ry: -180, hidden: true },
     "mesh plane 12x1.55@0,27.94,6.9": { ry: -180 },
+    "mesh plane 2.35x1.8@32.5,58.41,0.95": { x: 40, z: 59.65 },
     "mesh plane 2.38x1.8@-35.75,30,0.95": { hidden: true },
     "mesh plane 2.38x1.8@-38.25,30,0.95": { hidden: true },
     "mesh plane 2.38x1.8@-68.25,30,0.95": { x: -68.2, z: 30.05 },

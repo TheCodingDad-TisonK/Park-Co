@@ -118,6 +118,15 @@
     for (var i = 0; i < a.seats.length; i++) { var s = a.seats[i]; if (s.guest && s.guest.state === 'walkSeat') n++; }
     return n;
   }
+  // the queue as a guest sees it: guests standing on a lane slot, not the ones still walking over from the gate
+  function pkAttrWaiting(a) {
+    var n = 0;
+    for (var i = 0; i < a.queue.length; i++) {
+      var st = a.queue[i].state;
+      if (st === 'qwait' || st === 'qmove') n++;
+    }
+    return n;
+  }
   function pkAttrBegin(a) {
     if (a.state !== 'idle' && a.state !== 'unloading') return;
     var C = pkCtl(a);
@@ -138,18 +147,26 @@
     screenDirtyAll(); hudDirty = true;
     return true;
   }
+  // the ride has stopped. On AUTO it lifts the bars, lets the riders off and opens up; on MANUAL it waits with the bars down
+  // and the gates shut until the operator raises the bars (pkAttrLetOff), and the gates stay as the operator leaves them
   function pkAttrEnd(a) {
     var C = pkCtl(a);
-    a.state = 'unloading'; a.t = 0; C.barsWant = 0; C.gates = true;
-    var n = pkAttrUnseatAll(a);
+    a.state = 'unloading'; a.t = 0;
     a.cycles++;
     sfx('chime');
+    if (pkCtlAuto(a)) { C.barsWant = 0; C.gates = true; pkAttrLetOff(a); }
+    else { a.awaitBars = a.riders > 0; if (!a.awaitBars) C.barsWant = 0; }
     screenDirtyAll(); hudDirty = true;
+  }
+  function pkAttrLetOff(a) {
+    a.awaitBars = false; a.t = 0;
+    var n = pkAttrUnseatAll(a);
     if (n) logEvent(a.name + ': ' + n + ' rode', '');
+    return n;
   }
   function pkAttrTick(a, dt) {
     if (!a.open) return;
-    var C = pkCtl(a), auto = pkCtlAuto(a) || !!S.operator;
+    var C = pkCtl(a), auto = pkCtlAuto(a);   // AUTO is the desk's switch alone: on MANUAL nothing moves until someone works the desk
     // the gates and the restraints ease to where they were told to be, and the desk's lights follow
     C.gateT += ((C.gates ? 1 : 0) - C.gateT) * Math.min(1, dt * 3.5);
     C.bars += (C.barsWant - C.bars) * Math.min(1, dt * 3);
@@ -182,8 +199,12 @@
     } else if (a.state === 'running') {
       if (a.t >= a.run) pkAttrEnd(a);
     } else if (a.state === 'unloading') {
+      if (a.awaitBars) {                          // stopped with riders aboard: they get off when the bars come up
+        if (auto || PK.closed) C.barsWant = 0;   // (at closing nobody is left sitting in a stopped ride)
+        if (C.barsWant < 0.5) pkAttrLetOff(a); else return;
+      }
       if (a.t >= a.unload) {
-        a.state = 'idle'; a.t = 0; C.gates = false;
+        a.state = 'idle'; a.t = 0; if (auto) C.gates = false;
         if (!PK.closed && (auto || a.manualStart) && a.queue.length) { a.manualStart = false; pkAttrBegin(a); }
         screenDirtyAll();
       }
@@ -203,7 +224,7 @@
     return pkAttrQueueJoin(gu, pick);
   }
   function pkGuestPickRide(gu) {
-    var coasterOk = PK.ride.state !== 'fault' && !(gu.gaveUp && gu.gaveUp.coaster);
+    var coasterOk = pkCoasterOpen() && PK.ride.state !== 'fault' && !(gu.gaveUp && gu.gaveUp.coaster);
     var anyOpen = false;
     for (var i = 0; i < PK.attractions.length; i++) if (PK.attractions[i].open) { anyOpen = true; break; }
     if (coasterOk && (!anyOpen || randf(0, 1) < (S.coasterKey ? 0.45 : 0.15))) {
@@ -231,29 +252,46 @@
       bakeStatic();
     }
     sfx('unlock'); toast(a.name + ' opens', 'good'); logEvent(a.name + ' opens', 'good');
+    pkRidePowerApply(id);
     screenDirtyAll(); hudDirty = true;
     return true;
   }
-  function pkOpenCount() { var n = 1; for (var i = 0; i < PK.attractions.length; i++) if (PK.attractions[i].open) n++; return n; }
+  function pkRideSavedOpen(id) { return !S.rides || S.rides[id] !== false; }
+  function pkCoasterOpen() { return pkRideSavedOpen('coaster'); }
+  function pkOpenCount() { var n = pkCoasterOpen() ? 1 : 0; for (var i = 0; i < PK.attractions.length; i++) if (PK.attractions[i].open) n++; return n; }
   // Cut a ride's breaker from the park board: guests stop joining that queue until it is
   // switched back up. A ride with anyone aboard or waiting will not shut down - the breaker
   // drops straight back rather than stranding a train full of people.
   function pkSetRideOpen(id, on) {
-    if (id === 'coaster') return false;
-    var a = PK.attrById[id]; if (!a) return false;
     on = !!on;
+    if (id === 'coaster') {
+      if (on === pkCoasterOpen()) return true;
+      var R = PK.ride;
+      if (!on && (R.riders || PK.queue.length || (R.state !== 'idle' && R.state !== 'fault'))) {
+        sfx('bad'); toast('The coaster is still working - clear it first', 'bad'); return false;
+      }
+      if (!S.rides) S.rides = {};
+      S.rides.coaster = on;
+      pkRidePowerApply('coaster');
+      if (on) { sfx('unlock'); toast('The coaster open', 'good'); logEvent('The coaster open', 'good'); }
+      else { sfx('click'); toast('The coaster shut for the day', ''); logEvent('The coaster shut down', ''); }
+      screenDirtyAll(); hudDirty = true;
+      return true;
+    }
+    var a = PK.attrById[id]; if (!a) return false;
     if (on === !!a.open) return true;
     if (!on && (a.state !== 'idle' || a.riders || a.queue.length)) {
       sfx('bad'); toast(a.name + ' is still working - clear it first', 'bad'); return false;
     }
     a.open = on; if (S.rides) S.rides[id] = on;
+    pkRidePowerApply(id);
     if (on) { sfx('unlock'); toast(a.name + ' open', 'good'); logEvent(a.name + ' open', 'good'); }
     else { sfx('click'); toast(a.name + ' shut for the day', ''); logEvent(a.name + ' shut down', ''); }
     screenDirtyAll(); hudDirty = true;
     return true;
   }
   function pkRideList() {
-    var names = ['coaster'];
+    var names = pkCoasterOpen() ? ['coaster'] : [];
     for (var i = 0; i < PK.attractions.length; i++) if (PK.attractions[i].open) names.push(PK.attractions[i].id);
     return names.join(', ');
   }
@@ -281,19 +319,12 @@
     var makers = { carousel: pkBuildCarousel, teacups: pkBuildTeacups, ferris: pkBuildFerris, dodgems: pkBuildDodgems, droptower: pkBuildDropTower, flume: pkBuildFlume, haunted: pkBuildHaunted };
     PK_PLOTS.forEach(function (p) {
       var mk = makers[p.id]; if (!mk) return;
-      var open = true;   // every ride stands from the first day: the levels open the services, not the rides
-      var a = mk(p, open);
+      var a = mk(p, true);
       a.level = p.level;
       a.plot = p;
+      a.open = pkRideSavedOpen(p.id);   // the breaker remembers where it was left, but the ride still stands
+      if (S.rides) S.rides[p.id] = a.open;
       pkCtl(a); pkCtlLoad(a);
-      if (!open) {
-        a.open = false;
-        if (a.g) a.g.visible = false;
-        a.hoard = pkHoard(p);
-      } else {
-        a.open = true;
-        if (S.rides) S.rides[p.id] = true;
-      }
     });
   }
   function pkAttr(o) {

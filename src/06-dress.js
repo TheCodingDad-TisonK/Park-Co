@@ -300,10 +300,6 @@
       [[-49.4, 6.0], [-47.6, 0.4]].forEach(function (q) { pkCupLamp(q[0], q[1], g); });   // the south one stands clear of the kids' lane
       pkTrellis(-40.8, 3, g);
     } else if (a.id === 'ferris') {
-      for (var b = 0; b < 24; b++) {
-        var ang = b / 24 * Math.PI * 2;
-        sphere(0.17, glowMat(0xfff2c0, 0.9), p.x + Math.cos(ang) * 9.1, 10.6 + Math.sin(ang) * 9.1, p.z, g);
-      }
       // the ticket hut on the wheel's south side, clear of Baron's Drop coming home up its west side
       box(2.4, 2.2, 2.0, std({ color: th.a, roughness: 0.8 }), 39.0, 1.1, 27.4, g);
       sign(['TICKETS'], 1.8, 0.4, 39.0, 2.4, 26.38, Math.PI, { bg: '#1b232c', fg: '#f5b53d' }, g);

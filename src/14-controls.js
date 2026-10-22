@@ -130,6 +130,12 @@ function pkCtlPanel(o) {
   var face = new THREE.Mesh(new THREE.PlaneGeometry(o.w, o.h),
     new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.55, metalness: 0.22, emissive: 0xffffff, emissiveMap: faceTex, emissiveIntensity: 0.34 }));
   face.position.z = 0.0005; face.receiveShadow = true; g.add(face);
+  g.userData.pkSetPower = function (on) { face.material.emissiveIntensity = on ? 0.34 : 0.03; };
+  var pkWasLive = true;
+  pkCtlLive({ tick: function () {
+    var live = pkCtlPowered(g);
+    if (live !== pkWasLive) { pkWasLive = live; g.userData.pkSetPower(live); }
+  } });
   // the machined rim round the plate, and four screws
   pkBevelBox(o.w + 0.10, 0.018, 0.06, M.bezel, 0, o.h / 2 + 0.038, -0.028, g, 0.005);
   pkBevelBox(o.w + 0.10, 0.018, 0.06, M.bezel, 0, -o.h / 2 - 0.038, -0.028, g, 0.005);
@@ -145,6 +151,22 @@ function pkCtlPanel(o) {
 // treats the whole console as one item, and the part can travel.
 var PK_CTL_LIVE = [];
 function pkCtlLive(o) { PK_CTL_LIVE.push(o); }
+// A panel can carry a power supply of its own: the ride's breaker, the coaster key or the
+// console master. Every control on that panel asks before it acts, and its lamps, gauges and
+// face go dark when the supply is gone. A panel with no supply is always live (the park board).
+function pkCtlPowered(g) {
+  var f = g && g.userData && g.userData.pkPower;
+  return !f || !!f();
+}
+function pkCtlDead(g) {
+  if (pkCtlPowered(g)) return false;
+  sfx('bad'); toast('No power - the breaker is off', 'bad');
+  return true;
+}
+function pkCtlSetPower(g, fn) {
+  g.userData.pkPower = fn;
+  if (g.userData.pkSetPower) g.userData.pkSetPower(!fn || !!fn());
+}
 var PK_CTL_TICKED = false;
 function pkCtlTick(dt) {
   if (dt > 0.2) dt = 0.2;
@@ -187,14 +209,14 @@ function pkCtlBtn(g, x, y, o) {
         if (k >= 1) { pressT = 0; cg.position.z = 0.012; }
         else cg.position.z = 0.012 - 0.007 * Math.sin(Math.PI * k);
       }
-      var want = api.lit && PK.consoleLamps !== false ? 1 : 0;
+      var want = api.lit && PK.consoleLamps !== false && pkCtlPowered(g) ? 1 : 0;
       var cur = ledMat.emissiveIntensity || 0;
       ledMat.emissiveIntensity = cur + (want * 1.35 - cur) * Math.min(1, dt * 12);
     }
   });
   hitBox(r * 2.4, r * 2.4, 0.075, x, y, 0.028, {
-    prompt: function () { return o.prompt || ('Press ' + (o.label || 'the button')); },
-    use: function () { api.press(); }
+    prompt: function () { return pkCtlPowered(g) ? (o.prompt || ('Press ' + (o.label || 'the button'))) : 'No power - breaker off'; },
+    use: function () { if (pkCtlDead(g)) return; api.press(); }
   }, g);
   return api;
 }
@@ -225,8 +247,8 @@ function pkCtlToggle(g, x, y, o) {
   };
   pkCtlLive({ tick: function (dt) { piv.rotation.x += (target - piv.rotation.x) * Math.min(1, dt * 16); } });
   hitBox(0.095, 0.115, 0.085, x, y, 0.035, {
-    prompt: function () { return (o.prompt || 'Throw the switch') + ' - ' + (o.onName || 'ON') + ' / ' + (o.offName || 'OFF'); },
-    use: function () { api.flip(); }
+    prompt: function () { return pkCtlPowered(g) ? ((o.prompt || 'Throw the switch') + ' - ' + (o.onName || 'ON') + ' / ' + (o.offName || 'OFF')) : 'No power - breaker off'; },
+    use: function () { if (pkCtlDead(g)) return; api.flip(); }
   }, g);
   return api;
 }
@@ -256,8 +278,8 @@ function pkCtlRotary(g, x, y, o) {
   };
   pkCtlLive({ tick: function (dt) { piv.rotation.z += (target - piv.rotation.z) * Math.min(1, dt * 14); } });
   hitBox(r * 3.1, r * 3.1, 0.085, x, y, 0.030, {
-    prompt: function () { return (o.prompt || 'Turn the selector') + ': ' + (o.names ? o.names[api.pos] : 'position ' + (api.pos + 1)); },
-    use: function () { sfx('click'); api.step(); }
+    prompt: function () { return pkCtlPowered(g) ? ((o.prompt || 'Turn the selector') + ': ' + (o.names ? o.names[api.pos] : 'position ' + (api.pos + 1))) : 'No power - breaker off'; },
+    use: function () { if (pkCtlDead(g)) return; sfx('click'); api.step(); }
   }, g);
   return api;
 }
@@ -312,8 +334,8 @@ function pkCtlLever(g, x, y, o) {
     }
   });
   hitBox(0.15, 0.20, 0.22, x, y + 0.02, 0.115, {
-    prompt: function () { return o.prompt || 'Pull the lever'; },
-    use: function () { api.pull(); }
+    prompt: function () { return pkCtlPowered(g) ? (o.prompt || 'Pull the lever') : 'No power - breaker off'; },
+    use: function () { if (pkCtlDead(g)) return; api.pull(); }
   }, g);
   return api;
 }
@@ -341,8 +363,8 @@ function pkCtlMushroom(g, x, y, o) {
   };
   pkCtlLive({ tick: function (dt) { down += (target - down) * Math.min(1, dt * 20); head.position.z = 0.028 + down; } });
   hitBox(r * 3.0, r * 3.0, 0.09, x, y, 0.030, {
-    prompt: function () { return api.latched ? 'Turn the stop to reset' : (o.prompt || 'Hit the emergency stop'); },
-    use: function () { api.press(); }
+    prompt: function () { return pkCtlPowered(g) ? (api.latched ? 'Turn the stop to reset' : (o.prompt || 'Hit the emergency stop')) : 'No power - breaker off'; },
+    use: function () { if (pkCtlDead(g)) return; api.press(); }
   }, g);
   return api;
 }
@@ -370,8 +392,8 @@ function pkCtlKey(g, x, y, o) {
   };
   pkCtlLive({ tick: function (dt) { piv.rotation.z += (target - piv.rotation.z) * Math.min(1, dt * 12); } });
   hitBox(0.08, 0.08, 0.07, x, y, 0.03, {
-    prompt: function () { return (o.label || 'Operator key') + ': ' + (api.on ? 'ON - turn it off' : 'OFF - turn it on'); },
-    use: function () { api.turn(); }
+    prompt: function () { return pkCtlPowered(g) ? ((o.label || 'Operator key') + ': ' + (api.on ? 'ON - turn it off' : 'OFF - turn it on')) : 'No power - breaker off'; },
+    use: function () { if (pkCtlDead(g)) return; api.turn(); }
   }, g);
   return api;
 }
@@ -391,7 +413,7 @@ function pkCtlLamp(g, x, y, o) {
   var api = { id: o.id, mat: mat, col: o.col || 0x5fd38d, on: false, level: 0 };
   pkCtlLive({
     tick: function (dt) {
-      var want = api.on ? 1 : 0;
+      var want = api.on && pkCtlPowered(g) ? 1 : 0;
       api.level += (want - api.level) * Math.min(1, dt * 10);
       mat.emissiveIntensity = 0.10 + api.level * 2.1;
     }
@@ -424,7 +446,7 @@ function pkCtlGauge(g, x, y, o) {
   };
   pkCtlLive({
     tick: function (dt) {
-      var want = clamp(api.get(), 0, 1);
+      var want = pkCtlPowered(g) ? clamp(api.get(), 0, 1) : 0;
       cur += (want - cur) * Math.min(1, dt * (o.ease || 3.0));
       piv.rotation.z = -(225 + 270 * cur) * Math.PI / 180;
     }
@@ -440,7 +462,7 @@ function pkCtlState() {
       lamps: true,     // the lit rings in the buttons
       mode: 0,         // 0 MANUAL, 1 AUTO, 2 TEST
       air: 6.6,        // the air receiver, in bar
-      cab: { lights: false, snack: false, clerk: false },   // what the park has bothered to install
+      cab: { snack: false, clerk: false },   // what the park has bothered to install
       parts: {}        // the hardware, by id
     };
   }
@@ -448,6 +470,7 @@ function pkCtlState() {
 }
 function pkCtlGuard() {
   var C = pkCtlState();
+  if (!pkCoasterOpen()) { sfx('bad'); toast('The coaster breaker is off at the park board', 'bad'); return false; }
   if (!S.coasterKey) { sfx('bad'); toast('The coaster is locked - turn the operator key on', 'bad'); return false; }
   if (!C.on) { sfx('bad'); toast('The console is dead - turn the power on', 'bad'); return false; }
   return true;
@@ -458,6 +481,15 @@ function pkCtlGuard() {
 // one item, and nothing on the fascia can be nudged out of place on its own.
 // at: where the desk stands and which way it faces ({ x, z, ry }; its front, the operator's side, is local +z). Every part
 // hangs off one group, so the whole desk is placed and turned as one.
+// The BELL is a call bell, not the dispatch chime: three quick trings, then a second and a third
+// burst. The last strike starts at two seconds and rings on after it, so one press is heard for
+// well over two seconds. It uses the engine's own bell voice, so the sound setting and volume
+// still apply.
+SFX.pkCallBell = function (t) {
+  var ring = [0, 0.16, 0.32, 0.84, 1.00, 1.16, 1.68, 1.84, 2.00];
+  for (var i = 0; i < ring.length; i++) SFX.bell(t + ring[i]);
+};
+SFX.pkCallBell.ringSeconds = 2.6;
 function pkBuildCoasterConsole(at) {
   pkCtlStart();
   var C = pkCtlState();
@@ -540,6 +572,7 @@ function pkBuildCoasterConsole(at) {
       c.restore();
     }
   });
+  pkCtlSetPower(P, pkCoasterOpen);
 
   // hardware, in the order a hand would find it
   var gauges = {}, lamps = {}, buttons = {};
@@ -571,7 +604,7 @@ function pkBuildCoasterConsole(at) {
         if (id === 'reset') return pkReset();
         if (id === 'test') return pkTestRun();
         if (id === 'maint') return pkService();
-        if (id === 'horn') { sfx('bell'); return true; }
+        if (id === 'horn') { sfx('pkCallBell'); return true; }
       }
     });
   }
@@ -609,7 +642,7 @@ function pkBuildCoasterConsole(at) {
 
   var key = pkCtlKey(P, 0.60, -0.175, { id: 'opKey', on: !!S.coasterKey, label: 'Coaster operator key',
     act: function (on) { return pkSetCoasterKey(on); } });
-  C.parts = { gauges: gauges, lamps: lamps, buttons: buttons, toggles: toggles, mode: mode, stop: stop, lever: lever, key: key };
+  C.parts = { gauges: gauges, lamps: lamps, buttons: buttons, toggles: toggles, mode: mode, stop: stop, lever: lever, key: key, panel: P };
 
   // ── the status bank: where the train is on the track, and the counts ──
   // the mimic's sections start at points on the track, laid in lap order from the station
@@ -623,13 +656,15 @@ function pkBuildCoasterConsole(at) {
   C.parts.mimic = mimic; C.parts.readout = ro;
   pkCtlLive({
     tick: function (dt) {
-      var R = PK.ride, live = C.on && !!S.coasterKey, d = ((R.u - PK.stationU) % 1 + 1) % 1, k = 0;
+      var R = PK.ride, live = C.on && !!S.coasterKey && pkCoasterOpen(), d = ((R.u - PK.stationU) % 1 + 1) % 1, k = 0;
       for (var i = 1; i < SEC.length; i++) if (d >= SEC[i][1]) k = i;
       if (k === 6) k = 0;
       for (var j = 0; j < 6; j++) mimic[j].on = live && j === k;
       if (R.state === 'running') lapT += dt; else if (lapT > 0) { lastLap = lapT; lapT = 0; }
+      ro.setPower(live);
+      if (!live) { ro.set(['NO POWER', 'BREAKER OFF']); return; }
       ro.set(['SPEED ' + ('  ' + Math.round((R.v || 0) * 3.6)).slice(-3) + ' KM/H  LAP ' + ('  ' + Math.round(lapT || lastLap)).slice(-3) + 's',
-        'RIDE ' + R.riders + '/' + PK.seats.length + '   QUEUE ' + PK.queue.length]);
+        'RIDE ' + R.riders + '/' + PK.seats.length + '   QUEUE ' + pkQueueWaiting()]);
     }
   });
 
@@ -637,7 +672,7 @@ function pkBuildCoasterConsole(at) {
   var airT = 0;
   pkCtlLive({
     tick: function (dt) {
-      var R = PK.ride, live = C.on && !!S.coasterKey;
+      var R = PK.ride, live = C.on && !!S.coasterKey && pkCoasterOpen();
       if (key.on !== !!S.coasterKey) key.set(!!S.coasterKey);
       airT += dt;
       var wantAir = (R.state === 'dispatch' || R.state === 'running') ? 5.9 : 6.9;
@@ -736,7 +771,8 @@ function pkCtlReadout(g, x, y, w, h, o) {
       });
       for (var k = 0; k < H; k += 3) { c.fillStyle = 'rgba(0,0,0,0.18)'; c.fillRect(0, k, W, 1); }
       t.needsUpdate = true;
-    }
+    },
+    setPower: function (on) { m.material.emissiveIntensity = on ? 0.9 : 0; }
   };
   return api;
 }
@@ -785,7 +821,9 @@ function pkBoothPanel(a, con) {
       R2.txt('OFF', -0.645, -0.135, 0.012, '#aebcc4'); R2.txt('ON', -0.555, -0.135, 0.012, '#5fd38d');
     }
   });
+  pkCtlSetPower(P, function () { return !!a.open; });
   var parts = { buttons: {} };
+  parts.panel = P;
   for (var i = 0; i < B.length; i++) {
     var b = B[i];
     parts.buttons[b[0]] = pkCtlBtn(P, b[3], 0.105, {
@@ -854,11 +892,23 @@ function pkBoothPanel(a, con) {
   parts.readout = pkCtlReadout(HB, 0.46, 0, 0.56, 0.16);
   pkCtlLive({
     tick: function () {
-      var A = parts.ann;
-      A.key.on = !!C.key; A.auto.on = !!C.auto && !!C.key; A.gates.on = !!C.gates; A.bars.on = C.barsWant > 0.5;
-      A.run.on = a.state === 'running'; A.fault.on = (C.fault || C.maint) ? 'flash' : false;
+      var power = !!a.open, A = parts.ann;
+      var live = power && !C.fault && !!C.key;
+      if (parts.key.on !== !!C.key) parts.key.set(!!C.key);
+      if (parts.auto.on !== C.auto) parts.auto.set(C.auto);
+      if (parts.stop.latched !== !!C.fault) parts.stop.latched = !!C.fault;
+      // the key window follows the key itself, so it still shows ON while a fault holds the rest of the panel dead
+      A.key.on = power && !!C.key; A.auto.on = live && !!C.auto; A.gates.on = live && !!C.gates; A.bars.on = live && C.barsWant > 0.5;
+      A.run.on = live && a.state === 'running';
+      // the fault lamp has to stay lit while the ride is faulted, even though a fault drops the rest of the panel dead
+      A.fault.on = power && !!C.key && ((C.fault || C.maint) ? 'flash' : false);
+      parts.buttons.gates.setLit(live && (a.state === 'idle' || a.state === 'unloading' || a.state === 'boarding'));
+      parts.buttons.dispatch.setLit(live && !PK.closed && (a.state === 'boarding' || a.state === 'ready') && !a.queue.length && !a.boarding && a.riders > 0);
+      parts.buttons.test.setLit(live && !PK.closed && a.state === 'idle' && !a.queue.length && !a.riders);
+      parts.readout.setPower(power);
+      if (!power) { parts.readout.set(['NO POWER', 'BREAKER OFF']); return; }
       var left = a.state === 'running' ? Math.max(0, Math.ceil((a.run || 0) - (a.t || 0))) + 's' : '--';
-      parts.readout.set(['QUEUE ' + ('  ' + a.queue.length).slice(-3) + '  RIDE ' + a.riders + '/' + a.seats.length,
+      parts.readout.set(['QUEUE ' + ('  ' + pkAttrWaiting(a)).slice(-3) + '  RIDE ' + a.riders + '/' + a.seats.length,
         (C.fault ? 'FAULT   ' : C.maint ? 'MAINT   ' : !C.key ? 'LOCKED  ' : (a.state.toUpperCase() + '        ').slice(0, 8)) + ' END ' + left]);
     }
   });
@@ -871,16 +921,23 @@ function pkBoothPanel(a, con) {
 // ride, the park lights, the ticket window, the snack bar - lives on one steel switchboard on
 // the office wall, with a supply dial, a load dial, a lamp per circuit and a breaker per ride.
 var PK_CAB_RIDES = [
-  ['carousel', 'CAROUSEL'], ['teacups', 'TEACUPS'], ['ferris', 'FERRIS WHEEL'],
-  ['dodgems', 'DODGEMS'], ['droptower', 'DROP TOWER'], ['flume', 'LOG FLUME'],
-  ['haunted', 'HAUNTED HOUSE']
+  ['coaster', 'THE COASTER'], ['carousel', 'CAROUSEL'], ['teacups', 'TEACUPS'], ['ferris', 'FERRIS WHEEL'],
+  ['dodgems', 'DODGEMS'], ['droptower', 'DROP TOWER'], ['flume', 'LOG FLUME'], ['haunted', 'HAUNTED HOUSE'],
+  ['kround', 'LITTLE ROUNDABOUT'], ['kpots', 'WOBBLY POTS'], ['kpuffin', 'PUFFIN LINE'],
+  ['serpent', 'THE SERPENT'], ['baron', "BARON'S DROP"], ['nocturne', 'NOCTURNE'], ['wreck', 'THE WRECK'],
+  ['moonwood', 'MOONWOOD'], ['dragon', 'THE DRAGON'], ['firebird', 'THE FIREBIRD'], ['mountain', 'THE MOUNTAIN KING']
 ];
+var PK_CAB_PER_COL = 10;
+function pkCabRideSlot(i) {
+  var col = i < PK_CAB_PER_COL ? 0 : 1, row = i % PK_CAB_PER_COL;
+  return { labelX: col ? 0.06 : -0.84, switchX: col ? 0.80 : -0.10, lampX: col ? 0.70 : -0.20, y: 0.400 - row * 0.112 };
+}
 function pkBuildParkCabinet(px, py, pz, ry) {
   pkCtlStart();
   var C = pkCtlState();
   if (C.cabinet) return C.cabinet;
   var M = pkCtlM();
-  var PW = 1.34, PH = 1.26, CX = px === undefined ? -22.86 : px, CY = py === undefined ? 1.66 : py, CZ = pz === undefined ? 43.55 : pz;
+  var PW = 1.78, PH = 1.86, CX = px === undefined ? -22.86 : px, CY = py === undefined ? 1.66 : py, CZ = pz === undefined ? 43.55 : pz;
 
   // the enclosure hangs off a holder so the whole board can be moved as one item
   var H = new THREE.Group();
@@ -891,7 +948,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // the conduit up into the roof, and a pair of hinges down the near edge
   cyl(0.030, 0.62, MAT.steelDark, 0, PH / 2 + 0.44, -0.085, H, 10);
   cyl(0.038, 0.03, MAT.steelDark, 0, PH / 2 + 0.13, -0.085, H, 10);
-  [0.36, -0.36].forEach(function (hy) {
+  [0.55, -0.55].forEach(function (hy) {
     pkBevelBox(0.05, 0.11, 0.06, MAT.chrome, -PW / 2 - 0.055, hy, -0.02, H, 0.008);
   });
 
@@ -899,33 +956,33 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     w: PW, h: PH, x: 0, y: 0, z: 0, parent: H, key: 'pk-park-services',
     draw: function (c, W, H2) {
       var R2 = pkCtlRuler(W, H2, PW, PH); R2.c = c;
-      R2.engrave('PARK SERVICES', 0, 0.552, 0.033);
-      R2.txt('MAIN SWITCHBOARD   ·   STATION 01', 0, 0.512, 0.016, '#a6b4bc');
-      // three bays, ruled the way a real board is ruled
-      R2.box(-0.51, 0.01, 0.30, 1.00, 'rgba(0,0,0,0.20)', 0.005);
-      R2.box(-0.02, 0.01, 0.46, 1.00, 'rgba(0,0,0,0.20)', 0.005);
-      R2.box(0.48, 0.01, 0.32, 1.00, 'rgba(0,0,0,0.20)', 0.005);
-      R2.txt('SUPPLY', -0.51, 0.192, 0.018, '#a6b4bc');
-      R2.txt('LOAD', -0.51, -0.078, 0.018, '#a6b4bc');
-      R2.txt('MAINS', -0.51, -0.292, 0.017, '#a6b4bc');
-      R2.txt('PARK OPEN', -0.51, -0.452, 0.017, '#a6b4bc');
-      for (var i = 0; i < PK_CAB_RIDES.length; i++)
-        R2.txt(PK_CAB_RIDES[i][1], -0.028, 0.400 - i * 0.135, 0.021, '#eef2f4', 'left');
-      R2.txt('PARK LIGHTS', 0.48, 0.297, 0.018, '#d6dee3');
-      R2.txt('TICKET WINDOW', 0.48, 0.067, 0.018, '#d6dee3');
-      R2.txt('SNACK BAR', 0.48, -0.163, 0.018, '#d6dee3');
-      R2.txt('BREAKERS', 0.48, -0.310, 0.017, '#8f9ca4');
-      R2.txt('UP = OPEN', 0.48, -0.342, 0.017, '#8f9ca4');
-      R2.txt('DOWN = SHUT', 0.48, -0.374, 0.017, '#8f9ca4');
-      R2.txt('ISOLATE BEFORE SERVICE', 0.48, -0.448, 0.014, '#7d8a96');
+      R2.engrave('PARK SERVICES', 0, 0.845, 0.032);
+      R2.txt('MAIN SWITCHBOARD   ·   STATION 01', 0, 0.805, 0.015, '#a6b4bc');
+      // the top service strip: supply and load dials, the two lighting circuits, the window, the snack bar and the gate
+      R2.box(0, 0.635, 1.70, 0.27, 'rgba(0,0,0,0.20)', 0.005);
+      R2.txt('PARK LIGHTS', -0.25, 0.725, 0.012, '#d6dee3');
+      R2.txt('RIDE LIGHTS', 0.01, 0.725, 0.012, '#d6dee3');
+      R2.txt('TICKET', 0.27, 0.725, 0.012, '#d6dee3');
+      R2.txt('SNACK', 0.53, 0.725, 0.012, '#d6dee3');
+      R2.txt('GATE', 0.76, 0.725, 0.012, '#d6dee3');
+      // the breakers: two columns, ten rows on the left and nine on the right
+      R2.box(-0.46, -0.11, 0.82, 1.14, 'rgba(0,0,0,0.20)', 0.005);
+      R2.box(0.46, -0.11, 0.82, 1.14, 'rgba(0,0,0,0.20)', 0.005);
+      R2.txt('RIDE BREAKERS', 0, 0.475, 0.014, '#a6b4bc');
+      for (var i = 0; i < PK_CAB_RIDES.length; i++) {
+        var rs = pkCabRideSlot(i);
+        R2.txt(PK_CAB_RIDES[i][1], rs.labelX, rs.y, 0.015, '#eef2f4', 'left');
+      }
+      R2.txt('UP = OPEN   ·   DOWN = SHUT', 0, -0.710, 0.013, '#8f9ca4');
+      R2.txt('ISOLATE BEFORE SERVICE', 0, -0.748, 0.012, '#7d8a96');
       // a hazard strip along the bottom lip
-      var hy = R2.Y(-0.588), hh = R2.L(0.022);
+      var hy = R2.Y(-0.885), hh = R2.L(0.022);
       c.save();
-      c.beginPath(); c.rect(R2.X(-0.67), hy, R2.L(1.34), hh); c.clip();
-      c.fillStyle = '#151a1e'; c.fillRect(R2.X(-0.67), hy, R2.L(1.34), hh);
+      c.beginPath(); c.rect(R2.X(-0.89), hy, R2.L(1.78), hh); c.clip();
+      c.fillStyle = '#151a1e'; c.fillRect(R2.X(-0.89), hy, R2.L(1.78), hh);
       c.fillStyle = '#c9a227';
-      for (var hz = 0; hz < 40; hz++) {
-        var x0 = R2.X(-0.67) + hz * R2.L(0.046);
+      for (var hz = 0; hz < 42; hz++) {
+        var x0 = R2.X(-0.89) + hz * R2.L(0.046);
         c.beginPath(); c.moveTo(x0, hy + hh); c.lineTo(x0 + R2.L(0.020), hy + hh);
         c.lineTo(x0 + R2.L(0.020) + hh, hy); c.lineTo(x0 + hh, hy); c.closePath(); c.fill();
       }
@@ -935,43 +992,55 @@ function pkBuildParkCabinet(px, py, pz, ry) {
 
   var parts = { rides: {}, lamps: {}, gauges: {} };
   for (var i = 0; i < PK_CAB_RIDES.length; i++) {
-    var rid = PK_CAB_RIDES[i][0], ry2 = 0.400 - i * 0.135;
-    parts.rides[rid] = pkCtlToggle(P, -0.11, ry2, {
+    var rid = PK_CAB_RIDES[i][0], rs = pkCabRideSlot(i);
+    parts.rides[rid] = pkCtlToggle(P, rs.switchX, rs.y, {
       id: 'ride_' + rid, on: true, prompt: PK_CAB_RIDES[i][1] + ' breaker',
       onName: 'open', offName: 'shut',
       act: function (on) { return pkSetRideOpen(this.id.slice(5), on); }
     });
-    parts.lamps[rid] = pkCtlLamp(P, -0.205, ry2, { id: 'lamp_' + rid, r: 0.011, col: 0x5fd38d });
+    parts.lamps[rid] = pkCtlLamp(P, rs.lampX, rs.y, { id: 'lamp_' + rid, r: 0.011, col: 0x5fd38d });
   }
-  parts.gauges.supply = pkCtlGauge(P, -0.51, 0.305, {
-    id: 'supply', label: 'SUPPLY', unit: 'volts', min: 0, max: 300, red: 0.88, ticks: 6, r: 0.093,
+  parts.gauges.supply = pkCtlGauge(P, -0.77, 0.635, {
+    id: 'supply', label: 'SUPPLY', unit: 'volts', min: 0, max: 300, red: 0.88, ticks: 6, r: 0.075,
     get: function () { return 0.82; }
   });
-  parts.gauges.load = pkCtlGauge(P, -0.51, 0.035, {
-    id: 'load', label: 'LOAD', unit: 'amps', min: 0, max: 60, red: 0.85, ticks: 6, r: 0.093,
+  parts.gauges.load = pkCtlGauge(P, -0.57, 0.635, {
+    id: 'load', label: 'LOAD', unit: 'amps', min: 0, max: 60, red: 0.85, ticks: 6, r: 0.075,
     get: function () {
       var n = 0;
       for (var i = 0; i < PK_CAB_RIDES.length; i++) {
-        var at = PK.attrById && PK.attrById[PK_CAB_RIDES[i][0]];
-        if (at && at.open) n++;
+        var rid = PK_CAB_RIDES[i][0], at = PK.attrById && PK.attrById[rid];
+        if (rid === 'coaster' ? pkCoasterOpen() : (at && at.open)) n++;
       }
       return 0.10 + (n / PK_CAB_RIDES.length) * 0.72;
     }
   });
-  parts.lamps.mains = pkCtlLamp(P, -0.51, -0.245, { id: 'mains', r: 0.020, col: 0x5fd38d });
-  parts.lamps.park = pkCtlLamp(P, -0.51, -0.405, { id: 'park', r: 0.020, col: 0xf0c04a });
+  parts.lamps.mains = pkCtlLamp(P, -0.43, 0.665, { id: 'mains', r: 0.018, col: 0x5fd38d });
+  parts.lamps.park = pkCtlLamp(P, -0.43, 0.600, { id: 'park', r: 0.018, col: 0xf0c04a });
+  parts.gate = pkCtlToggle(P, 0.76, 0.635, {
+    id: 'gate', on: !!S.gateOpen, prompt: 'The park gate', onName: 'open', offName: 'shut',
+    act: function (on) { pkGateToggle(); return true; }
+  });
 
-  parts.lights = pkCtlToggle(P, 0.48, 0.38, {
+  parts.lights = pkCtlToggle(P, -0.25, 0.635, {
     id: 'parkLights', on: !!S.lights, prompt: 'Park lights', onName: 'on', offName: 'off',
     act: function (on) {
-      if (on && !C.cab.lights) { sfx('bad'); toast('The park lights are not installed yet', 'bad'); return false; }
       S.lights = on; PK.lights = on;
       sfx('click'); toast('Park lights ' + (on ? 'on' : 'off'), on ? 'good' : '');
       logEvent('Park lights ' + (on ? 'on' : 'off'), '');
       screenDirtyAll(); hudDirty = true; return true;
     }
   });
-  parts.ticket = pkCtlToggle(P, 0.48, 0.15, {
+  parts.rideLights = pkCtlToggle(P, 0.01, 0.635, {
+    id: 'rideLights', on: !!S.rideLights, prompt: 'Ride lights', onName: 'on', offName: 'off',
+    act: function (on) {
+      S.rideLights = on; PK.rideLights = on;
+      sfx('click'); toast('Ride lights ' + (on ? 'on' : 'off'), on ? 'good' : '');
+      logEvent('Ride lights ' + (on ? 'on' : 'off'), '');
+      screenDirtyAll(); hudDirty = true; return true;
+    }
+  });
+  parts.ticket = pkCtlToggle(P, 0.27, 0.635, {
     id: 'ticket', on: !!S.clerk, prompt: 'Ticket window', onName: 'staffed', offName: 'shut',
     act: function (on) {
       if (on && !C.cab.clerk) { sfx('bad'); toast('No clerk on the payroll', 'bad'); return false; }
@@ -980,7 +1049,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       logEvent('Ticket window ' + (on ? 'staffed' : 'shut'), ''); screenDirtyAll(); hudDirty = true; return true;
     }
   });
-  parts.snack = pkCtlToggle(P, 0.48, -0.08, {
+  parts.snack = pkCtlToggle(P, 0.53, 0.635, {
     id: 'snack', on: !!S.snackOpen, prompt: 'Snack bar', onName: 'serving', offName: 'shut',
     act: function (on) {
       if (on && !C.cab.snack) { sfx('bad'); toast('The snack stand is not built yet', 'bad'); return false; }
@@ -993,18 +1062,19 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   pkCtlLive({
     tick: function (dt) {
       // a service counts as installed once the park has unlocked or opened it anywhere else
-      if (S.lights) C.cab.lights = true;
       if (S.snackOpen || (PK.level || 1) >= 2) C.cab.snack = true;
       if (S.clerk) C.cab.clerk = true;
       for (var i = 0; i < PK_CAB_RIDES.length; i++) {
         var rid = PK_CAB_RIDES[i][0], at = PK.attrById && PK.attrById[rid];
-        var open = at ? !!at.open : true;
+        var open = rid === 'coaster' ? pkCoasterOpen() : (at ? !!at.open : true);
         if (parts.rides[rid].on !== open) parts.rides[rid].set(open);
-        parts.lamps[rid].on = !!at && open;
+        parts.lamps[rid].on = open;
       }
       if (parts.lights.on !== !!S.lights) parts.lights.set(!!S.lights);
+      if (parts.rideLights.on !== !!S.rideLights) parts.rideLights.set(!!S.rideLights);
       if (parts.ticket.on !== !!S.clerk) parts.ticket.set(!!S.clerk);
       if (parts.snack.on !== !!S.snackOpen) parts.snack.set(!!S.snackOpen);
+      if (parts.gate.on !== !!S.gateOpen) parts.gate.set(!!S.gateOpen);
       parts.lamps.mains.on = true;
       parts.lamps.park.on = !PK.closed;
     }
