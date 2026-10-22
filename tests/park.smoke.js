@@ -236,7 +236,9 @@ module.exports = `
   ok(T.PK.attractions.length === 18, 'eighteen rides besides the main coaster: ' + T.PK.attractions.length);
   ok(T.PK.attrById.carousel && T.PK.attrById.carousel.seats.length === 8, 'the carousel has eight horses');
   ok(T.PK.attrById.ferris && T.PK.attrById.ferris.seats.length === 16, 'the ferris wheel has eight cabins of two');
-  { const d = T.CO.npcs(); ok(d && d.characters && d.spawners.length === 5 && d.workers.length === 4 && Object.keys(d.spots).some((k) => d.spots[k].z < -60) && Object.keys(d.spots).some((k) => d.spots[k].x > 70), 'the crowd is described to the engine and its spots reach the far lands: ' + d.spawners.length + ' spawners, ' + d.workers.length + ' workers'); }
+  { const d = T.CO.npcs(), ids = d.workers.map((w) => w.id);
+    const cast = ['sweeper', 'sweeperNorth', 'gardener', 'guardSouth', 'guardNorth', 'guardGate', 'cashierWest', 'cashierEast'].every((k) => ids.indexOf(k) >= 0);
+    ok(d && d.spawners.length === 0 && cast && Object.keys(d.spots).some((k) => d.spots[k].z < -60) && Object.keys(d.spots).some((k) => d.spots[k].x > 70), 'only the guests visit; the NPCs are the staff, the guards and the cashiers: ' + d.spawners.length + ' spawners, ' + ids.join(', ')); }
   { const a = T.PK.attrById.teacups; a.state = 'idle'; a.t = 0; a.queue.length = 0; a.riders = 0; a.ctl.fault = ''; T.pkAttrUnseatAll(a);
     for (let i = 0; i < 4; i++) { const g = T.pkSpawnGuest(); const s = T.pkAttrSlot(a, i); g.rec.x = s.x; g.rec.z = s.z; g.state = 'qwait'; g.slot = i; g.attr = a.id; a.queue.push(g); }
     T.pkAttrTick(a, 0.05);
@@ -281,6 +283,29 @@ module.exports = `
       T.pkAttrQueueLeave(g, a); g.state = 'leave'; g.attr = null; a.queue.length = 0; q0.forEach((q) => a.queue.push(q));
     });
     ok(blocked.length === 0, 'every ride is reached on foot from Station Square' + (blocked.length ? ': blocked ' + blocked.join(', ') : '')); }
+  // the paths are fenced: W off the Fairground avenue stops at the rail, and a player left on the lawn can still walk back
+  { const F = T.PK_PF, keep = { x: T.player.x, z: T.player.z, y: T.player.y, yaw: T.player.yaw };
+    T.player.y = 0; T.player.x = -40; T.player.z = 3; T.player.yaw = Math.PI;
+    T.player.keys.KeyW = true; for (let k = 0; k < 40; k++) T.updatePlayer(0.05);
+    const stopZ = T.player.z;
+    T.player.z = 9; T.player.yaw = 0; for (let k = 0; k < 40; k++) T.updatePlayer(0.05); T.player.keys.KeyW = false;
+    const back = T.player.z < 6;
+    Object.assign(T.player, keep);
+    ok(F.posts > 500 && stopZ > 3.5 && stopZ < 5.6 && back, 'the paths are fenced: ' + F.posts + ' posts, W off the avenue stops at z ' + stopZ.toFixed(2) + ', back from the lawn ' + back); }
+  // the guests and the NPCs keep to the paving too: every walk from the gate and from Station Square to a ride stays off the
+  // lawn (a quarter metre over the kerb is the edge of the path, not the grass), and an NPC sent onto the lawn is moved off it
+  { const lawn = (x, z) => { const r = 0.25; return T.pkPfLawn(x, z) && T.pkPfLawn(x - r, z) && T.pkPfLawn(x + r, z) && T.pkPfLawn(x, z - r) && T.pkPfLawn(x, z + r); };
+    let pts = 0; const bad = [];
+    [[0, 4], [0, 42]].forEach((f) => T.PK.attractions.forEach((a) => {
+      let prev = { x: f[0], z: f[1] };
+      T.route(prev, { x: a.qx, z: a.qz }).forEach((w) => {
+        const n = Math.ceil(Math.hypot(w.x - prev.x, w.z - prev.z) / 0.25);
+        for (let k = 0; k <= n; k++) { const x = prev.x + (w.x - prev.x) * k / n, z = prev.z + (w.z - prev.z) * k / n; pts++; if (lawn(x, z) && bad.indexOf(a.id) < 0) bad.push(a.id); }
+        prev = w;
+      });
+    }));
+    const moved = T.pkPfOnPaving({ x: -50, z: 12 });
+    ok(bad.length === 0 && T.pkPfLawn(-50, 12) && !T.pkPfLawn(moved.x, moved.z), 'guests and NPCs keep to the paving: ' + pts + ' points on the walks to every ride' + (bad.length ? ', on the lawn to ' + bad.join(', ') : '') + '; a lawn spot moves to ' + moved.x.toFixed(1) + ',' + moved.z.toFixed(1)); }
   { const a = T.PK.attrById.carousel; a.state = 'idle'; a.t = 0; a.riders = 0; a.queue.length = 0; a.ctl.auto = true; a.ctl.fault = ''; T.pkAttrUnseatAll(a);
     T.player.x = a.qx + 2; T.player.z = a.qz; T.player.y = 0;
     ok(T.pkPlayerRideJoin(a) === true && !!T.PK.playerRide && T.PK.playerRide.kind === 'attr', 'the player can walk up to a ride and get on');

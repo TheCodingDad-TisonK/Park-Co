@@ -143,9 +143,9 @@
   }
   // the control house's outside, round the cabin: a brick plinth, cream walls with timber framing, a slate hip roof with
   // a turret, and the name board
-  function pkEastHouseShell(g, x0, x1, z0, z1, H, cfg) {
+  function pkEastHouseShell(g, x0, x1, z0, z1, H, cfg, door) {
     var M = pkFtM(), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, W = x1 - x0, D = z1 - z0;
-    box(W + 0.5, 0.6, D + 0.5, M.brick, cx, 0.3, cz, g);
+    pkPlinthRing(x0, x1, z0, z1, 0.6, 0.25, M.brick, g, door ? [{ side: 'x0', a: door[0], b: door[1] }] : null);   // round the outside, open at the door
     box(W + 0.12, H, 0.06, M.cream, cx, H / 2, z1 + 0.04, g);                         // the back of the room, outside
     // timber framing on the outer faces (the cabin's own walls are the inside)
     [[cx, z0 - 0.09, W + 0.2, 0.06], [cx, z1 + 0.09, W + 0.2, 0.06]].forEach(function (f) { box(f[2], 0.14, f[3], M.wood, f[0], H - 0.1, f[1], g); box(f[2], 0.14, f[3], M.wood, f[0], 0.68, f[1], g); });
@@ -207,7 +207,7 @@
     // the control house: the room is the halls' cabin kit, bigger, with its long window on the platform side (north)
     var K = { u0: ax - 6.6, u1: ax - 0.9, z0: az + 22.2, z1: az + 26.8, door: [az + 24.0, az + 25.1] };
     pkCabinBuild(g, a, { s: 1, AX: 0, K: K, trim: 0xf1e6cc, band: cfg.a, name: cfg.name, sign: cfg.sign, H: 3.0 });
-    pkEastHouseShell(g, K.u0, K.u1, K.z0, K.z1, 3.0, cfg);
+    pkEastHouseShell(g, K.u0, K.u1, K.z0, K.z1, 3.0, cfg, K.door);
     // the yard fence: west of the track north of the platform and south of the house, along the north and south ends
     var y0 = az - 13, y1 = az + 41.2;
     pkParkFence(ax - 0.8, y0, ax - 0.8, az - 0.4);

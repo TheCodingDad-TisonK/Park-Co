@@ -3573,423 +3573,6 @@
   });
   CO.npcs({
     "characters": {
-      "visitorA": {
-        "names": [
-          "Anna",
-          "Bram",
-          "Sanne",
-          "Daan",
-          "Lotte",
-          "Sem"
-        ],
-        "look": {
-          "shirt": "#3f6a9e",
-          "pants": "#2f3440",
-          "skin": "#d8a97c",
-          "hair": "#3a2a1c"
-        },
-        "speed": 1.35,
-        "steps": [
-          {
-            "do": "walk",
-            "to": "midway"
-          },
-          {
-            "do": "wander",
-            "radius": 4,
-            "seconds": 8
-          },
-          {
-            "do": "walk",
-            "to": "carousel"
-          },
-          {
-            "do": "wander",
-            "radius": 5,
-            "seconds": 12
-          },
-          {
-            "do": "walk",
-            "to": "fairCross"
-          },
-          {
-            "do": "walk",
-            "to": "teacups"
-          },
-          {
-            "do": "wander",
-            "radius": 5,
-            "seconds": 10
-          },
-          {
-            "do": "walk",
-            "to": "kidsLane"
-          },
-          {
-            "do": "wander",
-            "radius": 5,
-            "seconds": 14
-          },
-          {
-            "do": "say",
-            "text": "Look at the little train!"
-          },
-          {
-            "do": "walk",
-            "to": "snack"
-          },
-          {
-            "do": "wander",
-            "radius": 3,
-            "seconds": 6
-          },
-          {
-            "do": "walk",
-            "to": "plaza"
-          },
-          {
-            "do": "leave"
-          }
-        ]
-      },
-      "visitorB": {
-        "names": [
-          "Femke",
-          "Thijs",
-          "Noor",
-          "Jesse",
-          "Mila",
-          "Ruben"
-        ],
-        "look": {
-          "shirt": "#a8462f",
-          "pants": "#3a3f48",
-          "skin": "#e8c49b",
-          "hair": "#6b4a2a"
-        },
-        "speed": 1.28,
-        "steps": [
-          {
-            "do": "walk",
-            "to": "midway"
-          },
-          {
-            "do": "wander",
-            "radius": 4,
-            "seconds": 8
-          },
-          {
-            "do": "walk",
-            "to": "ferris"
-          },
-          {
-            "do": "wander",
-            "radius": 5,
-            "seconds": 10
-          },
-          {
-            "do": "walk",
-            "to": "thrillCross"
-          },
-          {
-            "do": "walk",
-            "to": "dodgems"
-          },
-          {
-            "do": "wander",
-            "radius": 5,
-            "seconds": 14
-          },
-          {
-            "do": "face",
-            "to": "baron"
-          },
-          {
-            "do": "wait",
-            "seconds": 6
-          },
-          {
-            "do": "walk",
-            "to": "station"
-          },
-          {
-            "do": "wander",
-            "radius": 3,
-            "seconds": 6
-          },
-          {
-            "do": "walk",
-            "to": "plaza"
-          },
-          {
-            "do": "leave"
-          }
-        ]
-      },
-      "visitorC": {
-        "names": [
-          "Omar",
-          "Yara",
-          "Sven",
-          "Iris",
-          "Timo",
-          "Eva"
-        ],
-        "look": {
-          "shirt": "#5b8a52",
-          "pants": "#2d333b",
-          "skin": "#c99266",
-          "hair": "#1e1712"
-        },
-        "speed": 1.42,
-        "steps": [
-          {
-            "do": "walk",
-            "to": "fairCross"
-          },
-          {
-            "do": "wander",
-            "radius": 3,
-            "seconds": 4
-          },
-          {
-            "do": "walk",
-            "to": "darkWoods"
-          },
-          {
-            "do": "wander",
-            "radius": 5,
-            "seconds": 14
-          },
-          {
-            "do": "walk",
-            "to": "dropTower"
-          },
-          {
-            "do": "wander",
-            "radius": 5,
-            "seconds": 10
-          },
-          {
-            "do": "walk",
-            "to": "promWest"
-          },
-          {
-            "do": "walk",
-            "to": "halls"
-          },
-          {
-            "do": "wander",
-            "radius": 5,
-            "seconds": 12
-          },
-          {
-            "do": "say",
-            "text": "Such a nice little park."
-          },
-          {
-            "do": "walk",
-            "to": "gardenWalk"
-          },
-          {
-            "do": "wander",
-            "radius": 5,
-            "seconds": 10
-          },
-          {
-            "do": "walk",
-            "to": "plaza"
-          },
-          {
-            "do": "leave"
-          }
-        ]
-      },
-      "visitorD": {
-        "names": [
-          "Lars",
-          "Julia",
-          "Bas",
-          "Roos",
-          "Milan",
-          "Fleur"
-        ],
-        "look": {
-          "shirt": "#7a4a8a",
-          "pants": "#2b2f36",
-          "skin": "#e2b48a",
-          "hair": "#4a2f1c"
-        },
-        "speed": 1.45,
-        "steps": [
-          {
-            "do": "walk",
-            "to": "thrillCross"
-          },
-          {
-            "do": "wander",
-            "radius": 3,
-            "seconds": 4
-          },
-          {
-            "do": "walk",
-            "to": "coasterCountry"
-          },
-          {
-            "do": "wander",
-            "radius": 5,
-            "seconds": 12
-          },
-          {
-            "do": "walk",
-            "to": "promEast"
-          },
-          {
-            "do": "walk",
-            "to": "eastWalk"
-          },
-          {
-            "do": "wander",
-            "radius": 5,
-            "seconds": 10
-          },
-          {
-            "do": "walk",
-            "to": "firebird"
-          },
-          {
-            "do": "wander",
-            "radius": 5,
-            "seconds": 12
-          },
-          {
-            "do": "face",
-            "to": "firebirdTrack"
-          },
-          {
-            "do": "wait",
-            "seconds": 8
-          },
-          {
-            "do": "walk",
-            "to": "dragon"
-          },
-          {
-            "do": "wander",
-            "radius": 5,
-            "seconds": 12
-          },
-          {
-            "do": "say",
-            "text": "That loop!"
-          },
-          {
-            "do": "walk",
-            "to": "promEast"
-          },
-          {
-            "do": "wander",
-            "radius": 5,
-            "seconds": 6
-          },
-          {
-            "do": "walk",
-            "to": "plaza"
-          },
-          {
-            "do": "leave"
-          }
-        ]
-      },
-      "visitorE": {
-        "names": [
-          "Wim",
-          "Ellen",
-          "Jan",
-          "Ilse",
-          "Koen",
-          "Maud"
-        ],
-        "look": {
-          "shirt": "#c9a227",
-          "pants": "#3a3f48",
-          "skin": "#d39a72",
-          "hair": "#8a6a4a"
-        },
-        "speed": 1.2,
-        "steps": [
-          {
-            "do": "walk",
-            "to": "fairCross"
-          },
-          {
-            "do": "wander",
-            "radius": 3,
-            "seconds": 4
-          },
-          {
-            "do": "walk",
-            "to": "gardenWest"
-          },
-          {
-            "do": "wander",
-            "radius": 5,
-            "seconds": 8
-          },
-          {
-            "do": "walk",
-            "to": "gardenWalk"
-          },
-          {
-            "do": "wander",
-            "radius": 5,
-            "seconds": 12
-          },
-          {
-            "do": "walk",
-            "to": "clock"
-          },
-          {
-            "do": "wander",
-            "radius": 5,
-            "seconds": 14
-          },
-          {
-            "do": "walk",
-            "to": "bandstand"
-          },
-          {
-            "do": "wander",
-            "radius": 5,
-            "seconds": 16
-          },
-          {
-            "do": "walk",
-            "to": "maze"
-          },
-          {
-            "do": "wander",
-            "radius": 5,
-            "seconds": 10
-          },
-          {
-            "do": "walk",
-            "to": "promWest"
-          },
-          {
-            "do": "wander",
-            "radius": 5,
-            "seconds": 8
-          },
-          {
-            "do": "walk",
-            "to": "plaza"
-          },
-          {
-            "do": "leave"
-          }
-        ]
-      },
       "sweeper": {
         "names": [
           "Piet"
@@ -4104,18 +3687,55 @@
           }
         ]
       },
-      "watcher": {
+      "guardSouth": {
         "names": [
-          "Kees"
+          "Marco"
         ],
         "look": {
-          "shirt": "#4a5a6a",
-          "pants": "#2f3440",
-          "skin": "#e0b48e",
+          "shirt": "#23324a",
+          "pants": "#1b2230",
+          "skin": "#d8a97c",
           "hair": "#2a2a2a"
         },
-        "speed": 1.05,
+        "speed": 1.15,
         "steps": [
+          {
+            "do": "walk",
+            "to": "plaza"
+          },
+          {
+            "do": "wait",
+            "seconds": 10
+          },
+          {
+            "do": "walk",
+            "to": "midway"
+          },
+          {
+            "do": "wander",
+            "radius": 3,
+            "seconds": 10
+          },
+          {
+            "do": "walk",
+            "to": "fairCross"
+          },
+          {
+            "do": "wait",
+            "seconds": 6
+          },
+          {
+            "do": "walk",
+            "to": "teacups"
+          },
+          {
+            "do": "wait",
+            "seconds": 8
+          },
+          {
+            "do": "walk",
+            "to": "fairCross"
+          },
           {
             "do": "walk",
             "to": "station"
@@ -4126,89 +3746,208 @@
           },
           {
             "do": "wait",
-            "seconds": 40
+            "seconds": 8
           },
           {
             "do": "walk",
-            "to": "ferris"
+            "to": "thrillCross"
           },
           {
             "do": "wait",
-            "seconds": 30
+            "seconds": 6
           },
           {
             "do": "walk",
-            "to": "carousel"
+            "to": "dodgems"
           },
           {
             "do": "wait",
-            "seconds": 30
+            "seconds": 8
+          },
+          {
+            "do": "walk",
+            "to": "thrillCross"
+          },
+          {
+            "do": "walk",
+            "to": "midway"
+          }
+        ]
+      },
+      "guardNorth": {
+        "names": [
+          "Ingrid"
+        ],
+        "look": {
+          "shirt": "#23324a",
+          "pants": "#1b2230",
+          "skin": "#d8a97c",
+          "hair": "#2a2a2a"
+        },
+        "speed": 1.15,
+        "steps": [
+          {
+            "do": "walk",
+            "to": "gardenWalk"
+          },
+          {
+            "do": "wait",
+            "seconds": 8
+          },
+          {
+            "do": "walk",
+            "to": "darkWoods"
+          },
+          {
+            "do": "wait",
+            "seconds": 6
+          },
+          {
+            "do": "walk",
+            "to": "dropTower"
+          },
+          {
+            "do": "wait",
+            "seconds": 6
+          },
+          {
+            "do": "walk",
+            "to": "promWest"
+          },
+          {
+            "do": "walk",
+            "to": "halls"
+          },
+          {
+            "do": "wait",
+            "seconds": 8
+          },
+          {
+            "do": "walk",
+            "to": "promWest"
+          },
+          {
+            "do": "walk",
+            "to": "bandstand"
+          },
+          {
+            "do": "wait",
+            "seconds": 6
+          },
+          {
+            "do": "walk",
+            "to": "promEast"
+          },
+          {
+            "do": "walk",
+            "to": "coasterCountry"
+          },
+          {
+            "do": "wait",
+            "seconds": 6
+          },
+          {
+            "do": "walk",
+            "to": "eastWalk"
+          },
+          {
+            "do": "walk",
+            "to": "firebird"
+          },
+          {
+            "do": "wait",
+            "seconds": 6
+          },
+          {
+            "do": "walk",
+            "to": "dragon"
+          },
+          {
+            "do": "wait",
+            "seconds": 8
+          },
+          {
+            "do": "walk",
+            "to": "promEast"
+          },
+          {
+            "do": "walk",
+            "to": "gardenWalk"
+          }
+        ]
+      },
+      "guardGate": {
+        "names": [
+          "Henk"
+        ],
+        "look": {
+          "shirt": "#23324a",
+          "pants": "#1b2230",
+          "skin": "#d8a97c",
+          "hair": "#2a2a2a"
+        },
+        "speed": 1,
+        "steps": [
+          {
+            "do": "walk",
+            "to": "post"
+          },
+          {
+            "do": "face",
+            "to": "lotDrive"
+          },
+          {
+            "do": "wait",
+            "seconds": 60
+          }
+        ]
+      },
+      "cashierWest": {
+        "names": [
+          "Sophie"
+        ],
+        "look": {
+          "shirt": "#b8362b",
+          "pants": "#2f3440",
+          "skin": "#e8c49b",
+          "hair": "#6b4a2a"
+        },
+        "speed": 1.2,
+        "steps": [
+          {
+            "do": "walk",
+            "to": "post"
+          },
+          {
+            "do": "wait",
+            "seconds": 120
+          }
+        ]
+      },
+      "cashierEast": {
+        "names": [
+          "Tom"
+        ],
+        "look": {
+          "shirt": "#b8362b",
+          "pants": "#2f3440",
+          "skin": "#e8c49b",
+          "hair": "#6b4a2a"
+        },
+        "speed": 1.2,
+        "steps": [
+          {
+            "do": "walk",
+            "to": "post"
+          },
+          {
+            "do": "wait",
+            "seconds": 120
           }
         ]
       }
     },
-    "spawners": [
-      {
-        "id": "crowdA",
-        "character": "visitorA",
-        "x": -5,
-        "z": 26,
-        "every": 13,
-        "max": 6,
-        "hours": [
-          9,
-          22
-        ]
-      },
-      {
-        "id": "crowdB",
-        "character": "visitorB",
-        "x": 5,
-        "z": 26,
-        "every": 15,
-        "max": 5,
-        "hours": [
-          9,
-          22
-        ]
-      },
-      {
-        "id": "crowdC",
-        "character": "visitorC",
-        "x": 0,
-        "z": 24,
-        "every": 17,
-        "max": 5,
-        "hours": [
-          9,
-          22
-        ]
-      },
-      {
-        "id": "crowdD",
-        "character": "visitorD",
-        "x": 3,
-        "z": 24,
-        "every": 17,
-        "max": 5,
-        "hours": [
-          9,
-          22
-        ]
-      },
-      {
-        "id": "crowdE",
-        "character": "visitorE",
-        "x": -3,
-        "z": 24,
-        "every": 19,
-        "max": 4,
-        "hours": [
-          9,
-          22
-        ]
-      }
-    ],
+    "spawners": [],
     "workers": [
       {
         "id": "sweeper",
@@ -4256,19 +3995,65 @@
         ]
       },
       {
-        "id": "watcher",
-        "character": "watcher",
+        "id": "guardSouth",
+        "character": "guardSouth",
         "x": 0,
-        "z": 2,
-        "ry": 3.141592653589793,
+        "z": 26,
+        "ry": 0,
         "home": [
           0,
           24
         ],
         "hours": [
-          9,
-          22
+          8.5,
+          22.5
         ]
+      },
+      {
+        "id": "guardNorth",
+        "character": "guardNorth",
+        "x": 2,
+        "z": -44,
+        "ry": 0,
+        "home": [
+          0,
+          24
+        ],
+        "hours": [
+          8.5,
+          22.5
+        ]
+      },
+      {
+        "id": "guardGate",
+        "character": "guardGate",
+        "x": -4.6,
+        "z": 71.7,
+        "ry": 1.5707963267948966,
+        "home": [
+          -16.6,
+          42.5
+        ],
+        "hours": [
+          7.5,
+          23
+        ]
+      },
+      {
+        "id": "cashierWest",
+        "character": "cashierWest",
+        "x": -9.55,
+        "z": 36.8,
+        "ry": 0,
+        "off": true
+      },
+      {
+        "id": "cashierEast",
+        "character": "cashierEast",
+        "x": 8.45,
+        "z": 36.8,
+        "ry": 0,
+        "off": true
       }
     ],
     "spots": {
@@ -4380,17 +4165,18 @@
         "x": 77,
         "z": -36
       },
-      "firebirdTrack": {
-        "x": 100,
-        "z": -30
-      },
       "dragon": {
         "x": 77,
         "z": -92
+      },
+      "lotDrive": {
+        "x": 0,
+        "z": 74
       }
     }
   });
   CO.world({
+    "booth@47.21,-58.5": { x: 58.3, z: -74.85, ry: -197 },
     "door@-21.27,19.95": { x: -23.35, z: 26.75 },
     "door@-22.57,3": { x: -21.3, z: -0.7 },
     "door@20.27,20": { x: 22.35, z: 24.8 },
@@ -7905,42 +7691,21 @@
     tube.rotation.z = Math.PI / 2 - 0.35; tube.rotation.y = 0.4;
     sphere(0.08, M.gold, x + 1.4, 1.5, z, parent);
   }
-  // ── The crowd ────────────────────────────────────────────────────
-  // The engine's NPC system (CO.npcs) makes people from data: a character, a spawner on a clock, and a list of steps.
-  // These are the wanderers and the staff. They do not queue and they do not buy: they walk, they look at the rides,
-  // they sit by the midway and they drift home. The queuing guests are a different machine, in part 02.
-  // Each visitor takes a tour of one part of the park and back (the spots are on the streets of every land), so the crowd is
-  // spread over the whole park rather than the midway; the staff keep their own corners.
+  // ── Who walks the park ────────────────────────────────────────────
+  // The engine's NPC system (CO.npcs) makes people from data: a character, a worker with a post and hours, and a list of steps.
+  // The park's only visitors are its guests (part 02), so everyone here works: the sweepers and the gardener keep their
+  // corners, two guards walk a beat (the south lands and the north and east), a guard keeps the car park's barrier, and a
+  // cashier stands behind the counter of each ticket office while a clerk is on the payroll.
+  var PK_CASHIERS = ['cashierWest', 'cashierEast'];
   function pkBuildNpcs() {
     var W = function (to, sec, r) { return [{ do: 'walk', to: to }, { do: 'wander', radius: r || 5, seconds: sec || 10 }]; };
-    var tour = function (list) { var st = []; list.forEach(function (x) { st = st.concat(Array.isArray(x) ? x : [x]); }); return st.concat([{ do: 'walk', to: 'plaza' }, { do: 'leave' }]); };
+    var go = function (to, wait) { return wait ? [{ do: 'walk', to: to }, { do: 'wait', seconds: wait }] : [{ do: 'walk', to: to }]; };
+    var beat = function (list) { var st = []; list.forEach(function (x) { st = st.concat(x); }); return st; };
+    var guard = { shirt: '#23324a', pants: '#1b2230', skin: '#d8a97c', hair: '#2a2a2a' };
+    var cashier = { shirt: '#b8362b', pants: '#2f3440', skin: '#e8c49b', hair: '#6b4a2a' };
+    var STAFF = [9, 22], GUARDS = [8.5, 22.5];
     CO.npcs({
       characters: {
-        visitorA: {          // the Fairground and the kids' garden
-          names: ['Anna', 'Bram', 'Sanne', 'Daan', 'Lotte', 'Sem'],
-          look: { shirt: '#3f6a9e', pants: '#2f3440', skin: '#d8a97c', hair: '#3a2a1c' }, speed: 1.35,
-          steps: tour([W('midway', 8, 4), W('carousel', 12), { do: 'walk', to: 'fairCross' }, W('teacups', 10), W('kidsLane', 14), { do: 'say', text: 'Look at the little train!' }, W('snack', 6, 3)])
-        },
-        visitorB: {          // Thrills and the wheel
-          names: ['Femke', 'Thijs', 'Noor', 'Jesse', 'Mila', 'Ruben'],
-          look: { shirt: '#a8462f', pants: '#3a3f48', skin: '#e8c49b', hair: '#6b4a2a' }, speed: 1.28,
-          steps: tour([W('midway', 8, 4), W('ferris', 10), { do: 'walk', to: 'thrillCross' }, W('dodgems', 14), { do: 'face', to: 'baron' }, { do: 'wait', seconds: 6 }, W('station', 6, 3)])
-        },
-        visitorC: {          // the Dark Woods, the drop tower and the show halls
-          names: ['Omar', 'Yara', 'Sven', 'Iris', 'Timo', 'Eva'],
-          look: { shirt: '#5b8a52', pants: '#2d333b', skin: '#c99266', hair: '#1e1712' }, speed: 1.42,
-          steps: tour([W('fairCross', 4, 3), W('darkWoods', 14), W('dropTower', 10), { do: 'walk', to: 'promWest' }, W('halls', 12), { do: 'say', text: 'Such a nice little park.' }, W('gardenWalk', 10)])
-        },
-        visitorD: {          // Coaster Country and the East Walk
-          names: ['Lars', 'Julia', 'Bas', 'Roos', 'Milan', 'Fleur'],
-          look: { shirt: '#7a4a8a', pants: '#2b2f36', skin: '#e2b48a', hair: '#4a2f1c' }, speed: 1.45,
-          steps: tour([W('thrillCross', 4, 3), W('coasterCountry', 12), { do: 'walk', to: 'promEast' }, W('eastWalk', 10), W('firebird', 12), { do: 'face', to: 'firebirdTrack' }, { do: 'wait', seconds: 8 }, W('dragon', 12), { do: 'say', text: 'That loop!' }, W('promEast', 6)])
-        },
-        visitorE: {          // the gardens: the Garden Walk, the flower clock, the bandstand and the maze
-          names: ['Wim', 'Ellen', 'Jan', 'Ilse', 'Koen', 'Maud'],
-          look: { shirt: '#c9a227', pants: '#3a3f48', skin: '#d39a72', hair: '#8a6a4a' }, speed: 1.2,
-          steps: tour([W('fairCross', 4, 3), W('gardenWest', 8), W('gardenWalk', 12), W('clock', 14), W('bandstand', 16), W('maze', 10), W('promWest', 8)])
-        },
         sweeper: {
           names: ['Piet'], look: { shirt: '#e0a92c', pants: '#2f3440', skin: '#d8a97c', hair: '#5a5a5a' }, speed: 1.1,
           steps: [].concat(W('midway', 25, 9), W('plaza', 20, 6), W('snack', 18, 5))
@@ -7953,24 +7718,39 @@
           names: ['Truus'], look: { shirt: '#4d7a3a', pants: '#3a2f24', skin: '#e0b48e', hair: '#b8b8b8' }, speed: 1.0,
           steps: [].concat(W('clock', 40, 6), W('maze', 30, 5))
         },
-        watcher: {
-          names: ['Kees'], look: { shirt: '#4a5a6a', pants: '#2f3440', skin: '#e0b48e', hair: '#2a2a2a' }, speed: 1.05,
-          steps: [{ do: 'walk', to: 'station' }, { do: 'face', to: 'coaster' }, { do: 'wait', seconds: 40 }, { do: 'walk', to: 'ferris' },
-            { do: 'wait', seconds: 30 }, { do: 'walk', to: 'carousel' }, { do: 'wait', seconds: 30 }]
-        }
+        // the south beat: the plaza, the midway, the Fairground and the Thrills
+        guardSouth: {
+          names: ['Marco'], look: guard, speed: 1.15,
+          steps: beat([go('plaza', 10), W('midway', 10, 3), go('fairCross', 6), go('teacups', 8), go('fairCross'), go('station'), [{ do: 'face', to: 'coaster' }, { do: 'wait', seconds: 8 }],
+            go('thrillCross', 6), go('dodgems', 8), go('thrillCross'), go('midway')])
+        },
+        // the north beat: the Dark Woods, the halls, the gardens, Coaster Country and the East Walk
+        guardNorth: {
+          names: ['Ingrid'], look: guard, speed: 1.15,
+          steps: beat([go('gardenWalk', 8), go('darkWoods', 6), go('dropTower', 6), go('promWest'), go('halls', 8), go('promWest'), go('bandstand', 6),
+            go('promEast'), go('coasterCountry', 6), go('eastWalk'), go('firebird', 6), go('dragon', 8), go('promEast'), go('gardenWalk')])
+        },
+        // the car park: beside the barrier, watching the cars come in off the road
+        guardGate: {
+          names: ['Henk'], look: guard, speed: 1.0,
+          steps: [{ do: 'walk', to: 'post' }, { do: 'face', to: 'lotDrive' }, { do: 'wait', seconds: 60 }]
+        },
+        // behind the counter, facing the window and the line
+        cashierWest: { names: ['Sophie'], look: cashier, speed: 1.2, steps: [{ do: 'walk', to: 'post' }, { do: 'wait', seconds: 120 }] },
+        cashierEast: { names: ['Tom'], look: cashier, speed: 1.2, steps: [{ do: 'walk', to: 'post' }, { do: 'wait', seconds: 120 }] }
       },
-      spawners: [
-        { id: 'crowdA', character: 'visitorA', x: -5, z: 26, every: 13, max: 6, hours: [9, 22] },
-        { id: 'crowdB', character: 'visitorB', x: 5, z: 26, every: 15, max: 5, hours: [9, 22] },
-        { id: 'crowdC', character: 'visitorC', x: 0, z: 24, every: 17, max: 5, hours: [9, 22] },
-        { id: 'crowdD', character: 'visitorD', x: 3, z: 24, every: 17, max: 5, hours: [9, 22] },
-        { id: 'crowdE', character: 'visitorE', x: -3, z: 24, every: 19, max: 4, hours: [9, 22] }
-      ],
+      spawners: [],
       workers: [
-        { id: 'sweeper', character: 'sweeper', x: 0, z: 20, ry: 0, home: [0, 24], hours: [9, 22] },
-        { id: 'sweeperNorth', character: 'sweeperNorth', x: 2, z: -44, ry: 0, home: [0, 24], hours: [9, 22] },
-        { id: 'gardener', character: 'gardener', x: 4, z: -58, ry: 0, home: [0, 24], hours: [9, 22] },
-        { id: 'watcher', character: 'watcher', x: 0, z: 2, ry: Math.PI, home: [0, 24], hours: [9, 22] }
+        { id: 'sweeper', character: 'sweeper', x: 0, z: 20, ry: 0, home: [0, 24], hours: STAFF },
+        { id: 'sweeperNorth', character: 'sweeperNorth', x: 2, z: -44, ry: 0, home: [0, 24], hours: STAFF },
+        { id: 'gardener', character: 'gardener', x: 4, z: -58, ry: 0, home: [0, 24], hours: STAFF },
+        { id: 'guardSouth', character: 'guardSouth', x: 0, z: 26, ry: 0, home: [0, 24], hours: GUARDS },
+        { id: 'guardNorth', character: 'guardNorth', x: 2, z: -44, ry: 0, home: [0, 24], hours: GUARDS },
+        // the gate guard comes out of HQ's door on the forecourt; the cashiers are at the counter (no hours of their own: the
+        // frame hook below brings them in and sends them off with the clerk and the opening hours)
+        { id: 'guardGate', character: 'guardGate', x: -4.6, z: 71.7, ry: Math.PI / 2, home: [-16.6, 42.5], hours: [7.5, 23] },   // by the barrier's post, past the bays and clear of the lane in
+        { id: 'cashierWest', character: 'cashierWest', x: PK_BOOTHS[0].x - 0.55, z: PK_BOOTHS[0].z + 0.8, ry: 0 },
+        { id: 'cashierEast', character: 'cashierEast', x: PK_BOOTHS[1].x - 0.55, z: PK_BOOTHS[1].z + 0.8, ry: 0 }
       ],
       spots: {
         plaza: { x: 0, z: 26 }, gate: { x: 0, z: 28 }, midway: { x: 0, z: 14 }, station: { x: 0, z: 4 }, coaster: { x: 0, z: -2 },
@@ -7980,10 +7760,22 @@
         darkWoods: { x: -36, z: -24 }, dropTower: { x: -36, z: -52 }, promWest: { x: -20, z: -60 }, halls: { x: -46.5, z: -70 },
         gardenWest: { x: -28, z: -44 }, gardenWalk: { x: 2, z: -44 }, clock: { x: 6, z: -58 }, bandstand: { x: 2, z: -66 }, maze: { x: 9.5, z: -72 },
         coasterCountry: { x: 40, z: -24 }, promEast: { x: 50, z: -60 }, eastWalk: { x: 76, z: -20 },
-        firebird: { x: 77, z: -36 }, firebirdTrack: { x: 100, z: -30 }, dragon: { x: 77, z: -92 }
+        firebird: { x: 77, z: -36 }, dragon: { x: 77, z: -92 },
+        lotDrive: { x: 0, z: 74 }
       }
     });
   }
+  // the cashiers work while the park has a clerk and the windows are open (08:30 to 22:00). They stand in a shut room the
+  // route finder cannot walk into, so they are at the counter when the shift starts and gone when it ends, not walked there
+  hook('frame', function () {
+    if (typeof NPCS !== 'object' || !NPCS.workers) return;
+    var on = !!S.clerk && S.time >= 8.5 && S.time < 22;
+    NPCS.workers.forEach(function (w) {
+      if (PK_CASHIERS.indexOf(w.id) < 0) return;
+      w.off = !on;
+      if (w.off) npcList.slice().forEach(function (n) { if (n.worker === w) npcRemove(n); });
+    });
+  });
   // ── Painted textures ─────────────────────────────────────────────
   function pkTexPavers() {
     return tex(512, 512, function (c, w, h) {
@@ -8587,7 +8379,26 @@
     pkBevelBox(t, h, d, M, w / 2 + t / 2, h / 2, 0, parent, 0.02);
     pkBevelBox(t, h, d, M, -w / 2 - t / 2, h / 2, 0, parent, 0.02);
   }
-  var PK_PLANTER_COLS = [0xd94f6a, 0xf3c84a, 0xe7e2f2, 0xb85cc7, 0xf08a3c, 0xf2f2f2];
+  // a building's plinth as a band round its outside, never a block under its floor: the rectangle is the outer wall line, the
+  // band runs t outward from it, h high from y (0 by default), and breaks for each gap ({ side: 'x0' | 'x1' | 'z0' | 'z1', a, b }:
+  // a door's span). Up a wall it makes a cornice or a string course the same way
+  function pkPlinthRing(x0, x1, z0, z1, h, t, mat, parent, gaps, y) {
+    y = y || 0;
+    var sides = [['z0', x0 - t, x1 + t, z0], ['z1', x0 - t, x1 + t, z1], ['x0', z0, z1, x0], ['x1', z0, z1, x1]];
+    sides.forEach(function (sd) {
+      var runs = [[sd[1], sd[2]]];
+      (gaps || []).forEach(function (gp) {
+        if (gp.side !== sd[0]) return;
+        var o = []; runs.forEach(function (r) { if (gp.b <= r[0] || gp.a >= r[1]) { o.push(r); return; } if (gp.a > r[0]) o.push([r[0], gp.a]); if (gp.b < r[1]) o.push([gp.b, r[1]]); }); runs = o;
+      });
+      var out = sd[0] === 'z0' || sd[0] === 'x0' ? -1 : 1, at = sd[3] + out * t / 2;
+      runs.forEach(function (r) {
+        var len = r[1] - r[0], m = (r[0] + r[1]) / 2; if (len < 0.02) return;
+        if (sd[0].charAt(0) === 'z') box(len, h, t, mat, m, y + h / 2, at, parent); else box(t, h, len, mat, at, y + h / 2, m, parent);
+      });
+    });
+  }
+  var PK_PLANTER_COLS =[0xd94f6a, 0xf3c84a, 0xe7e2f2, 0xb85cc7, 0xf08a3c, 0xf2f2f2];
   function pkPlanter(w, parent, x, y, z) {
     var M = pkMats(), g = new THREE.Group(); g.position.set(x, y, z); parentOf(parent).add(g);
     pkBevelBox(w, 0.34, 0.52, pkMatStone(), 0, 0.17, 0, g, 0.03);
@@ -13169,15 +12980,24 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       // south, to the car park; west, to the fence
       run('x', Z1, X0, X1, y0, [[-27.4, -25.0], [-23.6, -21.2]], 1);
       run('z', X0, Z0, Z1, y0, [[37.6, 39.8]], -1);
-      // the cornice at each floor line and the band under it, cream on the brick
-      box(W + 0.5, 0.22, D + 0.5, cream, CX, y0 + FH - 0.05, CZ);
-      box(W + 0.62, 0.08, D + 0.62, stone, CX, y0 + FH + 0.07, CZ);
+      // the cornice at each floor line and the band over it, cream on the brick: round the outside, so they never close the
+      // stair well inside
+      pkPlinthRing(X0, X1, Z0, Z1, 0.22, 0.25, cream, null, null, y0 + FH - 0.16);
+      pkPlinthRing(X0, X1, Z0, Z1, 0.08, 0.31, stone, null, null, y0 + FH + 0.03);
     }
-    // the stone base under the ground floor and the corner quoins up the building
-    box(W + 0.36, 0.8, D + 0.36, stone, CX, 0.4, CZ);
+    // the stone base round the foot of the walls (outside them, not a block under the ground floor), open at the entrance,
+    // and the corner quoins up the building
+    pkPlinthRing(X0, X1, Z0, Z1, 0.8, 0.18, stone, null, [{ side: 'x1', a: 41.4, b: 43.6 }]);
     [[X0, Z0], [X1, Z0], [X0, Z1], [X1, Z1]].forEach(function (c) { for (var q = 0; q < 14; q++) box(q % 2 ? 0.5 : 0.7, 0.36, q % 2 ? 0.7 : 0.5, stone, c[0], 1.0 + q * 0.72, c[1]); });
     // ── floors and the roof ──
     var vx = H.st.voidX, vz0 = H.st.z0 - 0.1, vz1 = H.st.z1 + 0.1;
+    // a ceiling under a floor that has the stair coming up through it: three panels round the well, the well left open
+    function wellCeiling(y) {
+      var a = X0 + 0.15, b = X1 - 0.15, c = Z0 + 0.15, d = Z1 - 0.15;
+      box(b - vx, 0.05, d - c, inner, (vx + b) / 2, y, (c + d) / 2);
+      box(vx - a, 0.05, vz0 - c, inner, (a + vx) / 2, y, (c + vz0) / 2);
+      box(vx - a, 0.05, d - vz1, inner, (a + vx) / 2, y, (vz1 + d) / 2);
+    }
     for (var lv = 1; lv < 3; lv++) {
       var ly = H.lv[lv];
       box(X1 - vx, T, D, inner, (vx + X1) / 2, ly - T / 2, CZ);
@@ -13250,7 +13070,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     // ── ground floor: Guest Services ──
     var gy = 0.02;
     pkPaved(W - 0.3, D - 0.3, S2({ color: 0xcfc6b4, roughness: 0.6 }), CX, gy + 0.01, CZ, 0.9);        // a polished stone floor
-    box(W - 0.3, 0.05, D - 0.3, inner, CX, FH - T - 0.03, CZ);
+    wellCeiling(FH - T - 0.03);
     [-26, -22].forEach(function (x) { pkBkBatten(scene, x, FH - T - 0.08, 39.5, 0, 1.4); pkBkBatten(scene, x, FH - T - 0.08, 44.5, 0, 1.4); });
     // the counter along the north side, facing the lobby, with its screen
     pkBevelBox(4.6, 1.05, 0.7, navy, -24.6, 0.53, 38.9, null, 0.03);
@@ -13283,7 +13103,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
 
     // ── first floor: Operations ──
     var oy = H.lv[1];
-    box(W - 0.3, 0.05, D - 0.3, inner, CX, oy + FH - T - 0.03, CZ);
+    wellCeiling(oy + FH - T - 0.03);
     [-26, -22].forEach(function (x) { pkBkBatten(scene, x, oy + FH - T - 0.08, 39.5, 0, 1.4); pkBkBatten(scene, x, oy + FH - T - 0.08, 44.5, 0, 1.4); });
     // a corridor wall down the middle (north rooms, south staff room), with two doorways
     box(1.6, FH - T, 0.15, cream, -27.6, oy + (FH - T) / 2, 42.0); box(2.8, FH - T, 0.15, cream, -23.9, oy + (FH - T) / 2, 42.0); box(2.4, FH - T, 0.15, cream, -20.3, oy + (FH - T) / 2, 42.0);
@@ -13337,16 +13157,17 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     box(W - 0.3, 0.05, D - 0.3, S2({ color: 0x2a2f36, roughness: 0.8 }), CX, ty + FH - T - 0.03, CZ);
     [-25.5, -21.5].forEach(function (x) { [39.5, 44.5].forEach(function (z) { pkRoundCyl(0.22, 0.06, S2({ color: 0x1b1f23, roughness: 0.5 }), x, ty + FH - T - 0.08, z, null, 16); sphere(0.12, glowMat(0xfff0d0, 1.1), x, ty + FH - T - 0.13, z); }); });
     pkPaved(4.2, 3.0, S2({ color: 0x8a6a4a, roughness: 0.95 }), -21.6, ty + 0.02, 44.4, 1.0);   // a rug under the sofa corner
-    // the desk at the north windows: walnut on a steel frame, the PC that runs the park, a lamp, papers and a nameplate
+    // the desk at the north windows: walnut on a steel frame, the workstation that runs the park, a lamp, papers and a nameplate
     var desk = S2({ color: 0x4a3426, roughness: 0.55 });
     pkBevelBox(2.6, 0.07, 1.1, desk, -23.6, ty + 0.78, 38.8, null, 0.02);
     pkBevelBox(0.6, 0.74, 1.0, desk, -24.6, ty + 0.38, 38.8, null, 0.02); pkBevelBox(0.6, 0.74, 1.0, desk, -22.6, ty + 0.38, 38.8, null, 0.02);
     pkBevelBox(1.5, 0.5, 0.04, desk, -23.6, ty + 0.48, 38.3, null, 0.01);
     solid(-24.95, -22.25, 38.2, 39.4, ty, ty + 1.0);
-    pkHQOwnerPC(-23.6, ty + 0.815, 38.55);
+    pkHQOwnerPC(-23.6, ty + 0.815, 38.8);   // the workstation and Park OS, part 25
     pkSign3D(['THE OWNER'], 0.42, 0.1, -23.0, ty + 0.86, 39.32, 0, { bg: '#d8c9a8', fg: '#1b232c' });
-    pkRoundCyl(0.08, 0.03, MAT.steelDark, -22.6, ty + 0.83, 38.5, null, 12); pkRod(-22.6, ty + 0.84, 38.5, -22.7, ty + 1.25, 38.6, 0.015, gold, null, 6);
-    sphere(0.06, glowMat(0xfff0c8, 1.2), -22.7, ty + 1.24, 38.62);
+    // the lamp on the front corner, clear of the second screen
+    pkRoundCyl(0.08, 0.03, MAT.steelDark, -22.45, ty + 0.83, 39.05, null, 12); pkRod(-22.45, ty + 0.84, 39.05, -22.55, ty + 1.25, 39.0, 0.015, gold, null, 6);
+    sphere(0.06, glowMat(0xfff0c8, 1.2), -22.55, ty + 1.24, 39.0);
     var pc1 = pkBevelBox(0.3, 0.008, 0.4, MAT.paper, -24.3, ty + 0.82, 39.0, null, 0.003); pc1.rotation.y = 0.2;
     // the owner's chair, high-backed, facing the desk and the view
     pkHQExecChair(-23.6, ty, 39.85);
@@ -13501,38 +13322,6 @@ function pkBuildParkCabinet(px, py, pz, ry) {
         c.fillStyle = PK.closed ? '#ff6b5e' : '#5fd38d'; c.font = 'bold 16px ' + SCREEN_THEME.font; c.fillText(PK.closed ? 'THE GATE IS SHUT' : 'THE GATE IS OPEN', 18, 250);
       } });
     PK_BK_LIVE.push({ sc: sc, g: g, every: 2 });
-  }
-  // the owner's PC: the screen that runs the park (the management panel), on the desk, with a keyboard and a mouse
-  function pkHQOwnerPC(x, y, z) {
-    var caseM = pkBkStd({ color: 0x232a30, roughness: 0.42, metalness: 0.5 });
-    var pc = new THREE.Group(); pc.position.set(x, y, z); scene.add(pc);
-    var mon = new THREE.Group(); mon.position.set(0, 0.22, 0); mon.rotation.x = -0.07; pc.add(mon);
-    pkBevelBox(1.04, 0.64, 0.05, caseM, 0, 0.13, 0, mon, 0.02);
-    pkRoundCyl(0.048, 0.2, MAT.steelDark, 0, 0.02, -0.035, pc, 10);
-    pkBevelBox(0.36, 0.02, 0.22, caseM, 0, -0.09, -0.02, pc, 0.008);
-    var scr = touchScreen({ w: 560, h: 320, pw: 0.92, ph: 0.54, x: 0, y: 0.13, z: 0.028, parent: mon, title: 'Park office',
-      draw: function (ctx, s) {
-        scBg(ctx, s.w, s.h); scHead(ctx, s.w, 'PARK CO  ·  OFFICE', 'Day ' + S.day + '   ' + fmtTime(S.time));
-        ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-        ctx.fillStyle = '#eef1f5'; ctx.font = 'bold 36px ' + SCREEN_THEME.font; ctx.fillText(money(S.bank), 18, 86);
-        ctx.fillStyle = '#8b98a4'; ctx.font = '12px ' + SCREEN_THEME.font; ctx.fillText('BANK', 20, 102);
-        var st = [['GUESTS', PK.guests.length], ['RIDES', pkOpenCount() + '/' + (PK.attractions.length + 1)], ['TICKETS', PK.today.tickets], ['SNACKS', PK.today.snacks]];
-        for (var si = 0; si < st.length; si++) { var sx = 186 + si * 96; ctx.fillStyle = '#8b98a4'; ctx.font = '12px ' + SCREEN_THEME.font; ctx.fillText(st[si][0], sx, 72); ctx.fillStyle = '#eef1f5'; ctx.font = 'bold 20px ' + SCREEN_THEME.font; ctx.fillText(String(st[si][1]), sx, 96); }
-        ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(16, 112, s.w - 32, 1);
-        var atts = PK.attractions || [];
-        for (var r = 0; r < atts.length; r++) {
-          var ax = 22 + (r % 3) * 178, ay = 134 + Math.floor(r / 3) * 24, open = !!atts[r].open;
-          ctx.fillStyle = open ? '#5fd38d' : '#ff6b5e'; ctx.beginPath(); ctx.arc(ax + 4, ay - 4, 4.5, 0, 6.2832); ctx.fill();
-          ctx.fillStyle = '#c9d2d9'; ctx.font = '13px ' + SCREEN_THEME.font; ctx.fillText(atts[r].name, ax + 14, ay);
-        }
-        scButton(s, 16, 268, 168, 38, 'Manage', true, function () { openPanel('admin'); });
-        scButton(s, 192, 268, 168, 38, 'Rides', true, function () { openPanel('admin', 'coaster'); });
-        scButton(s, 368, 268, 176, 38, 'Service', true, function () { pkService(); });
-      } });
-    pkBevelBox(0.48, 0.018, 0.16, pkBkStd({ color: 0x2a3036, roughness: 0.75 }), 0, -0.088, 0.34, pc, 0.006);
-    pkBevelBox(0.07, 0.035, 0.11, pkBkStd({ color: 0x2f363c, roughness: 0.6 }), 0.38, -0.08, 0.34, pc, 0.03);
-    hitBox(1.5, 1.0, 0.9, 0, 0.3, 0.1, { prompt: function () { return 'Park management'; }, use: function () { openPanel('admin'); } }, pc);
-    PK.officeScreen = scr;
   }
   // the armchairs only stand in the owner's office, on the top floor
   function pkHQLevelAt(x, z) { return PK_HQ.lv[2]; }
@@ -14000,9 +13789,9 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   }
   // the control house's outside, round the cabin: a brick plinth, cream walls with timber framing, a slate hip roof with
   // a turret, and the name board
-  function pkEastHouseShell(g, x0, x1, z0, z1, H, cfg) {
+  function pkEastHouseShell(g, x0, x1, z0, z1, H, cfg, door) {
     var M = pkFtM(), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, W = x1 - x0, D = z1 - z0;
-    box(W + 0.5, 0.6, D + 0.5, M.brick, cx, 0.3, cz, g);
+    pkPlinthRing(x0, x1, z0, z1, 0.6, 0.25, M.brick, g, door ? [{ side: 'x0', a: door[0], b: door[1] }] : null);   // round the outside, open at the door
     box(W + 0.12, H, 0.06, M.cream, cx, H / 2, z1 + 0.04, g);                         // the back of the room, outside
     // timber framing on the outer faces (the cabin's own walls are the inside)
     [[cx, z0 - 0.09, W + 0.2, 0.06], [cx, z1 + 0.09, W + 0.2, 0.06]].forEach(function (f) { box(f[2], 0.14, f[3], M.wood, f[0], H - 0.1, f[1], g); box(f[2], 0.14, f[3], M.wood, f[0], 0.68, f[1], g); });
@@ -14064,7 +13853,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     // the control house: the room is the halls' cabin kit, bigger, with its long window on the platform side (north)
     var K = { u0: ax - 6.6, u1: ax - 0.9, z0: az + 22.2, z1: az + 26.8, door: [az + 24.0, az + 25.1] };
     pkCabinBuild(g, a, { s: 1, AX: 0, K: K, trim: 0xf1e6cc, band: cfg.a, name: cfg.name, sign: cfg.sign, H: 3.0 });
-    pkEastHouseShell(g, K.u0, K.u1, K.z0, K.z1, 3.0, cfg);
+    pkEastHouseShell(g, K.u0, K.u1, K.z0, K.z1, 3.0, cfg, K.door);
     // the yard fence: west of the track north of the platform and south of the house, along the north and south ends
     var y0 = az - 13, y1 = az + 41.2;
     pkParkFence(ax - 0.8, y0, ax - 0.8, az - 0.4);
@@ -14322,5 +14111,669 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     PK.propSolids = pkClaimPropSolids();
     return r;
   };
+  // ── Why ──────────────────────────────────────────────────────────
+  // The park is paths, plazas and ride pads laid on a lawn, and nothing kept the player on them: you could walk off any street
+  // and across the grass to anywhere. This part reads the paving the world actually laid (every flat thing at ground level that
+  // is not grass or water), draws a waist-high rail along its edge, and keeps the player, the guests and the NPCs on it. It
+  // follows the paving by itself, so a new street or plaza gets its rail with no list to keep, and an editor move of a prop
+  // redraws it.
+  //   The mask: one top-down render of the ground-level meshes into a 0.5 m grid (the originals the bake hid are drawn for it),
+  // plus the raised floors floorY knows (the platform, the booth steps). Specks under 15 m² are dropped, gaps under 6 m² filled.
+  //   The rail: the edge of the mask is traced into loops, straightened, and broken wherever the grass side already has a wall,
+  // a hedge or a fence of its own, or lies outside the palisade.
+  //   The rule: inside the palisade and at ground level, a step that puts more of you on the grass is refused; a step back
+  // toward the paving never is, so nobody dropped on the lawn by the editor is stuck there.
+  var PK_PF = { m: null, block: null, W: 0, D: 0, X0: 0, Z0: 0, C: 0.5, group: null, dirty: 0, runs: 0, posts: 0 };
+  var PK_PF_H = 0.95;   // the rail's height
+
+  function pkPfMask() {
+    var P = PK_PF, C = P.C;
+    P.X0 = PK_PARK.x0 - 2; P.Z0 = PK_PARK.z0 - 2;
+    P.W = Math.round((PK_PARK.x1 + 2 - P.X0) / C); P.D = Math.round((74 - P.Z0) / C);
+    var W = P.W, D = P.D, X1 = P.X0 + W * C, Z1 = P.Z0 + D * C;
+    // the ground-level meshes: flat, low, not the lawn, not grass, not water
+    var M = pkMats(), bb = new THREE.Box3(), cand = [], lift = [];
+    scene.updateMatrixWorld(true);
+    scene.traverse(function (o) {
+      if (!o.isMesh || o.isInstancedMesh || !o.geometry || o.userData.baked || o.userData.pkPathFence) return;
+      var mt = o.material; if (!mt || Array.isArray(mt) || mt === MAT.grass || mt === M.water) return;
+      if (mt.map && TEX.grass && mt.map.image === TEX.grass.image) return;
+      var g = o.geometry; if (!g.boundingBox) g.computeBoundingBox();
+      bb.copy(g.boundingBox).applyMatrix4(o.matrixWorld);
+      if (!(bb.max.y < 0.3 && bb.max.y > -0.1 && bb.max.y - bb.min.y < 0.3) || bb.max.x - bb.min.x > 300) return;
+      if (!o.visible && !o.userData.bakedAway) return;
+      for (var p = o.parent; p; p = p.parent) if (!p.visible) return;
+      cand.push(o);
+    });
+    var cam = new THREE.OrthographicCamera(P.X0, X1, -P.Z0, -Z1, 0.1, 60);
+    cam.up.set(0, 0, -1); cam.position.set(0, 30, 0); cam.lookAt(0, 0, 0); cam.updateMatrixWorld(); cam.layers.set(7);
+    var rt = new THREE.WebGLRenderTarget(W, D), white = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+    cand.forEach(function (o) { lift.push([o.visible, o.layers.mask]); o.visible = true; o.layers.enable(7); });
+    var ov = scene.overrideMaterial, bg = scene.background, fog = scene.fog, cc = new THREE.Color(), ca = renderer.getClearAlpha();
+    renderer.getClearColor(cc);
+    scene.overrideMaterial = white; scene.background = null; scene.fog = null; renderer.setClearColor(0x000000, 1);
+    var px = new Uint8Array(W * D * 4);
+    renderer.setRenderTarget(rt); renderer.clear(); renderer.render(scene, cam); renderer.readRenderTargetPixels(rt, 0, 0, W, D, px); renderer.setRenderTarget(null);
+    scene.overrideMaterial = ov; scene.background = bg; scene.fog = fog; renderer.setClearColor(cc, ca);
+    cand.forEach(function (o, i) { o.visible = lift[i][0]; o.layers.mask = lift[i][1]; });
+    rt.dispose(); white.dispose();
+    // the render's rows run from the bottom (z1) up
+    var m = new Uint8Array(W * D);
+    for (var j = 0; j < D; j++) for (var i = 0; i < W; i++) {
+      var x = P.X0 + (i + 0.5) * C, z = P.Z0 + (j + 0.5) * C;
+      m[j * W + i] = px[((D - 1 - j) * W + i) * 4] > 127 || floorY(x, z, 0) > 0.02 ? 1 : 0;
+    }
+    pkPfClose(m, W, D, 2);       // a strip of lawn under 2 m between two pavings (a doorway, a booth's steps) is walked across
+    pkPfClean(m, W, D, 1, 60);   // a stray slab or a step stone on the lawn is no path
+    pkPfClean(m, W, D, 0, 24);   // a crack between two slabs is no lawn
+    P.m = m;
+  }
+  // a closing: grow the paving r cells, then shrink it back, so the gaps narrower than 2r fill and the edges stay where they were
+  function pkPfClose(m, W, D, r) {
+    function pass(src, grow) {
+      var a = new Uint8Array(W * D), b = new Uint8Array(W * D), i, j, k, v;
+      for (j = 0; j < D; j++) for (i = 0; i < W; i++) {
+        v = grow ? 0 : 1;
+        for (k = -r; k <= r; k++) { var ii = i + k; var s = ii < 0 || ii >= W ? (grow ? 0 : 1) : src[j * W + ii]; if (grow ? s : !s) { v = grow ? 1 : 0; break; } }
+        a[j * W + i] = v;
+      }
+      for (j = 0; j < D; j++) for (i = 0; i < W; i++) {
+        v = grow ? 0 : 1;
+        for (k = -r; k <= r; k++) { var jj = j + k; var t = jj < 0 || jj >= D ? (grow ? 0 : 1) : a[jj * W + i]; if (grow ? t : !t) { v = grow ? 1 : 0; break; } }
+        b[j * W + i] = v;
+      }
+      return b;
+    }
+    m.set(pass(pass(m, true), false));
+  }
+  // flood the 4-connected pieces of value v; a piece smaller than n cells (and, for the lawn, not touching the edge) flips
+  function pkPfClean(m, W, D, v, n) {
+    var seen = new Uint8Array(W * D), stack = [], piece = [];
+    for (var s = 0; s < W * D; s++) {
+      if (seen[s] || m[s] !== v) continue;
+      stack.length = 0; piece.length = 0; stack.push(s); seen[s] = 1; var edge = false;
+      while (stack.length) {
+        var k = stack.pop(), i = k % W, j = (k - i) / W; piece.push(k);
+        if (i === 0 || j === 0 || i === W - 1 || j === D - 1) edge = true;
+        if (i > 0 && !seen[k - 1] && m[k - 1] === v) { seen[k - 1] = 1; stack.push(k - 1); }
+        if (i < W - 1 && !seen[k + 1] && m[k + 1] === v) { seen[k + 1] = 1; stack.push(k + 1); }
+        if (j > 0 && !seen[k - W] && m[k - W] === v) { seen[k - W] = 1; stack.push(k - W); }
+        if (j < D - 1 && !seen[k + W] && m[k + W] === v) { seen[k + W] = 1; stack.push(k + W); }
+      }
+      if (piece.length < n && !(v === 0 && edge)) for (var q = 0; q < piece.length; q++) m[piece[q]] = 1 - v;
+    }
+  }
+  // inside the palisade: the park, the forecourt and the car park. Outside it the grass is nobody's business
+  function pkPfInside(x, z) { return x > PK_PARK.x0 && x < PK_PARK.x1 && z > PK_PARK.z0 && z < 71.5 && !(x < -32.5 && z > PK_KIDS_Z); }
+
+  // the lawn cells the player may not stand on, and the ones a rail would only double: a solid already stands there
+  function pkPfBlockers() {
+    var P = PK_PF, W = P.W, D = P.D, C = P.C, block = new Uint8Array(W * D), walled = new Uint8Array(W * D), pad = 0.8;
+    for (var j = 0; j < D; j++) for (var i = 0; i < W; i++) {
+      var k = j * W + i; if (P.m[k]) continue;
+      if (pkPfInside(P.X0 + (i + 0.5) * C, P.Z0 + (j + 0.5) * C)) block[k] = 1;
+    }
+    solids.forEach(function (s) {
+      if (s.y0 > 1.2 || s.y1 < 0.3) return;
+      if (Math.max(s.x1 - s.x0, s.z1 - s.z0) < 1.2) return;   // a lamp post or a bin beside the kerb is no wall: the rail runs past it
+      var i0 = Math.max(0, Math.floor((s.x0 - pad - P.X0) / C)), i1 = Math.min(W - 1, Math.floor((s.x1 + pad - P.X0) / C));
+      var j0 = Math.max(0, Math.floor((s.z0 - pad - P.Z0) / C)), j1 = Math.min(D - 1, Math.floor((s.z1 + pad - P.Z0) / C));
+      for (var jj = j0; jj <= j1; jj++) for (var ii = i0; ii <= i1; ii++) walled[jj * W + ii] = 1;
+    });
+    P.block = block; P.walled = walled;
+  }
+
+  // ── The rail ─────────────────────────────────────────────────────
+  // every edge between a paved cell and a lawn cell, wound with the paving on its left, chained into loops
+  function pkPfTrace() {
+    var P = PK_PF, W = P.W, D = P.D, m = P.m, edges = [], from = {};
+    function add(ax, az, bx, bz, g) { var e = { a: ax + ',' + az, b: bx + ',' + bz, ax: ax, az: az, bx: bx, bz: bz, g: g, used: false }; edges.push(e); (from[e.a] = from[e.a] || []).push(e); }
+    for (var j = 0; j < D; j++) for (var i = 0; i < W; i++) {
+      var k = j * W + i; if (!m[k]) continue;
+      if (j === 0 || !m[k - W]) add(i, j, i + 1, j, j ? k - W : -1);
+      if (i === W - 1 || !m[k + 1]) add(i + 1, j, i + 1, j + 1, i < W - 1 ? k + 1 : -1);
+      if (j === D - 1 || !m[k + W]) add(i + 1, j + 1, i, j + 1, j < D - 1 ? k + W : -1);
+      if (i === 0 || !m[k - 1]) add(i, j + 1, i, j, i ? k - 1 : -1);
+    }
+    var loops = [];
+    edges.forEach(function (e0) {
+      if (e0.used) return;
+      var loop = [], e = e0;
+      while (e && !e.used) {
+        e.used = true; loop.push(e);
+        var nx = from[e.b], next = null;
+        if (nx) for (var q = 0; q < nx.length; q++) if (!nx[q].used) { next = nx[q]; break; }
+        e = next;
+      }
+      loops.push(loop);
+    });
+    return loops;
+  }
+  // a rail stands on an edge whose lawn side is inside the palisade and has no wall of its own
+  function pkPfRuns(loops) {
+    var P = PK_PF, runs = [];
+    loops.forEach(function (loop) {
+      var ok = loop.map(function (e) { return e.g >= 0 && P.block[e.g] && !P.walled[e.g]; });
+      var n = loop.length, start = ok.indexOf(false), cur = null;
+      if (start < 0) { runs.push(loop.map(function (e) { return [e.ax, e.az]; }).concat([[loop[0].ax, loop[0].az]])); return; }
+      for (var t = 1; t <= n; t++) {
+        var q = (start + t) % n, e = loop[q];
+        if (ok[q]) { if (!cur) cur = [[e.ax, e.az]]; cur.push([e.bx, e.bz]); }
+        else if (cur) { runs.push(cur); cur = null; }
+      }
+      if (cur) runs.push(cur);
+    });
+    // grid corners to metres, and the stair steps of a curve or a slant pulled straight
+    return runs.map(function (r) { return pkPfSimplify(r.map(function (p) { return [P.X0 + p[0] * P.C, P.Z0 + p[1] * P.C]; }), 0.36); })
+      .filter(function (r) { var L = 0; for (var i = 1; i < r.length; i++) L += Math.hypot(r[i][0] - r[i - 1][0], r[i][1] - r[i - 1][1]); return L >= 1.4; });
+  }
+  // Douglas-Peucker: keep the corners, drop the points a straight line passes within tol of
+  function pkPfSimplify(pts, tol) {
+    if (pts.length < 3) return pts;
+    var keep = new Uint8Array(pts.length), stack = [[0, pts.length - 1]]; keep[0] = keep[pts.length - 1] = 1;
+    while (stack.length) {
+      var s = stack.pop(), a = pts[s[0]], b = pts[s[1]], best = -1, bd = tol;
+      for (var i = s[0] + 1; i < s[1]; i++) { var d = pkSegDist(pts[i][0], pts[i][1], a[0], a[1], b[0], b[1]); if (d > bd) { bd = d; best = i; } }
+      if (best > 0) { keep[best] = 1; stack.push([s[0], best], [best, s[1]]); }
+    }
+    return pts.filter(function (p, i) { return keep[i]; });
+  }
+  // the rail itself: cast-iron posts with a gold ball, a top rail and a mid rail, all instanced so a park of it is three draws
+  function pkPfBuildRail(runs) {
+    var P = PK_PF, M = pkMats();
+    if (P.group) { scene.remove(P.group); P.group.children.forEach(function (c) { c.geometry.dispose(); }); P.group = null; }
+    var posts = [], rails = [];
+    runs.forEach(function (r) {
+      for (var i = 0; i < r.length; i++) {
+        posts.push(r[i]);
+        if (i === r.length - 1) break;
+        var a = r[i], b = r[i + 1], len = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.max(1, Math.round(len / 1.8));
+        for (var k = 1; k < n; k++) posts.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]);
+        rails.push([a, b, len]);
+      }
+    });
+    var g = new THREE.Group(); g.userData.pkPathFence = true; g.userData.dynamic = true;
+    var postM = new THREE.InstancedMesh(new THREE.BoxGeometry(0.07, PK_PF_H, 0.07), M.iron, posts.length);
+    var capM = new THREE.InstancedMesh(new THREE.SphereGeometry(0.055, 10, 6), M.gold, posts.length);
+    var railM = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.045, 0.04), M.iron, rails.length * 2);
+    var mx = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3(1, 1, 1), up = new THREE.Vector3(0, 1, 0);
+    posts.forEach(function (p, i) {
+      mx.makeTranslation(p[0], PK_PF_H / 2, p[1]); postM.setMatrixAt(i, mx);
+      mx.makeTranslation(p[0], PK_PF_H + 0.04, p[1]); capM.setMatrixAt(i, mx);
+    });
+    rails.forEach(function (r, i) {
+      var a = r[0], b = r[1]; q.setFromAxisAngle(up, Math.atan2(-(b[1] - a[1]), b[0] - a[0])); sc.set(r[2], 1, 1);
+      [PK_PF_H - 0.06, PK_PF_H * 0.45].forEach(function (y, h) { v.set((a[0] + b[0]) / 2, y, (a[1] + b[1]) / 2); mx.compose(v, q, sc); railM.setMatrixAt(i * 2 + h, mx); });
+    });
+    [postM, capM, railM].forEach(function (im) { im.castShadow = true; im.receiveShadow = true; im.instanceMatrix.needsUpdate = true; im.frustumCulled = false; im.userData.pkPathFence = true; g.add(im); });
+    scene.add(g); P.group = g; P.runs = runs.length; P.posts = posts.length;
+    if (typeof shadowDirty !== 'undefined') shadowDirty = true;
+  }
+  function pkPathFence() {
+    var t0 = performance.now();
+    pkPfMask(); pkPfBlockers(); pkPfBuildRail(pkPfRuns(pkPfTrace()));
+    PK_PF.ms = Math.round(performance.now() - t0);
+    NAV.dirty = true;   // the route finder rebuilds its grid with the lawn shut
+  }
+
+  // ── The rule ─────────────────────────────────────────────────────
+  function pkPfLawn(x, z) {
+    var P = PK_PF, i = Math.floor((x - P.X0) / P.C), j = Math.floor((z - P.Z0) / P.C);
+    return i >= 0 && j >= 0 && i < P.W && j < P.D && P.block[j * P.W + i] ? 1 : 0;
+  }
+  // how much of the player's footprint is on the lawn: the centre and four points round it
+  function pkPfOff(x, z) { var r = 0.28; return pkPfLawn(x, z) + pkPfLawn(x - r, z) + pkPfLawn(x + r, z) + pkPfLawn(x, z - r) + pkPfLawn(x, z + r); }
+  var _pkPfPrevCollides = GAME.collides;
+  GAME.collides = function (x, z, opt) {
+    if (_pkPfPrevCollides && _pkPfPrevCollides(x, z, opt)) return true;
+    if (!PK_PF.block || PK.playerRide || player.y > 0.4) return false;
+    var off = pkPfOff(x, z);
+    return off > 0 && off > pkPfOff(player.x, player.z);
+  };
+  // the guests and the NPCs keep to the paving too. Their route finder asks insideWalk of every cell, so the lawn is shut to it;
+  // and an NPC's wander picks a spot at random and walks its last leg straight there, so a spot on the lawn is moved to the
+  // nearest paving it can stand on whole (the guests' own spots are all paved already: the midway, the gate, the queues)
+  var _pkPfPrevInsideWalk = GAME.insideWalk;
+  // a cell is open only with the lawn 0.2 m clear of its centre, so a string-pulled run past a corner does not clip the grass
+  function pkPfNear(x, z) { var r = 0.2; return pkPfLawn(x, z) || pkPfLawn(x - r, z - r) || pkPfLawn(x + r, z - r) || pkPfLawn(x - r, z + r) || pkPfLawn(x + r, z + r); }
+  GAME.insideWalk = function (x, z) { return (!_pkPfPrevInsideWalk || _pkPfPrevInsideWalk(x, z)) && !(PK_PF.block && pkPfNear(x, z)); };
+  // the route finder's open cells that join up with the gate. A paved spot off that (the gravel path inside the coaster
+  // yard's fence) is one the route finder cannot reach, and it would send the walker straight over the lawn and the fence
+  function pkPfReach() {
+    if (NAV.dirty || !NAV.grid) navBuild();
+    if (PK_PF.reachOf === NAV.grid) return PK_PF.reach;
+    var W = NAV.w, H = NAV.h, reach = new Uint8Array(W * H), s = navNearestOpen(navCell({ x: 0, z: 26 })), stack = [s.j * W + s.i];
+    reach[stack[0]] = 1;
+    while (stack.length) {
+      var k = stack.pop(), i = k % W, j = (k - i) / W;
+      [[i - 1, j], [i + 1, j], [i, j - 1], [i, j + 1]].forEach(function (c) { var q = c[1] * W + c[0]; if (navOpen(c[0], c[1]) && !reach[q]) { reach[q] = 1; stack.push(q); } });
+    }
+    PK_PF.reach = reach; PK_PF.reachOf = NAV.grid; return reach;
+  }
+  function pkPfReachable(x, z) { var c = navCell({ x: x, z: z }); return !!pkPfReach()[c.j * NAV.w + c.i]; }
+  function pkPfOnPaving(p) {
+    if (!PK_PF.block || (!pkPfLawn(p.x, p.z) && pkPfReachable(p.x, p.z))) return p;
+    for (var r = 0.5; r <= 8; r += 0.5) {
+      var n = Math.max(8, Math.round(r * 8)), a0 = Math.random() * Math.PI * 2;
+      for (var k = 0; k < n; k++) {
+        var a = a0 + k / n * Math.PI * 2, x = p.x + Math.cos(a) * r, z = p.z + Math.sin(a) * r;
+        if (!pkPfOff(x, z) && pkPfReachable(x, z)) { var q = {}; for (var key in p) q[key] = p[key]; q.x = x; q.z = z; return q; }
+      }
+    }
+    return p;
+  }
+  // with the lawn shut a walk across the park goes round by the streets, and the far rides (The Mountain King) need more of
+  // the route finder's search than its default 20000 steps: short of it, it gives up and sends the walker in a straight line
+  NAV.steps = 60000;
+  var _pkPfNpcWalkTo = npcWalkTo;
+  // (a worker's own post is where the game put it on purpose - a cashier behind a counter - and is never moved)
+  npcWalkTo = function (n, p) { var post = p && n.post && p.x === n.post.x && p.z === n.post.z; return _pkPfNpcWalkTo(n, p && !post ? pkPfOnPaving(p) : p); };
+  // built once the world stands, the editor's edits are on it and the bake is done; redrawn a moment after a prop moves
+  hook('boot', function () { pkPathFence(); });
+  ['propPlaced', 'propDeleted', 'propRemoved'].forEach(function (h) { hook(h, function () { if (PK_PF.m) PK_PF.dirty = 0.6; }); });
+  hook('frame', function (dt) { if (PK_PF.dirty > 0 && (PK_PF.dirty -= dt) <= 0) { PK_PF.dirty = 0; pkPathFence(); } });
+  var _pkPfT = GAME.T;
+  GAME.T = function () { var t = _pkPfT(); t.PK_PF = PK_PF; t.pkPathFence = pkPathFence; t.pkPfOff = pkPfOff; t.pkPfLawn = pkPfLawn; t.pkPfOnPaving = pkPfOnPaving; return t; };
+  GAME.commands.fence =function () { pkPathFence(); return 'path fence: ' + PK_PF.runs + ' runs, ' + PK_PF.posts + ' posts, ' + PK_PF.ms + ' ms'; };
+  // ── What it is ────────────────────────────────────────────────────
+  // On the desk: an ultrawide main screen on an aluminium stand with a webcam and a bias light behind it, a second screen
+  // turned toward the chair with the live park map, a soundbar, a lit keyboard and mouse on a desk mat, a mug. Beside the desk
+  // on the floor: the tower, a glass side with three lit fans and a lit graphics card. The lights cycle slowly through colour.
+  // On the main screen, Park OS: a lock screen that wakes on a tap and locks itself when you walk away, a top bar with the
+  // day, the time and the bank, a dock of apps down the left, and the apps:
+  //   Dashboard  the day at a glance: the bank, guests, rides open, tickets, the bank through the day, alerts, the level
+  //   Finance    the ticket and snack prices with buttons to change them, the wages, today, and the ledger
+  //   Rides      every ride, its state, queue, riders and cycles, open or shut it; the coaster's AUTO and its service
+  //   Guests     where the guests are (arriving, queuing, riding, walking, leaving) and the longest queues
+  //   Staff      hire or let go the clerk and the operator, and everyone on duty: who, what, where
+  //   Security   four live cameras over the park: the paths, the rides, the guests, the staff and the guards
+  //   Inbox      the park's news, newest first
+  // Every button is a tap zone on the screen (E or a click while aiming at it); the full management panel is a tap away.
+  var PK_PC = { app: 'home', awake: false, idle: 0, page: 0, hist: [], lastSample: -1, sc: null, side: null, x: 0, z: 0, hue: 0, rgb: [] };
+  var PK_PC_APPS = [['home', 'Dashboard', '#f5b53d'], ['money', 'Finance', '#5fd38d'], ['rides', 'Rides', '#ff8a5c'], ['guests', 'Guests', '#8fc3ff'],
+    ['staff', 'Staff', '#c79bff'], ['cctv', 'Security', '#ff6b5e'], ['mail', 'Inbox', '#f0d58a']];
+  var PK_PC_W = 960, PK_PC_H = 420, PK_PC_SIDE = 150, PK_PC_TOP = 30;
+
+  // ── The hardware ──────────────────────────────────────────────────
+  function pkHQOwnerPC(x, y, z) {
+    var S2 = pkBkStd, alu = S2({ color: 0xb9bec4, roughness: 0.32, metalness: 0.85 }), black = S2({ color: 0x15181b, roughness: 0.45, metalness: 0.3 });
+    var dark = S2({ color: 0x23282d, roughness: 0.6, metalness: 0.2 }), steel = S2({ color: 0x2f363c, roughness: 0.5, metalness: 0.6 });
+    var pc = new THREE.Group(); pc.position.set(x, y, z); scene.add(pc);
+    var lit = new THREE.Group(); lit.userData.dynamic = true; pc.add(lit);                     // the lights that change colour: never baked
+    PK_PC.x = x; PK_PC.z = z;
+    function rgb() { var m = new THREE.MeshBasicMaterial({ color: 0xffffff }); m.userData.noBake = true; PK_PC.rgb.push(m); return m; }
+
+    // the desk mat, the keyboard and the mouse
+    pkBevelBox(0.92, 0.004, 0.4, S2({ color: 0x1b2129, roughness: 0.95 }), -0.02, 0.002, 0.2, pc, 0.002);
+    box(0.92, 0.0045, 0.006, S2({ color: 0xc9a227, roughness: 0.4, metalness: 0.7 }), -0.02, 0.003, 0.398, pc);
+    var keyTex = tex(512, 160, pkPCKeyboardArt, 1, 1);
+    pkBevelBox(0.46, 0.022, 0.15, black, -0.08, 0.013, 0.2, pc, 0.006);
+    var keys = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.135), new THREE.MeshStandardMaterial({ map: keyTex, roughness: 0.55 }));
+    keys.rotation.x = -Math.PI / 2 + 0.06; keys.position.set(-0.08, 0.026, 0.2); pc.add(keys);
+    box(0.44, 0.003, 0.004, rgb(), -0.08, 0.004, 0.276, lit);                                   // the underglow along its front
+    pkBevelBox(0.065, 0.032, 0.11, black, 0.31, 0.018, 0.21, pc, 0.028);                       // a wireless mouse
+    box(0.006, 0.003, 0.05, rgb(), 0.31, 0.035, 0.18, lit);
+    // the main screen: an ultrawide on an aluminium stand, a webcam on its top edge, a bias light behind it
+    var mon = new THREE.Group(); mon.position.set(0, 0.36, -0.36); mon.rotation.x = -0.05; pc.add(mon);
+    pkBevelBox(1.06, 0.5, 0.03, black, 0, 0, -0.012, mon, 0.012);
+    pkBevelBox(0.4, 0.22, 0.05, dark, 0, 0, -0.045, mon, 0.02);
+    box(1.0, 0.012, 0.012, alu, 0, -0.256, 0.0, mon);                                          // the chin
+    pkBevelBox(0.07, 0.034, 0.03, black, 0, 0.268, 0.004, mon, 0.01);
+    sphere(0.008, S2({ color: 0x0a0c0e, roughness: 0.1, metalness: 0.4 }), 0, 0.268, 0.02, mon);
+    // the bias light: a soft glow on the air behind the screen, brightest at its middle
+    var glow = tex(128, 128, function (cx, w, h) { var r = cx.createRadialGradient(w / 2, h / 2, 4, w / 2, h / 2, w / 2); r.addColorStop(0, 'rgba(255,255,255,0.55)'); r.addColorStop(1, 'rgba(255,255,255,0)'); cx.fillStyle = r; cx.fillRect(0, 0, w, h); }, 1, 1);
+    var biasM = new THREE.MeshBasicMaterial({ map: glow, color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }); biasM.userData.noBake = true; PK_PC.rgb.push(biasM);
+    var bias = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.7), biasM); bias.position.set(0, 0.38, -0.44); lit.add(bias);
+    pkBevelBox(0.07, 0.3, 0.035, alu, 0, 0.17, -0.42, pc, 0.012);                              // the stand's neck
+    pkBevelBox(0.32, 0.012, 0.22, alu, 0, 0.006, -0.38, pc, 0.006);                             // and its foot
+    var sc = touchScreen({ w: PK_PC_W, h: PK_PC_H, res: 1.5, pw: 1.0, ph: 1.0 * PK_PC_H / PK_PC_W, x: 0, y: 0, z: 0.006, parent: mon, title: 'Park OS', draw: pkPCDraw });
+    PK_PC.sc = sc; PK.officeScreen = sc;
+    PK_BK_LIVE.push({ sc: sc, g: mon, every: 0.5 });
+    // the soundbar under it
+    pkBevelBox(0.62, 0.055, 0.07, black, 0, 0.03, -0.17, pc, 0.025);
+    box(0.5, 0.004, 0.002, rgb(), 0, 0.012, -0.134, lit);
+    // the second screen, turned toward the chair: the live park map
+    var side = new THREE.Group(); side.position.set(0.78, 0.28, -0.22); side.rotation.y = -0.55; pc.add(side);
+    pkBevelBox(0.56, 0.35, 0.03, black, 0, 0, -0.012, side, 0.01);
+    pkBevelBox(0.05, 0.26, 0.03, alu, 0, -0.13, -0.05, side, 0.01);
+    pkBevelBox(0.2, 0.012, 0.16, alu, 0, -0.274, -0.05, side, 0.006);
+    var ss = touchScreen({ w: 480, h: 288, pw: 0.52, ph: 0.312, x: 0, y: 0, z: 0.006, parent: side, title: 'Live park map', draw: pkPCDrawMap });
+    PK_PC.side = ss; PK_BK_LIVE.push({ sc: ss, g: side, every: 1.0 });
+    // a mug with the park's name
+    var mug = S2({ color: 0xf4f1e6, roughness: 0.35 });
+    pkRoundCyl(0.042, 0.1, mug, -0.86, 0.05, -0.12, pc, 16);
+    pkRoundCyl(0.036, 0.004, S2({ color: 0x3a2418, roughness: 0.2 }), -0.86, 0.097, -0.12, pc, 14);
+    var handle = new THREE.Mesh(new THREE.TorusGeometry(0.025, 0.007, 6, 12), mug); handle.position.set(-0.81, 0.05, -0.12); handle.rotation.y = Math.PI / 2; pc.add(handle);
+    box(0.05, 0.03, 0.002, S2({ color: 0xf5b53d, roughness: 0.5 }), -0.86, 0.055, -0.078, pc);
+
+    // the tower, on the floor beside the desk, its glass side to the room
+    var tw = new THREE.Group(); tw.position.set(-1.72, -y + PK_HQ.lv[2], -0.1); pc.add(tw);
+    var twLit = new THREE.Group(); twLit.userData.dynamic = true; tw.add(twLit);
+    pkBevelBox(0.46, 0.5, 0.22, black, 0, 0.27, 0, tw, 0.012);
+    [[-0.19, 0.19], [0.19, 0.19], [-0.19, -0.09], [0.19, -0.09]].forEach(function (f) { pkRoundCyl(0.02, 0.02, steel, f[0], 0.01, f[1] * 0.4, tw, 8); });
+    box(0.42, 0.44, 0.004, S2({ color: 0x1a2a33, roughness: 0.05, metalness: 0.3, transparent: true, opacity: 0.35 }), 0, 0.28, 0.112, tw);
+    box(0.4, 0.42, 0.004, S2({ color: 0x0c0f12, roughness: 0.8 }), 0, 0.28, -0.098, tw);      // the board, behind the glass
+    box(0.22, 0.05, 0.12, S2({ color: 0x2a3036, roughness: 0.4, metalness: 0.6 }), -0.08, 0.22, 0.0, tw);   // the graphics card
+    box(0.2, 0.006, 0.002, rgb(), -0.08, 0.245, 0.061, twLit);
+    box(0.08, 0.08, 0.06, S2({ color: 0x3b444c, roughness: 0.3, metalness: 0.8 }), -0.08, 0.38, -0.05, tw);  // the cooler
+    // three fans up the front, facing the glass
+    PK_PC.fans = [];
+    [[0.13, 0.42], [0.13, 0.27], [0.13, 0.12]].forEach(function (f) {
+      var fan = new THREE.Group(); fan.position.set(f[0], f[1], 0.02); twLit.add(fan);
+      var ring = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.007, 6, 24), rgb()); fan.add(ring);
+      var hub = new THREE.Group(); fan.add(hub);
+      for (var b = 0; b < 5; b++) { var arm = new THREE.Group(); arm.rotation.z = b * Math.PI * 2 / 5; hub.add(arm); box(0.018, 0.045, 0.004, S2({ color: 0x20262b, roughness: 0.6 }), 0, 0.028, 0, arm); }
+      PK_PC.fans.push(hub);
+    });
+    sphere(0.006, glowMat(0x5fd38d, 2.0), -0.23, 0.47, 0.06, tw);                                  // the power light
+    solid(x - 1.72 - 0.25, x - 1.72 + 0.25, z - 0.1 - 0.13, z - 0.1 + 0.13, PK_HQ.lv[2], PK_HQ.lv[2] + 0.55);
+
+    // E on the keyboard: the full management panel
+    hitBox(0.5, 0.12, 0.25, -0.08, 0.04, 0.2, { prompt: function () { return 'Park management (the full panel)'; }, use: function () { openPanel('admin'); } }, pc);
+    return pc;
+  }
+  // the keycaps, printed once: rows of dark caps with pale legends, the wide keys where they belong
+  function pkPCKeyboardArt(c, w, h) {
+    c.fillStyle = '#111417'; c.fillRect(0, 0, w, h);
+    var rows = [['Esc', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12', 'Del'], ['`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 'Bksp'],
+      ['Tab', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '[', ']', '\\'], ['Caps', 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ';', "'", 'Enter'],
+      ['Shift', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/', 'Shift'], ['Ctrl', 'Win', 'Alt', ' ', 'Alt', 'Fn', 'Ctrl']];
+    var wide = { Bksp: 1.8, Tab: 1.4, '\\': 1.4, Caps: 1.7, Enter: 2.1, Shift: 2.3, ' ': 6.4, Ctrl: 1.3, Win: 1.2, Alt: 1.2, Fn: 1.2 };
+    var rh = h / rows.length;
+    rows.forEach(function (r, j) {
+      var units = r.reduce(function (s, k) { return s + (wide[k] || 1); }, 0), u = (w - 8) / units, cx = 4;
+      r.forEach(function (k) {
+        var kw = (wide[k] || 1) * u;
+        c.fillStyle = '#23292f'; c.fillRect(cx + 1.5, j * rh + 2, kw - 3, rh - 4);
+        c.fillStyle = '#2d343b'; c.fillRect(cx + 3, j * rh + 3, kw - 6, rh - 9);
+        c.fillStyle = '#d8dee4'; c.font = (k.length > 1 ? 9 : 13) + 'px Arial'; c.textAlign = 'center'; c.textBaseline = 'middle';
+        if (k !== ' ') c.fillText(k, cx + kw / 2, j * rh + rh / 2 - 2);
+        cx += kw;
+      });
+    });
+  }
+
+  // ── Park OS ───────────────────────────────────────────────────────
+  function pkPCZone(sc, x, y, w, h, label, act) { sc.zones.push({ x: x, y: y, w: w, h: h, label: label, act: function () { act(); PK_PC.idle = 0; sc.dirty = true; } }); }
+  function pkPCRound(c, x, y, w, h, r) { c.beginPath(); if (c.roundRect) c.roundRect(x, y, w, h, r); else c.rect(x, y, w, h); }
+  function pkPCText(c, t, x, y, size, col, bold, align) { c.font = (bold ? 'bold ' : '') + size + 'px ' + SCREEN_THEME.font; c.fillStyle = col || '#eef1f5'; c.textAlign = align || 'left'; c.textBaseline = 'alphabetic'; c.fillText(t, x, y); c.textAlign = 'left'; }
+  function pkPCPanel(c, x, y, w, h, title) {
+    pkPCRound(c, x, y, w, h, 10); c.fillStyle = 'rgba(255,255,255,0.045)'; c.fill(); c.strokeStyle = 'rgba(255,255,255,0.08)'; c.lineWidth = 1; c.stroke();
+    if (title) pkPCText(c, title.toUpperCase(), x + 12, y + 20, 11, '#8b98a4', true);
+  }
+  function pkPCBtn(sc, x, y, w, h, label, act, on, col) { scButton(sc, x, y, w, h, label, on !== false, function () { act(); PK_PC.idle = 0; }, col); }
+  function pkPCWords(id) { var s = String(id).replace(/([A-Z])/g, ' $1').toLowerCase(); return s.charAt(0).toUpperCase() + s.slice(1); }
+  function pkPCDraw(c, sc) {
+    var W = PK_PC_W, H = PK_PC_H;
+    if (!PK_PC.awake) return pkPCLock(c, sc);
+    // the desktop: a deep wallpaper, the top bar, the dock
+    var g = c.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#0e1620'); g.addColorStop(1, '#101d1a'); c.fillStyle = g; c.fillRect(0, 0, W, H);
+    c.fillStyle = 'rgba(0,0,0,0.45)'; c.fillRect(0, 0, W, PK_PC_TOP);
+    pkPCText(c, 'PARK OS', 12, 20, 13, '#f5b53d', true);
+    var app = PK_PC_APPS.filter(function (a) { return a[0] === PK_PC.app; })[0];
+    pkPCText(c, app ? app[1] : '', 92, 20, 13, '#d7dee4');
+    pkPCText(c, 'Day ' + S.day + '   ' + fmtTime(S.time) + '   ' + money(S.bank), W - 14, 20, 13, '#d7dee4', false, 'right');
+    c.fillStyle = PK.closed ? '#ff6b5e' : '#5fd38d'; c.beginPath(); c.arc(W - 250, 15, 4, 0, 6.283); c.fill();
+    pkPCText(c, PK.closed ? 'CLOSED' : 'OPEN', W - 240, 20, 11, PK.closed ? '#ff6b5e' : '#5fd38d', true);
+    // the dock
+    c.fillStyle = 'rgba(0,0,0,0.28)'; c.fillRect(0, PK_PC_TOP, PK_PC_SIDE, H - PK_PC_TOP);
+    PK_PC_APPS.forEach(function (a, i) {
+      var y = PK_PC_TOP + 8 + i * 40, on = a[0] === PK_PC.app;
+      if (on) { pkPCRound(c, 6, y, PK_PC_SIDE - 12, 36, 8); c.fillStyle = 'rgba(255,255,255,0.09)'; c.fill(); }
+      pkPCRound(c, 14, y + 5, 26, 26, 7); c.fillStyle = a[2]; c.fill();
+      pkPCText(c, a[1].charAt(0), 27, y + 24, 15, '#14181c', true, 'center');
+      pkPCText(c, a[1], 50, y + 23, 14, on ? '#ffffff' : '#c3ccd4', on);
+      pkPCZone(sc, 6, y, PK_PC_SIDE - 12, 36, a[1], function () { PK_PC.app = a[0]; PK_PC.page = 0; });
+    });
+    pkPCBtn(sc, 10, H - 82, PK_PC_SIDE - 20, 30, 'Full panel', function () { openPanel('admin'); });
+    pkPCBtn(sc, 10, H - 44, PK_PC_SIDE - 20, 30, 'Lock', function () { PK_PC.awake = false; }, false);
+    var X = PK_PC_SIDE + 12, Y = PK_PC_TOP + 12, CW = W - X - 12, CH = H - Y - 12;
+    ({ home: pkPCHome, money: pkPCMoney, rides: pkPCRides, guests: pkPCGuests, staff: pkPCStaff, cctv: pkPCCctv, mail: pkPCMail }[PK_PC.app] || pkPCHome)(c, sc, X, Y, CW, CH);
+  }
+  // the lock screen: the time, big, over the wallpaper; a tap anywhere signs in
+  function pkPCLock(c, sc) {
+    var W = PK_PC_W, H = PK_PC_H, g = c.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#13243a'); g.addColorStop(1, '#0b1418'); c.fillStyle = g; c.fillRect(0, 0, W, H);
+    [[180, 320, 220, 'rgba(245,181,61,0.10)'], [760, 90, 260, 'rgba(95,211,141,0.08)'], [520, 380, 160, 'rgba(143,195,255,0.07)']].forEach(function (b) { var r = c.createRadialGradient(b[0], b[1], 0, b[0], b[1], b[2]); r.addColorStop(0, b[3]); r.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = r; c.fillRect(0, 0, W, H); });
+    pkPCText(c, fmtTime(S.time), W / 2, 196, 104, '#f4f1e6', true, 'center');
+    pkPCText(c, 'Day ' + S.day + '  ·  ' + (PK.closed ? 'the gate is shut' : 'the gate is open') + '  ·  ' + PK.guests.length + ' guests', W / 2, 236, 18, '#c3ccd4', false, 'center');
+    pkPCRound(c, W / 2 - 110, 290, 220, 44, 22); c.fillStyle = 'rgba(255,255,255,0.12)'; c.fill();
+    pkPCText(c, 'Tap to sign in', W / 2, 318, 17, '#ffffff', true, 'center');
+    pkPCText(c, 'PARK CO', 24, H - 22, 15, '#f5b53d', true);
+    pkPCZone(sc, 0, 0, W, H, 'Sign in to Park OS', function () { PK_PC.awake = true; });
+  }
+  function pkPCTile(c, x, y, w, h, label, value, col, sub) {
+    pkPCPanel(c, x, y, w, h);
+    pkPCText(c, label.toUpperCase(), x + 14, y + 22, 11, '#8b98a4', true);
+    pkPCText(c, value, x + 14, y + 52, 26, col || '#eef1f5', true);
+    if (sub) pkPCText(c, sub, x + 14, y + h - 10, 11, '#8b98a4');
+  }
+  // the alerts: what wants the owner's attention now
+  function pkPCAlerts() {
+    var out = [];
+    if (PK.ride.fault) out.push(['The coaster is stopped: ' + PK.ride.fault, '#ff6b5e']);
+    if ((S.wear || 0) >= 60) out.push(['The coaster wants a service (' + Math.round(S.wear) + ' % wear)', '#f0c04a']);
+    PK.attractions.forEach(function (a) {
+      if (a.ctl && a.ctl.fault) out.push([a.name + ' is stopped', '#ff6b5e']);
+      else if (a.ctl && a.ctl.maint) out.push([a.name + ' is in maintenance', '#f0c04a']);
+      else if (a.queue.length >= 8) out.push([a.name + ': ' + a.queue.length + ' in the queue', '#f0c04a']);
+    });
+    var tq = PK.booths.reduce(function (s, b) { return s + b.queue.length; }, 0);
+    if (!S.clerk && tq >= 4) out.push(['No clerk: ' + tq + ' waiting at the windows', '#f0c04a']);
+    if (S.bank < 0) out.push(['The bank is overdrawn', '#ff6b5e']);
+    return out;
+  }
+  function pkPCHome(c, sc, X, Y, W, H) {
+    var tw = (W - 30) / 4;
+    pkPCTile(c, X, Y, tw, 78, 'Bank', money(S.bank), '#f5b53d', 'earned today ' + money(PK.today.earned || 0));
+    pkPCTile(c, X + (tw + 10), Y, tw, 78, 'Guests', String(PK.guests.length), '#8fc3ff', 'in the park now');
+    pkPCTile(c, X + (tw + 10) * 2, Y, tw, 78, 'Rides open', pkOpenCount() + ' / ' + (PK.attractions.length + 1), '#5fd38d', S.coasterKey ? 'coaster key on' : 'coaster key off');
+    pkPCTile(c, X + (tw + 10) * 3, Y, tw, 78, 'Tickets', String(PK.today.tickets), '#eef1f5', 'rides ridden ' + PK.today.rides);
+    // the bank through the day
+    var cy = Y + 90, cw = W * 0.6, ch = H - 90 - 46;
+    pkPCPanel(c, X, cy, cw, ch, 'The bank today');
+    var pts = PK_PC.hist.filter(function (p) { return p.d === S.day; });
+    if (pts.length > 1) {
+      var lo = Math.min.apply(null, pts.map(function (p) { return p.v; })), hi = Math.max.apply(null, pts.map(function (p) { return p.v; })); if (hi - lo < 1) { hi += 1; lo -= 1; }
+      var px = function (t) { return X + 14 + (t / 24) * (cw - 28); }, py = function (v) { return cy + ch - 16 - (v - lo) / (hi - lo) * (ch - 50); };
+      c.beginPath(); c.moveTo(px(pts[0].t), cy + ch - 16); pts.forEach(function (p) { c.lineTo(px(p.t), py(p.v)); }); c.lineTo(px(pts[pts.length - 1].t), cy + ch - 16); c.closePath();
+      var ag = c.createLinearGradient(0, cy + 30, 0, cy + ch); ag.addColorStop(0, 'rgba(245,181,61,0.35)'); ag.addColorStop(1, 'rgba(245,181,61,0)'); c.fillStyle = ag; c.fill();
+      c.beginPath(); pts.forEach(function (p, i) { if (i) c.lineTo(px(p.t), py(p.v)); else c.moveTo(px(p.t), py(p.v)); }); c.strokeStyle = '#f5b53d'; c.lineWidth = 2.5; c.stroke();
+      pkPCText(c, money(hi), X + cw - 14, cy + 20, 11, '#8b98a4', false, 'right'); pkPCText(c, money(lo), X + cw - 14, cy + ch - 20, 11, '#8b98a4', false, 'right');
+      [9, 12, 15, 18, 21].forEach(function (hr) { pkPCText(c, hr + ':00', px(hr), cy + ch - 3, 10, '#6b7781', false, 'center'); });
+    } else pkPCText(c, 'The day has only just begun.', X + 14, cy + 60, 14, '#8b98a4');
+    // the alerts
+    var ax = X + cw + 10, aw = W - cw - 10;
+    pkPCPanel(c, ax, cy, aw, ch, 'Alerts');
+    var al = pkPCAlerts();
+    if (!al.length) { pkPCText(c, 'All clear', ax + 14, cy + 52, 18, '#5fd38d', true); pkPCText(c, 'Nothing wants you now.', ax + 14, cy + 74, 12, '#8b98a4'); }
+    al.slice(0, 7).forEach(function (a, i) { c.fillStyle = a[1]; c.beginPath(); c.arc(ax + 18, cy + 42 + i * 24, 4, 0, 6.283); c.fill(); c.save(); c.font = '13px ' + SCREEN_THEME.font; var t = scFit(c, a[0], aw - 40); c.restore(); pkPCText(c, t, ax + 30, cy + 47 + i * 24, 13, '#d7dee4'); });
+    // the level
+    var L = PK_LEVELS[PK.level - 1], N = PK_LEVELS[PK.level], ly = Y + H - 34;
+    pkPCPanel(c, X, ly, W, 34);
+    pkPCText(c, 'Level ' + PK.level + '  ' + (L ? L.name : ''), X + 14, ly + 22, 13, '#eef1f5', true);
+    var f = N ? clamp((PK.xp - L.xp) / (N.xp - L.xp), 0, 1) : 1, bx = X + 260, bw = W - 400;
+    pkPCRound(c, bx, ly + 12, bw, 10, 5); c.fillStyle = 'rgba(255,255,255,0.1)'; c.fill();
+    pkPCRound(c, bx, ly + 12, Math.max(10, bw * f), 10, 5); c.fillStyle = '#f5b53d'; c.fill();
+    pkPCText(c, N ? PK.xp + ' / ' + N.xp + ' xp: ' + N.name : 'Every level reached', X + W - 14, ly + 22, 12, '#8b98a4', false, 'right');
+  }
+  function pkPCMoney(c, sc, X, Y, W, H) {
+    var lw = W * 0.44;
+    pkPCPanel(c, X, Y, lw, 150, 'Prices');
+    pkPCText(c, 'Adult ticket', X + 14, Y + 52, 15, '#d7dee4'); pkPCText(c, money(S.ticketPrice), X + 150, Y + 54, 22, '#f5b53d', true);
+    pkPCBtn(sc, X + lw - 150, Y + 32, 64, 30, '- 1', function () { pkPrice(-1); });
+    pkPCBtn(sc, X + lw - 78, Y + 32, 64, 30, '+ 1', function () { pkPrice(1); });
+    pkPCText(c, 'Fries', X + 14, Y + 104, 15, '#d7dee4'); pkPCText(c, money(S.snackPrice), X + 150, Y + 106, 22, '#f5b53d', true);
+    pkPCBtn(sc, X + lw - 150, Y + 84, 64, 30, '- 0.50', function () { pkSnackPrice(-0.5); });
+    pkPCBtn(sc, X + lw - 78, Y + 84, 64, 30, '+ 0.50', function () { pkSnackPrice(0.5); });
+    pkPCText(c, PK.snackOpen ? 'the snack stand is open' : 'the snack stand opens at level 2', X + 14, Y + 138, 11, '#8b98a4');
+    var ty = Y + 160, wages = (S.clerk ? 40 : 0) + (S.operator ? 60 : 0), st = S.stats || {};
+    pkPCPanel(c, X, ty, lw, H - 160, 'Today and all time');
+    [['Earned today', money(PK.today.earned || 0), '#5fd38d'], ['Tickets / snacks', PK.today.tickets + ' / ' + PK.today.snacks, '#eef1f5'], ['Wages a day', money(wages), '#f0c04a'],
+      ['Earned, all time', money(st.earned || 0), '#5fd38d'], ['Spent, all time', money(st.spent || 0), '#ff8a5c']].forEach(function (r, i) {
+      pkPCText(c, r[0], X + 14, ty + 48 + i * 30, 14, '#a0acb8'); pkPCText(c, r[1], X + lw - 14, ty + 48 + i * 30, 15, r[2], true, 'right');
+    });
+    // the ledger
+    var gx = X + lw + 10, gw = W - lw - 10;
+    pkPCPanel(c, gx, Y, gw, H, 'Ledger');
+    var L = (S.ledger || []).slice(0, 13);
+    if (!L.length) pkPCText(c, 'Nothing paid in or out yet.', gx + 14, Y + 52, 13, '#8b98a4');
+    L.forEach(function (e, i) {
+      var y = Y + 46 + i * 25;
+      pkPCText(c, 'D' + e.day + ' ' + e.t, gx + 14, y, 12, '#6b7781');
+      c.save(); c.font = '13px ' + SCREEN_THEME.font; var why = scFit(c, String(e.why || ''), gw - 220); c.restore();
+      pkPCText(c, why, gx + 100, y, 13, '#d7dee4');
+      pkPCText(c, (e.n >= 0 ? '+' : '-') + money(Math.abs(e.n)), gx + gw - 14, y, 13, e.n >= 0 ? '#5fd38d' : '#ff8a5c', true, 'right');
+    });
+  }
+  function pkPCRideRows() {
+    var rows = [{ coaster: true, name: 'The coaster', state: pkRideWord(), queue: PK.queue.length, riders: PK.ride.riders, seats: PK.seats.length, cycles: S.cycles || 0, open: true, bad: !!PK.ride.fault }];
+    PK.attractions.forEach(function (a) {
+      var C = a.ctl || {}, w = C.fault ? 'stopped' : C.maint ? 'maintenance' : !a.open ? 'shut' : a.state;
+      rows.push({ a: a, name: a.name, state: w, queue: a.queue.length, riders: a.riders || 0, seats: a.seats.length, cycles: a.cycles || 0, open: !!a.open, bad: !!(C.fault || C.maint) });
+    });
+    return rows;
+  }
+  function pkPCRides(c, sc, X, Y, W, H) {
+    var rows = pkPCRideRows(), per = 8, pages = Math.ceil(rows.length / per); PK_PC.page = clamp(PK_PC.page, 0, pages - 1);
+    pkPCPanel(c, X, Y, W, H);
+    var cols = [X + 32, X + 250, X + 400, X + 470, X + 560];
+    ['RIDE', 'STATE', 'QUEUE', 'ON RIDE', 'CYCLES'].forEach(function (h, i) { pkPCText(c, h, cols[i], Y + 22, 11, '#8b98a4', true); });
+    rows.slice(PK_PC.page * per, PK_PC.page * per + per).forEach(function (r, i) {
+      var y = Y + 36 + i * 38;
+      if (i % 2 === 0) { c.fillStyle = 'rgba(255,255,255,0.03)'; c.fillRect(X + 6, y, W - 12, 36); }
+      c.fillStyle = r.bad ? '#ff6b5e' : !r.open ? '#6b7781' : (r.state === 'running' || r.state === 'boarding' || r.state === 'dispatching') ? '#ff9d6b' : '#5fd38d';
+      c.beginPath(); c.arc(X + 18, y + 18, 5, 0, 6.283); c.fill();
+      pkPCText(c, r.name, cols[0], y + 23, 14, '#eef1f5', true);
+      pkPCText(c, r.state, cols[1], y + 23, 13, r.bad ? '#ff6b5e' : '#c3ccd4');
+      pkPCText(c, String(r.queue), cols[2], y + 23, 13, r.queue >= 8 ? '#f0c04a' : '#c3ccd4');
+      pkPCText(c, r.riders + ' / ' + r.seats, cols[3], y + 23, 13, '#c3ccd4');
+      pkPCText(c, String(r.cycles), cols[4], y + 23, 13, '#c3ccd4');
+      if (r.coaster) {
+        var auto = pkCoasterAuto();
+        pkPCBtn(sc, X + W - 236, y + 4, 104, 28, auto ? 'AUTO on' : 'AUTO off', function () { if (!S.operator) pkSetAuto(!S.auto); else toast('The operator runs the coaster', ''); }, auto);
+        pkPCBtn(sc, X + W - 124, y + 4, 112, 28, 'Service ' + Math.round(S.wear || 0) + '%', function () { pkService(); }, (S.wear || 0) > 0, '#f0c04a');
+      } else pkPCBtn(sc, X + W - 124, y + 4, 112, 28, r.open ? 'Shut it' : 'Open it', function () { pkSetRideOpen(r.a.id, !r.a.open); }, !r.open, '#5fd38d');
+    });
+    var py = Y + H - 40;
+    pkPCText(c, 'Page ' + (PK_PC.page + 1) + ' of ' + pages + '   ·   ' + pkOpenCount() + ' of ' + rows.length + ' open', X + 16, py + 24, 13, '#8b98a4');
+    pkPCBtn(sc, X + W - 236, py + 4, 104, 30, 'Previous', function () { PK_PC.page = Math.max(0, PK_PC.page - 1); }, PK_PC.page > 0);
+    pkPCBtn(sc, X + W - 124, py + 4, 112, 30, 'Next', function () { PK_PC.page = Math.min(pages - 1, PK_PC.page + 1); }, PK_PC.page < pages - 1);
+  }
+  var PK_PC_GROUPS = [['Arriving', ['walkBooth', 'boothQueue', 'walkTurn'], '#8fc3ff'], ['Queuing', ['queue', 'qwait', 'walkQueue'], '#f0c04a'], ['Riding', ['board', 'seated', 'walkSeat'], '#ff9d6b'],
+    ['Walking', ['walkAttr', 'toSnack', 'off'], '#5fd38d'], ['Leaving', ['leave'], '#a0acb8']];
+  function pkPCGuests(c, sc, X, Y, W, H) {
+    var tw = (W - 40) / 5;
+    PK_PC_GROUPS.forEach(function (gp, i) {
+      var n = PK.guests.filter(function (g) { return gp[1].indexOf(g.state) >= 0; }).length;
+      pkPCTile(c, X + i * (tw + 10), Y, tw, 78, gp[0], String(n), gp[2]);
+    });
+    var by = Y + 90, bw = W * 0.62;
+    pkPCPanel(c, X, by, bw, H - 90, 'The longest queues');
+    var q = [{ name: 'The coaster', n: PK.queue.length }].concat(PK.attractions.map(function (a) { return { name: a.name, n: a.queue.length }; })).sort(function (p, r) { return r.n - p.n; }).slice(0, 8);
+    var top = Math.max(1, q[0] ? q[0].n : 1);
+    q.forEach(function (r, i) {
+      var y = by + 38 + i * 28;
+      pkPCText(c, r.name, X + 14, y + 14, 13, '#d7dee4');
+      pkPCRound(c, X + 170, y + 2, bw - 230, 16, 6); c.fillStyle = 'rgba(255,255,255,0.06)'; c.fill();
+      if (r.n) { pkPCRound(c, X + 170, y + 2, Math.max(12, (bw - 230) * r.n / top), 16, 6); c.fillStyle = r.n >= 8 ? '#f0c04a' : '#8fc3ff'; c.fill(); }
+      pkPCText(c, String(r.n), X + bw - 14, y + 15, 13, '#eef1f5', true, 'right');
+    });
+    var dx = X + bw + 10, dw = W - bw - 10;
+    pkPCPanel(c, dx, by, dw, H - 90, 'Today');
+    [['Tickets sold', PK.today.tickets], ['Rides ridden', PK.today.rides], ['Snacks sold', PK.today.snacks], ['Adult ticket', money(S.ticketPrice)], ['At the windows', PK.booths.reduce(function (s, b) { return s + b.queue.length; }, 0)]].forEach(function (r, i) {
+      pkPCText(c, r[0], dx + 14, by + 50 + i * 30, 14, '#a0acb8'); pkPCText(c, String(r[1]), dx + dw - 14, by + 50 + i * 30, 15, '#eef1f5', true, 'right');
+    });
+  }
+  function pkPCRole(id) { return /^guard/.test(id) ? ['Security', '#8fc3ff'] : /^cashier/.test(id) ? ['Tickets', '#ff8a5c'] : /^(sweeper|gardener)/.test(id) ? ['Grounds', '#5fd38d'] : ['Staff', '#c3ccd4']; }
+  function pkPCWhere(x, z) { var best = '', bd = 1e9; for (var k in NPCS.spots) { var p = NPCS.spots[k], d = (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z); if (d < bd) { bd = d; best = k; } } return bd < 900 ? 'by the ' + pkPCWords(best).toLowerCase() : 'on the move'; }
+  function pkPCStaff(c, sc, X, Y, W, H) {
+    var cw = (W - 10) / 2;
+    [['clerk', 'Ticket clerk', 'Serves both ticket windows', 40, 400], ['operator', 'Ride operator', 'Runs the coaster and every ride', 60, 600]].forEach(function (r, i) {
+      var x = X + i * (cw + 10), on = !!S[r[0]];
+      pkPCPanel(c, x, Y, cw, 96);
+      pkPCText(c, r[1], x + 14, Y + 30, 17, '#eef1f5', true);
+      pkPCText(c, r[2] + '  ·  ' + money(r[3]) + ' a day', x + 14, Y + 52, 12, '#8b98a4');
+      pkPCText(c, on ? 'ON THE PAYROLL' : 'NOT HIRED', x + 14, Y + 80, 12, on ? '#5fd38d' : '#a0acb8', true);
+      pkPCBtn(sc, x + cw - 150, Y + 56, 136, 30, on ? 'Let go' : 'Hire (' + money(r[4]) + ')', function () {
+        var res = on ? pkFire(r[0]) : pkHire(r[0]);
+        if (res !== 'Hired' && res !== 'Let go' && typeof res === 'string') toast(res, 'bad');
+      }, !on, on ? '#ff8a5c' : '#5fd38d');
+    });
+    var ry = Y + 106;
+    pkPCPanel(c, X, ry, W, H - 106, 'On duty now');
+    var list = npcList.filter(function (n) { return !n.gone && n.g.visible; });
+    if (!list.length) pkPCText(c, 'Nobody is on duty: the staff work from 09:00 to 22:00.', X + 14, ry + 50, 13, '#8b98a4');
+    list.slice(0, 9).forEach(function (n, i) {
+      var y = ry + 46 + i * 26, role = pkPCRole(n.charId), st = n.leaving ? 'going home' : n.path && n.path.length ? 'walking' : 'at work';
+      c.fillStyle = role[1]; c.beginPath(); c.arc(X + 20, y - 4, 5, 0, 6.283); c.fill();
+      pkPCText(c, n.name, X + 34, y, 14, '#eef1f5', true);
+      pkPCText(c, role[0], X + 150, y, 13, role[1]);
+      pkPCText(c, pkPCWhere(n.x, n.z), X + 270, y, 13, '#c3ccd4');
+      pkPCText(c, st, X + W - 14, y, 13, '#8b98a4', false, 'right');
+    });
+  }
+  // a camera: a stretch of the park from above, the paths and the rides, the guests and the staff on them, live
+  var PK_PC_CAMS = [['GATE AND CAR PARK', -34, 34, 24, 74], ['MIDWAY AND STATION SQUARE', -30, 30, -10, 30], ['THE FAIRGROUND AND THE DARK WOODS', -72, -14, -78, 40], ['GARDENS, COASTER COUNTRY, EAST WALK', -36, 123, -118, -8]];
+  function pkPCCam(c, x, y, w, h, cam, i) {
+    var x0 = cam[1], x1 = cam[2], z0 = cam[3], z1 = cam[4], k = Math.min(w / (x1 - x0), h / (z1 - z0));
+    var ox = x + w / 2 - (x0 + x1) / 2 * k, oz = y + h / 2 - (z0 + z1) / 2 * k;
+    var X = function (v) { return ox + v * k; }, Z = function (v) { return oz + v * k; };
+    c.save(); c.beginPath(); c.rect(x, y, w, h); c.clip();
+    c.fillStyle = '#0d1a12'; c.fillRect(x, y, w, h);
+    c.strokeStyle = 'rgba(200,190,160,0.32)'; c.lineCap = 'round';
+    PK_ROUTES.forEach(function (r) { c.lineWidth = Math.max(1.5, r[4] * k); c.beginPath(); c.moveTo(X(r[0]), Z(r[1])); c.lineTo(X(r[2]), Z(r[3])); c.stroke(); });
+    c.fillStyle = 'rgba(200,190,160,0.32)'; c.fillRect(X(-7), Z(-4), 14 * k, 34 * k); c.fillRect(X(-17), Z(35), 34 * k, 18 * k); c.fillStyle = 'rgba(120,124,130,0.35)'; c.fillRect(X(-31), Z(53), 62 * k, 18 * k);
+    PK.attractions.forEach(function (a) { var C = a.ctl || {}; c.strokeStyle = C.fault || C.maint ? '#ff6b5e' : a.open ? 'rgba(95,211,141,0.8)' : 'rgba(160,172,184,0.5)'; c.lineWidth = 1.5; c.beginPath(); c.arc(X(a.x), Z(a.z), Math.max(3, 5 * k), 0, 6.283); c.stroke(); });
+    c.fillStyle = '#f5d36b'; PK.guests.forEach(function (g) { var r = g.rec; c.fillRect(X(r.x) - 1.5, Z(r.z) - 1.5, 3, 3); });
+    npcList.forEach(function (n) { if (n.gone || !n.g.visible) return; var role = pkPCRole(n.charId); c.fillStyle = role[1]; c.beginPath(); c.arc(X(n.x), Z(n.z), 3.2, 0, 6.283); c.fill(); });
+    if (player) { c.strokeStyle = '#ffffff'; c.lineWidth = 1.5; c.beginPath(); c.arc(X(player.x), Z(player.z), 4, 0, 6.283); c.stroke(); }
+    pkBkScanlines(c, x + w, y + h);
+    c.restore();
+    c.strokeStyle = 'rgba(255,255,255,0.12)'; c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    pkPCText(c, 'CAM ' + (i + 1) + '  ' + cam[0], x + 8, y + 16, 11, '#8fe0a0', true);
+    pkPCText(c, fmtTime(S.time), x + w - 8, y + 16, 11, '#8fe0a0', false, 'right');
+    if (Math.floor(worldTime * 1.5 + i) % 2 === 0) { c.fillStyle = '#ff3b30'; c.beginPath(); c.arc(x + w - 14, y + h - 12, 4, 0, 6.283); c.fill(); pkPCText(c, 'REC', x + w - 22, y + h - 8, 10, '#ff6b5e', true, 'right'); }
+  }
+  function pkPCCctv(c, sc, X, Y, W, H) {
+    var cw = (W - 8) / 2, ch = (H - 34) / 2;
+    PK_PC_CAMS.forEach(function (cam, i) { pkPCCam(c, X + (i % 2) * (cw + 8), Y + Math.floor(i / 2) * (ch + 8), cw, ch, cam, i); });
+    var guards = npcList.filter(function (n) { return !n.gone && /^guard/.test(n.charId); });
+    var ly = Y + H - 12;
+    [['#f5d36b', 'guests'], ['#5fd38d', 'grounds'], ['#8fc3ff', 'guards'], ['#ff8a5c', 'tickets'], ['#ffffff', 'you']].forEach(function (k, i) { c.fillStyle = k[0]; c.beginPath(); c.arc(X + 8 + i * 84, ly - 4, 4, 0, 6.283); c.fill(); pkPCText(c, k[1], X + 18 + i * 84, ly, 12, '#a0acb8'); });
+    pkPCText(c, guards.length ? guards.map(function (n) { return n.name; }).join(', ') + ' on patrol' : 'No guards on duty', X + W, ly, 12, '#8fc3ff', true, 'right');
+  }
+  function pkPCMail(c, sc, X, Y, W, H) {
+    pkPCPanel(c, X, Y, W, H, 'Park news, newest first');
+    var L = (S.log || []).slice(0, 13);
+    if (!L.length) pkPCText(c, 'No news yet.', X + 14, Y + 52, 13, '#8b98a4');
+    L.forEach(function (e, i) {
+      var y = Y + 48 + i * 26, col = e.kind === 'good' ? '#5fd38d' : e.kind === 'bad' ? '#ff6b5e' : '#8b98a4';
+      c.fillStyle = col; c.beginPath(); c.arc(X + 20, y - 4, 4, 0, 6.283); c.fill();
+      pkPCText(c, 'Day ' + e.day + '  ' + e.t, X + 34, y, 12, '#6b7781');
+      c.save(); c.font = '14px ' + SCREEN_THEME.font; var m = scFit(c, String(e.msg || ''), W - 180); c.restore();
+      pkPCText(c, m, X + 150, y, 14, '#e6ebef');
+    });
+  }
+  // the second screen: the whole park, live
+  function pkPCDrawMap(c, sc) {
+    c.fillStyle = '#0b1210'; c.fillRect(0, 0, sc.w, sc.h);
+    pkPCCam(c, 6, 6, sc.w - 12, sc.h - 12, ['THE WHOLE PARK', PK_PARK.x0, PK_PARK.x1, PK_PARK.z0, 74], 0);
+  }
+
+  // ── Live: the colour cycle, the fans, the bank's history, the lock ──
+  animate(function (dt) {
+    if (!PK_PC.sc) return;
+    PK_PC.hue = (PK_PC.hue + dt * 0.04) % 1;
+    for (var i = 0; i < PK_PC.rgb.length; i++) PK_PC.rgb[i].color.setHSL((PK_PC.hue + i * 0.03) % 1, 0.85, 0.58);
+    if (PK_PC.fans) PK_PC.fans.forEach(function (f) { f.rotation.z -= dt * 14; });
+    var slot = S.day * 1000 + Math.floor(S.time * 6);                       // every ten game minutes
+    if (slot !== PK_PC.lastSample) { PK_PC.lastSample = slot; PK_PC.hist.push({ d: S.day, t: S.time, v: S.bank }); if (PK_PC.hist.length > 300) PK_PC.hist.shift(); }
+    if (typeof player !== 'undefined' && player) {
+      var far = Math.hypot(player.x - PK_PC.x, player.z - PK_PC.z) > 5 || player.y < PK_HQ.lv[2] - 0.5;
+      PK_PC.idle = far ? PK_PC.idle + dt : 0;
+      if (PK_PC.awake && PK_PC.idle > 20) { PK_PC.awake = false; PK_PC.sc.dirty = true; }
+    }
+  });
   CO.boot(GAME);
 })();
