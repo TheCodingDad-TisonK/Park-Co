@@ -604,7 +604,26 @@
     pkBevelBox(t, h, d, M, w / 2 + t / 2, h / 2, 0, parent, 0.02);
     pkBevelBox(t, h, d, M, -w / 2 - t / 2, h / 2, 0, parent, 0.02);
   }
-  var PK_PLANTER_COLS = [0xd94f6a, 0xf3c84a, 0xe7e2f2, 0xb85cc7, 0xf08a3c, 0xf2f2f2];
+  // a building's plinth as a band round its outside, never a block under its floor: the rectangle is the outer wall line, the
+  // band runs t outward from it, h high from y (0 by default), and breaks for each gap ({ side: 'x0' | 'x1' | 'z0' | 'z1', a, b }:
+  // a door's span). Up a wall it makes a cornice or a string course the same way
+  function pkPlinthRing(x0, x1, z0, z1, h, t, mat, parent, gaps, y) {
+    y = y || 0;
+    var sides = [['z0', x0 - t, x1 + t, z0], ['z1', x0 - t, x1 + t, z1], ['x0', z0, z1, x0], ['x1', z0, z1, x1]];
+    sides.forEach(function (sd) {
+      var runs = [[sd[1], sd[2]]];
+      (gaps || []).forEach(function (gp) {
+        if (gp.side !== sd[0]) return;
+        var o = []; runs.forEach(function (r) { if (gp.b <= r[0] || gp.a >= r[1]) { o.push(r); return; } if (gp.a > r[0]) o.push([r[0], gp.a]); if (gp.b < r[1]) o.push([gp.b, r[1]]); }); runs = o;
+      });
+      var out = sd[0] === 'z0' || sd[0] === 'x0' ? -1 : 1, at = sd[3] + out * t / 2;
+      runs.forEach(function (r) {
+        var len = r[1] - r[0], m = (r[0] + r[1]) / 2; if (len < 0.02) return;
+        if (sd[0].charAt(0) === 'z') box(len, h, t, mat, m, y + h / 2, at, parent); else box(t, h, len, mat, at, y + h / 2, m, parent);
+      });
+    });
+  }
+  var PK_PLANTER_COLS =[0xd94f6a, 0xf3c84a, 0xe7e2f2, 0xb85cc7, 0xf08a3c, 0xf2f2f2];
   function pkPlanter(w, parent, x, y, z) {
     var M = pkMats(), g = new THREE.Group(); g.position.set(x, y, z); parentOf(parent).add(g);
     pkBevelBox(w, 0.34, 0.52, pkMatStone(), 0, 0.17, 0, g, 0.03);

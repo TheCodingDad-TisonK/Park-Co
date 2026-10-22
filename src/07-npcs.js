@@ -1,40 +1,19 @@
-//@ Park Co, part 07: the crowd - the people who are not here to ride, they are here to be here
-  // ── The crowd ────────────────────────────────────────────────────
-  // The engine's NPC system (CO.npcs) makes people from data: a character, a spawner on a clock, and a list of steps.
-  // These are the wanderers and the staff. They do not queue and they do not buy: they walk, they look at the rides,
-  // they sit by the midway and they drift home. The queuing guests are a different machine, in part 02.
-  // Each visitor takes a tour of one part of the park and back (the spots are on the streets of every land), so the crowd is
-  // spread over the whole park rather than the midway; the staff keep their own corners.
+//@ Park Co, part 07: the people who work here - the staff and the guards. The guests are part 02's: they come by car, pay at the window, queue and ride
+  // ── Who walks the park ────────────────────────────────────────────
+  // The engine's NPC system (CO.npcs) makes people from data: a character, a worker with a post and hours, and a list of steps.
+  // The park's only visitors are its guests (part 02), so everyone here works: the sweepers and the gardener keep their
+  // corners, two guards walk a beat (the south lands and the north and east), a guard keeps the car park's barrier, and a
+  // cashier stands behind the counter of each ticket office while a clerk is on the payroll.
+  var PK_CASHIERS = ['cashierWest', 'cashierEast'];
   function pkBuildNpcs() {
     var W = function (to, sec, r) { return [{ do: 'walk', to: to }, { do: 'wander', radius: r || 5, seconds: sec || 10 }]; };
-    var tour = function (list) { var st = []; list.forEach(function (x) { st = st.concat(Array.isArray(x) ? x : [x]); }); return st.concat([{ do: 'walk', to: 'plaza' }, { do: 'leave' }]); };
+    var go = function (to, wait) { return wait ? [{ do: 'walk', to: to }, { do: 'wait', seconds: wait }] : [{ do: 'walk', to: to }]; };
+    var beat = function (list) { var st = []; list.forEach(function (x) { st = st.concat(x); }); return st; };
+    var guard = { shirt: '#23324a', pants: '#1b2230', skin: '#d8a97c', hair: '#2a2a2a' };
+    var cashier = { shirt: '#b8362b', pants: '#2f3440', skin: '#e8c49b', hair: '#6b4a2a' };
+    var STAFF = [9, 22], GUARDS = [8.5, 22.5];
     CO.npcs({
       characters: {
-        visitorA: {          // the Fairground and the kids' garden
-          names: ['Anna', 'Bram', 'Sanne', 'Daan', 'Lotte', 'Sem'],
-          look: { shirt: '#3f6a9e', pants: '#2f3440', skin: '#d8a97c', hair: '#3a2a1c' }, speed: 1.35,
-          steps: tour([W('midway', 8, 4), W('carousel', 12), { do: 'walk', to: 'fairCross' }, W('teacups', 10), W('kidsLane', 14), { do: 'say', text: 'Look at the little train!' }, W('snack', 6, 3)])
-        },
-        visitorB: {          // Thrills and the wheel
-          names: ['Femke', 'Thijs', 'Noor', 'Jesse', 'Mila', 'Ruben'],
-          look: { shirt: '#a8462f', pants: '#3a3f48', skin: '#e8c49b', hair: '#6b4a2a' }, speed: 1.28,
-          steps: tour([W('midway', 8, 4), W('ferris', 10), { do: 'walk', to: 'thrillCross' }, W('dodgems', 14), { do: 'face', to: 'baron' }, { do: 'wait', seconds: 6 }, W('station', 6, 3)])
-        },
-        visitorC: {          // the Dark Woods, the drop tower and the show halls
-          names: ['Omar', 'Yara', 'Sven', 'Iris', 'Timo', 'Eva'],
-          look: { shirt: '#5b8a52', pants: '#2d333b', skin: '#c99266', hair: '#1e1712' }, speed: 1.42,
-          steps: tour([W('fairCross', 4, 3), W('darkWoods', 14), W('dropTower', 10), { do: 'walk', to: 'promWest' }, W('halls', 12), { do: 'say', text: 'Such a nice little park.' }, W('gardenWalk', 10)])
-        },
-        visitorD: {          // Coaster Country and the East Walk
-          names: ['Lars', 'Julia', 'Bas', 'Roos', 'Milan', 'Fleur'],
-          look: { shirt: '#7a4a8a', pants: '#2b2f36', skin: '#e2b48a', hair: '#4a2f1c' }, speed: 1.45,
-          steps: tour([W('thrillCross', 4, 3), W('coasterCountry', 12), { do: 'walk', to: 'promEast' }, W('eastWalk', 10), W('firebird', 12), { do: 'face', to: 'firebirdTrack' }, { do: 'wait', seconds: 8 }, W('dragon', 12), { do: 'say', text: 'That loop!' }, W('promEast', 6)])
-        },
-        visitorE: {          // the gardens: the Garden Walk, the flower clock, the bandstand and the maze
-          names: ['Wim', 'Ellen', 'Jan', 'Ilse', 'Koen', 'Maud'],
-          look: { shirt: '#c9a227', pants: '#3a3f48', skin: '#d39a72', hair: '#8a6a4a' }, speed: 1.2,
-          steps: tour([W('fairCross', 4, 3), W('gardenWest', 8), W('gardenWalk', 12), W('clock', 14), W('bandstand', 16), W('maze', 10), W('promWest', 8)])
-        },
         sweeper: {
           names: ['Piet'], look: { shirt: '#e0a92c', pants: '#2f3440', skin: '#d8a97c', hair: '#5a5a5a' }, speed: 1.1,
           steps: [].concat(W('midway', 25, 9), W('plaza', 20, 6), W('snack', 18, 5))
@@ -47,24 +26,39 @@
           names: ['Truus'], look: { shirt: '#4d7a3a', pants: '#3a2f24', skin: '#e0b48e', hair: '#b8b8b8' }, speed: 1.0,
           steps: [].concat(W('clock', 40, 6), W('maze', 30, 5))
         },
-        watcher: {
-          names: ['Kees'], look: { shirt: '#4a5a6a', pants: '#2f3440', skin: '#e0b48e', hair: '#2a2a2a' }, speed: 1.05,
-          steps: [{ do: 'walk', to: 'station' }, { do: 'face', to: 'coaster' }, { do: 'wait', seconds: 40 }, { do: 'walk', to: 'ferris' },
-            { do: 'wait', seconds: 30 }, { do: 'walk', to: 'carousel' }, { do: 'wait', seconds: 30 }]
-        }
+        // the south beat: the plaza, the midway, the Fairground and the Thrills
+        guardSouth: {
+          names: ['Marco'], look: guard, speed: 1.15,
+          steps: beat([go('plaza', 10), W('midway', 10, 3), go('fairCross', 6), go('teacups', 8), go('fairCross'), go('station'), [{ do: 'face', to: 'coaster' }, { do: 'wait', seconds: 8 }],
+            go('thrillCross', 6), go('dodgems', 8), go('thrillCross'), go('midway')])
+        },
+        // the north beat: the Dark Woods, the halls, the gardens, Coaster Country and the East Walk
+        guardNorth: {
+          names: ['Ingrid'], look: guard, speed: 1.15,
+          steps: beat([go('gardenWalk', 8), go('darkWoods', 6), go('dropTower', 6), go('promWest'), go('halls', 8), go('promWest'), go('bandstand', 6),
+            go('promEast'), go('coasterCountry', 6), go('eastWalk'), go('firebird', 6), go('dragon', 8), go('promEast'), go('gardenWalk')])
+        },
+        // the car park: beside the barrier, watching the cars come in off the road
+        guardGate: {
+          names: ['Henk'], look: guard, speed: 1.0,
+          steps: [{ do: 'walk', to: 'post' }, { do: 'face', to: 'lotDrive' }, { do: 'wait', seconds: 60 }]
+        },
+        // behind the counter, facing the window and the line
+        cashierWest: { names: ['Sophie'], look: cashier, speed: 1.2, steps: [{ do: 'walk', to: 'post' }, { do: 'wait', seconds: 120 }] },
+        cashierEast: { names: ['Tom'], look: cashier, speed: 1.2, steps: [{ do: 'walk', to: 'post' }, { do: 'wait', seconds: 120 }] }
       },
-      spawners: [
-        { id: 'crowdA', character: 'visitorA', x: -5, z: 26, every: 13, max: 6, hours: [9, 22] },
-        { id: 'crowdB', character: 'visitorB', x: 5, z: 26, every: 15, max: 5, hours: [9, 22] },
-        { id: 'crowdC', character: 'visitorC', x: 0, z: 24, every: 17, max: 5, hours: [9, 22] },
-        { id: 'crowdD', character: 'visitorD', x: 3, z: 24, every: 17, max: 5, hours: [9, 22] },
-        { id: 'crowdE', character: 'visitorE', x: -3, z: 24, every: 19, max: 4, hours: [9, 22] }
-      ],
+      spawners: [],
       workers: [
-        { id: 'sweeper', character: 'sweeper', x: 0, z: 20, ry: 0, home: [0, 24], hours: [9, 22] },
-        { id: 'sweeperNorth', character: 'sweeperNorth', x: 2, z: -44, ry: 0, home: [0, 24], hours: [9, 22] },
-        { id: 'gardener', character: 'gardener', x: 4, z: -58, ry: 0, home: [0, 24], hours: [9, 22] },
-        { id: 'watcher', character: 'watcher', x: 0, z: 2, ry: Math.PI, home: [0, 24], hours: [9, 22] }
+        { id: 'sweeper', character: 'sweeper', x: 0, z: 20, ry: 0, home: [0, 24], hours: STAFF },
+        { id: 'sweeperNorth', character: 'sweeperNorth', x: 2, z: -44, ry: 0, home: [0, 24], hours: STAFF },
+        { id: 'gardener', character: 'gardener', x: 4, z: -58, ry: 0, home: [0, 24], hours: STAFF },
+        { id: 'guardSouth', character: 'guardSouth', x: 0, z: 26, ry: 0, home: [0, 24], hours: GUARDS },
+        { id: 'guardNorth', character: 'guardNorth', x: 2, z: -44, ry: 0, home: [0, 24], hours: GUARDS },
+        // the gate guard comes out of HQ's door on the forecourt; the cashiers are at the counter (no hours of their own: the
+        // frame hook below brings them in and sends them off with the clerk and the opening hours)
+        { id: 'guardGate', character: 'guardGate', x: -4.6, z: 71.7, ry: Math.PI / 2, home: [-16.6, 42.5], hours: [7.5, 23] },   // by the barrier's post, past the bays and clear of the lane in
+        { id: 'cashierWest', character: 'cashierWest', x: PK_BOOTHS[0].x - 0.55, z: PK_BOOTHS[0].z + 0.8, ry: 0 },
+        { id: 'cashierEast', character: 'cashierEast', x: PK_BOOTHS[1].x - 0.55, z: PK_BOOTHS[1].z + 0.8, ry: 0 }
       ],
       spots: {
         plaza: { x: 0, z: 26 }, gate: { x: 0, z: 28 }, midway: { x: 0, z: 14 }, station: { x: 0, z: 4 }, coaster: { x: 0, z: -2 },
@@ -74,7 +68,19 @@
         darkWoods: { x: -36, z: -24 }, dropTower: { x: -36, z: -52 }, promWest: { x: -20, z: -60 }, halls: { x: -46.5, z: -70 },
         gardenWest: { x: -28, z: -44 }, gardenWalk: { x: 2, z: -44 }, clock: { x: 6, z: -58 }, bandstand: { x: 2, z: -66 }, maze: { x: 9.5, z: -72 },
         coasterCountry: { x: 40, z: -24 }, promEast: { x: 50, z: -60 }, eastWalk: { x: 76, z: -20 },
-        firebird: { x: 77, z: -36 }, firebirdTrack: { x: 100, z: -30 }, dragon: { x: 77, z: -92 }
+        firebird: { x: 77, z: -36 }, dragon: { x: 77, z: -92 },
+        lotDrive: { x: 0, z: 74 }
       }
     });
   }
+  // the cashiers work while the park has a clerk and the windows are open (08:30 to 22:00). They stand in a shut room the
+  // route finder cannot walk into, so they are at the counter when the shift starts and gone when it ends, not walked there
+  hook('frame', function () {
+    if (typeof NPCS !== 'object' || !NPCS.workers) return;
+    var on = !!S.clerk && S.time >= 8.5 && S.time < 22;
+    NPCS.workers.forEach(function (w) {
+      if (PK_CASHIERS.indexOf(w.id) < 0) return;
+      w.off = !on;
+      if (w.off) npcList.slice().forEach(function (n) { if (n.worker === w) npcRemove(n); });
+    });
+  });

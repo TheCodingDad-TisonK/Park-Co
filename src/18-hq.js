@@ -78,15 +78,24 @@
       // south, to the car park; west, to the fence
       run('x', Z1, X0, X1, y0, [[-27.4, -25.0], [-23.6, -21.2]], 1);
       run('z', X0, Z0, Z1, y0, [[37.6, 39.8]], -1);
-      // the cornice at each floor line and the band under it, cream on the brick
-      box(W + 0.5, 0.22, D + 0.5, cream, CX, y0 + FH - 0.05, CZ);
-      box(W + 0.62, 0.08, D + 0.62, stone, CX, y0 + FH + 0.07, CZ);
+      // the cornice at each floor line and the band over it, cream on the brick: round the outside, so they never close the
+      // stair well inside
+      pkPlinthRing(X0, X1, Z0, Z1, 0.22, 0.25, cream, null, null, y0 + FH - 0.16);
+      pkPlinthRing(X0, X1, Z0, Z1, 0.08, 0.31, stone, null, null, y0 + FH + 0.03);
     }
-    // the stone base under the ground floor and the corner quoins up the building
-    box(W + 0.36, 0.8, D + 0.36, stone, CX, 0.4, CZ);
+    // the stone base round the foot of the walls (outside them, not a block under the ground floor), open at the entrance,
+    // and the corner quoins up the building
+    pkPlinthRing(X0, X1, Z0, Z1, 0.8, 0.18, stone, null, [{ side: 'x1', a: 41.4, b: 43.6 }]);
     [[X0, Z0], [X1, Z0], [X0, Z1], [X1, Z1]].forEach(function (c) { for (var q = 0; q < 14; q++) box(q % 2 ? 0.5 : 0.7, 0.36, q % 2 ? 0.7 : 0.5, stone, c[0], 1.0 + q * 0.72, c[1]); });
     // ── floors and the roof ──
     var vx = H.st.voidX, vz0 = H.st.z0 - 0.1, vz1 = H.st.z1 + 0.1;
+    // a ceiling under a floor that has the stair coming up through it: three panels round the well, the well left open
+    function wellCeiling(y) {
+      var a = X0 + 0.15, b = X1 - 0.15, c = Z0 + 0.15, d = Z1 - 0.15;
+      box(b - vx, 0.05, d - c, inner, (vx + b) / 2, y, (c + d) / 2);
+      box(vx - a, 0.05, vz0 - c, inner, (a + vx) / 2, y, (c + vz0) / 2);
+      box(vx - a, 0.05, d - vz1, inner, (a + vx) / 2, y, (vz1 + d) / 2);
+    }
     for (var lv = 1; lv < 3; lv++) {
       var ly = H.lv[lv];
       box(X1 - vx, T, D, inner, (vx + X1) / 2, ly - T / 2, CZ);
@@ -159,7 +168,7 @@
     // ── ground floor: Guest Services ──
     var gy = 0.02;
     pkPaved(W - 0.3, D - 0.3, S2({ color: 0xcfc6b4, roughness: 0.6 }), CX, gy + 0.01, CZ, 0.9);        // a polished stone floor
-    box(W - 0.3, 0.05, D - 0.3, inner, CX, FH - T - 0.03, CZ);
+    wellCeiling(FH - T - 0.03);
     [-26, -22].forEach(function (x) { pkBkBatten(scene, x, FH - T - 0.08, 39.5, 0, 1.4); pkBkBatten(scene, x, FH - T - 0.08, 44.5, 0, 1.4); });
     // the counter along the north side, facing the lobby, with its screen
     pkBevelBox(4.6, 1.05, 0.7, navy, -24.6, 0.53, 38.9, null, 0.03);
@@ -192,7 +201,7 @@
 
     // ── first floor: Operations ──
     var oy = H.lv[1];
-    box(W - 0.3, 0.05, D - 0.3, inner, CX, oy + FH - T - 0.03, CZ);
+    wellCeiling(oy + FH - T - 0.03);
     [-26, -22].forEach(function (x) { pkBkBatten(scene, x, oy + FH - T - 0.08, 39.5, 0, 1.4); pkBkBatten(scene, x, oy + FH - T - 0.08, 44.5, 0, 1.4); });
     // a corridor wall down the middle (north rooms, south staff room), with two doorways
     box(1.6, FH - T, 0.15, cream, -27.6, oy + (FH - T) / 2, 42.0); box(2.8, FH - T, 0.15, cream, -23.9, oy + (FH - T) / 2, 42.0); box(2.4, FH - T, 0.15, cream, -20.3, oy + (FH - T) / 2, 42.0);
@@ -246,16 +255,17 @@
     box(W - 0.3, 0.05, D - 0.3, S2({ color: 0x2a2f36, roughness: 0.8 }), CX, ty + FH - T - 0.03, CZ);
     [-25.5, -21.5].forEach(function (x) { [39.5, 44.5].forEach(function (z) { pkRoundCyl(0.22, 0.06, S2({ color: 0x1b1f23, roughness: 0.5 }), x, ty + FH - T - 0.08, z, null, 16); sphere(0.12, glowMat(0xfff0d0, 1.1), x, ty + FH - T - 0.13, z); }); });
     pkPaved(4.2, 3.0, S2({ color: 0x8a6a4a, roughness: 0.95 }), -21.6, ty + 0.02, 44.4, 1.0);   // a rug under the sofa corner
-    // the desk at the north windows: walnut on a steel frame, the PC that runs the park, a lamp, papers and a nameplate
+    // the desk at the north windows: walnut on a steel frame, the workstation that runs the park, a lamp, papers and a nameplate
     var desk = S2({ color: 0x4a3426, roughness: 0.55 });
     pkBevelBox(2.6, 0.07, 1.1, desk, -23.6, ty + 0.78, 38.8, null, 0.02);
     pkBevelBox(0.6, 0.74, 1.0, desk, -24.6, ty + 0.38, 38.8, null, 0.02); pkBevelBox(0.6, 0.74, 1.0, desk, -22.6, ty + 0.38, 38.8, null, 0.02);
     pkBevelBox(1.5, 0.5, 0.04, desk, -23.6, ty + 0.48, 38.3, null, 0.01);
     solid(-24.95, -22.25, 38.2, 39.4, ty, ty + 1.0);
-    pkHQOwnerPC(-23.6, ty + 0.815, 38.55);
+    pkHQOwnerPC(-23.6, ty + 0.815, 38.8);   // the workstation and Park OS, part 25
     pkSign3D(['THE OWNER'], 0.42, 0.1, -23.0, ty + 0.86, 39.32, 0, { bg: '#d8c9a8', fg: '#1b232c' });
-    pkRoundCyl(0.08, 0.03, MAT.steelDark, -22.6, ty + 0.83, 38.5, null, 12); pkRod(-22.6, ty + 0.84, 38.5, -22.7, ty + 1.25, 38.6, 0.015, gold, null, 6);
-    sphere(0.06, glowMat(0xfff0c8, 1.2), -22.7, ty + 1.24, 38.62);
+    // the lamp on the front corner, clear of the second screen
+    pkRoundCyl(0.08, 0.03, MAT.steelDark, -22.45, ty + 0.83, 39.05, null, 12); pkRod(-22.45, ty + 0.84, 39.05, -22.55, ty + 1.25, 39.0, 0.015, gold, null, 6);
+    sphere(0.06, glowMat(0xfff0c8, 1.2), -22.55, ty + 1.24, 39.0);
     var pc1 = pkBevelBox(0.3, 0.008, 0.4, MAT.paper, -24.3, ty + 0.82, 39.0, null, 0.003); pc1.rotation.y = 0.2;
     // the owner's chair, high-backed, facing the desk and the view
     pkHQExecChair(-23.6, ty, 39.85);
@@ -410,38 +420,6 @@
         c.fillStyle = PK.closed ? '#ff6b5e' : '#5fd38d'; c.font = 'bold 16px ' + SCREEN_THEME.font; c.fillText(PK.closed ? 'THE GATE IS SHUT' : 'THE GATE IS OPEN', 18, 250);
       } });
     PK_BK_LIVE.push({ sc: sc, g: g, every: 2 });
-  }
-  // the owner's PC: the screen that runs the park (the management panel), on the desk, with a keyboard and a mouse
-  function pkHQOwnerPC(x, y, z) {
-    var caseM = pkBkStd({ color: 0x232a30, roughness: 0.42, metalness: 0.5 });
-    var pc = new THREE.Group(); pc.position.set(x, y, z); scene.add(pc);
-    var mon = new THREE.Group(); mon.position.set(0, 0.22, 0); mon.rotation.x = -0.07; pc.add(mon);
-    pkBevelBox(1.04, 0.64, 0.05, caseM, 0, 0.13, 0, mon, 0.02);
-    pkRoundCyl(0.048, 0.2, MAT.steelDark, 0, 0.02, -0.035, pc, 10);
-    pkBevelBox(0.36, 0.02, 0.22, caseM, 0, -0.09, -0.02, pc, 0.008);
-    var scr = touchScreen({ w: 560, h: 320, pw: 0.92, ph: 0.54, x: 0, y: 0.13, z: 0.028, parent: mon, title: 'Park office',
-      draw: function (ctx, s) {
-        scBg(ctx, s.w, s.h); scHead(ctx, s.w, 'PARK CO  ·  OFFICE', 'Day ' + S.day + '   ' + fmtTime(S.time));
-        ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-        ctx.fillStyle = '#eef1f5'; ctx.font = 'bold 36px ' + SCREEN_THEME.font; ctx.fillText(money(S.bank), 18, 86);
-        ctx.fillStyle = '#8b98a4'; ctx.font = '12px ' + SCREEN_THEME.font; ctx.fillText('BANK', 20, 102);
-        var st = [['GUESTS', PK.guests.length], ['RIDES', pkOpenCount() + '/' + (PK.attractions.length + 1)], ['TICKETS', PK.today.tickets], ['SNACKS', PK.today.snacks]];
-        for (var si = 0; si < st.length; si++) { var sx = 186 + si * 96; ctx.fillStyle = '#8b98a4'; ctx.font = '12px ' + SCREEN_THEME.font; ctx.fillText(st[si][0], sx, 72); ctx.fillStyle = '#eef1f5'; ctx.font = 'bold 20px ' + SCREEN_THEME.font; ctx.fillText(String(st[si][1]), sx, 96); }
-        ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(16, 112, s.w - 32, 1);
-        var atts = PK.attractions || [];
-        for (var r = 0; r < atts.length; r++) {
-          var ax = 22 + (r % 3) * 178, ay = 134 + Math.floor(r / 3) * 24, open = !!atts[r].open;
-          ctx.fillStyle = open ? '#5fd38d' : '#ff6b5e'; ctx.beginPath(); ctx.arc(ax + 4, ay - 4, 4.5, 0, 6.2832); ctx.fill();
-          ctx.fillStyle = '#c9d2d9'; ctx.font = '13px ' + SCREEN_THEME.font; ctx.fillText(atts[r].name, ax + 14, ay);
-        }
-        scButton(s, 16, 268, 168, 38, 'Manage', true, function () { openPanel('admin'); });
-        scButton(s, 192, 268, 168, 38, 'Rides', true, function () { openPanel('admin', 'coaster'); });
-        scButton(s, 368, 268, 176, 38, 'Service', true, function () { pkService(); });
-      } });
-    pkBevelBox(0.48, 0.018, 0.16, pkBkStd({ color: 0x2a3036, roughness: 0.75 }), 0, -0.088, 0.34, pc, 0.006);
-    pkBevelBox(0.07, 0.035, 0.11, pkBkStd({ color: 0x2f363c, roughness: 0.6 }), 0.38, -0.08, 0.34, pc, 0.03);
-    hitBox(1.5, 1.0, 0.9, 0, 0.3, 0.1, { prompt: function () { return 'Park management'; }, use: function () { openPanel('admin'); } }, pc);
-    PK.officeScreen = scr;
   }
   // the armchairs only stand in the owner's office, on the top floor
   function pkHQLevelAt(x, z) { return PK_HQ.lv[2]; }

@@ -1,5 +1,6 @@
 //@ the world the editor changed: what was moved, turned, resized, removed or copied of what the game builds straight into its world. Written by the Co Engine editor; it sorts first in src/ and is laid on the world as it is built. A key is the thing and where the game built it; delete a line to put that thing back, or to take a copy away.
   CO.world({
+    "booth@47.21,-58.5": { x: 58.3, z: -74.85, ry: -197 },
     "door@-21.27,19.95": { x: -23.35, z: 26.75 },
     "door@-22.57,3": { x: -21.3, z: -0.7 },
     "door@20.27,20": { x: 22.35, z: 24.8 },
