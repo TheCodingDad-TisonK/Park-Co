@@ -3500,6 +3500,7 @@
       "pkTree": { x: -15.95, z: 24.05, rot: 0, h: 0, hidden: true },
     },
     placed: [
+      { id: "cp-mvjfjcv5-1", type: "hmBed", x: -20.35, z: 41.4, rot: 3, h: 7.15 },
     ]
   });
   CO.material("pk-stone", {"size":512,"repeat":[3,3],"layers":[{"type":"fill","color":"#b8b6b0"},{"type":"grain","alpha":0.1},{"type":"cracks","color":"#505048","n":25,"sz":120}],"roughness":0.9,"metalness":0.1,"bump":{"amp":24,"strength":0.9}});
@@ -4175,6 +4176,190 @@
       }
     }
   });
+  // the pack's own finishes, made once: coloured corrugated sheet, painted boards, dark window glass
+  var BD_MATS = {};
+  function bdMat(key, make) { if (!BD_MATS[key]) BD_MATS[key] = make(); return BD_MATS[key]; }
+  function bdSheet(hex) { return bdMat('sheet' + hex, function () { return std({ map: TEX.corrugated, color: hex, roughness: 0.55, metalness: 0.45 }); }); }
+  function bdBoards(hex) { return bdMat('boards' + hex, function () { return std({ map: TEX.wood, color: hex, roughness: 0.85 }); }); }
+  function bdPaint(hex) { return bdMat('paint' + hex, function () { return std({ color: hex, roughness: 0.7 }); }); }
+  function bdGlass() { return bdMat('glass', function () { return std({ color: 0x1d2630, roughness: 0.08, metalness: 0.6 }); }); }
+  function bdUse(c, label, x0, x1, z0, z1, h) { c.hit(x1 - x0, h, z1 - z0, (x0 + x1) / 2, h / 2, (z0 + z1) / 2, { prompt: function () { return label; }, use: function () { toast(label + '.', ''); } }); }
+  // a pitched roof, its ridge along x: two slabs and the two gable ends
+  function bdRoof(c, L, D, y, rise, mat, gableMat, over) {
+    over = over || 0.3; var half = D / 2, a = Math.atan2(rise, half), slab = Math.sqrt(half * half + rise * rise) + over;
+    [-1, 1].forEach(function (s) { var r = c.box(L + 2 * over, 0.08, slab, mat, 0, y + rise / 2, s * half / 2); r.rotation.x = s * a; });
+    if (gableMat) [-1, 1].forEach(function (s) { var sh = new THREE.Shape(); sh.moveTo(-half, 0); sh.lineTo(half, 0); sh.lineTo(0, rise); sh.lineTo(-half, 0); var m = new THREE.Mesh(new THREE.ShapeGeometry(sh), gableMat); m.position.set(s * L / 2, y, 0); m.rotation.y = s * Math.PI / 2; m.castShadow = true; m.receiveShadow = true; c.add(m); });
+  }
+  // a window: a frame and the glass, on a wall facing +z (ry turns it to the other walls)
+  function bdWindow(c, w, h, x, y, z, ry) { var g = c.box(w, h, 0.06, bdGlass(), x, y, z); g.rotation.y = ry || 0; var f = c.box(w + 0.12, 0.08, 0.1, MAT.white, x, y - h / 2, z); f.rotation.y = ry || 0; var t = c.box(w + 0.12, 0.06, 0.1, MAT.white, x, y + h / 2, z); t.rotation.y = ry || 0; }
+
+  defProp('bdShed', { extra: true, shop: false, label: 'garden shed', cat: 'buildings', desc: 'A wooden shed, 3 by 2.4 m, with an open doorway: walk in.', build: function (c) {
+    var W = 3, D = 2.4, H = 2.1, wood = bdBoards(0x8a5a36), t = 0.08;
+    c.box(W, 0.1, D, MAT.wood, 0, 0.05, 0);
+    c.box(W, H, t, wood, 0, H / 2, -D / 2); c.box(t, H, D, wood, -W / 2, H / 2, 0); c.box(t, H, D, wood, W / 2, H / 2, 0);
+    c.box(W / 2 - 0.45, H, t, wood, -W / 4 - 0.225, H / 2, D / 2); c.box(W / 2 - 0.45, H, t, wood, W / 4 + 0.225, H / 2, D / 2); c.box(0.9, H - 1.9, t, wood, 0, 1.9 + (H - 1.9) / 2, D / 2);
+    bdWindow(c, 0.6, 0.45, -1.0, 1.4, D / 2 + 0.05);
+    bdRoof(c, W, D, H, 0.7, MAT.roof, wood, 0.2);
+    c.solid(-W / 2, W / 2, -D / 2 - 0.05, -D / 2 + 0.05, 0, 2.6); c.solid(-W / 2 - 0.05, -W / 2 + 0.05, -D / 2, D / 2, 0, 2.6); c.solid(W / 2 - 0.05, W / 2 + 0.05, -D / 2, D / 2, 0, 2.6);
+    c.solid(-W / 2, -0.45, D / 2 - 0.05, D / 2 + 0.05, 0, 2.6); c.solid(0.45, W / 2, D / 2 - 0.05, D / 2 + 0.05, 0, 2.6);
+    bdUse(c, 'A garden shed', -W / 2, W / 2, D / 2 - 0.1, D / 2 + 0.1, 0.3);
+  } });
+  defProp('bdCarport', { extra: true, shop: false, label: 'carport', cat: 'buildings', desc: 'Four posts and a roof, 3.2 by 5.6 m: park a car under it.', build: function (c) {
+    var W = 3.2, D = 5.6, H = 2.5;
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (p) { c.box(0.12, H, 0.12, MAT.steelDark, p[0] * (W / 2 - 0.1), H / 2, p[1] * (D / 2 - 0.1)); c.solid(p[0] * (W / 2 - 0.1) - 0.08, p[0] * (W / 2 - 0.1) + 0.08, p[1] * (D / 2 - 0.1) - 0.08, p[1] * (D / 2 - 0.1) + 0.08, 0, H); });
+    c.box(W + 0.3, 0.1, D + 0.3, bdSheet(0x7d8690), 0, H + 0.05, 0); c.box(W + 0.3, 0.12, 0.08, MAT.steelDark, 0, H - 0.03, D / 2 + 0.11); c.box(W + 0.3, 0.12, 0.08, MAT.steelDark, 0, H - 0.03, -D / 2 - 0.11);
+    bdUse(c, 'A carport', -W / 2, W / 2, -D / 2, D / 2, 0.15);
+  } });
+  defProp('bdBusShelter', { extra: true, shop: false, label: 'bus shelter', cat: 'buildings', desc: 'A glass bus shelter with a bench and the stop sign.', build: function (c) {
+    var W = 3.2, D = 1.4, H = 2.3, glass = std({ color: 0xbfd8e6, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.35 });
+    c.box(W, H - 0.1, 0.04, glass, 0, H / 2, -D / 2); c.box(0.04, H - 0.1, D, glass, -W / 2, H / 2, 0); c.box(0.04, H - 0.1, D * 0.6, glass, W / 2, H / 2, -D * 0.2);
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (p) { c.box(0.06, H, 0.06, MAT.steelDark, p[0] * W / 2, H / 2, p[1] * D / 2); });
+    c.box(W + 0.2, 0.08, D + 0.25, MAT.steelDark, 0, H, 0.05); c.box(W - 0.6, 0.06, 0.38, MAT.wood, 0, 0.48, -D / 2 + 0.3); c.box(0.06, 0.45, 0.3, MAT.steelDark, -1, 0.24, -D / 2 + 0.3); c.box(0.06, 0.45, 0.3, MAT.steelDark, 1, 0.24, -D / 2 + 0.3);
+    c.cyl(0.04, 2.6, MAT.steelDark, W / 2 + 0.4, 1.3, D / 2, 8); c.sign(['BUS', '12  34'], 0.5, 0.42, W / 2 + 0.4, 2.45, D / 2 + 0.03, 0, { w: 256, h: 220, bg: '#2a6db2', fg: '#ffffff' });
+    c.solid(-W / 2, W / 2, -D / 2 - 0.05, -D / 2 + 0.05, 0, H); c.solid(-W / 2 - 0.05, -W / 2 + 0.05, -D / 2, D / 2, 0, H); c.solid(W / 2 - 0.05, W / 2 + 0.05, -D / 2, D * 0.1, 0, H);
+    bdUse(c, 'A bus shelter', -W / 2, W / 2, -D / 2, D / 2, 0.6);
+  } });
+  function bdContainer(hex, label) { return function (c) {
+    var L = 6.06, W = 2.44, H = 2.59, sheet = bdSheet(hex);
+    c.box(L, H, W, sheet, 0, H / 2, 0); c.box(0.05, H - 0.1, W - 0.1, bdPaint(hex), L / 2 + 0.02, H / 2, 0);
+    [-0.6, 0.6].forEach(function (z) { c.cyl(0.025, H - 0.2, MAT.steelDark, L / 2 + 0.06, H / 2, z, 6); c.cyl(0.025, H - 0.2, MAT.steelDark, L / 2 + 0.06, H / 2, z * 0.3, 6); });
+    [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(function (p) { c.box(0.18, 0.16, 0.18, MAT.steelDark, p[0] * (L / 2 - 0.09), 0.08, p[1] * (W / 2 - 0.09)); c.box(0.18, 0.16, 0.18, MAT.steelDark, p[0] * (L / 2 - 0.09), H - 0.08, p[1] * (W / 2 - 0.09)); });
+    c.sign(['COCU 482117 2'], 1.6, 0.22, 0, H - 0.4, W / 2 + 0.01, 0, { w: 512, h: 72, bg: '#' + ('000000' + hex.toString(16)).slice(-6), fg: '#ffffff' });
+    c.solid(-L / 2, L / 2, -W / 2, W / 2, 0, H); bdUse(c, label, -L / 2, L / 2, -W / 2, W / 2, H);
+  }; }
+  defProp('bdContainerRed', { extra: true, shop: false, label: 'shipping container (red)', cat: 'buildings', desc: 'A 20 ft shipping container, red.', build: bdContainer(0x9e2b25, 'A shipping container') });
+  defProp('bdContainerBlue', { extra: true, shop: false, label: 'shipping container (blue)', cat: 'buildings', desc: 'A 20 ft shipping container, blue.', build: bdContainer(0x24548c, 'A shipping container') });
+  defProp('bdKiosk', { extra: true, shop: false, label: 'kiosk', cat: 'buildings', desc: 'A kiosk with a service window and a striped awning.', build: function (c) {
+    var W = 2.6, D = 2.2, H = 2.6, wall = bdPaint(0x2f6d5a);
+    c.box(W, H, D, wall, 0, H / 2, 0); c.box(W + 0.2, 0.16, D + 0.2, MAT.white, 0, H + 0.08, 0);
+    c.box(1.8, 0.9, 0.06, bdGlass(), 0, 1.6, D / 2 + 0.01); c.box(1.9, 0.08, 0.4, MAT.wood, 0, 1.12, D / 2 + 0.2);
+    for (var i = 0; i < 6; i++) { var aw = c.box(0.36, 0.04, 0.8, bdPaint(i % 2 ? 0xf3f0e8 : 0xc0282e), -0.9 + i * 0.36, 2.25, D / 2 + 0.35); aw.rotation.x = 0.35; }
+    c.sign(['KIOSK'], 1.6, 0.3, 0, 2.48, D / 2 + 0.02, 0, { w: 512, h: 96, bg: '#1b232c', fg: '#f5b53d' });
+    c.solid(-W / 2, W / 2, -D / 2, D / 2, 0, H); bdUse(c, 'A kiosk', -W / 2, W / 2, -D / 2, D / 2 + 0.4, 2);
+  } });
+  defProp('bdSiteOffice', { extra: true, shop: false, label: 'site office cabin', cat: 'buildings', desc: 'A portable site office: a door, steps and windows.', build: function (c) {
+    var L = 6, W = 2.5, H = 2.7, sheet = bdSheet(0xd8d4c8);
+    c.box(L, H - 0.2, W, sheet, 0, 0.2 + (H - 0.2) / 2, 0); c.box(L + 0.1, 0.12, W + 0.1, MAT.steelDark, 0, H + 0.06, 0); c.box(L - 0.4, 0.2, W - 0.4, MAT.steelDark, 0, 0.1, 0);
+    c.box(0.9, 2.0, 0.06, MAT.door, 1.6, 1.2, W / 2 + 0.01); c.box(1.2, 0.18, 0.6, MAT.steelDark, 1.6, 0.18, W / 2 + 0.4);
+    bdWindow(c, 1.2, 0.8, -1.4, 1.6, W / 2 + 0.02); bdWindow(c, 1.2, 0.8, -0.0, 1.6, W / 2 + 0.02);
+    c.sign(['SITE OFFICE'], 1.6, 0.24, 1.6, 2.45, W / 2 + 0.02, 0, { w: 512, h: 80, bg: '#f5b53d', fg: '#1b232c' });
+    c.solid(-L / 2, L / 2, -W / 2, W / 2, 0, H); bdUse(c, 'A site office cabin', -L / 2, L / 2, -W / 2, W / 2 + 0.2, H);
+  } });
+  defProp('bdLockup', { extra: true, shop: false, label: 'lock-up garage', cat: 'buildings', desc: 'A block lock-up garage with a roller door.', build: function (c) {
+    var W = 5, D = 6, H = 3;
+    c.box(W, H, D, MAT.block, 0, H / 2, 0); c.box(W + 0.3, 0.2, D + 0.3, MAT.roof, 0, H + 0.1, 0);
+    c.box(3.2, 2.5, 0.06, bdSheet(0x9aa2aa), 0, 1.25, D / 2 + 0.02); c.box(3.4, 0.35, 0.3, MAT.steelDark, 0, 2.65, D / 2 + 0.1);
+    c.sign(['UNIT 4'], 0.8, 0.22, 2.0, 2.75, D / 2 + 0.02, 0, { w: 256, h: 72, bg: '#1b232c', fg: '#ffffff' });
+    c.solid(-W / 2, W / 2, -D / 2, D / 2, 0, H); bdUse(c, 'A lock-up garage', -W / 2, W / 2, -D / 2, D / 2 + 0.1, H);
+  } });
+  defProp('bdHouse', { extra: true, shop: false, label: 'house', cat: 'buildings', desc: 'A two-storey house: windows, a front door, a pitched roof and a chimney.', build: function (c) {
+    var L = 8, W = 6, H = 5.4, wall = bdPaint(0xe8e0cf);
+    c.box(L, H, W, wall, 0, H / 2, 0); c.box(L + 0.1, 0.3, W + 0.1, MAT.brick, 0, 0.15, 0);
+    bdRoof(c, L, W, H, 2.4, bdPaint(0x5a3a32), wall, 0.4);
+    c.box(0.6, 1.6, 0.6, MAT.brick, 2.2, H + 2.0, -0.8);
+    c.box(1.0, 2.1, 0.08, bdPaint(0x2a4d6e), 0, 1.1, W / 2 + 0.02); c.box(1.4, 0.12, 0.5, MAT.white, 0, 2.35, W / 2 + 0.25);
+    [-2.6, 2.6].forEach(function (x) { bdWindow(c, 1.2, 1.1, x, 1.5, W / 2 + 0.03); }); [-2.6, 0, 2.6].forEach(function (x) { bdWindow(c, 1.1, 1.0, x, 4.1, W / 2 + 0.03); });
+    [-1.5, 1.5].forEach(function (z) { bdWindow(c, 1.0, 1.0, L / 2 + 0.03, 4.1, z, Math.PI / 2); });
+    c.solid(-L / 2, L / 2, -W / 2, W / 2, 0, H); bdUse(c, 'A house', -L / 2, L / 2, -W / 2, W / 2 + 0.1, H);
+  } });
+  defProp('bdShopFront', { extra: true, shop: false, label: 'shop front', cat: 'buildings', desc: 'A brick shop with a glass front, an awning and its sign.', build: function (c) {
+    var L = 8, W = 5, H = 4.6;
+    c.box(L, H, W, MAT.brick, 0, H / 2, 0); c.box(L + 0.2, 0.25, W + 0.2, MAT.steelDark, 0, H + 0.12, 0);
+    c.box(L - 1.2, 2.3, 0.06, bdGlass(), -0.4, 1.35, W / 2 + 0.02); c.box(1.0, 2.2, 0.08, bdGlass(), L / 2 - 1.1, 1.1, W / 2 + 0.02); c.box(L - 0.6, 0.12, 0.12, MAT.steelDark, 0, 2.55, W / 2 + 0.06);
+    var aw = c.box(L - 0.4, 0.05, 1.3, bdPaint(0x2a6b4a), 0, 3.0, W / 2 + 0.6); aw.rotation.x = 0.3;
+    c.sign(['CORNER SHOP'], 3.6, 0.6, 0, 3.75, W / 2 + 0.02, 0, { w: 768, h: 128, bg: '#1b232c', fg: '#f3efe4' });
+    c.solid(-L / 2, L / 2, -W / 2, W / 2, 0, H); bdUse(c, 'A shop', -L / 2, L / 2, -W / 2, W / 2 + 0.1, H);
+  } });
+  defProp('bdPetrolCanopy', { extra: true, shop: false, label: 'petrol station canopy', cat: 'buildings', desc: 'A petrol station canopy on four pillars, with two pump islands and lights under it.', build: function (c) {
+    var L = 10, W = 7, H = 5;
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (p) { var x = p[0] * (L / 2 - 1), z = p[1] * (W / 2 - 1); c.box(0.4, H, 0.4, MAT.white, x, H / 2, z); c.solid(x - 0.22, x + 0.22, z - 0.22, z + 0.22, 0, H); });
+    c.box(L, 0.7, W, MAT.white, 0, H + 0.35, 0); c.box(L + 0.02, 0.25, W + 0.02, bdPaint(0xc0282e), 0, H + 0.45, 0); c.box(L - 0.4, 0.04, W - 0.4, MAT.lamp, 0, H - 0.01, 0);
+    c.sign(['FUEL'], 2.0, 0.5, 0, H + 0.4, W / 2 + 0.02, 0, { w: 512, h: 128, bg: '#c0282e', fg: '#ffffff' });
+    [-1.6, 1.6].forEach(function (x) { c.box(0.9, 0.2, 3.0, MAT.grey, x, 0.1, 0); c.box(0.6, 1.6, 0.4, bdPaint(0xe8e8e8), x, 1.0, 0); c.box(0.5, 0.35, 0.02, bdGlass(), x, 1.45, 0.21); c.box(0.5, 0.35, 0.02, bdGlass(), x, 1.45, -0.21); c.cyl(0.03, 0.9, MAT.black, x + 0.32, 1.0, 0.1, 6); c.solid(x - 0.45, x + 0.45, -1.5, 1.5, 0, 1.8); });
+    c.light(0xfff2dd, 0.8, 12, 0, H - 0.4, 0);
+    bdUse(c, 'A petrol station', -2.2, 2.2, -1.5, 1.5, 1.8);
+  } });
+  defProp('bdWarehouse', { extra: true, shop: false, label: 'warehouse', cat: 'buildings', desc: 'A corrugated warehouse, 16 by 12 m, with a roller door and a pedestrian door.', build: function (c) {
+    var L = 16, W = 12, H = 6.5, sheet = bdSheet(0x8d969e);
+    c.box(L, H, W, sheet, 0, H / 2, 0); c.box(L, 0.6, W, MAT.block, 0, 0.3, 0);
+    bdRoof(c, L, W, H, 1.6, bdSheet(0x5c6670), sheet, 0.3);
+    c.box(4.2, 4.5, 0.08, bdSheet(0xb9c0c6), -3, 2.25, W / 2 + 0.03); c.box(4.5, 0.4, 0.4, MAT.steelDark, -3, 4.7, W / 2 + 0.15);
+    c.box(1.0, 2.1, 0.08, MAT.door, 3.5, 1.05, W / 2 + 0.03); c.box(0.4, 0.15, 0.2, MAT.lamp, 3.5, 2.5, W / 2 + 0.1);
+    c.sign(['WAREHOUSE 2'], 3.2, 0.6, 3.0, 5.2, W / 2 + 0.04, 0, { w: 768, h: 144, bg: '#1b232c', fg: '#f5b53d' });
+    c.solid(-L / 2, L / 2, -W / 2, W / 2, 0, H); bdUse(c, 'A warehouse', -L / 2, L / 2, -W / 2, W / 2 + 0.1, H);
+  } });
+  // ── pre-built city buildings ──
+  // a facade grid of windows on one wall facing +z (a row per floor), for the blocks below
+  function bdFloors(c, L, z, floors, fh, y0, perFloor, w, h) { for (var f = 0; f < floors; f++) for (var i = 0; i < perFloor; i++) bdWindow(c, w, h, -L / 2 + (i + 0.5) * L / perFloor, y0 + f * fh + fh * 0.55, z); }
+  defProp('bdApartments', { extra: true, shop: false, label: 'apartment block', cat: 'buildings', desc: 'A five-storey apartment block with balconies and an entrance.', build: function (c) {
+    var L = 14, W = 10, fh = 3, n = 5, H = n * fh + 0.4, wall = bdPaint(0xcfc6b4);
+    c.box(L, H, W, wall, 0, H / 2, 0); c.box(L + 0.3, 0.3, W + 0.3, MAT.steelDark, 0, H + 0.15, 0);
+    bdFloors(c, L, W / 2 + 0.03, n, fh, 0, 5, 1.3, 1.4); bdFloors(c, L, -W / 2 - 0.03, n, fh, 0, 5, 1.3, 1.4);
+    for (var f = 1; f < n; f++) [-4.2, 0, 4.2].forEach(function (x) { c.box(2.0, 0.12, 0.9, MAT.grey, x, f * fh, W / 2 + 0.45); c.box(2.0, 0.9, 0.04, std({ color: 0xdfe8ee, roughness: 0.05, transparent: true, opacity: 0.35 }), x, f * fh + 0.5, W / 2 + 0.9); });
+    c.box(2.0, 2.4, 0.08, bdGlass(), 0, 1.2, W / 2 + 0.04); c.box(2.6, 0.15, 1.2, MAT.steelDark, 0, 2.6, W / 2 + 0.6); c.sign(['12'], 0.5, 0.3, 0, 2.95, W / 2 + 0.03, 0, { w: 128, h: 80, bg: '#1b232c', fg: '#ffffff' });
+    c.solid(-L / 2, L / 2, -W / 2, W / 2, 0, H); bdUse(c, 'An apartment block', -L / 2, L / 2, -W / 2, W / 2 + 0.1, H);
+  } });
+  defProp('bdOfficeTower', { extra: true, shop: false, label: 'office tower', cat: 'buildings', desc: 'A twelve-storey glass office tower with a lit lobby.', build: function (c) {
+    var L = 12, W = 12, fh = 3.4, n = 12, H = n * fh, glass = bdGlass();
+    c.box(L, H, W, glass, 0, H / 2, 0);
+    for (var f = 1; f <= n; f++) c.box(L + 0.1, 0.25, W + 0.1, MAT.steelDark, 0, f * fh, 0);
+    [-1, 1].forEach(function (s) { [-1, 1].forEach(function (t) { c.box(0.4, H, 0.4, MAT.steelDark, s * L / 2, H / 2, t * W / 2); }); });
+    c.box(L - 1, 3.0, 0.1, std({ color: 0xfff1d6, emissive: 0xffe2b0, emissiveIntensity: 0.25, roughness: 0.3 }), 0, 1.5, W / 2 + 0.02); c.box(L + 1, 0.3, 2, MAT.steelDark, 0, 3.4, W / 2 + 1);
+    c.sign(['MERIDIAN HOUSE'], 5, 0.7, 0, 4.0, W / 2 + 0.06, 0, { w: 1024, h: 140, bg: '#1b232c', fg: '#e8e8e8' });
+    c.solid(-L / 2, L / 2, -W / 2, W / 2, 0, H); bdUse(c, 'An office tower', -L / 2, L / 2, -W / 2, W / 2 + 0.1, H);
+  } });
+  defProp('bdTerrace', { extra: true, shop: false, label: 'terraced houses', cat: 'buildings', desc: 'A row of three terraced houses in brick, each with its own door.', build: function (c) {
+    var w = 5.5, L = 3 * w, W = 8, H = 6, cols = [0x2a4d6e, 0x8a2a2a, 0x2f6d4a];
+    c.box(L, H, W, MAT.brick, 0, H / 2, 0); bdRoof(c, L, W, H, 2.6, bdPaint(0x4a4a50), MAT.brick, 0.35);
+    for (var i = 0; i < 3; i++) { var x = -L / 2 + (i + 0.5) * w; c.box(0.95, 2.1, 0.08, bdPaint(cols[i]), x - 1.4, 1.05, W / 2 + 0.03); bdWindow(c, 1.6, 1.2, x + 0.9, 1.5, W / 2 + 0.03); bdWindow(c, 1.1, 1.1, x - 1.4, 4.2, W / 2 + 0.03); bdWindow(c, 1.1, 1.1, x + 0.9, 4.2, W / 2 + 0.03); c.box(0.5, 1.2, 0.5, MAT.brick, x, H + 2.0, -1.2); if (i) c.box(0.12, H + 0.2, 0.3, MAT.brick, -L / 2 + i * w, H / 2, W / 2 + 0.1); }
+    c.solid(-L / 2, L / 2, -W / 2, W / 2, 0, H); bdUse(c, 'Terraced houses', -L / 2, L / 2, -W / 2, W / 2 + 0.1, H);
+  } });
+  defProp('bdCafe', { extra: true, shop: false, label: 'cafe', cat: 'buildings', desc: 'A corner cafe: a glass front, an awning, tables outside.', build: function (c) {
+    var L = 8, W = 6, H = 4.2, wall = bdPaint(0xe7d8be);
+    c.box(L, H, W, wall, 0, H / 2, 0); c.box(L + 0.2, 0.25, W + 0.2, bdPaint(0x3a2a20), 0, H + 0.12, 0);
+    c.box(L - 1.4, 2.3, 0.06, bdGlass(), -0.4, 1.35, W / 2 + 0.02); c.box(1.0, 2.2, 0.08, bdPaint(0x3a2a20), L / 2 - 1.0, 1.1, W / 2 + 0.03);
+    for (var i = 0; i < 10; i++) { var aw = c.box(0.78, 0.04, 1.4, bdPaint(i % 2 ? 0xf3f0e8 : 0x2a6b4a), -L / 2 + 0.4 + i * 0.8, 2.95, W / 2 + 0.65); aw.rotation.x = 0.3; }
+    c.sign(['CAFE'], 2.4, 0.55, 0, 3.6, W / 2 + 0.02, 0, { w: 512, h: 120, bg: '#3a2a20', fg: '#f3efe4' });
+    [-2.4, 0.2].forEach(function (x) { c.cyl(0.4, 0.04, MAT.white, x, 0.75, W / 2 + 1.6, 16); c.cyl(0.04, 0.73, MAT.steelDark, x, 0.37, W / 2 + 1.6, 6); [-0.6, 0.6].forEach(function (dx) { c.box(0.38, 0.04, 0.38, MAT.wood, x + dx, 0.45, W / 2 + 1.6); c.box(0.04, 0.45, 0.04, MAT.steelDark, x + dx, 0.22, W / 2 + 1.6); }); c.solid(x - 0.9, x + 0.9, W / 2 + 1.2, W / 2 + 2.0, 0, 0.8); });
+    c.solid(-L / 2, L / 2, -W / 2, W / 2, 0, H); bdUse(c, 'A cafe', -L / 2, L / 2, -W / 2, W / 2 + 0.1, H);
+  } });
+  defProp('bdSupermarket', { extra: true, shop: false, label: 'supermarket', cat: 'buildings', desc: 'A supermarket: a long glass front, a big sign and trolley bays.', build: function (c) {
+    var L = 24, W = 16, H = 6;
+    c.box(L, H, W, bdSheet(0xe4e4e0), 0, H / 2, 0); c.box(L + 0.4, 0.8, W + 0.4, bdPaint(0xc0282e), 0, H + 0.2, 0);
+    c.box(L - 4, 3.0, 0.08, bdGlass(), 0, 1.6, W / 2 + 0.03); c.box(3, 2.6, 0.1, std({ color: 0xbfd8e6, roughness: 0.05, transparent: true, opacity: 0.4 }), 0, 1.3, W / 2 + 0.06);
+    c.box(L, 0.4, 3, MAT.steelDark, 0, 3.6, W / 2 + 1.5);
+    c.sign(['FRESH MARKET'], 8, 1.4, 0, 5.0, W / 2 + 0.25, 0, { w: 1024, h: 180, bg: '#c0282e', fg: '#ffffff' });
+    [-8, 8].forEach(function (x) { c.box(2.4, 1.0, 0.08, MAT.steel, x, 0.5, W / 2 + 2.6); for (var t = 0; t < 4; t++) c.box(0.55, 0.8, 0.9, MAT.steel, x - 0.9 + t * 0.6, 0.6, W / 2 + 2.0); });
+    c.solid(-L / 2, L / 2, -W / 2, W / 2, 0, H); bdUse(c, 'A supermarket', -L / 2, L / 2, -W / 2, W / 2 + 0.1, H);
+  } });
+  defProp('bdCarPark', { extra: true, shop: false, label: 'multi-storey car park', cat: 'buildings', desc: 'A three-deck car park: concrete decks on columns, open sides.', build: function (c) {
+    var L = 20, W = 14, fh = 3, n = 3, H = n * fh;
+    for (var f = 1; f <= n; f++) { c.box(L, 0.35, W, MAT.grey, 0, f * fh, 0); c.box(L, 0.9, 0.2, MAT.grey, 0, f * fh + 0.6, W / 2 - 0.1); c.box(L, 0.9, 0.2, MAT.grey, 0, f * fh + 0.6, -W / 2 + 0.1); }
+    for (var i = 0; i < 5; i++) [-1, 1].forEach(function (s) { var x = -L / 2 + 0.3 + i * (L - 0.6) / 4; c.box(0.5, H, 0.5, MAT.grey, x, H / 2, s * (W / 2 - 0.3)); c.solid(x - 0.25, x + 0.25, s * (W / 2 - 0.3) - 0.25, s * (W / 2 - 0.3) + 0.25, 0, H); });
+    c.box(L, 0.02, W, MAT.yard || MAT.grey, 0, 0.01, 0); for (var k = 0; k < 6; k++) c.box(0.1, 0.012, 4.8, MAT.white, -L / 2 + 2 + k * 3.2, 0.02, 3);
+    c.sign(['P', 'PARKING'], 1.6, 1.2, -L / 2 + 0.5, H - 1.0, W / 2 + 0.03, 0, { w: 256, h: 192, bg: '#2a5a9e', fg: '#ffffff' });
+    bdUse(c, 'A car park', -L / 2, L / 2, -W / 2, W / 2, 0.3);
+  } });
+  var HM_MATS = {};
+  function hmMat(hex, rough, metal, map) { var k = hex + ':' + rough + ':' + metal + ':' + (map ? map.uuid : ''); if (!HM_MATS[k]) HM_MATS[k] = std({ color: hex, roughness: rough === undefined ? 0.7 : rough, metalness: metal || 0, map: map || null }); return HM_MATS[k]; }
+  function hmFabric(hex) { return hmMat(hex, 0.95, 0, TEX.cloth || null); }
+  function hmUse(c, label, w, h, d, sx, sz) { sx = sx || 0; sz = sz || 0; c.solid(sx - w / 2, sx + w / 2, sz - d / 2, sz + d / 2, 0, h); c.hit(w, h, d, sx, h / 2, sz, { prompt: function () { return label; }, use: function () { toast(label + '.', ''); } }); }
+  function hmLegs(c, w, d, h, mat, inset) { inset = inset || 0.05; [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (p) { c.box(0.05, h, 0.05, mat, p[0] * (w / 2 - inset), h / 2, p[1] * (d / 2 - inset)); }); }
+
+  defProp('hmSofa', { extra: true, shop: false, label: 'sofa', cat: 'home', desc: 'A three-seat sofa in grey fabric.', build: function (c) { var f = hmFabric(0x6a7480); c.box(2.1, 0.42, 0.9, f, 0, 0.27, 0); c.box(2.1, 0.5, 0.2, f, 0, 0.7, -0.35); [-1, 1].forEach(function (s) { c.box(0.18, 0.62, 0.9, f, s * 0.96, 0.37, 0); }); for (var i = 0; i < 3; i++) c.box(0.6, 0.12, 0.62, hmFabric(0x7a8490), -0.64 + i * 0.64, 0.54, 0.06); hmLegs(c, 2.0, 0.8, 0.06, MAT.black); hmUse(c, 'A sofa', 2.1, 0.95, 0.9); } });
+  defProp('hmArmchair', { extra: true, shop: false, label: 'armchair', cat: 'home', desc: 'A deep armchair in green fabric.', build: function (c) { var f = hmFabric(0x3f6a52); c.box(0.9, 0.42, 0.85, f, 0, 0.27, 0); c.box(0.9, 0.55, 0.18, f, 0, 0.72, -0.33); [-1, 1].forEach(function (s) { c.box(0.16, 0.62, 0.85, f, s * 0.37, 0.37, 0); }); c.box(0.6, 0.12, 0.6, hmFabric(0x4a7a5e), 0, 0.54, 0.05); hmLegs(c, 0.8, 0.75, 0.06, hmMat(0x5a3a22)); hmUse(c, 'An armchair', 0.9, 1.0, 0.85); } });
+  defProp('hmCoffeeTable', { extra: true, shop: false, label: 'coffee table', cat: 'home', desc: 'A low oak coffee table with a magazine and a mug.', build: function (c) { c.box(1.1, 0.05, 0.6, MAT.wood, 0, 0.42, 0); hmLegs(c, 1.1, 0.6, 0.4, MAT.wood); c.box(1.0, 0.03, 0.5, MAT.wood, 0, 0.14, 0); c.box(0.3, 0.01, 0.22, hmMat(0xc0282e, 0.6), -0.25, 0.45, 0.05); c.cyl(0.04, 0.09, MAT.white, 0.3, 0.49, -0.1, 10); hmUse(c, 'A coffee table', 1.1, 0.45, 0.6); } });
+  defProp('hmTvUnit', { extra: true, shop: false, label: 'TV unit', cat: 'home', desc: 'A low unit with a flat TV on it.', build: function (c) { c.box(1.8, 0.45, 0.42, hmMat(0x2a2a2e, 0.5), 0, 0.23, 0); [-0.45, 0.45].forEach(function (x) { c.box(0.8, 0.35, 0.02, hmMat(0x3a3a40, 0.5), x, 0.23, 0.215); }); c.box(0.3, 0.04, 0.2, MAT.black, 0, 0.47, 0); c.box(0.04, 0.12, 0.04, MAT.black, 0, 0.53, 0); c.box(1.3, 0.75, 0.05, MAT.black, 0, 0.98, 0); c.box(1.24, 0.69, 0.01, std({ color: 0x0c1218, emissive: 0x1a3a5a, emissiveIntensity: 0.4, roughness: 0.2 }), 0, 0.98, 0.03); hmUse(c, 'A TV', 1.8, 1.35, 0.42); } });
+  defProp('hmBookcase', { extra: true, shop: false, label: 'bookcase', cat: 'home', desc: 'A tall bookcase full of books.', build: function (c) { var w = MAT.wood; c.box(1.0, 2.0, 0.04, w, 0, 1.0, -0.15); [-0.48, 0.48].forEach(function (x) { c.box(0.04, 2.0, 0.32, w, x, 1.0, 0); }); for (var s = 0; s < 5; s++) { c.box(1.0, 0.03, 0.32, w, 0, 0.05 + s * 0.48, 0); if (s < 4) for (var b = 0; b < 9; b++) { var h = 0.26 + (b * 7 % 5) * 0.03; c.box(0.08, h, 0.22, hmMat([0xc0282e, 0x2a5a9e, 0x3f7a4a, 0xe0b020, 0x6a3a8a, 0x2a2a2a][(b + s) % 6], 0.8), -0.38 + b * 0.095, 0.07 + s * 0.48 + h / 2, 0.02); } } hmUse(c, 'A bookcase', 1.0, 2.0, 0.34); } });
+  defProp('hmDiningSet', { extra: true, shop: false, label: 'dining set', cat: 'home', desc: 'A dining table with four chairs.', build: function (c) { c.box(1.6, 0.05, 0.9, MAT.wood, 0, 0.75, 0); hmLegs(c, 1.6, 0.9, 0.73, MAT.wood, 0.08); [[-0.45, -0.65, 0], [0.45, -0.65, 0], [-0.45, 0.65, Math.PI], [0.45, 0.65, Math.PI]].forEach(function (q) { c.box(0.42, 0.04, 0.42, MAT.wood, q[0], 0.46, q[1]); var bk = c.box(0.42, 0.45, 0.04, MAT.wood, q[0], 0.7, q[1] + (q[2] ? 0.19 : -0.19)); [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (p) { c.box(0.03, 0.45, 0.03, MAT.wood, q[0] + p[0] * 0.18, 0.22, q[1] + p[1] * 0.18); }); }); hmUse(c, 'A dining table', 1.6, 0.8, 1.7); } });
+  defProp('hmBed', { extra: true, shop: false, label: 'double bed', cat: 'home', desc: 'A double bed with a headboard, pillows and a duvet.', build: function (c) { c.box(1.6, 0.3, 2.05, MAT.wood, 0, 0.2, 0); c.box(1.55, 0.2, 1.95, MAT.white, 0, 0.45, 0.02); c.box(1.6, 0.06, 1.4, hmFabric(0x5a7aa0), 0, 0.57, 0.3); [-0.38, 0.38].forEach(function (x) { c.box(0.6, 0.12, 0.38, MAT.white, x, 0.62, -0.72); }); c.box(1.7, 0.9, 0.08, MAT.wood, 0, 0.6, -1.02); hmUse(c, 'A bed', 1.6, 1.05, 2.1); } });
+  defProp('hmWardrobe', { extra: true, shop: false, label: 'wardrobe', cat: 'home', desc: 'A two-door wardrobe.', build: function (c) { var w = hmMat(0xe8e2d4, 0.6); c.box(1.2, 2.1, 0.6, w, 0, 1.05, 0); c.box(0.01, 1.9, 0.01, MAT.black, 0, 1.05, 0.301); [-0.08, 0.08].forEach(function (x) { c.box(0.03, 0.25, 0.04, MAT.chrome, x, 1.1, 0.32); }); hmUse(c, 'A wardrobe', 1.2, 2.1, 0.6); } });
+  defProp('hmKitchen', { extra: true, shop: false, label: 'kitchen run', cat: 'home', desc: 'A 3 m kitchen run: units, a worktop, a sink, a hob and wall cupboards.', build: function (c) { var u = hmMat(0xf2efe6, 0.5), top = hmMat(0x3a3a40, 0.3, 0.2); c.box(3.0, 0.86, 0.6, u, 0, 0.43, 0); for (var i = 0; i < 5; i++) { c.box(0.58, 0.7, 0.01, hmMat(0xeae6dc, 0.5), -1.2 + i * 0.6, 0.45, 0.301); c.box(0.12, 0.02, 0.03, MAT.chrome, -1.2 + i * 0.6, 0.72, 0.31); } c.box(3.02, 0.04, 0.62, top, 0, 0.88, 0); c.box(0.5, 0.02, 0.4, MAT.chrome, -0.6, 0.9, 0); c.cyl(0.02, 0.3, MAT.chrome, -0.6, 1.05, -0.22, 8); c.box(0.6, 0.01, 0.5, MAT.black, 0.7, 0.905, 0); [[0.55, -0.12], [0.85, -0.12], [0.55, 0.12], [0.85, 0.12]].forEach(function (p) { c.cyl(0.08, 0.005, hmMat(0x555555), p[0], 0.912, p[1], 14); }); c.box(3.0, 0.7, 0.35, u, 0, 1.95, -0.12); hmUse(c, 'A kitchen', 3.0, 0.9, 0.6); } });
+  defProp('hmFridge', { extra: true, shop: false, label: 'fridge', cat: 'home', desc: 'A tall fridge-freezer.', build: function (c) { var w = hmMat(0xe8ecee, 0.35, 0.3); c.box(0.65, 1.85, 0.65, w, 0, 0.93, 0); c.box(0.64, 0.01, 0.01, MAT.black, 0, 1.15, 0.33); [0.7, 1.5].forEach(function (y) { c.box(0.03, 0.3, 0.04, MAT.chrome, 0.26, y, 0.34); }); hmUse(c, 'A fridge', 0.65, 1.85, 0.65); } });
+  defProp('hmFloorLamp', { extra: true, shop: false, label: 'floor lamp', cat: 'home', desc: 'A standard lamp that lights the room.', build: function (c) { c.cyl(0.18, 0.03, MAT.black, 0, 0.02, 0, 16); c.cyl(0.015, 1.5, MAT.black, 0, 0.78, 0, 8); var sh = c.cyl(0.18, 0.28, hmMat(0xf0e4c8, 0.9), 0, 1.55, 0, 16, 0.24); var bulb = c.sphere(0.05, glowMat(0xfff2c0, 1.0), 0, 1.48, 0); lampMeshes.push(bulb); c.light(0xffdca0, 0.7, 7, 0, 1.45, 0); hmUse(c, 'A floor lamp', 0.36, 1.7, 0.36); } });
+  defProp('hmRug', { extra: true, shop: false, label: 'rug', cat: 'home', desc: 'A 2.4 by 1.6 m rug with a border; walk on it.', build: function (c) { c.box(2.4, 0.01, 1.6, hmFabric(0x8a3a32), 0, 0.005, 0); c.box(2.1, 0.012, 1.3, hmFabric(0xd8c8a8), 0, 0.006, 0); c.box(1.6, 0.014, 0.8, hmFabric(0x2a4a6a), 0, 0.007, 0); } });
+  defProp('hmPlant', { extra: true, shop: false, label: 'house plant', cat: 'home', desc: 'A leafy plant in a white pot.', build: function (c) { c.cyl(0.2, 0.4, MAT.white, 0, 0.2, 0, 14, 0.15); for (var i = 0; i < 9; i++) { var a = i * 0.7, l = c.box(0.12, 0.02, 0.5, hmMat(0x3f7a30, 0.8), Math.cos(a) * 0.15, 0.55 + (i % 3) * 0.12, Math.sin(a) * 0.15); l.rotation.set(-0.6 - (i % 3) * 0.2, -a + Math.PI / 2, 0, 'YXZ'); } hmUse(c, 'A house plant', 0.4, 0.9, 0.4); } });
+  defProp('hmBathroom', { extra: true, shop: false, label: 'bathroom set', cat: 'home', desc: 'A bath, a toilet and a basin with a mirror, along a 2.6 m wall.', build: function (c) { var w = hmMat(0xf6f6f2, 0.25); c.box(1.7, 0.55, 0.75, w, -0.4, 0.28, 0); c.box(1.5, 0.02, 0.55, std({ color: 0xbcd8e6, roughness: 0.1 }), -0.4, 0.5, 0); c.box(0.38, 0.4, 0.5, w, 0.75, 0.2, -0.05); c.box(0.4, 0.4, 0.18, w, 0.75, 0.6, -0.24); c.box(0.5, 0.15, 0.4, w, 1.05 + 0.2, 0.85, -0.17); c.cyl(0.03, 0.85, w, 1.25, 0.42, -0.2, 8); c.box(0.5, 0.6, 0.02, std({ color: 0xdfe8ee, roughness: 0.02, metalness: 0.9 }), 1.25, 1.4, -0.36); hmUse(c, 'A bathroom', 2.6, 0.9, 0.75, 0.15, 0); } });
   CO.world({
     "booth@47.21,-58.5": { x: 58.3, z: -74.85, ry: -197 },
     "door@-21.27,19.95": { x: -23.35, z: 26.75 },
@@ -4188,6 +4373,7 @@
     "group@-14,52": { x: -16.6, z: 51.35 },
     "group@-15,-56": { hidden: true },
     "group@-15,33.5": { x: -15.05, z: 33.45, hidden: true },
+    "group@-18.84,84.9": { x: -18.95, z: 85.05, hidden: true },
     "group@-19.2,17.4": { hidden: true },
     "group@-19.2,22.6": { hidden: true },
     "group@-22.9,19.95": { x: -25.05, z: 26.75 },
@@ -4195,6 +4381,7 @@
     "group@-22.95,-0.7": { x: -22.9 },
     "group@-23.57,72.77": { x: -23.55, z: 72.7, hidden: true },
     "group@-23.82,-9.27": { x: -18.65, z: -1.85, hidden: true },
+    "group@-23.96,82.17": { hidden: true },
     "group@-24.2,3": { x: -22.95, z: -0.7 },
     "group@-25.02,-47.43": { x: -25.1, z: -48.95, hidden: true },
     "group@-25.13,-33.6": { hidden: true },
@@ -4208,6 +4395,7 @@
     "group@-27.7,-13": { z: -13.05, hidden: true },
     "group@-27.9,-32": { hidden: true },
     "group@-30.35,38.76": { hidden: true },
+    "group@-33.91,84.81": { x: -34.1, z: 84.8, hidden: true },
     "group@-34,3": { z: 3.1 },
     "group@-34.1,-8": { hidden: true },
     "group@-36.25,-17.6": { x: -36.3, z: -17.55, hidden: true },
@@ -4217,8 +4405,10 @@
     "group@-37.45,-46.32": { hidden: true },
     "group@-37.65,-29.25": { hidden: true },
     "group@-37.77,-18.62": { hidden: true },
+    "group@-39.44,83.09": { x: -39.4, z: 83.15, hidden: true },
     "group@-4.11,-67.45": { hidden: true },
     "group@-4.2,40.4": { x: -1.4, z: 39.1, ry: 90, hidden: true },
+    "group@-4.51,83.74": { hidden: true },
     "group@-40.91,-38.36": { hidden: true },
     "group@-41.2,-21.4": { hidden: true },
     "group@-41.2,-26.6": { hidden: true },
@@ -4228,6 +4418,7 @@
     "group@-41.2,5.6": { hidden: true },
     "group@-43.4,17.3": { hidden: true },
     "group@-43.4,25.2": { hidden: true },
+    "group@-45.9,83.23": { x: -45.95, z: 83.25, hidden: true },
     "group@-46.2,17.4": { hidden: true },
     "group@-46.2,22.6": { hidden: true },
     "group@-46.2,27.4": { hidden: true },
@@ -4235,6 +4426,7 @@
     "group@-5,-76.5": { hidden: true },
     "group@-5.38,-20.38": { x: -5.45, z: -20.4, hidden: true },
     "group@-50,21.4": { x: -49.8, z: 21.65, hidden: true },
+    "group@-52.28,84.24": { hidden: true },
     "group@-6,26": { x: -6.6, z: 24.15 },
     "group@-6,38": { x: -7, z: 36 },
     "group@-6,6": { x: -6.6, z: 12.05, hidden: true },
@@ -4243,17 +4435,24 @@
     "group@-6.8,18.4": { x: 14.75, z: 15.85 },
     "group@-7,12": { x: -6.75, z: 15.05 },
     "group@-7,24": { x: -6.75, z: 23.5 },
+    "group@-73.66,82.8": { x: -75.25, z: 83.05, hidden: true },
     "group@-8,10": { x: -6.75, z: 10.6, hidden: true },
     "group@-8,2": { x: -6.65, z: 13.6, hidden: true },
     "group@-8,20": { x: -9.25, z: 22.35, ry: -180, hidden: true },
+    "group@-80,81.81": { hidden: true },
+    "group@-9.91,81.55": { x: -9.55, z: 81.4, hidden: true },
     "group@0,0": { z: -0.15, ry: -360 },
     "group@0,0#2": { x: -0.1, z: 0.1 },
     "group@0,0#3": { x: 0.2, z: 0.05 },
+    "group@1.6,83.41": { x: 1.35, z: 83.25, hidden: true },
     "group@10.23,-70.99": { x: 10.1, z: -71.15, hidden: true },
     "group@11.24,-20.98": { x: 11.2, z: -21, hidden: true },
     "group@11.9,-28.12": { hidden: true },
     "group@11.93,-53.12": { hidden: true },
+    "group@113.97,83.11": { x: 114, z: 83.1, hidden: true },
     "group@12.2,-3.88,2.55": { x: 11.8, z: -3.85 },
+    "group@121.45,81.46": { x: 141.05, z: 86.8, hidden: true },
+    "group@129.92,84.01": { hidden: true },
     "group@13,33": { x: 0.15, z: 44.9, ry: -90 },
     "group@13.5,-84.5": { x: 13.45, hidden: true },
     "group@14,-70": { x: 13.8, hidden: true },
@@ -4263,6 +4462,7 @@
     "group@15,33.5": { x: 0, z: 40.2, ry: -90, hidden: true },
     "group@16,-76": { hidden: true },
     "group@18.2,-64.8": { hidden: true },
+    "group@18.26,81.92": { x: 17.55, z: 81.9, hidden: true },
     "group@19.2,17.4": { hidden: true },
     "group@19.2,22.6": { hidden: true },
     "group@19.25,-53.25": { hidden: true },
@@ -4271,6 +4471,7 @@
     "group@21.62,-54.31": { hidden: true },
     "group@21.78,-49.1": { hidden: true },
     "group@21.9,20": { x: 24.05, z: 24.85 },
+    "group@25.6,81.53": { x: 25.6, z: 81.5, hidden: true },
     "group@27.01,-53.37": { x: 27, z: -53.35, hidden: true },
     "group@28.72,-40.34": { hidden: true },
     "group@28.73,-24.91": { x: 28.7, z: -23.7, hidden: true },
@@ -4280,6 +4481,7 @@
     "group@29.24,-8.98": { hidden: true },
     "group@29.29,-32.52": { hidden: true },
     "group@29.61,-10.94": { hidden: true },
+    "group@36.56,81.27": { x: 36.55, z: 81.3, hidden: true },
     "group@38.3,-13": { hidden: true },
     "group@4.2,40.4": { x: 6.2, z: 37.45, ry: -90, hidden: true },
     "group@40.49,-3.75": { hidden: true },
@@ -4291,8 +4493,10 @@
     "group@42.4,-32": { x: 42.45, z: -32.05 },
     "group@43.6,-21.4": { hidden: true },
     "group@43.6,-26.6": { hidden: true },
+    "group@45.66,81.37": { x: 45.7, z: 81.35, hidden: true },
     "group@49.65,-12.73": { hidden: true },
     "group@5.9,12.8": { x: 5.5, z: 8.8, ry: -90 },
+    "group@57.85,82.93": { hidden: true },
     "group@6,26": { x: 6.5, z: 24.1 },
     "group@6,38": { x: 6.7, z: 35.95 },
     "group@60,-17.05": { x: 60, z: -17, hidden: true },
@@ -4305,7 +4509,11 @@
     "group@8,2": { x: 8.4, z: 15.9, hidden: true },
     "group@8,20": { x: 13.95, z: 22.5, ry: -180, hidden: true },
     "group@8.4,13.7": { hidden: true },
+    "group@8.99,81.8": { hidden: true },
+    "group@86.1,83.95": { x: 86.05, hidden: true },
     "group@9.8,-64.8": { hidden: true },
+    "group@92.61,81.09": { x: 92.55, z: 81.1, hidden: true },
+    "group@99.77,83.84": { hidden: true },
     "lamp post@-22.7,-0.8": { x: -22.7, hidden: true },
     "mesh box 0.01x0.44x0.66@12.37,-2.86,1.42": { x: 12.35, z: -2.85, hidden: true },
     "mesh box 0.05x0.04x0.34@14.15,-2.5,0.06": { x: 12.45, z: -2.1 },
@@ -4438,6 +4646,7 @@
     "mesh box 5.6x0.98x0.05@16.87,-1,0.49": { hidden: true },
     "mesh box 6.46x0.62x6.46@14,-1,0.31": { hidden: true },
     "mesh buffer@-15.6,13.2,0.02": { x: -12.65, z: 11.65, sx: 1.28, sy: 1.67 },
+    "mesh buffer@0,73.5,0.01": { z: 71.5, sx: 1.04, sy: 0.2 },
     "mesh cone 0.16x0.15@12.34,-0.94,1.46": { hidden: true },
     "mesh cone 0.45x0.18@-14,20,2.6": { hidden: true },
     "mesh cone 0.45x0.18@-14,3,2.6": { hidden: true },
@@ -4475,6 +4684,7 @@
     "mesh plane 2.38x1.8@-68.25,30,0.95": { x: -68.2, z: 30.05 },
     "mesh plane 2.6x6.6@13.6,5.2,0.05": { hidden: true },
     "mesh plane 2.6x6.6@13.6,5.8,0.05": { hidden: true },
+    "mesh plane 200x8@0,76,0.01": { x: -0.1 },
     "mesh plane 3.2x0.8@0,-4.4,3": { y: 3.65, z: 0 },
     "mesh plane 3.4x22.4@9.5,-69.5,0.04": { hidden: true },
     "mesh plane 3.7x10.3@14,-63.3,0.04": { hidden: true },
@@ -4528,8 +4738,8 @@
     { id: "wc-mvco4im1-f", of: "mesh box 1x0.22x2.1@9.5,25.8,0.11", x: 18.35, y: 0.11, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvco4im2-g", of: "mesh box 0.8x0.85x1.9@9.5,25.8,0.43", x: 18.35, y: 0.43, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvco99z9-i", of: "group@13,33", x: 0.2, y: 0, z: 48.95, ry: -90, sx: 1, sy: 1, sz: 1 },
-    { id: "wc-mvco9wt7-j", of: "group@14,52", x: 0.6, y: 0, z: 46.95, ry: 0, sx: 1, sy: 1, sz: 1 },
-    { id: "wc-mvcoa1ud-k", of: "group@14,52", x: -0.3, y: 0, z: 43.15, ry: 180, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvco9wt7-j", of: "group@14,52", x: 0.6, y: 0, z: 46.95, ry: -180, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvcoa1ud-k", of: "group@14,52", x: -0.3, y: 0, z: 43.15, ry: 0, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvcoir5j-15", of: "mesh box 0.14x0.5x0.14@-8.5,26,0.25", x: -7.1, y: 0.25, z: 25.2, ry: 0, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvcoisyr-17", of: "mesh box 0.22x0.06x0.22@-8.5,26,0.55", x: -7.1, y: 0.55, z: 25.2, ry: 0, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvcoj4vs-18", of: "mesh box 0.14x0.5x0.14@-8.5,26,0.25", x: -7.1, y: 0.25, z: 27.25, ry: 0, sx: 1, sy: 1, sz: 1 },
@@ -4617,12 +4827,140 @@
     { id: "wc-mvhzozpa-g", of: "mesh box 0.8x0.85x1.9@9.5,25.8,0.43", x: 20.9, y: 0.43, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvigo6fx-1", of: "mesh buffer@2,-0.5,0.02", x: 12.7, y: 0.02, z: 11.05, ry: 0, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvigrxyy-2", of: "fence@7.8,4.1", x: -18.15, y: 0, z: 10.1, ry: 0, sx: 1, sy: 1, sz: 1 },
-    { id: "wc-mvjf76tg-1", of: "group@14,52", x: 0.65, y: 0, z: 43.2, ry: 0, sx: 1, sy: 1, sz: 1 },
-    { id: "wc-mvjf7f7r-2", of: "group@14,52", x: -0.35, y: 0, z: 46.95, ry: -180, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjf76tg-1", of: "group@14,52", x: 0.65, y: 0, z: 43.2, ry: 180, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjf7f7r-2", of: "group@14,52", x: -0.35, y: 0, z: 46.95, ry: 0, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvjf8bqo-3", of: "group@14,40", x: 16.5, y: 0, z: 44, ry: 0, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvjf8v19-4", of: "group@14,52", x: 16.6, y: 0, z: 51.25, ry: -360, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvjf91av-5", of: "group@14,40", x: 16.6, y: 0, z: 36.75, ry: 0, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvjf9o7y-6", of: "group@-14,52", x: -16.55, y: 0, z: 48, ry: 90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfm0sy-3", of: "group@-25.43,-17.3", x: -18.85, y: 0, z: 50.55, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfmaez-4", of: "group@-25.43,-17.3", x: -22, y: 0, z: 50.65, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfmcke-5", of: "group@-25.43,-17.3", x: -25.15, y: 0, z: 50.7, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfmn11-6", of: "group@-25.43,-17.3", x: -28.55, y: 0, z: 50.7, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfmr76-7", of: "group@-25.43,-17.3", x: 29.2, y: 0, z: 51.8, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfn2ag-8", of: "group@-25.43,-17.3", x: 25.7, y: 0, z: 51.6, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfnec4-9", of: "group@-25.43,-17.3", x: 22.15, y: 0, z: 51.7, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfnkx1-a", of: "group@-25.43,-17.3", x: 18.75, y: 0, z: 51.4, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfnwa9-b", of: "group@-25.43,-17.3", x: 18.35, y: 0, z: 40.45, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfnzg2-c", of: "group@-25.43,-17.3", x: 18.45, y: 0, z: 44.05, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfo20i-d", of: "group@-25.43,-17.3", x: 18.65, y: 0, z: 47.7, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfoeqk-e", of: "group@-25.43,-17.3", x: 18.4, y: 0, z: 36.75, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfokd7-f", of: "group@-25.43,-17.3", x: 16, y: 0, z: 33.45, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfovxc-g", of: "group@-25.43,-17.3", x: 44.7, y: 0, z: 68.8, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfovxc-h", of: "group@-25.43,-17.3", x: 41.55, y: 0, z: 66.4, ry: 23308, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfovxc-i", of: "group@-25.43,-17.3", x: 37.65, y: 0, z: 68.7, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfovxc-j", of: "group@-25.43,-17.3", x: 34.25, y: 0, z: 68.4, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfp7p0-k", of: "group@-25.43,-17.3", x: 41, y: 0, z: 64.9, ry: 23308, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfp7p1-l", of: "group@-25.43,-17.3", x: 37.45, y: 0, z: 65, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfp7p1-m", of: "group@-25.43,-17.3", x: 34.05, y: 0, z: 64.7, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfp7p1-n", of: "group@-25.43,-17.3", x: 44.5, y: 0, z: 65.1, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfpevd-o", of: "group@-25.43,-17.3", x: 55.5, y: 0, z: 65.1, ry: 23308, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfpevd-p", of: "group@-25.43,-17.3", x: 51.95, y: 0, z: 65.2, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfpevd-q", of: "group@-25.43,-17.3", x: 48.55, y: 0, z: 64.9, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfpevd-r", of: "group@-25.43,-17.3", x: 59, y: 0, z: 65.3, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfpevd-s", of: "group@-25.43,-17.3", x: 48.75, y: 0, z: 68.6, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfpeve-t", of: "group@-25.43,-17.3", x: 52.15, y: 0, z: 68.9, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfpeve-u", of: "group@-25.43,-17.3", x: 55.7, y: 0, z: 68.8, ry: 23308, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfpeve-v", of: "group@-25.43,-17.3", x: 59.2, y: 0, z: 69, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfpmeb-w", of: "group@-25.43,-17.3", x: 41.1, y: 0, z: 57.95, ry: 23308, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfpmeb-x", of: "group@-25.43,-17.3", x: 37.55, y: 0, z: 58.05, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfpmeb-y", of: "group@-25.43,-17.3", x: 34.15, y: 0, z: 57.75, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfpmeb-z", of: "group@-25.43,-17.3", x: 44.6, y: 0, z: 58.15, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfpmeb-10", of: "group@-25.43,-17.3", x: 34.35, y: 0, z: 61.45, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfpmeb-11", of: "group@-25.43,-17.3", x: 37.75, y: 0, z: 61.75, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfpmec-12", of: "group@-25.43,-17.3", x: 41.3, y: 0, z: 61.65, ry: 23308, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfpmec-13", of: "group@-25.43,-17.3", x: 44.8, y: 0, z: 61.85, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfprse-14", of: "group@-25.43,-17.3", x: 42.6, y: 0, z: 59.45, ry: 23308, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfprse-15", of: "group@-25.43,-17.3", x: 39.05, y: 0, z: 59.55, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfprse-16", of: "group@-25.43,-17.3", x: 35.65, y: 0, z: 59.25, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfprse-17", of: "group@-25.43,-17.3", x: 46.1, y: 0, z: 59.65, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfprsf-18", of: "group@-25.43,-17.3", x: 35.85, y: 0, z: 62.95, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfprsf-19", of: "group@-25.43,-17.3", x: 39.25, y: 0, z: 63.25, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfprsf-1a", of: "group@-25.43,-17.3", x: 42.8, y: 0, z: 63.15, ry: 23308, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfprsf-1b", of: "group@-25.43,-17.3", x: 46.3, y: 0, z: 63.35, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfqlv1-1c", of: "group@-25.43,-17.3", x: 39.6, y: 0, z: 67.15, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfqlv1-1d", of: "group@-25.43,-17.3", x: 39.4, y: 0, z: 63.45, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfqlv1-1e", of: "group@-25.43,-17.3", x: 35.9, y: 0, z: 63.25, ry: 23308, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfqlv2-1f", of: "group@-25.43,-17.3", x: 36.1, y: 0, z: 66.95, ry: 23308, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfqpav-1g", of: "group@-25.43,-17.3", x: 41.1, y: 0, z: 68.65, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfqpaw-1h", of: "group@-25.43,-17.3", x: 40.9, y: 0, z: 64.95, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfqpaw-1i", of: "group@-25.43,-17.3", x: 37.4, y: 0, z: 64.75, ry: 23308, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfqpaw-1j", of: "group@-25.43,-17.3", x: 37.6, y: 0, z: 68.45, ry: 23308, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfqrmy-1k", of: "group@-25.43,-17.3", x: 44.25, y: 0, z: 67, ry: 23308, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfqtek-1l", of: "group@-25.43,-17.3", x: 46.4, y: 0, z: 66.65, ry: 23308, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfquq6-1m", of: "group@-25.43,-17.3", x: 50.4, y: 0, z: 66.8, ry: 23308, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfqwjv-1n", of: "group@-25.43,-17.3", x: 53.9, y: 0, z: 66.9, ry: 23308, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfqzq4-1o", of: "group@-25.43,-17.3", x: 57.15, y: 0, z: 66.35, ry: 23308, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfr3jm-1p", of: "group@-25.43,-17.3", x: 63.7, y: 0, z: 66.4, ry: 23308, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfr3jm-1q", of: "group@-25.43,-17.3", x: 65.55, y: 0, z: 65.35, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfr3jm-1r", of: "group@-25.43,-17.3", x: 62.05, y: 0, z: 65.15, ry: 23308, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfr3jn-1s", of: "group@-25.43,-17.3", x: 62.25, y: 0, z: 68.85, ry: 23308, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfr3jn-1t", of: "group@-25.43,-17.3", x: 65.75, y: 0, z: 69.05, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfsmw0-30", of: "group@-25.43,-17.3", x: -43.8, y: 0, z: 57.6, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfsmw0-31", of: "group@-25.43,-17.3", x: -40.4, y: 0, z: 57.6, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfsmw0-32", of: "group@-25.43,-17.3", x: -37.25, y: 0, z: 57.5, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfsmw0-33", of: "group@-25.43,-17.3", x: -34.1, y: 0, z: 57.4, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfsztd-34", of: "group@-25.43,-17.3", x: -56.4, y: 0, z: 57.7, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfsztd-35", of: "group@-25.43,-17.3", x: -53, y: 0, z: 57.7, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfsztd-36", of: "group@-25.43,-17.3", x: -49.85, y: 0, z: 57.65, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfsztd-37", of: "group@-25.43,-17.3", x: -46.7, y: 0, z: 57.55, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjft4mc-38", of: "group@-25.43,-17.3", x: -68.8, y: 0, z: 57.9, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjft4mc-39", of: "group@-25.43,-17.3", x: -65.4, y: 0, z: 57.9, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjft4md-3a", of: "group@-25.43,-17.3", x: -62.25, y: 0, z: 57.85, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjft4md-3b", of: "group@-25.43,-17.3", x: -59.1, y: 0, z: 57.75, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftehu-3c", of: "group@-25.43,-17.3", x: -68.65, y: 0, z: 61.25, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftehu-3d", of: "group@-25.43,-17.3", x: -65.25, y: 0, z: 61.25, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftehv-3e", of: "group@-25.43,-17.3", x: -62.1, y: 0, z: 61.2, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftehv-3f", of: "group@-25.43,-17.3", x: -58.95, y: 0, z: 61.1, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftehv-3g", of: "group@-25.43,-17.3", x: -56.25, y: 0, z: 61.05, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftehv-3h", of: "group@-25.43,-17.3", x: -52.85, y: 0, z: 61.05, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftehv-3i", of: "group@-25.43,-17.3", x: -49.7, y: 0, z: 61, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftehw-3j", of: "group@-25.43,-17.3", x: -46.55, y: 0, z: 60.9, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftehw-3k", of: "group@-25.43,-17.3", x: -33.95, y: 0, z: 60.75, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftehw-3l", of: "group@-25.43,-17.3", x: -37.1, y: 0, z: 60.85, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftehw-3m", of: "group@-25.43,-17.3", x: -40.25, y: 0, z: 60.95, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftjl5-3n", of: "group@-25.43,-17.3", x: -68.4, y: 0, z: 64.35, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftjl6-3o", of: "group@-25.43,-17.3", x: -65, y: 0, z: 64.35, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftjl6-3p", of: "group@-25.43,-17.3", x: -61.85, y: 0, z: 64.3, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftjl6-3q", of: "group@-25.43,-17.3", x: -58.7, y: 0, z: 64.2, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftjl7-3r", of: "group@-25.43,-17.3", x: -56, y: 0, z: 64.15, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftjl7-3s", of: "group@-25.43,-17.3", x: -52.6, y: 0, z: 64.15, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftjl7-3t", of: "group@-25.43,-17.3", x: -49.45, y: 0, z: 64.1, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftjl7-3u", of: "group@-25.43,-17.3", x: -46.3, y: 0, z: 64, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftjl7-3v", of: "group@-25.43,-17.3", x: -33.7, y: 0, z: 63.85, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftjl7-3w", of: "group@-25.43,-17.3", x: -36.85, y: 0, z: 63.95, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftjl7-3x", of: "group@-25.43,-17.3", x: -40, y: 0, z: 64.05, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftjl7-3y", of: "group@-25.43,-17.3", x: -43.55, y: 0, z: 60.7, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftsbo-3z", of: "group@-25.43,-17.3", x: -43.35, y: 0, z: 63.65, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftyo3-40", of: "group@-25.43,-17.3", x: -33.55, y: 0, z: 66.05, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjftyo3-41", of: "group@-25.43,-17.3", x: -36.7, y: 0, z: 66.15, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfu1nh-42", of: "group@-25.43,-17.3", x: -33.75, y: 0, z: 68.3, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfu1nh-43", of: "group@-25.43,-17.3", x: -36.9, y: 0, z: 68.4, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfwgbi-44", of: "group@-25.43,-17.3", x: -15.7, y: 0, z: 32.75, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfwl6t-45", of: "group@-25.43,-17.3", x: -19.1, y: 0, z: 32.95, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfwpqj-46", of: "group@-25.43,-17.3", x: -22.85, y: 0, z: 33.35, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfwt7h-47", of: "group@-25.43,-17.3", x: -28.35, y: 0, z: 33.25, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfx2iz-48", of: "group@-25.43,-17.3", x: 19.35, y: 0, z: 32.55, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfx5si-49", of: "group@-25.43,-17.3", x: 22.9, y: 0, z: 32.4, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfx8fb-4a", of: "group@-25.43,-17.3", x: 26.4, y: 0, z: 32.2, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfxb97-4b", of: "group@-25.43,-17.3", x: 29.7, y: 0, z: 31.95, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfxiyg-4c", of: "group@-25.43,-17.3", x: 21.05, y: 0, z: 35.05, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfxl3d-4d", of: "group@-25.43,-17.3", x: 24.25, y: 0, z: 34.8, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfxncf-4e", of: "group@-25.43,-17.3", x: 28.1, y: 0, z: 35.05, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfxrwl-4f", of: "group@-25.43,-17.3", x: 21.05, y: 0, z: 38.7, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfxuk8-4g", of: "group@-25.43,-17.3", x: 24.65, y: 0, z: 38, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfxwiu-4h", of: "group@-25.43,-17.3", x: 28.55, y: 0, z: 38.45, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfy3m6-4i", of: "group@-25.43,-17.3", x: 28.9, y: 0, z: 44.75, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfy3m7-4j", of: "group@-25.43,-17.3", x: 25, y: 0, z: 44.25, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfy3m7-4k", of: "group@-25.43,-17.3", x: 28.45, y: 0, z: 41.35, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfy3m7-4l", of: "group@-25.43,-17.3", x: 24.6, y: 0, z: 41.1, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfy3m7-4m", of: "group@-25.43,-17.3", x: 21.4, y: 0, z: 41.35, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfy3m7-4n", of: "group@-25.43,-17.3", x: 21.4, y: 0, z: 44.95, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfybsj-4o", of: "group@-25.43,-17.3", x: 21.1, y: 0, z: 48.3, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfybsj-4p", of: "group@-25.43,-17.3", x: 24.7, y: 0, z: 47.6, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjfybsj-4q", of: "group@-25.43,-17.3", x: 28.6, y: 0, z: 48.1, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjg01py-1", of: "mesh plane 200x8@0,76,0.01", x: 199.9, y: 0.01, z: 76, ry: 0, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvjg0tdu-2", of: "mesh box 200x0.02x0.16@0,76,0.02", x: 200, y: 0.02, z: 76, ry: 0, sx: 1, sy: 1, sz: 1 },
   ]);
   // ── Park Co ───────────────────────────────────────────────────────
   // A small park: a gate at the south, two ticket windows outside it, a midway running north to the coaster station, and the

@@ -8,5 +8,6 @@
       "pkTree": { x: -15.95, z: 24.05, rot: 0, h: 0, hidden: true },
     },
     placed: [
+      { id: "cp-mvjfjcv5-1", type: "hmBed", x: -20.35, z: 41.4, rot: 3, h: 7.15 },
     ]
   });
