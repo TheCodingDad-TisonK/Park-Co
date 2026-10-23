@@ -505,7 +505,7 @@ module.exports = `
     ok(desk === true && station === true && floor === false && midway === false, 'the coaster desk and the station desk are solid and the room floor stays walkable (' + desk + ', ' + station + ', ' + floor + ', ' + midway + ')'); }
   // the day rolls over and pays the wages
    { const d0 = S.day; S.operator = true; S.clerk = true; const w = (S.clerk ? 40 : 0) + (S.operator ? 60 : 0);
-        S.time = 22; T.setTime(22); S.gateOpen = false; for (let i = 0; i < 2520; i++) T.pkTick(0.05);
+        S.time = 22; T.setTime(22); S.gateOpen = false; for (let i = 0; i < 3200; i++) T.pkTick(0.05);   // 160 s = 2.13 game hours at dt / 75, enough to roll past midnight
      const wage = S.ledger.find((e) => e.why === 'Wages');
     ok(S.day === d0 + 1 && !!wage && wage.n === -w && S.today === T.PK.today, 'midnight starts a new day and pays the wages: day ' + S.day + ', wages ' + (wage && wage.n)); }
   // cards, sound and the log
