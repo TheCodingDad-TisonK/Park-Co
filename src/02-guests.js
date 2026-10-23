@@ -245,8 +245,10 @@
       }
     } else if (gu.state === 'off') {
       if (!gu.trash && !PK.closed && Math.random() < dt * 0.02) gu.trash = true;   // picked up a drink or a wrapper somewhere off-screen
-      if (!rec.path.length) {
-        if (PK.closed) pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
+      // what next means a route across the park (a few ms each from far away), so a crowd standing up at once - a show
+      // letting out, closing time - takes its turns over a few frames instead of all in one
+      if (!rec.path.length && performance.now() - PK_THINK_T0 < PK_THINK_MS) {
+        if (PK.closed || gu.goHome) { gu.goHome = false; pkGo(gu, randf(-14, 14), randf(40, 56), 'leave'); }
         else if (gu.trash && pkGuestBinGo(gu)) { /* off to the nearest bin */ }
         else if (PK.snackOpen && !gu.ate && gu.hunger > 60 && S.bank >= S.snackPrice) pkGo(gu, -13, 10.4, 'toSnack');
         else if (!gu.trash && randf(0, 1) < 0.22 && pkGuestLifeStart(gu)) { /* a bench, a phone call, a smoke, a chat */ }
@@ -290,7 +292,9 @@
       if (g.userData.pkPhone) g.userData.pkPhone.visible = (!moving && gu.state === 'life' && gu.lifeKind === 'phone');
     }
   }
+  var PK_THINK_T0 = 0, PK_THINK_MS = 4;   // the guests' share of a frame for working out where to go next
   function pkGuestTick(dt) {
+    PK_THINK_T0 = performance.now();
     for (var i = PK.guests.length - 1; i >= 0; i--) {
       var gu = PK.guests[i];
       pkGuestStep(gu, dt);
@@ -312,13 +316,16 @@
       }
       if ((gu.state === 'toBooth' || gu.state === 'walkBooth') && !gu.ticket) {
         gu.booth = -1;
-        gu.state = 'leave'; pkGo(gu, randf(-14, 14), randf(40, 56), 'leave'); return;
+        gu.state = 'off'; gu.goHome = true; gu.rec.path = []; return;
       }
-      if (gu.attr) pkAttrQueueLeave(gu, PK.attrById[gu.attr]);
-      if (PK.queue.indexOf(gu) >= 0) { PK.queue.splice(PK.queue.indexOf(gu), 1); pkQueueReslot(); }
-      gu.state = 'leave';
-      pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
+      // out of any line (the lines are put back in order once, below, not once a guest), and home through the guests'
+      // own decision step, which spreads the routes over a few frames
+      if (gu.attr) { var at = PK.attrById[gu.attr], ai = at ? at.queue.indexOf(gu) : -1; if (ai >= 0) at.queue.splice(ai, 1); gu.attr = null; gu.slot = -1; }
+      var qi = PK.queue.indexOf(gu); if (qi >= 0) PK.queue.splice(qi, 1);
+      gu.state = 'off'; gu.goHome = true; gu.rec.path = [];
     });
+    PK.attractions.forEach(function (a) { pkAttrQueueReslot(a); });
+    pkQueueReslot(); screenDirtyAll();
   }
   // ── The ticket window ─────────────────────────────────────────────
   function pkServe(bi, machine) {

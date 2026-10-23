@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.3 (2026-10-23): World Update + FPS Fix
+
+- Maintenance release.
+
 ## 1.0.2 (2026-10-23): Dev Menu
 
 - Maintenance release.

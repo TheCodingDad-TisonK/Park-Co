@@ -335,8 +335,9 @@ module.exports = `
      ok(T.pkBoothDispatch(a) === true && a.state === 'running', 'manual dispatch waits until queue and boarding paths clear');
     T.pkCtl(a).fault = ''; a.state = 'unloading'; a.t = a.unload; a.queue.length = 0; a.riders = 0; T.pkAttrTick(a, 0.05); T.pkAttrUnseatAll(a); }
   // the real queue lanes and the player's own turn on the rides
-  ok(T.pkLanes().length === 18 && T.pkLanes().every((L) => L.a && !!L.leafL && !!L.leafR), 'every ride has a fenced queue lane and a boarding gate');
-  ok(T.pkLanes().every((L) => L.x1 > L.x0 && L.zB > L.zA && L.x1 - L.x0 < 8.5 && L.zB - L.zA < 3.6 && L.rows % 2 === 1),
+  ok(T.pkLanes().length === 19 && T.pkLanes().every((L) => L.a && !!L.leafL && !!L.leafR), 'every ride has a fenced queue lane and a boarding gate');
+  // the arena's lane holds a sixty-seat show's line, so it runs deeper than a ride's three rows; it still folds and still keeps to 8.5 m
+  ok(T.pkLanes().every((L) => L.x1 > L.x0 && L.zB > L.zA && L.x1 - L.x0 < 8.5 && (L.zB - L.zA < 3.6 || L.a.id === 'theater') && L.rows % 2 === 1),
     'the lanes fold into switchbacks, none longer than 8.5 m: ' + T.pkLanes().map((L) => L.a.id + ' ' + (L.x1 - L.x0).toFixed(1) + 'x' + (L.zB - L.zA).toFixed(1)).join(', '));
   // a guest walks the rows: every step of the way into the lane runs along a row or across a turn, never through a fence
   { const a = T.PK.attrById.ferris, L = T.pkLanes().find((l) => l.a === a), P = T.pkAttrLanePath(a, 18, 0);
