@@ -927,15 +927,15 @@
     pkPlaceTrain();
   }
   // ── Staff ─────────────────────────────────────────────────────────
-  // one clerk; up to four ride operators, who work the rides in shifts (part 26). S.operator stays true while any is hired
-  var PK_OPS_MAX = 4;
+  // one clerk; up to ten ride operators, who work the rides in shifts (part 26). S.operator stays true while any is hired
+  var PK_OPS_MAX = 10;
   function pkOpCount() { return typeof S.operators === 'number' ? S.operators : (S.operator ? 1 : 0); }
   function pkWages() { return (S.clerk ? 40 : 0) + 60 * pkOpCount(); }
   function pkHire(which) {
     if (which !== 'clerk' && which !== 'operator') return 'No such role';
     var cost = which === 'clerk' ? 400 : 600;
     if (which === 'clerk' && S.clerk) return 'A clerk already works the window';
-    if (which === 'operator' && pkOpCount() >= PK_OPS_MAX) return 'Four operators already work the rides';
+    if (which === 'operator' && pkOpCount() >= PK_OPS_MAX) return 'All ' + PK_OPS_MAX + ' operators already work the rides';
     if (S.bank < cost || S.bank < 0) { sfx('bad'); toast('Not enough money', 'bad'); return 'Not enough money'; }
     pay(-cost, which === 'clerk' ? 'Ticket clerk' : 'Ride operator');
     if (which === 'clerk') { S.clerk = true; PK.clerk = true; }

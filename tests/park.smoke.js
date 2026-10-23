@@ -38,7 +38,7 @@ module.exports = `
   ok(!!T.pkScreen() && !!T.pkSnack() && !!T.pkConsole() && !!T.pkConsole().parts.buttons.dispatch && !!T.pkConsole().parts.gauges.speed && !!T.pkConsole().parts.lever, 'the operator room has its screen and a real desk: buttons, a throttle and gauges');
   ok(T.pkScreen().zones.length === 0, 'the room screen reports the ride; it does not take taps');
   { const attractions = T.PK.attractions;
-    ok(attractions.length === 18 && attractions.every((a) => !!a.booth && !!a.boothScreen), 'every attraction has an operator booth and screen');
+    ok(attractions.length === 19 && attractions.every((a) => !!a.booth && !!a.boothScreen), 'every attraction has an operator booth and screen');
     ok(attractions.every((a) => {
       const sc = a.boothScreen, m = sc.mesh, g = a.booth, wp = m.getWorldPosition(new T.THREE.Vector3());
       const dx = wp.x - g.position.x, dz = wp.z - g.position.z;
@@ -108,7 +108,7 @@ module.exports = `
     ok(C.maint === false && a.state === 'boarding', 'back to RUN, the line boards: ' + a.state);
     C.gates = false; a.state = 'idle'; a.queue.length = 0; T.pkAttrUnseatAll(a); g.state = 'leave'; g.attr = null; }
   ok(!!T.PK.console && T.PK.console.parts.mode && T.PK.console.parts.stop, 'the control desk runs off the physical hardware');
-  ok(!!T.pkCabinet() && !!T.pkCabinet().rides.carousel && !!T.pkCabinet().rides.coaster && Object.keys(T.pkCabinet().rides).length === 19 && !!T.pkCabinet().gauges.load, 'the park switchboard has all 19 ride breakers, the coaster among them, and its own dials');
+  ok(!!T.pkCabinet() && !!T.pkCabinet().rides.carousel && !!T.pkCabinet().rides.coaster && Object.keys(T.pkCabinet().rides).length === 20 && !!T.pkCabinet().gauges.load, 'the park switchboard has all 20 ride breakers, the coaster among them, and its own dials');
   { const L = T.pkCabinet().lights, was = S.lights;
     L.flip(); const on = L.on === true && S.lights === true && T.PK.lights === true;
     L.flip(); const off = L.on === false && S.lights === false && T.PK.lights === false;
@@ -311,7 +311,7 @@ module.exports = `
     for (let k = 0; k < 1200 && R.riders < 2; k++) { T.pkRideTick(0.05); T.pkGuestTick(0.05); }
     ok(R.riders === 2 && next.every((g) => g.state === 'seated'), 'the second line walks in from the lane'); }
   // the rides
-  ok(T.PK.attractions.length === 18, 'eighteen rides besides the main coaster: ' + T.PK.attractions.length);
+  ok(T.PK.attractions.length === 19, 'nineteen rides besides the main coaster: ' + T.PK.attractions.length);
   ok(T.PK.attrById.carousel && T.PK.attrById.carousel.seats.length === 8, 'the carousel has eight horses');
   ok(T.PK.attrById.ferris && T.PK.attrById.ferris.seats.length === 16, 'the ferris wheel has eight cabins of two');
   { const d = T.CO.npcs(), ids = d.workers.map((w) => w.id);
@@ -473,7 +473,7 @@ module.exports = `
   // the level ladder and the prices
   ok(T.PK_LEVELS.length === 5 && T.PK_LEVELS[0].name === 'The gate' && T.PK_LEVELS[4].unlock === 'lights', 'the level ladder runs from the gate to the park lights');
   ok(T.pkPrice(5) === 30 && T.pkPrice(-100) === 5 && T.pkPrice(1000) === 200, 'the ticket price clamps 5 to 200');
-  ok(T.pkOpenCount() === 19, 'every ride is open from the first day (' + T.pkOpenCount() + ')');
+  ok(T.pkOpenCount() === 20, 'every ride is open from the first day (' + T.pkOpenCount() + ')');
   { const x0 = T.PK.xp; T.pkXp(60); ok(T.PK.xp === x0 + 60 && T.PK.level >= 2 && T.PK.snackOpen === true && S.snackOpen === true, 'xp opens the snack stand at level 2'); }
   ok(T.pkSnackPrice(1) === 7 && T.pkSnackPrice(-100) === 1, 'the snack price clamps 1 to 40');
   // the snack stand

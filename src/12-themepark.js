@@ -107,6 +107,13 @@
         if (nearLamp(pb[0], pb[1], 2.2)) { pb = at(tb + 3.5, sb * (w / 2 + 1.3)); if (nearLamp(pb[0], pb[1], 2.2) || pkNearRoute(pb[0], pb[1], i, 2)) continue; }   // a lamp stands there: step along
         pkBench(pb[0], pb[1], Math.atan2(-sb * nx, -sb * nz));
       }
+      // a bin every 40 m too, so there is always one within a short walk of wherever a guest is standing
+      for (var ti = 23, ki = 0; ti < len - 6; ti += 40, ki++) {
+        var si = ki % 2 ? 1 : -1, pi = at(ti, si * (w / 2 + 1.3));
+        if (pkNearRide(pi[0], pi[1], 2) || pkNearRoute(pi[0], pi[1], i, 2)) continue;
+        if (nearLamp(pi[0], pi[1], 2.2)) { pi = at(ti + 4, si * (w / 2 + 1.3)); if (nearLamp(pi[0], pi[1], 2.2) || pkNearRoute(pi[0], pi[1], i, 2)) continue; }
+        pkBin(pi[0], pi[1]); solid(pi[0] - 0.35, pi[0] + 0.35, pi[1] - 0.35, pi[1] + 0.35, 0, 1.0);
+      }
       // a flower bed on each outer corner of the route and at every 30 m
       for (var tf = 16, kf = 0; tf < len - 8; tf += 30, kf++) {
         var sf = kf % 2 ? -1 : 1, pf = at(tf, sf * (w / 2 + 1.5)), horiz = Math.abs(dx) > Math.abs(dz);

@@ -330,7 +330,7 @@
     }
     // a forest wraps the park, so the palisade is the edge of the trees rather than of a bare green field
     var rng2 = pkRng(77123);
-    for (var fx = -88; fx <= PK_PARK.x1 + 16; fx += 7) {
+    for (var fx = Math.min(-88, PK_PARK.x0 - 16); fx <= PK_PARK.x1 + 16; fx += 7) {
       for (var fz = -127; fz <= 88; fz += 7) {
         if (fx > PK_PARK.x0 - 3 && fx < PK_PARK.x1 + 3 && fz > PK_PARK.z0 - 3 && fz < 71) continue;   // the park and a breathing margin
         if (fz >= 72 && fz <= 80) continue;                         // the road runs along z 76
