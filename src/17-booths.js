@@ -354,7 +354,7 @@
   // the wait, in whole minutes: a full load per cycle, a cycle being boarding + run + unload
   function pkBkWait(a) {
     var cap = Math.max(1, a.seats.length), cyc = (a.board || 10) + (a.run || 20) + (a.unload || 5);
-    return Math.ceil(Math.ceil((pkAttrWaiting(a) + 1) / cap) * cyc / 60);
+    return Math.ceil(Math.ceil((pkAttrWaiting(a) + 1) / cap) * cyc / 75);
   }
 
   // ── The signal tower on the roof ──────────────────────────────────

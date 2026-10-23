@@ -1,7 +1,7 @@
 //@ Park Co, part 04: the clock, the day, the panel and the guide
   // ── The clock and the day ─────────────────────────────────────────
   function pkTick(dt) {
-    S.time += dt / 60;   // a game minute a second
+    S.time += dt / 75;   // 75 real seconds a game hour, like Depot Co (was dt / 60: too fast)
     var min = Math.floor(S.time * 60);
     if (min !== PK.lastMin) { PK.lastMin = min; hudDirty = true; }
     if (S.time >= 24) { S.time -= 24; S.day++; PK.lastDay = S.day; pkNewDay(); }

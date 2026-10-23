@@ -282,7 +282,7 @@
       draw: function (c, s) {
         c.fillStyle = '#0a0806'; c.fillRect(0, 0, s.w, s.h);
         c.fillStyle = 'rgba(255,170,40,0.05)'; for (var yy = 2; yy < s.h; yy += 4) for (var xx = 2; xx < s.w; xx += 4) c.fillRect(xx, yy, 2, 2);
-        var R = PK.ride, n = pkQueueWaiting(), wait = Math.ceil(Math.ceil((n + 1) / Math.max(1, PK.seats.length)) * 75 / 60);
+        var R = PK.ride, n = pkQueueWaiting(), wait = Math.ceil((n + 1) / Math.max(1, PK.seats.length));   // a cycle is ~75 real s, one game minute at dt / 75
         c.textAlign = 'center'; c.textBaseline = 'middle';
         c.fillStyle = '#ffb03a'; c.font = 'bold 28px ' + SCREEN_THEME.font; c.fillText('THE COASTER', s.w / 2, 26);
         c.fillStyle = R.fault ? '#ff5a3c' : '#ffcf6a'; c.font = 'bold 24px ' + SCREEN_THEME.font;
