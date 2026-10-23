@@ -42,10 +42,44 @@
       stone: pkMatStone(), brick: pkMatBrick(), wood: pkMatWoodRich(), cream: M.cream, stoneDark: M.stoneDark, iron: M.iron,
       gold: M.gold, slate: M.slate, water: M.water, glass: M.glass,
       pave: pkPadMat(0xa89a84), sand: std({ map: TEX.plaster, color: 0xd6bd8e, roughness: 1 }),
+      sandDark: std({ map: TEX.plaster, color: 0xc2a575, roughness: 1 }), sandPale: std({ map: TEX.plaster, color: 0xe5d0a7, roughness: 1 }),
+      straw: std({ color: 0xd9bf7a, roughness: 0.95 }), timber: std({ color: 0x5a4028, roughness: 0.85 }),
+      waterDeep: std({ map: M.water.map, color: 0x6f9f96, roughness: 0.12, metalness: 0.1, emissive: 0x0a2420, emissiveIntensity: 0.35 }),
+      coal: pkThGlow(0xff6a1a, 0.5, 0x2a0a04), flame: pkThGlow(0xff8a2a, 1.6, 0x2a0a04), lampGlow: pkThGlow(0xffd9a0, 1.0),
       conc: std({ map: TEX.plaster, color: 0x9d968a, roughness: 0.95 }), nosing: std({ color: 0xe0b23a, roughness: 0.6 }),
       pink: std({ map: TEX.plaster, color: 0xe7c3b0, roughness: 0.88 }), blue: std({ map: TEX.plaster, color: 0xc9d6dc, roughness: 0.88 }),
       cloth: std({ color: 0x7a1f2b, roughness: 0.85, side: THREE.DoubleSide }), fold: std({ color: 0x5a1520, roughness: 0.9 }), lino: std({ color: 0x2b3036, roughness: 0.85 }),
-      win: pkThGlow(0xffc46a, 0.15, 0x2a2018)
+      win: pkThGlow(0xffc46a, 0.15, 0x2a2018),
+      // market stall canopies: striped awning cloth in the five riders' colours
+      awningRed: pkStripes(0xd9472b, 0xf1e6cc), awningBlue: pkStripes(0x2f6fb3, 0xf1e6cc),
+      awningGreen: pkStripes(0x4d7a3a, 0xf1e6cc), awningGold: pkStripes(0xf0c04a, 0xf1e6cc),
+      awningPurple: pkStripes(0x7a4a2a, 0xf1e6cc),
+      awningTimber: std({ color: 0x5a4028, roughness: 0.85 }),
+      awningPost: std({ color: 0x4a3320, roughness: 0.8 }),
+      stallGood: std({ color: 0xe8dcc0, roughness: 0.9, side: THREE.DoubleSide }),
+      // bunting pennants: rider colours, double-sided so they read from both sides of the wall
+      buntingRed: std({ color: 0xd9472b, roughness: 0.85, side: THREE.DoubleSide }),
+      buntingBlue: std({ color: 0x2f6fb3, roughness: 0.85, side: THREE.DoubleSide }),
+      buntingGreen: std({ color: 0x4d7a3a, roughness: 0.85, side: THREE.DoubleSide }),
+      buntingGold: std({ color: 0xf0c04a, roughness: 0.85, side: THREE.DoubleSide }),
+      buntingPurple: std({ color: 0x7a4a2a, roughness: 0.85, side: THREE.DoubleSide }),
+      buntingRope: std({ color: 0x8a7350, roughness: 0.9 }),
+      buntingPole: std({ color: 0x6a4a2a, roughness: 0.7 }),
+      // shields: enamelled metal in rider colours with a gold rim
+      shieldRed: std({ color: 0xd9472b, roughness: 0.35, metalness: 0.5 }),
+      shieldBlue: std({ color: 0x2f6fb3, roughness: 0.35, metalness: 0.5 }),
+      shieldGreen: std({ color: 0x4d7a3a, roughness: 0.35, metalness: 0.5 }),
+      shieldGold: std({ color: 0xf0c04a, roughness: 0.35, metalness: 0.5 }),
+      shieldPurple: std({ color: 0x7a4a2a, roughness: 0.35, metalness: 0.5 }),
+      shieldRim: std({ color: 0xc9a227, roughness: 0.4, metalness: 0.8 }),
+      shieldBoss: std({ color: 0xe8dcc0, roughness: 0.3 }),
+      // wall torch: iron bracket, coal bed, flame
+      torchCoal: pkThGlow(0xff6a1a, 0.4, 0x2a0a04),
+      torchFlame: pkThGlow(0xff8a2a, 1.6, 0x2a0a04),
+      // canopy over the booth window: deep awning cloth
+      canopyCloth: std({ color: 0x2a1a12, roughness: 0.9, side: THREE.DoubleSide }),
+      canopyFascia: std({ color: 0xf0c04a, roughness: 0.6 }),
+      canopyRod: std({ color: 0x6a4a2a, roughness: 0.6 })
     };
     return PK_TH_M;
   }
@@ -273,7 +307,226 @@
 
     // ── The cast and the hydra wait, hidden, in the yard ─────────────────────────────────────────────────────────
     pkTheaterCast(a); X.hydra = pkThHydra(g);
+    pkTheaterDress(a, g, M, G, X, BF, BZ0, BZ1, BX, BH, S_);
     return g;
+  }
+
+  // ── Dressing: the arena's market, barrier, standards and inlay, and the control room's fit-out ─────────────────────
+  // Everything stands on the ground or a wall: the sand is x -20..20, z -13..10; the paved strips run out to the side walls
+  // (inner faces at x -25.75 and 23.75). The control room is x -3.46..3.46, z BZ0..BZ1, floor BF, ceiling BF + BH.
+  function pkTheaterDress(a, g, M, G, X, BF, BZ0, BZ1, BX, BH, S_) {
+    var RC = [0xb8322a, 0x2f5f9e, 0x3f6e34, 0xd9a730, 0x5e3a80];
+    var cloth = RC.map(function (c) { return std({ color: c, roughness: 0.85, side: THREE.DoubleSide }); });
+    var enamel = RC.map(function (c) { return std({ color: c, roughness: 0.35, metalness: 0.4 }); });
+    function inlay(c) { return std({ map: TEX.plaster, color: c, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }); }
+    function flat(geo, mat, x, z) { var m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.position.set(x, 0.051, z); m.receiveShadow = true; g.add(m); return m; }
+    function mesh(geo, mat, x, y, z, par) { var m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; (par || g).add(m); return m; }
+
+    // ── The sand inlay: a raked star in darker sand, a gold ring, the five riders' marks ──
+    var SZ = -1.5, star = new THREE.Shape(), dark = inlay(0xb39563), goldIn = inlay(0xc9a227);
+    for (var i = 0; i < 10; i++) { var r = i % 2 ? 1.05 : 2.6, an = Math.PI / 2 + i * Math.PI / 5; star[i ? 'lineTo' : 'moveTo'](Math.cos(an) * r, Math.sin(an) * r); }
+    star.closePath();
+    flat(new THREE.ShapeGeometry(star), dark, 0, SZ);
+    flat(new THREE.RingGeometry(2.85, 2.97, 64), goldIn, 0, SZ);
+    flat(new THREE.RingGeometry(6.6, 6.85, 96), dark, 0, SZ);
+    for (var t = 0; t < 5; t++) {
+      var ta = Math.PI / 2 + t * 2 * Math.PI / 5, tx = Math.cos(ta) * 4.6, tz = SZ - Math.sin(ta) * 4.6;
+      flat(new THREE.RingGeometry(0.42, 0.5, 32), goldIn, tx, tz);
+      flat(new THREE.CircleGeometry(0.42, 32), inlay(RC[t]), tx, tz);
+    }
+
+    // ── The tilt barrier: a timber rail down both sides of the sand, open at the grandstand end ──
+    function fence(x, z0, z1) {
+      var n = Math.max(1, Math.round((z1 - z0) / 2)), st = (z1 - z0) / n, mz = (z0 + z1) / 2;
+      for (var i = 0; i <= n; i++) { var z = z0 + i * st; pkBevelBox(0.16, 1.15, 0.16, M.timber, x, 0.575, z, g, 0.02); box(0.2, 0.06, 0.2, M.gold, x, 1.18, z, g); }
+      box(0.09, 0.12, z1 - z0, M.timber, x, 1.02, mz, g);
+      box(0.07, 0.1, z1 - z0, M.timber, x, 0.55, mz, g);
+      S_(x - 0.1, x + 0.1, z0, z1, 0, 1.2);
+    }
+    fence(-20.6, -12.6, 6.8); fence(20.6, -12.6, 6.8);
+
+    // ── The riders' standards: a swallow-tailed banner in each rider's colour on a pole outside the barrier ──
+    var tail = new THREE.Shape(); tail.moveTo(-0.55, 0); tail.lineTo(0.55, 0); tail.lineTo(0.55, -2.6); tail.lineTo(0, -2.15); tail.lineTo(-0.55, -2.6); tail.closePath();
+    var tailGeo = new THREE.ShapeGeometry(tail), emblem = new THREE.CircleGeometry(0.26, 24);
+    function standard(x, z, k) {
+      pkBevelBox(0.5, 0.3, 0.5, M.stoneDark, x, 0.15, z, g, 0.03);
+      pkRoundCyl(0.07, 6.2, M.timber, x, 3.1, z, g, 8);
+      mesh(new THREE.SphereGeometry(0.12, 12, 8), M.gold, x, 6.3, z);
+      var b = new THREE.Group(); b.position.set(x, 6.0, z); b.rotation.y = Math.PI / 2; g.add(b);
+      pkRoundCyl(0.035, 1.3, M.iron, 0, 0, 0, b, 6).rotation.z = Math.PI / 2;
+      var bn = new THREE.Mesh(tailGeo, cloth[k]); bn.position.y = -0.05; b.add(bn);
+      box(1.12, 0.1, 0.03, M.gold, 0, -0.1, 0, b);
+      [1, -1].forEach(function (s) { var e = new THREE.Mesh(emblem, M.gold); e.position.set(0, -0.95, s * 0.012); e.rotation.y = s > 0 ? 0 : Math.PI; b.add(e); });
+      S_(x - 0.25, x + 0.25, z - 0.25, z + 0.25, 0, 6);
+    }
+    [-6, 0, 6.3].forEach(function (z, i) { standard(-21.3, z, i); });
+    [-9, -3, 3].forEach(function (z, i) { standard(21.3, z, (i + 3) % 5); });
+
+    // ── The market on the west strip: three stalls facing the sand, goods on the counters, barrels at their feet ──
+    function barrel(x, z) {
+      mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.78, 14), M.timber, x, 0.39, z);
+      mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.6, 14, 1, true), M.timber, x, 0.39, z);
+      [0.12, 0.66].forEach(function (y) { var h = mesh(new THREE.TorusGeometry(0.295, 0.02, 6, 20), M.iron, x, y, z); h.rotation.x = Math.PI / 2; });
+      S_(x - 0.3, x + 0.3, z - 0.3, z + 0.3, 0, 0.8);
+    }
+    function stall(z, k, kind, label) {
+      var x0 = -24.6, x1 = -22.3, hw = 1.35, top = 0.995, stripes = pkStripes(hexCss(RC[k]), '#f1e6cc');
+      [[x0, 2.75], [x1, 2.35]].forEach(function (p) { [-1, 1].forEach(function (s) { pkRoundCyl(0.06, p[1], M.awningPost, p[0], p[1] / 2, z + s * hw, g, 8); }); });
+      var aw = box(2.75, 0.05, hw * 2 + 0.3, stripes, (x0 + x1) / 2 + 0.05, 2.58, z, g); aw.rotation.z = -Math.atan2(0.45, 2.3);
+      box(0.04, 0.36, hw * 2 + 0.3, stripes, x1 + 0.12, 2.2, z, g);
+      sign([label], 1.7, 0.28, x1 + 0.15, 2.2, z, Math.PI / 2, { bg: '#2a1a12', fg: '#f0c04a' }, g);
+      pkBevelBox(0.6, 0.95, hw * 2 - 0.1, M.timber, x1 - 0.3, 0.475, z, g, 0.02);
+      box(0.72, 0.05, hw * 2, M.wood, x1 - 0.3, 0.97, z, g);
+      box(0.35, 0.04, hw * 2 - 0.2, M.wood, x0 + 0.25, 1.4, z, g);
+      var gx = x1 - 0.3;
+      if (kind === 'bread') {
+        for (var i = 0; i < 7; i++) { var lf = mesh(new THREE.SphereGeometry(0.09, 12, 8), std({ color: i % 2 ? 0xb87a3a : 0xc98f4a, roughness: 0.9 }), gx + (i % 2 ? 0.12 : -0.12), top + 0.06, z - 0.9 + i * 0.3); lf.scale.set(1, 0.75, 1.9); }
+        for (var j = 0; j < 4; j++) mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.07, 14), std({ color: 0xa8692f, roughness: 0.9 }), x0 + 0.25, 1.455, z - 0.6 + j * 0.4);
+      } else if (kind === 'fruit') {
+        [[-0.75, 0xb8322a], [-0.25, 0x7aa83a], [0.25, 0xe0a030], [0.75, 0x9a2a3a]].forEach(function (c) {
+          box(0.5, 0.1, 0.38, M.wood, gx, top + 0.05, z + c[0], g);
+          for (var q = 0; q < 9; q++) mesh(new THREE.SphereGeometry(0.055, 10, 8), std({ color: c[1], roughness: 0.55 }), gx - 0.14 + (q % 3) * 0.14, top + 0.14 + (q === 4 ? 0.05 : 0), z + c[0] - 0.12 + Math.floor(q / 3) * 0.12);
+        });
+      } else {
+        for (var w = 0; w < 5; w++) { var wh = mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.11, 18), std({ color: 0xe8c45a, roughness: 0.6 }), gx + (w % 2 ? 0.1 : -0.1), top + 0.06 + (w === 4 ? 0.11 : 0), z - 0.75 + (w === 4 ? 0.85 : w) * 0.42); wh.castShadow = true; }
+        for (var h = 0; h < 3; h++) mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.16, 16), std({ color: 0xd9b24a, roughness: 0.6 }), x0 + 0.25, 1.5, z - 0.5 + h * 0.5);
+      }
+      mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.08, 8), M.iron, x1 - 0.6, 2.12, z);
+      mesh(new THREE.SphereGeometry(0.1, 12, 10), M.lampGlow, x1 - 0.6, 2.0, z);
+      barrel(x1 - 0.1, z + hw + 0.4);
+      box(0.5, 0.5, 0.5, M.timber, x0 + 0.4, 0.25, z + hw + 0.45, g); S_(x0 + 0.15, x0 + 0.65, z + hw + 0.2, z + hw + 0.7, 0, 0.5);
+      S_(x0 - 0.1, x1, z - hw - 0.1, z + hw + 0.1, 0, 2.8);
+    }
+    stall(-9, 0, 'bread', 'THE BAKER'); stall(-3, 3, 'fruit', 'ORCHARD FRUIT'); stall(3, 1, 'cheese', 'CHEESEMONGER');
+
+    // ── The east strip: the riders' side. Shields and torches on the wall, hay, a lance rack and a horse trough ──
+    var shieldSh = new THREE.Shape();
+    shieldSh.moveTo(-0.45, 0.55); shieldSh.lineTo(0.45, 0.55); shieldSh.lineTo(0.45, 0);
+    shieldSh.quadraticCurveTo(0.45, -0.45, 0, -0.68); shieldSh.quadraticCurveTo(-0.45, -0.45, -0.45, 0); shieldSh.closePath();
+    var shieldGeo = new THREE.ExtrudeGeometry(shieldSh, { depth: 0.05, bevelEnabled: false });
+    function onWall(x, z, ry) { var w = new THREE.Group(); w.position.set(x, 0, z); w.rotation.y = ry; g.add(w); return w; }
+    function shieldAt(x, z, ry, k) {
+      var w = onWall(x, z, ry);
+      var rim = mesh(shieldGeo, M.shieldRim, 0, 2.3, 0, w); rim.scale.set(1.12, 1.1, 1);
+      mesh(shieldGeo, enamel[k], 0, 2.3, 0.04, w);
+      box(0.08, 0.95, 0.02, M.gold, 0, 2.2, 0.1, w);
+      mesh(new THREE.SphereGeometry(0.09, 12, 10), M.shieldBoss, 0, 2.4, 0.11, w);
+    }
+    function torchAt(x, z, ry) {
+      var w = onWall(x, z, ry);
+      box(0.14, 0.3, 0.06, M.iron, 0, 2.55, 0.03, w);
+      box(0.04, 0.04, 0.4, M.iron, 0, 2.6, 0.22, w);
+      mesh(new THREE.CylinderGeometry(0.15, 0.08, 0.26, 10, 1, true), M.iron, 0, 2.75, 0.42, w);
+      var coal = mesh(new THREE.CircleGeometry(0.13, 12), M.torchCoal, 0, 2.86, 0.42, w); coal.rotation.x = -Math.PI / 2;
+      mesh(new THREE.ConeGeometry(0.1, 0.32, 8), M.torchFlame, 0, 3.04, 0.42, w);
+    }
+    [-12, -6, 0, 6].forEach(function (z, i) { shieldAt(23.75, z, -Math.PI / 2, i % 5); });
+    [-9, -3, 3].forEach(function (z) { torchAt(23.75, z, -Math.PI / 2); });
+    [-6, 0, 6.3].forEach(function (z) { torchAt(-25.75, z, Math.PI / 2); });
+    [[22.5, -12.2, 0], [22.5, -11.0, 0], [22.5, -11.6, 0.5]].forEach(function (b) {
+      box(0.55, 0.5, 1.1, M.straw, b[0], 0.25 + b[2], b[1], g);
+      [-0.3, 0.3].forEach(function (d) { box(0.56, 0.51, 0.03, M.timber, b[0], 0.25 + b[2], b[1] + d, g); });
+    });
+    S_(22.2, 22.8, -12.8, -10.4, 0, 1.0);
+    (function lanceRack(x, z) {
+      [-0.8, 0.8].forEach(function (d) { pkBevelBox(0.12, 1.7, 0.12, M.timber, x, 0.85, z + d, g, 0.015); });
+      box(0.12, 0.08, 1.75, M.timber, x, 1.55, z, g); box(0.3, 0.08, 1.75, M.timber, x, 0.25, z, g);
+      for (var i = 0; i < 5; i++) {
+        var lz = z - 0.6 + i * 0.3;
+        pkRoundCyl(0.035, 3.0, cloth[i], x, 1.75, lz, g, 8);
+        mesh(new THREE.ConeGeometry(0.11, 0.32, 10), M.wood, x, 0.43, lz).rotation.x = Math.PI;
+        mesh(new THREE.ConeGeometry(0.045, 0.2, 8), M.iron, x, 3.35, lz);
+      }
+      S_(x - 0.2, x + 0.2, z - 0.9, z + 0.9, 0, 3.3);
+    })(22.6, -4.6);
+    box(0.7, 0.5, 1.7, M.timber, 22.7, 0.25, 4.6, g);
+    box(0.56, 0.02, 1.56, M.water, 22.7, 0.44, 4.6, g);
+    S_(22.35, 23.05, 3.75, 5.45, 0, 0.5);
+
+    // ── Bunting along the tops of both side walls, on short poles, sagging between them ──
+    function bunting(x) {
+      var zs = [-16, -11, -6, -1, 4, 9], pts = [], k = 0;
+      zs.forEach(function (z) { pkRoundCyl(0.035, 1.5, M.buntingPole, x, 4.18, z, g, 6); mesh(new THREE.SphereGeometry(0.06, 8, 6), M.gold, x, 4.95, z); });
+      for (var s = 0; s < zs.length - 1; s++) {
+        for (var q = 0; q <= 10; q++) { var u = q / 10; if (s && !q) continue; pts.push(new THREE.Vector3(x, 4.85 - 0.45 * Math.sin(Math.PI * u), zs[s] + 5 * u)); }
+        for (var u2 = 0.08; u2 < 0.95; u2 += 0.105) {
+          var pen = new THREE.Mesh(new THREE.ShapeGeometry(pennant), cloth[k++ % 5]);
+          pen.position.set(x, 4.84 - 0.45 * Math.sin(Math.PI * u2), zs[s] + 5 * u2); pen.rotation.y = Math.PI / 2; g.add(pen);
+        }
+      }
+      g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 80, 0.015, 5, false), M.buntingRope));
+    }
+    var pennant = new THREE.Shape(); pennant.moveTo(-0.16, 0); pennant.lineTo(0.16, 0); pennant.lineTo(0, -0.42); pennant.closePath();
+    bunting(23.7); bunting(-25.7);
+
+    // ── The control room: a show-control rack, the running-order board, a crew bench, a tea counter, a proper ceiling ──
+    var F = BF, mz = (BZ0 + BZ1) / 2, iw = BX - 0.14;
+    var tile = std({ color: 0xdcd9d2, roughness: 0.95 }), grid = std({ color: 0x8e9196, roughness: 0.5, metalness: 0.4 });
+    box(iw * 2, 0.02, BZ1 - BZ0 - 0.1, tile, 0, F + BH - 0.012, mz, g);
+    for (var cx = -iw + 0.6; cx < iw; cx += 0.6) box(0.025, 0.012, BZ1 - BZ0 - 0.1, grid, cx, F + BH - 0.028, mz, g);
+    for (var cz = BZ0 + 0.6; cz < BZ1 - 0.1; cz += 0.6) box(iw * 2, 0.012, 0.025, grid, 0, F + BH - 0.028, cz, g);
+    box(5.9, 0.1, 0.1, std({ color: 0xe6e3dc, roughness: 0.6 }), -0.65, F + 2.24, BZ0 + 0.13, g);
+
+    // the rack: two bays of show control, every unit with its status lights
+    var rackM = std({ color: 0x1d2227, roughness: 0.5, metalness: 0.4 }), unitM = std({ color: 0x2c3339, roughness: 0.45, metalness: 0.5 });
+    var leds = [pkThGlow(0x5fd38d, 1.4), pkThGlow(0xf0b030, 1.2), pkThGlow(0x4aa8ff, 1.2)];
+    [-3.08, -2.42].forEach(function (x, b) {
+      pkBevelBox(0.6, 1.9, 0.75, rackM, x, F + 0.95, BZ1 - 0.4, g, 0.015);
+      for (var u = 0; u < 6; u++) {
+        box(0.52, 0.18, 0.02, unitM, x, F + 0.3 + u * 0.24, BZ1 - 0.785, g);
+        for (var l = 0; l < 3; l++) box(0.025, 0.025, 0.01, leds[(u + l + b) % 3], x - 0.2 + l * 0.05, F + 0.33 + u * 0.24, BZ1 - 0.797, g);
+        box(0.22, 0.03, 0.01, std({ color: 0x0c0f12, roughness: 0.3 }), x + 0.1, F + 0.3 + u * 0.24, BZ1 - 0.797, g);
+      }
+      S_(x - 0.3, x + 0.3, BZ1 - 0.78, BZ1, F, F + 1.9);
+    });
+    sign(['SHOW CONTROL'], 1.2, 0.12, -2.75, F + 1.78, BZ1 - 0.8, Math.PI, { bg: '#1b232c', fg: '#f5b53d' }, g);
+
+    // the running-order board under the clock
+    box(1.84, 1.02, 0.04, std({ color: 0x9aa0a6, roughness: 0.4, metalness: 0.5 }), -0.4, F + 1.38, BZ1 - 0.02, g);
+    sign(['RUNNING ORDER', '1 House to half, curtain', '2 Keeper on the balcony', '3 Gate: the five riders', '4 Moat up: Count Grimwald', '5 Hydra, fire and thunder', '6 Bow, curtain, house up'], 1.74, 0.92, -0.4, F + 1.38, BZ1 - 0.045, Math.PI, { bg: '#f4f3ee', fg: '#1d2b3a' }, g);
+    box(1.3, 0.035, 0.08, M.iron, -0.4, F + 0.85, BZ1 - 0.06, g);
+    [0x1d2b3a, 0xb8322a, 0x2f5f9e].forEach(function (c, i) { mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.13, 8), std({ color: c }), -0.7 + i * 0.1, F + 0.88, BZ1 - 0.07).rotation.z = Math.PI / 2; });
+
+    // coat hooks and the operator's hi-vis
+    box(0.62, 0.08, 0.03, M.wood, 0.9, F + 1.78, BZ1 - 0.02, g);
+    [0.7, 0.9, 1.1].forEach(function (x) { box(0.03, 0.03, 0.08, M.iron, x, F + 1.76, BZ1 - 0.06, g); });
+    box(0.42, 0.62, 0.05, std({ color: 0xd8ef2a, roughness: 0.7, emissive: 0x1a1f00, emissiveIntensity: 0.4 }), 0.7, F + 1.42, BZ1 - 0.08, g);
+    [F + 1.3, F + 1.5].forEach(function (y) { box(0.43, 0.04, 0.055, std({ color: 0xc8ccd0, roughness: 0.2, metalness: 0.6 }), 0.7, y, BZ1 - 0.08, g); });
+
+    // the tea counter in the back corner: base units, worktop, kettle, coffee machine, mugs, first-aid box above
+    var kx = 2.05, unitW = std({ color: 0xe9e6df, roughness: 0.6 });
+    pkBevelBox(1.4, 0.88, 0.6, unitW, kx, F + 0.44, BZ1 - 0.3, g, 0.015);
+    box(0.012, 0.8, 0.01, std({ color: 0x9a978f }), kx, F + 0.44, BZ1 - 0.605, g);
+    [-0.08, 0.08].forEach(function (d) { box(0.02, 0.14, 0.03, M.iron, kx + d, F + 0.66, BZ1 - 0.62, g); });
+    box(1.46, 0.04, 0.64, std({ color: 0x3a3f44, roughness: 0.4 }), kx, F + 0.9, BZ1 - 0.32, g);
+    mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.22, 14), std({ color: 0xf2f2f0, roughness: 0.3 }), kx - 0.48, F + 1.03, BZ1 - 0.3);
+    box(0.25, 0.36, 0.3, std({ color: 0x1c1f22, roughness: 0.35, metalness: 0.4 }), kx - 0.1, F + 1.1, BZ1 - 0.28, g);
+    box(0.03, 0.03, 0.01, leds[0], kx - 0.02, F + 1.2, BZ1 - 0.435, g);
+    for (var m = 0; m < 3; m++) mesh(new THREE.CylinderGeometry(0.045, 0.04, 0.095, 12), enamel[m + 1], kx + 0.28 + m * 0.12, F + 0.968, BZ1 - 0.3);
+    box(0.4, 0.3, 0.1, std({ color: 0x2f8a4a, roughness: 0.5 }), kx + 0.3, F + 1.55, BZ1 - 0.05, g);
+    box(0.16, 0.04, 0.01, std({ color: 0xffffff }), kx + 0.3, F + 1.55, BZ1 - 0.105, g);
+    box(0.04, 0.16, 0.01, std({ color: 0xffffff }), kx + 0.3, F + 1.55, BZ1 - 0.105, g);
+    S_(kx - 0.7, kx + 0.7, BZ1 - 0.62, BZ1, F, F + 0.92);
+
+    // the crew bench on the west wall, under the two screens
+    var seatM = std({ color: 0x7a1f2b, roughness: 0.9 });
+    pkBevelBox(0.48, 0.42, 1.8, M.timber, -3.2, F + 0.21, 19.5, g, 0.02);
+    pkBevelBox(0.46, 0.08, 1.76, seatM, -3.2, F + 0.46, 19.5, g, 0.03);
+    pkBevelBox(0.08, 0.4, 1.76, seatM, -3.42, F + 0.72, 19.5, g, 0.03);
+    S_(-3.46, -2.96, 18.6, 20.4, F, F + 0.5);
+
+    // the operator's mat, the bin, the extinguisher by the door, the script and headset on the desk's free end
+    box(1.5, 0.014, 1.1, std({ color: 0x1c1f22, roughness: 1 }), -1.2, F + 0.027, 18.5, g);
+    mesh(new THREE.CylinderGeometry(0.17, 0.14, 0.42, 14), std({ color: 0x3a3f44, roughness: 0.6, metalness: 0.3 }), -2.95, F + 0.21, 18.08);
+    S_(-3.12, -2.78, 17.91, 18.25, F, F + 0.42);
+    mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.5, 14), std({ color: 0xc8241a, roughness: 0.4 }), 3.3, F + 0.29, 18.75);
+    mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.08, 10), M.iron, 3.3, F + 0.58, 18.75);
+    box(0.04, 0.12, 0.2, M.iron, 3.43, F + 0.3, 18.75, g);
+    S_(3.2, 3.46, 18.65, 18.85, F, F + 0.6);
+    box(0.32, 0.045, 0.24, std({ color: 0x2f5f9e, roughness: 0.6 }), 1.25, F + 0.768, 17.5, g);
+    box(0.29, 0.012, 0.21, std({ color: 0xf4f3ee, roughness: 0.9 }), 1.25, F + 0.796, 17.5, g);
+    var band = mesh(new THREE.TorusGeometry(0.09, 0.012, 8, 18, Math.PI), M.iron, 1.65, F + 0.76, 17.32); band.rotation.x = -Math.PI / 2;
+    [-1, 1].forEach(function (s) { mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.035, 14), std({ color: 0x15181b, roughness: 0.7 }), 1.65 + s * 0.09, F + 0.765, 17.32); });
   }
 
   // ── The two consoles ─────────────────────────────────────────────
