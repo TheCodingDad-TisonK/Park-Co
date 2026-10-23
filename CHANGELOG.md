@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.7 (2026-10-23): Input Update
+
+Changed E key to LMB
+
 ## 1.0.6 (2026-10-23): World Update
 
 - Maintenance release.
