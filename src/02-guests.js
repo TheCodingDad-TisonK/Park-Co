@@ -26,7 +26,7 @@
       id: PK.nextId++, g: g,
       rec: { x: x, z: z, yaw: Math.PI, path: [], speed: randf(1.3, 1.9) },
       state: 'toBooth', ticket: false, booth: -1, turn: undefined, seat: null, attr: null, slot: -1, qslot: -1, rides: 0, pose: 'sit',
-      hunger: randf(30, 90), ate: false, mood: 'neutral', t: 0
+      hunger: randf(30, 90), ate: false, mood: 'neutral', t: 0, trash: false
     };
     PK.guests.push(gu);
     return gu;
@@ -238,31 +238,56 @@
       if (arrived) {
         if (!PK.closed && PK.snackOpen && S.bank >= S.snackPrice) {
           pay(S.snackPrice, 'Snack'); PK.today.snacks++; PK.today.earned += S.snackPrice; pkXp(1);
-          gu.ate = true; sfx('cash'); say(g, 'Thanks!'); screenDirtyAll(); hudDirty = true;
+          gu.ate = true; gu.trash = true; sfx('cash'); say(g, 'Thanks!'); screenDirtyAll(); hudDirty = true;
         }
         if (PK.closed || S.bank < S.snackPrice) pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
         else gu.state = 'off';
       }
     } else if (gu.state === 'off') {
+      if (!gu.trash && !PK.closed && Math.random() < dt * 0.02) gu.trash = true;   // picked up a drink or a wrapper somewhere off-screen
       if (!rec.path.length) {
         if (PK.closed) pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
+        else if (gu.trash && pkGuestBinGo(gu)) { /* off to the nearest bin */ }
         else if (PK.snackOpen && !gu.ate && gu.hunger > 60 && S.bank >= S.snackPrice) pkGo(gu, -13, 10.4, 'toSnack');
+        else if (!gu.trash && randf(0, 1) < 0.22 && pkGuestLifeStart(gu)) { /* a bench, a phone call, a smoke, a chat */ }
         else if ((gu.rides || 0) < 4 && randf(0, 1) < 0.8 && (pkQueueJoin(gu) || pkAttrPick(gu))) { /* off to another ride */ }
         else pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
       }
+    } else if (gu.state === 'toBin') {
+      if (arrived) pkGuestBinArrive(gu);
+    } else if (gu.state === 'toBench') {
+      if (arrived) { gu.state = 'bench'; rec.path = []; rec.yaw = gu.benchYaw; }
+    } else if (gu.state === 'bench') {
+      gu.lifeT -= dt;
+      if (gu.lifeT <= 0 || PK.closed) { pkLifeEnd(gu); gu.state = 'off'; }
+    } else if (gu.state === 'life') {
+      pkGuestLifeTick(gu, dt);
+      if (gu.lifeT <= 0 || PK.closed) { pkLifeEnd(gu); gu.state = 'off'; }
     } else if (gu.state === 'leave') {
       if (arrived && !pkLotHome(gu)) gu.state = 'gone';             // out through the gate, then back to the car they came in
     } else if (gu.state === 'toCar') {
       if (arrived) pkLotBoard(gu);
     }
-    if (gu.state !== 'seated') {
+    if (gu.state === 'seated') {
+      animateHuman(g, dt, gu.pose === 'stand' ? 'idle' : 'sit', 0, null, false);
+    } else if (gu.state === 'bench') {
+      g.position.set(rec.x, pkFloor(rec.x, rec.z), rec.z);
+      g.rotation.y = rec.yaw;
+      animateHuman(g, dt, 'sit', 0, null, false);
+    } else {
       g.position.set(rec.x, pkFloor(rec.x, rec.z), rec.z);
       g.rotation.y = rec.yaw;
       var moving = rec.path.length > 0;
+      var carry = false, look = null;
+      if (!moving && gu.state === 'life') {
+        if (gu.lifeKind === 'smoke') carry = pkArmRaised(-1);
+        else if (gu.lifeKind === 'phone') carry = pkArmRaised(1);
+        else if (gu.lifeKind === 'chat' && gu.lifeLook) look = gu.lifeLook;
+      }
       var mode = moving ? 'walk' : (gu.state === 'boothQueue' || gu.state === 'queue' || gu.state === 'qwait' || gu.state === 'board' ? 'wait' : 'idle');
-      animateHuman(g, dt, mode, rec.speed, null, false);
-    } else {
-      animateHuman(g, dt, gu.pose === 'stand' ? 'idle' : 'sit', 0, null, false);
+      animateHuman(g, dt, mode, rec.speed, look, carry);
+      if (g.userData.pkCig) g.userData.pkCig.visible = (!moving && gu.state === 'life' && gu.lifeKind === 'smoke');
+      if (g.userData.pkPhone) g.userData.pkPhone.visible = (!moving && gu.state === 'life' && gu.lifeKind === 'phone');
     }
   }
   function pkGuestTick(dt) {
@@ -270,6 +295,7 @@
       var gu = PK.guests[i];
       pkGuestStep(gu, dt);
       if (gu.state === 'gone') {
+        if (gu.benchSeat) pkBenchRelease(gu);
         pkParkHuman(gu.g);
         var qi = PK.queue.indexOf(gu); if (qi >= 0) { PK.queue.splice(qi, 1); pkQueueReslot(); }
         if (gu.attr) { var aq = PK.attrById[gu.attr]; if (aq) { var ai = aq.queue.indexOf(gu); if (ai >= 0) { aq.queue.splice(ai, 1); pkAttrQueueReslot(aq); } } }

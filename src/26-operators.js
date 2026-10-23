@@ -11,7 +11,9 @@
   // unless the player is near: no toasts, no log lines, only the sounds within earshot. They work 08:30 to 22:00; let go, or at
   // the end of the day, the last ride goes back on AUTO and they walk to HQ and go.
   var PK_OPS = { list: [], quiet: 0, near: false };
-  var PK_OP_NAMES = ['Jan', 'Fatima', 'Ruud', 'Mei'];
+  var PK_OP_NAMES = ['Jan', 'Fatima', 'Ruud', 'Mei', 'Bram', 'Ayesha', 'Finn', 'Noor', 'Daan', 'Lotte'];
+  var PK_OP_SKINS = [0xd8a97c, 0xc99266, 0xe8c49b, 0xe0b48e, 0xb87b5a, 0xf1d2b6, 0x8d5a3c, 0xd9a98a, 0xe2b48f, 0x5c3a28];
+  var PK_OP_HAIRS = [0x3a2a1c, 0x1e1712, 0x8a6a4a, 0x2a2a2a, 0x6b4a2b, 0x1d1510, 0xa8793f, 0x8a8a8a, 0xd9b36a, 0xb0352a];
   var PK_OP_HOME = { x: -16.6, z: 42.5 };                     // HQ's door on the forecourt
   var PK_OP_BREAKS = [[-6.5, 20], [6.5, 20], [-6.5, 10], [6.5, 10], [-6.5, 2.5], [6.5, 2.5], [0, 26]];   // the midway's benches and the plaza
 
@@ -57,7 +59,7 @@
   // ── A person ──────────────────────────────────────────────────────
   function pkOpMake(i) {
     var name = PK_OP_NAMES[i % PK_OP_NAMES.length];
-    var g = makeHuman({ key: 'operator:' + name, skin: [0xd8a97c, 0xc99266, 0xe8c49b, 0xe0b48e][i % 4], hair: [0x3a2a1c, 0x1e1712, 0x8a6a4a, 0x2a2a2a][i % 4],
+    var g = makeHuman({ key: 'operator:' + name, skin: PK_OP_SKINS[i % PK_OP_SKINS.length], hair: PK_OP_HAIRS[i % PK_OP_HAIRS.length],
       shirt: std({ map: TEX.cloth, color: 0x1f7a8c, roughness: 0.92 }), pants: std({ map: TEX.cloth, color: 0x23282e, roughness: 0.95 }) });
     g.userData.dynamic = true; scene.add(g);
     var op = { i: i, name: name, g: g, x: PK_OP_HOME.x, z: PK_OP_HOME.z, yaw: Math.PI / 2, path: [], speed: 1.6, state: 'pick', t: 0, wait: 0,

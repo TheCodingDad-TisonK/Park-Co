@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1 (2026-10-23): New Ride Added + NPC life
+
+- Maintenance release.
+
 ## 1.0.0 (2026-10-22): First stable release
 
 - 19 rides

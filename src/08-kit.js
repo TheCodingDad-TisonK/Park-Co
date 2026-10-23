@@ -365,6 +365,12 @@
     });
     var c = Math.cos(ry || 0), s = Math.sin(ry || 0), hx = Math.abs(c) * 0.95 + Math.abs(s) * 0.35, hz = Math.abs(s) * 0.95 + Math.abs(c) * 0.35;
     solid(x - hx, x + hx, z - hz, z + hz, 0, 0.9);
+    // a world bench (not one dressed into another prop's local group) takes two sitting guests
+    if (!parent) {
+      (PK.benches = PK.benches || []).push({ x: x, z: z, ry: ry || 0, g: g, seats: [-0.5, 0.5].map(function (lx) {
+        return { x: x + lx * c, z: z - lx * s, taken: null };
+      }) });
+    }
     return g;
   }
   // a litter bin: upgraded - turned body with domed hood, liner rim and foot pedal.
@@ -384,6 +390,15 @@
     var pedal = pkBevelBox(0.22, 0.04, 0.12, M.iron, 0, 0.05, 0.42, g, 0.02);
     pedal.rotation.x = 0.25;
     pkRoundCyl(0.015, 0.1, M.iron, 0, 0.07, 0.48, g, 6);
+    // a world bin (not one dressed into another prop's local group) takes guests' rubbish, fills up and can be emptied by hand
+    if (!parent) {
+      var rec = { x: x, z: z, g: g, fill: 0, cap: 8 };
+      (PK.bins = PK.bins || []).push(rec);
+      hitBox(0.9, 1.3, 0.9, 0, 0.6, 0, {
+        prompt: function () { return rec.fill > 0 ? 'Empty the bin (' + rec.fill + ' of ' + rec.cap + ')' : 'The bin is empty'; },
+        use: function () { if (rec.fill <= 0) { sfx('bad'); return; } rec.fill = 0; pkBinRefreshLook(rec); sfx('ok'); toast('Emptied the bin', 'good'); }
+      }, g);
+    }
     return g;
   }
   // trees: lumpy leaf crowns on a rounded trunk. The crowns share one handful of geometries and the textured leaf materials, so a
