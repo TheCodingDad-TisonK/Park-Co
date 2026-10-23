@@ -267,6 +267,10 @@
     pkBkCabinet(a, g, BX - 0.18, BF + 1.35, BZ0 + 3.0, -Math.PI / 2);
     pkTheaterWallScreens(a, g, BF, BZ0, BX);
 
+    // ── The queue lane on the forecourt: the park's own switchback (part 06), sized for sixty ───────────────────────
+    var lane = new THREE.Group(); scene.add(lane);
+    pkQueueLaneBetter(a, { ground: 0xa89a84, name: 'The Lindenburg Arena' }, lane);
+
     // ── The cast and the hydra wait, hidden, in the yard ─────────────────────────────────────────────────────────
     pkTheaterCast(a); X.hydra = pkThHydra(g);
     return g;
