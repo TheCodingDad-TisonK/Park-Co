@@ -3564,6 +3564,33 @@
     },
     placed: [
       { id: "cp-mvjfjcv5-1", type: "hmBed", x: -20.35, z: 41.4, rot: 3, h: 7.15 },
+      { id: "cp-mvm9808e-1", type: "bdHouse", x: 7.65, z: 87.35, rot: 2, h: 0 },
+      { id: "cp-mvm98l1e-4", type: "bdApartments", x: -9.35, z: 89.65, rot: 0, h: 0 },
+      { id: "cp-mvm9a1r8-5", type: "bdHouse", x: 18.9, z: 87.15, rot: 2, h: 0 },
+      { id: "cp-mvm9b0ze-6", type: "bdApartments", x: -31.2, z: 89.75, rot: 0, h: 0 },
+      { id: "cp-mvm9b9ou-7", type: "bdHouse", x: 30.85, z: 86.9, rot: 2, h: 0 },
+      { id: "cp-mvm9bizs-8", type: "bdHouse", x: 42.1, z: 86.75, rot: 2, h: 0 },
+      { id: "cp-mvm9c1ps-9", type: "bdApartments", x: 56.05, z: 88.3, rot: 0, h: 0 },
+      { id: "cp-mvm9f8cd-1", type: "rdPavement", x: -5.7, z: 81.15, rot: 2, h: 0 },
+      { id: "cp-mvm9fz6f-3", type: "rdPavement", x: 4.3, z: 81.15, rot: 2, h: 0 },
+      { id: "cp-mvm9gd9x-4", type: "rdPavement", x: 14.3, z: 81.15, rot: 2, h: 0 },
+      { id: "cp-mvm9h1jt-5", type: "rdPavement", x: 24.2, z: 81.15, rot: 2, h: 0 },
+      { id: "cp-mvm9hf6z-6", type: "rdPavement", x: 34.2, z: 81.15, rot: 2, h: 0 },
+      { id: "cp-mvm9in9m-7", type: "rdPavement", x: -15.7, z: 81.15, rot: 2, h: 0 },
+      { id: "cp-mvm9jjwy-8", type: "rdPavement", x: 44.2, z: 81.15, rot: 2, h: 0 },
+      { id: "cp-mvm9jvr6-9", type: "rdPavement", x: 54.2, z: 81.15, rot: 2, h: 0 },
+      { id: "cp-mvm9keqr-a", type: "rdPavement", x: -25.7, z: 81.15, rot: 2, h: 0 },
+      { id: "cp-mvm9kqzy-b", type: "rdPavement", x: -35.7, z: 81.15, rot: 2, h: 0 },
+      { id: "cp-mvm9lyzc-c", type: "rdPavement", x: 64.1, z: 81.2, rot: 2, h: 0 },
+      { id: "cp-mvm9nuvs-d", type: "rdSpeedBump", x: -10.95, z: 76.15, rot: 0, h: 0 },
+      { id: "cp-mvm9o747-e", type: "rdSpeedBump", x: 12.1, z: 76.1, rot: 0, h: 0 },
+      { id: "cp-mvm9q016-h", type: "rdGiveWay", x: -2.35, z: 70.4, rot: 3, h: 0 },
+      { id: "cp-mvm9qnhg-i", type: "rdGiveWay", x: 2.1, z: 70.4, rot: 3, h: 0 },
+      { id: "cp-mvm9r0yq-j", type: "pkLamp", x: -6.2, z: 71.35, rot: 0, h: 0 },
+      { id: "cp-mvm9rcum-k", type: "pkLamp", x: 6.2, z: 71.35, rot: 2, h: 0 },
+      { id: "cp-mvm9t0vj-l", type: "pkBench", x: 15.75, z: 42.2, rot: 3, h: 0 },
+      { id: "cp-mvm9tchw-m", type: "pkBench", x: 15.65, z: 45.85, rot: 3, h: 0 },
+      { id: "cp-mvm9tr0v-n", type: "pkBench", x: 15.55, z: 49.5, rot: 3, h: 0 },
     ]
   });
   CO.material("pk-stone", {"size":512,"repeat":[3,3],"layers":[{"type":"fill","color":"#b8b6b0"},{"type":"grain","alpha":0.1},{"type":"cracks","color":"#505048","n":25,"sz":120}],"roughness":0.9,"metalness":0.1,"bump":{"amp":24,"strength":0.9}});
@@ -4423,25 +4450,88 @@
   defProp('hmRug', { extra: true, shop: false, label: 'rug', cat: 'home', desc: 'A 2.4 by 1.6 m rug with a border; walk on it.', build: function (c) { c.box(2.4, 0.01, 1.6, hmFabric(0x8a3a32), 0, 0.005, 0); c.box(2.1, 0.012, 1.3, hmFabric(0xd8c8a8), 0, 0.006, 0); c.box(1.6, 0.014, 0.8, hmFabric(0x2a4a6a), 0, 0.007, 0); } });
   defProp('hmPlant', { extra: true, shop: false, label: 'house plant', cat: 'home', desc: 'A leafy plant in a white pot.', build: function (c) { c.cyl(0.2, 0.4, MAT.white, 0, 0.2, 0, 14, 0.15); for (var i = 0; i < 9; i++) { var a = i * 0.7, l = c.box(0.12, 0.02, 0.5, hmMat(0x3f7a30, 0.8), Math.cos(a) * 0.15, 0.55 + (i % 3) * 0.12, Math.sin(a) * 0.15); l.rotation.set(-0.6 - (i % 3) * 0.2, -a + Math.PI / 2, 0, 'YXZ'); } hmUse(c, 'A house plant', 0.4, 0.9, 0.4); } });
   defProp('hmBathroom', { extra: true, shop: false, label: 'bathroom set', cat: 'home', desc: 'A bath, a toilet and a basin with a mirror, along a 2.6 m wall.', build: function (c) { var w = hmMat(0xf6f6f2, 0.25); c.box(1.7, 0.55, 0.75, w, -0.4, 0.28, 0); c.box(1.5, 0.02, 0.55, std({ color: 0xbcd8e6, roughness: 0.1 }), -0.4, 0.5, 0); c.box(0.38, 0.4, 0.5, w, 0.75, 0.2, -0.05); c.box(0.4, 0.4, 0.18, w, 0.75, 0.6, -0.24); c.box(0.5, 0.15, 0.4, w, 1.05 + 0.2, 0.85, -0.17); c.cyl(0.03, 0.85, w, 1.25, 0.42, -0.2, 8); c.box(0.5, 0.6, 0.02, std({ color: 0xdfe8ee, roughness: 0.02, metalness: 0.9 }), 1.25, 1.4, -0.36); hmUse(c, 'A bathroom', 2.6, 0.9, 0.75, 0.15, 0); } });
+  var RD_W = 7, RD_PAVE = 2, RD_HALF = RD_W / 2;
+  var RD_MATS = {};
+  function rdMat(hex, rough, metal) { var k = hex + ':' + rough + ':' + metal; if (!RD_MATS[k]) RD_MATS[k] = std({ color: hex, roughness: rough === undefined ? 0.7 : rough, metalness: metal || 0 }); return RD_MATS[k]; }
+  function rdTex(name, w, d, per) {
+    // a texture cloned per size so a 10 m piece and a 40 m roundabout show the tarmac at the same scale
+    var k = name + ':' + Math.round(w * 10) + 'x' + Math.round(d * 10);
+    if (!RD_MATS[k]) { var base = TEX[name], t = base ? base.clone() : null; if (t) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(Math.max(1, w / per), Math.max(1, d / per)); t.needsUpdate = true; } RD_MATS[k] = std({ map: t, color: name === 'asphalt' ? 0xffffff : 0xd8d6d0, roughness: 0.95 }); }
+    return RD_MATS[k];
+  }
+  var RD_KERB = null;
+  function rdKerb() { if (!RD_KERB) RD_KERB = std({ color: 0xb8b6b0, roughness: 0.9, side: THREE.DoubleSide }); return RD_KERB; }
+  function rdTar(c, w, d, x, z) { return c.box(w, 0.02, d, rdTex('asphalt', w, d, 8), x || 0, 0.01, z || 0); }
+  function rdPave(c, w, d, x, z) { var m = c.box(w, 0.15, d, rdTex('concrete', w, d, 4), x, 0.075, z); c.box(w, 0.16, 0.15, rdMat(0xb8b6b0, 0.9), x, 0.08, z + (z > 0 ? -d / 2 : d / 2) + (z > 0 ? 0.075 : -0.075)); return m; }
+  function rdPaveZ(c, w, d, x, z) { c.box(w, 0.15, d, rdTex('concrete', w, d, 4), x, 0.075, z); }
+  function rdLine(c, len, w, x, z, ry, mat) { var m = c.box(len, 0.012, w, mat || MAT.whiteLine || MAT.white, x, 0.026, z); if (ry) m.rotation.y = ry; return m; }
+  function rdDashes(c, x0, x1, z) { for (var x = x0 + 0.5; x + 2 <= x1 + 0.01; x += 4) rdLine(c, 2, 0.12, x + 1, z, 0); }
+  function rdEdges(c, len, x) { [-1, 1].forEach(function (s) { rdLine(c, len, 0.1, x || 0, s * (RD_HALF - 0.25), 0); }); }
+  function rdArc(c, r0, r1, a0, a1, mat, y, h, ox) {
+    ox = ox || 0;
+    // a flat ring sector in the ground plane; angle 0 is +x and angles turn toward -z
+    var g = new THREE.RingGeometry(r0, r1, Math.max(8, Math.round((a1 - a0) * r1 * 1.5)), 1, a0, a1 - a0);
+    var m = new THREE.Mesh(g, mat); m.rotation.x = -Math.PI / 2; m.position.set(ox, y, 0); m.receiveShadow = true; c.add(m);
+    if (h) [r0, r1].forEach(function (r) { if (r <= 0) return; var w = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, Math.max(8, Math.round((a1 - a0) * r * 1.5)), 1, true, Math.PI / 2 + a0, a1 - a0), rdKerb()); w.position.set(ox, y - h / 2, 0); c.add(w); });
+    return m;
+  }
+  function rdArcDashes(c, r, a0, a1) { var n = Math.floor((a1 - a0) * r / 4); for (var i = 0; i < n; i++) { var a = a0 + (i + 0.5) * (a1 - a0) / n; rdLine(c, 2, 0.12, Math.cos(a) * r, -Math.sin(a) * r, a + Math.PI / 2); } }
+  function rdUse(c, label, w, h, d, x, z) { x = x || 0; z = z || 0; c.solid(x - w / 2, x + w / 2, z - d / 2, z + d / 2, 0, h); c.hit(w, h, d, x, h / 2, z, { prompt: function () { return label; }, use: function () { toast(label + '.', ''); } }); }
+  // traffic lanes (0.11.0): cars keep right, 1.75 m off the centre line. Points are [x, z] local to the piece; the engine joins
+  // the lanes of pieces that meet into one network and drives roadTraffic's cars along it
+  var RD_L = 1.75, RD_E = RD_HALF + RD_PAVE;
+  function rdRot(q, k) { var a = k * Math.PI / 2, c = Math.round(Math.cos(a)), s = Math.round(Math.sin(a)); return [q[0] * c + q[1] * s, -q[0] * s + q[1] * c]; }
+  function rdCircle(cx, cz, r, t0, t1) { var n = Math.max(4, Math.ceil(Math.abs(t1 - t0) * r / 1.2)), out = []; for (var i = 0; i <= n; i++) { var t = t0 + (t1 - t0) * i / n; out.push([cx + r * Math.cos(t), cz + r * Math.sin(t)]); } return out; }
+  function rdRing(r, a0, a1) { var n = Math.max(3, Math.ceil(Math.abs(a1 - a0) * r / 1.2)), out = []; for (var i = 0; i <= n; i++) { var a = a0 + (a1 - a0) * i / n; out.push([r * Math.cos(a), -r * Math.sin(a)]); } return out; }
+  function rdBez(a, b, c, d) { var out = []; for (var i = 0; i <= 10; i++) { var t = i / 10, u = 1 - t; out.push(d ? [u * u * u * a[0] + 3 * u * u * t * b[0] + 3 * u * t * t * c[0] + t * t * t * d[0], u * u * u * a[1] + 3 * u * u * t * b[1] + 3 * u * t * t * c[1] + t * t * t * d[1]] : [u * u * a[0] + 2 * u * t * b[0] + t * t * c[0], u * u * a[1] + 2 * u * t * b[1] + t * t * c[1]]); } return out; }
+  function rdStraightLanes(c, len) { c.lane([[-len / 2, RD_L], [len / 2, RD_L]]); c.lane([[len / 2, -RD_L], [-len / 2, -RD_L]]); }
+  // a junction approach from arm k (0 from -x, 1 from +z, 2 from +x, 3 from -z): straight on, a right turn and a left turn, as asked
+  function rdApproach(c, k, ways) {
+    var lanes = { straight: [[[-RD_E, RD_L], [RD_E, RD_L]], 0], right: [rdCircle(-RD_E, RD_E, RD_E - RD_L, -Math.PI / 2, 0), RD_E - RD_L], left: [rdCircle(-RD_E, -RD_E, RD_E + RD_L, Math.PI / 2, 0), RD_E + RD_L] };
+    ways.forEach(function (w) { var L = lanes[w]; c.lane(L[0].map(function (q) { return rdRot(q, k); }), { box: 'junction', from: k, r: L[1] || undefined }); });
+  }
+  function rdStraight(c, len) { rdTar(c, len, RD_W, 0, 0); [-1, 1].forEach(function (s) { rdPave(c, len, RD_PAVE, 0, s * (RD_HALF + RD_PAVE / 2)); }); rdEdges(c, len, 0); rdDashes(c, -len / 2, len / 2, 0); rdStraightLanes(c, len); }
+
+  defProp('rdStraight', { extra: true, shop: false, label: 'road, straight 10 m', cat: 'roads', desc: 'A 10 m straight: two lanes, a dashed centre line, kerbs and pavements.', build: function (c) { rdStraight(c, 10); } });
+  defProp('rdStraight20', { extra: true, shop: false, label: 'road, straight 20 m', cat: 'roads', desc: 'A 20 m straight: two lanes, a dashed centre line, kerbs and pavements.', build: function (c) { rdStraight(c, 20); } });
+  defProp('rdCrossroads', { extra: true, shop: false, label: 'crossroads', cat: 'roads', desc: 'An 11 m crossroads with give way lines on all four arms: set a straight on each side.', build: function (c) { var S = RD_W + RD_PAVE * 2, o = RD_HALF + RD_PAVE / 2; rdTar(c, RD_W, S, 0, 0); rdTar(c, RD_PAVE * 2 + 0.001, RD_W, -o, 0); rdTar(c, RD_PAVE * 2 + 0.001, RD_W, o, 0); [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (q) { rdPaveZ(c, RD_PAVE, RD_PAVE, q[0] * o, q[1] * o); }); for (var k = 0; k < 4; k++) { var a = k * Math.PI / 2, ca = Math.cos(a), sa = Math.sin(a); for (var d = 0; d < 4; d++) { var off = 0.5 + d * 0.8, m = rdLine(c, 0.5, 0.15, ca * (RD_HALF + 0.1) - sa * off, sa * (RD_HALF + 0.1) + ca * off, a + Math.PI / 2); } } for (var ak = 0; ak < 4; ak++) rdApproach(c, ak, ['straight', 'right', 'left']); } });
+  defProp('rdTJunction', { extra: true, shop: false, label: 'T-junction', cat: 'roads', desc: 'An 11 m T-junction: the road runs along x and a side road joins from +z, with a give way line.', build: function (c) { var S = RD_W + RD_PAVE * 2, o = RD_HALF + RD_PAVE / 2; rdTar(c, S, RD_W, 0, 0); rdTar(c, RD_W, RD_PAVE, 0, o); rdPave(c, S, RD_PAVE, 0, -o); [-1, 1].forEach(function (s) { rdPaveZ(c, RD_PAVE, RD_PAVE, s * o, o); }); rdLine(c, S, 0.1, 0, -(RD_HALF - 0.25), 0); [-1, 1].forEach(function (s) { rdLine(c, RD_PAVE, 0.1, s * o, RD_HALF - 0.25, 0); }); rdDashes(c, -S / 2, S / 2, 0); for (var d = 0; d < 4; d++) rdLine(c, 0.5, 0.15, 0.4 + d * 0.8, RD_HALF + 0.2, 0); rdApproach(c, 0, ['straight', 'right']); rdApproach(c, 2, ['straight', 'left']); rdApproach(c, 1, ['right', 'left']); } });
+  defProp('rdBend', { extra: true, shop: false, label: 'road, 90 degree bend', cat: 'roads', desc: 'A 90 degree bend on a 10 m centre radius. It leaves along x at one end and along z at the other, each end meeting a straight.', build: function (c) { var R = 10, A = Math.PI / 2, tar = rdTex('asphalt', 24, 24, 8), pave = rdTex('concrete', 24, 24, 4); rdArc(c, R - RD_HALF, R + RD_HALF, 0, A, tar, 0.02); rdArc(c, R + RD_HALF, R + RD_HALF + RD_PAVE, 0, A, pave, 0.15, 0.15); rdArc(c, R - RD_HALF - RD_PAVE, R - RD_HALF, 0, A, pave, 0.15, 0.15); rdArcDashes(c, R, 0, A); [R - RD_HALF + 0.25, R + RD_HALF - 0.25].forEach(function (r) { var n = 24; for (var i = 0; i < n; i++) { var a = (i + 0.5) * A / n, len = r * A / n + 0.02; rdLine(c, len, 0.1, Math.cos(a) * r, -Math.sin(a) * r, a + Math.PI / 2); } }); c.lane(rdRing(R - RD_L, A, 0), { r: R - RD_L }); c.lane(rdRing(R + RD_L, 0, A), { r: R + RD_L }); } });
+  defProp('rdRoundabout', { extra: true, shop: false, label: 'roundabout', cat: 'roads', desc: 'A roundabout with a grassed island and a tree, 30 m across, with four arms that meet straights.', build: function (c) { var Ri = 5, Ro = Ri + RD_W, tar = rdTex('asphalt', 34, 34, 8), pave = rdTex('concrete', 34, 34, 4); rdArc(c, Ri, Ro, 0, Math.PI * 2, tar, 0.022); var isl = c.cyl(Ri, 0.3, std({ map: TEX.grass || null, color: 0x8ab06a, roughness: 1 }), 0, 0.15, 0, 28); c.cyl(Ri + 0.15, 0.2, rdMat(0xb8b6b0, 0.9), 0, 0.1, 0, 28); c.cyl(0.25, 3, rdMat(0x6a4a32, 0.95), 0, 1.6, 0, 8); c.sphere(1.6, rdMat(0x4f7a3a, 0.9), 0, 3.6, 0); rdArcDashes(c, Ri + RD_HALF, 0, Math.PI * 2); for (var k = 0; k < 4; k++) { var a = k * Math.PI / 2 + Math.PI / 4, gap = 0.46; rdArc(c, Ro, Ro + RD_PAVE, a - (Math.PI / 4 - gap), a + (Math.PI / 4 - gap), pave, 0.15, 0.15); var b = k * Math.PI / 2, ca = Math.cos(b), sa = -Math.sin(b), L = 4; var arm = rdTar(c, L + 0.5, RD_W, ca * (Ro + L / 2 - 0.25), sa * (Ro + L / 2 - 0.25)); arm.rotation.y = b; [-1, 1].forEach(function (s) { var p = c.box(L, 0.15, RD_PAVE, pave, ca * (Ro + L / 2) - sa * s * (RD_HALF + RD_PAVE / 2), 0.075, sa * (Ro + L / 2) + ca * s * (RD_HALF + RD_PAVE / 2)); p.rotation.y = b; }); for (var d = 0; d < 4; d++) { var off = 0.4 + d * 0.8, m = rdLine(c, 0.5, 0.15, ca * (Ro + 0.3) - sa * off, sa * (Ro + 0.3) + ca * off, b + Math.PI / 2); } } c.solid(-Ri, Ri, -Ri, Ri, 0, 0.3); var rr = Ri + RD_HALF, ga = 0.6, edge = Ro + 4; for (var q = 0; q < 4; q++) { var bq = q * Math.PI / 2, u = [Math.cos(bq), -Math.sin(bq)], w = [-Math.sin(bq), -Math.cos(bq)], at = function (k, side) { return [u[0] * k + w[0] * side, u[1] * k + w[1] * side]; }, ringAt = function (a) { return [rr * Math.cos(a), -rr * Math.sin(a)]; }; c.lane([at(edge, RD_L), at(Ro + 0.5, RD_L)]); c.lane([at(Ro + 0.5, RD_L)].concat(rdBez(at(Ro, RD_L), at(9.5, RD_L), ringAt(bq + ga))), { r: 6, merge: true }); c.lane(rdBez(ringAt(bq - ga), at(9.5, -RD_L), at(Ro, -RD_L)).concat([at(edge, -RD_L)]), { r: 6 }); c.lane(rdRing(rr, bq - ga, bq + ga), { prio: 1, r: rr }); c.lane(rdRing(rr, bq + ga, bq + Math.PI / 2 - ga), { prio: 1, r: rr }); } } });
+  defProp('rdDeadEnd', { extra: true, shop: false, label: 'road, dead end', cat: 'roads', desc: 'A 10 m road that ends in a turning circle with a kerb round it.', build: function (c) { rdTar(c, 6, RD_W, -2, 0); [-1, 1].forEach(function (s) { rdPave(c, 6, RD_PAVE, -2, s * (RD_HALF + RD_PAVE / 2)); }); rdEdges(c, 6, -2); rdDashes(c, -5, 1, 0); var tar = rdTex('asphalt', 14, 14, 8), pave = rdTex('concrete', 14, 14, 4); rdArc(c, 0, 5.5, -Math.PI / 2, Math.PI / 2, tar, 0.021, 0, 1); rdArc(c, 5.5, 5.5 + RD_PAVE, -Math.PI / 2 + 0.68, Math.PI / 2 - 0.68, pave, 0.15, 0.15, 1); c.lane([[-5, RD_L]].concat(rdBez([0, RD_L], [5.5, RD_L], [5.5, -RD_L], [0, -RD_L])).concat([[-5, -RD_L]]), { r: 2.5 }); } });
+  defProp('rdPavement', { extra: true, shop: false, label: 'pavement strip', cat: 'roads', desc: 'A 10 m by 2 m pavement with a kerb, to edge a yard or a car park.', build: function (c) { rdPaveZ(c, 10, RD_PAVE, 0, 0); c.box(10, 0.16, 0.15, rdMat(0xb8b6b0, 0.9), 0, 0.08, RD_PAVE / 2 + 0.075); } });
+  defProp('rdParking', { extra: true, shop: false, label: 'parking bays', cat: 'roads', desc: 'Five 2.5 by 5 m parking bays on tarmac, with a P sign.', build: function (c) { rdTar(c, 12.5, 6, 0, 0); for (var i = 0; i <= 5; i++) rdLine(c, 5, 0.12, -6.25 + i * 2.5, -0.5, Math.PI / 2); rdLine(c, 12.5, 0.12, 0, -3.0, 0); c.cyl(0.04, 2.4, MAT.steelDark, 6.6, 1.2, -2.9, 8); c.sign(['P'], 0.6, 0.6, 6.6, 2.2, -2.85, 0, { w: 128, h: 128, bg: '#1d4fb8', fg: '#ffffff' }); c.solid(6.5, 6.7, -3.0, -2.8, 0, 2.5); } });
+  defProp('rdBusStop', { extra: true, shop: false, label: 'bus stop', cat: 'roads', desc: 'A bus stop: the yellow box marking on the road and a flag on its pole.', build: function (c) { var y = MAT.yellowLine || rdMat(0xf0c020, 0.6); rdLine(c, 12, 0.15, 0, 0, 0, y); rdLine(c, 12, 0.15, 0, 2.6, 0, y); [-6, 6].forEach(function (x) { rdLine(c, 2.6, 0.15, x, 1.3, Math.PI / 2, y); }); var sg = c.sign(['BUS STOP'], 3.6, 0.6, 0, 0.03, 1.3, 0, { w: 512, h: 86, bg: '#3d3f42', fg: '#f0c020' }); sg.rotation.x = -Math.PI / 2; c.cyl(0.04, 2.8, MAT.steelDark, 4, 1.4, -0.6, 8); c.sign(['BUS', '12  24  36'], 0.55, 0.45, 4, 2.55, -0.55, 0, { w: 160, h: 130, bg: '#c0282e', fg: '#ffffff' }); c.solid(3.9, 4.1, -0.7, -0.5, 0, 2.8); } });
+  defProp('rdSpeedBump', { extra: true, shop: false, label: 'speed bump', cat: 'roads', desc: 'A speed bump across a 7 m road, striped black and yellow.', build: function (c) { for (var i = 0; i < 7; i++) { var b = c.cyl(0.35, 1.0, i % 2 ? MAT.black : rdMat(0xf0c020, 0.6), 0, 0, -3 + i, 16); b.rotation.x = Math.PI / 2; b.scale.set(1, 1, 0.22); b.position.y = 0; } } });
+  defProp('rdCrashBarrier', { extra: true, shop: false, label: 'crash barrier', cat: 'roads', desc: 'A 10 m steel crash barrier on posts.', build: function (c) { var s = rdMat(0xb8bcc0, 0.35, 0.8); for (var i = 0; i < 6; i++) c.box(0.1, 0.75, 0.1, MAT.steelDark, -5 + i * 2, 0.38, -0.08); c.box(10, 0.3, 0.06, s, 0, 0.6, 0.02); c.box(10, 0.06, 0.1, s, 0, 0.6, 0.04); c.solid(-5, 5, -0.15, 0.1, 0, 0.8); } });
+  defProp('rdCones', { extra: true, shop: false, label: 'traffic cones', cat: 'roads', desc: 'Six traffic cones in a line, 1.5 m apart.', build: function (c) { var o = rdMat(0xe8641e, 0.5); for (var i = 0; i < 6; i++) { var x = -3.75 + i * 1.5; c.box(0.4, 0.04, 0.4, MAT.black, x, 0.02, 0); c.cyl(0.03, 0.7, o, x, 0.39, 0, 12, 0.17); c.cyl(0.09, 0.1, MAT.white, x, 0.46, 0, 12, 0.11); c.solid(x - 0.2, x + 0.2, -0.2, 0.2, 0, 0.75); } } });
+  defProp('rdArrows', { extra: true, shop: false, label: 'lane arrows', cat: 'roads', desc: 'Painted lane arrows: straight on in one lane, turn left in the other.', build: function (c) { function arrow(x, z, turn) { var s = new THREE.Shape(); if (turn) { s.moveTo(-1.6, -0.12); s.lineTo(0.12, -0.12); s.lineTo(0.12, 0.6); s.lineTo(0.45, 0.6); s.lineTo(0, 1.3); s.lineTo(-0.45, 0.6); s.lineTo(-0.12, 0.6); s.lineTo(-0.12, 0.12); s.lineTo(-1.6, 0.12); s.lineTo(-1.6, -0.12); } else { s.moveTo(-1.6, -0.12); s.lineTo(0.8, -0.12); s.lineTo(0.8, -0.45); s.lineTo(1.6, 0); s.lineTo(0.8, 0.45); s.lineTo(0.8, 0.12); s.lineTo(-1.6, 0.12); s.lineTo(-1.6, -0.12); } var m = new THREE.Mesh(new THREE.ShapeGeometry(s), MAT.whiteLine || MAT.white); m.rotation.x = -Math.PI / 2; m.position.set(x, 0.027, z); c.add(m); } arrow(0, -1.75, false); arrow(0, 1.2, true); } });
+  defProp('rdGiveWay', { extra: true, shop: false, label: 'give way line', cat: 'roads', desc: 'A give way line across one lane, with the triangle painted behind it.', build: function (c) { for (var d = 0; d < 4; d++) rdLine(c, 0.5, 0.15, 0, -1.4 + d * 0.8, Math.PI / 2); var s = new THREE.Shape(); s.moveTo(0, -0.9); s.lineTo(2.4, 0); s.lineTo(0, 0.9); s.lineTo(0, -0.9); var h = new THREE.Path(); h.moveTo(0.2, -0.6); h.lineTo(0.2, 0.6); h.lineTo(1.8, 0); h.lineTo(0.2, -0.6); s.holes.push(h); var m = new THREE.Mesh(new THREE.ShapeGeometry(s), MAT.whiteLine || MAT.white); m.rotation.x = -Math.PI / 2; m.position.set(-3.5, 0.027, 0); c.add(m); } });
+  defProp('rdGantry', { extra: true, shop: false, label: 'motorway sign gantry', cat: 'roads', desc: 'A sign gantry spanning a 7 m road, with two direction boards.', build: function (c) { var g = rdMat(0x8a9098, 0.4, 0.6); [-1, 1].forEach(function (s) { c.box(0.35, 6.2, 0.35, g, 0, 3.1, s * 4.8); c.box(0.8, 0.3, 0.8, rdMat(0x9a9890, 0.9), 0, 0.15, s * 4.8); c.solid(-0.2, 0.2, s * 4.8 - 0.2, s * 4.8 + 0.2, 0, 6.2); }); c.box(0.5, 0.5, 10, g, 0, 6.0, 0); c.sign(['A1  North', 'Leeds  42'], 3.8, 1.6, 0.3, 4.9, -2.1, Math.PI / 2, { w: 512, h: 216, bg: '#1d4fb8', fg: '#ffffff' }); c.sign(['City Centre', 'Docks  3'], 3.8, 1.6, 0.3, 4.9, 2.1, Math.PI / 2, { w: 512, h: 216, bg: '#1d4fb8', fg: '#ffffff' }); } });
   CO.world({
     "booth@47.21,-58.5": { x: 58.3, z: -74.85, ry: -197 },
     "door@-21.27,19.95": { x: -23.35, z: 26.75 },
     "door@-22.57,3": { x: -21.3, z: -0.7 },
     "door@20.27,20": { x: 22.35, z: 24.8 },
     "group@-10,-72": { hidden: true },
+    "group@-105.9,83.23": { x: -101.85, z: 85.35 },
     "group@-11.44,-17.88": { x: -11.45, z: -17.9, hidden: true },
+    "group@-112.28,84.24": { x: -109.25, z: 85.2 },
     "group@-13,33": { x: -13.05, z: 35.35, hidden: true },
     "group@-13,8": { x: -15.4, z: 13.4, ry: -1260 },
     "group@-14,40": { x: -16.65, z: 35.45, ry: -90 },
     "group@-14,52": { x: -16.6, z: 51.35 },
+    "group@-14.34,81.37": { x: -20.2, z: 86.4 },
     "group@-15,-56": { hidden: true },
     "group@-15,33.5": { x: -15.05, z: 33.45, hidden: true },
     "group@-18.84,84.9": { x: -18.95, z: 85.05, hidden: true },
     "group@-19.2,17.4": { hidden: true },
     "group@-19.2,22.6": { hidden: true },
+    "group@-2.15,82.93": { x: 0.75, z: 86.45 },
     "group@-22.9,19.95": { x: -25.05, z: 26.75 },
     "group@-22.9,20": { z: 19.95 },
     "group@-22.95,-0.7": { x: -22.9 },
+    "group@-23.44,81.27": { x: -23.45, z: 81.25, hidden: true },
     "group@-23.57,72.77": { x: -23.55, z: 72.7, hidden: true },
     "group@-23.82,-9.27": { x: -18.65, z: -1.85, hidden: true },
     "group@-23.96,82.17": { hidden: true },
@@ -4461,6 +4551,7 @@
     "group@-33.91,84.81": { x: -34.1, z: 84.8, hidden: true },
     "group@-34,3": { z: 3.1 },
     "group@-34.1,-8": { hidden: true },
+    "group@-34.4,81.53": { x: -51, z: 86.6 },
     "group@-36.25,-17.6": { x: -36.3, z: -17.55, hidden: true },
     "group@-36.29,-10.69": { hidden: true },
     "group@-36.72,-33.45": { x: -34.15, z: -27.65 },
@@ -4479,6 +4570,7 @@
     "group@-41.2,-54.6": { hidden: true },
     "group@-41.2,0.4": { hidden: true },
     "group@-41.2,5.6": { hidden: true },
+    "group@-41.74,81.92": { x: -43.85, z: 86.3 },
     "group@-43.4,17.3": { hidden: true },
     "group@-43.4,25.2": { hidden: true },
     "group@-45.9,83.23": { x: -45.95, z: 83.25, hidden: true },
@@ -4489,22 +4581,31 @@
     "group@-5,-76.5": { hidden: true },
     "group@-5.38,-20.38": { x: -5.45, z: -20.4, hidden: true },
     "group@-50,21.4": { x: -49.8, z: 21.65, hidden: true },
+    "group@-51.01,81.8": { hidden: true },
     "group@-52.28,84.24": { hidden: true },
+    "group@-58.4,83.41": { x: -57.15, z: 86.5 },
     "group@-6,26": { x: -6.6, z: 24.15 },
     "group@-6,38": { x: -7, z: 36 },
     "group@-6,6": { x: -6.6, z: 12.05, hidden: true },
     "group@-6.3,-71.25": { z: -71.3, hidden: true },
     "group@-6.33,-75.64": { x: -6.35, z: -75.65, hidden: true },
     "group@-6.8,18.4": { x: 14.75, z: 15.85 },
+    "group@-64.51,83.74": { x: -62.35, z: 88.2 },
+    "group@-69.91,81.55": { x: -70.9, z: 85.95 },
     "group@-7,12": { x: -6.75, z: 15.05 },
     "group@-7,24": { x: -6.75, z: 23.5 },
     "group@-73.66,82.8": { x: -75.25, z: 83.05, hidden: true },
+    "group@-78.84,84.9": { x: -77.55, z: 86.2 },
     "group@-8,10": { x: -6.75, z: 10.6, hidden: true },
     "group@-8,2": { x: -6.65, z: 13.6, hidden: true },
     "group@-8,20": { x: -9.25, z: 22.35, ry: -180, hidden: true },
     "group@-80,81.81": { hidden: true },
+    "group@-83.96,82.17": { x: -82.5, z: 87.1 },
     "group@-9.91,81.55": { x: -9.55, z: 81.4, hidden: true },
+    "group@-93.91,84.81": { x: -89.15, z: 85.9 },
+    "group@-99.44,83.09": { x: -95.55, z: 85.5 },
     "group@0,0": { z: -0.15, ry: -360 },
+    "group@0,0#15": { hidden: true },
     "group@0,0#2": { x: -0.1, z: 0.1 },
     "group@0,0#3": { x: 0.2, z: 0.05 },
     "group@1.6,83.41": { x: 1.35, z: 83.25, hidden: true },
@@ -4535,6 +4636,7 @@
     "group@21.78,-49.1": { hidden: true },
     "group@21.9,20": { x: 24.05, z: 24.85 },
     "group@25.6,81.53": { x: 25.6, z: 81.5, hidden: true },
+    "group@26.1,83.95": { x: 24.9, z: 91.1 },
     "group@27.01,-53.37": { x: 27, z: -53.35, hidden: true },
     "group@28.72,-40.34": { hidden: true },
     "group@28.73,-24.91": { x: 28.7, z: -23.7, hidden: true },
@@ -4544,8 +4646,10 @@
     "group@29.24,-8.98": { hidden: true },
     "group@29.29,-32.52": { hidden: true },
     "group@29.61,-10.94": { hidden: true },
+    "group@32.61,81.09": { x: 36.65, z: 93.35 },
     "group@36.56,81.27": { x: 36.55, z: 81.3, hidden: true },
     "group@38.3,-13": { hidden: true },
+    "group@39.77,83.84": { x: 45.85, z: 94.35 },
     "group@4.2,40.4": { x: 6.2, z: 37.45, ry: -90, hidden: true },
     "group@40.49,-3.75": { hidden: true },
     "group@40.68,-17.74": { ry: 20794, hidden: true },
@@ -4559,15 +4663,18 @@
     "group@45.66,81.37": { x: 45.7, z: 81.35, hidden: true },
     "group@49.65,-12.73": { hidden: true },
     "group@5.9,12.8": { x: 5.5, z: 8.8, ry: -90 },
+    "group@53.97,83.11": { x: 65, z: 85.15 },
     "group@57.85,82.93": { hidden: true },
     "group@6,26": { x: 6.5, z: 24.1 },
     "group@6,38": { x: 6.7, z: 35.95 },
     "group@60,-17.05": { x: 60, z: -17, hidden: true },
+    "group@61.45,81.46": { x: 74.05, z: 84.3 },
     "group@69.92,-18.13": { hidden: true },
     "group@7,0": { hidden: true },
     "group@7,24": { x: 6.6, z: 23.35, ry: -180 },
     "group@7.1,17.6": { x: 17.55, z: 10.25 },
     "group@7.92,-67.26": { hidden: true },
+    "group@75,83.94": { x: 69, z: 84.9 },
     "group@8,10": { x: 6.3, z: 9.5, hidden: true },
     "group@8,2": { x: 8.4, z: 15.9, hidden: true },
     "group@8,20": { x: 13.95, z: 22.5, ry: -180, hidden: true },
@@ -4597,6 +4704,8 @@
     "mesh box 0.08x0.9x0.08@12.82,-3.66,0.45": { hidden: true },
     "mesh box 0.09x0.07x2.02@11.14,-0.98,1": { x: 11.15, z: -0.95, hidden: true },
     "mesh box 0.09x0.07x2.02@11.14,2.98,1": { hidden: true },
+    "mesh box 0.12x0.02x5@-2.75,68.5,0.02": { hidden: true },
+    "mesh box 0.12x0.02x5@2.75,68.5,0.02": { hidden: true },
     "mesh box 0.12x0.02x8@-22,60,0.02": { hidden: true },
     "mesh box 0.12x1.95x0.12@-34.5,30,0.98": { hidden: true },
     "mesh box 0.12x1.95x0.12@-37,30,0.98": { hidden: true },
