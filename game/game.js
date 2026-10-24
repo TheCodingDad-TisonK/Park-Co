@@ -4517,6 +4517,7 @@
     "group@-105.9,83.23": { x: -101.85, z: 85.35 },
     "group@-11.44,-17.88": { x: -11.45, z: -17.9, hidden: true },
     "group@-112.28,84.24": { x: -109.25, z: 85.2 },
+    "group@-128,-72.01": { sz: 0.95 },
     "group@-13,33": { x: -13.05, z: 35.35, hidden: true },
     "group@-13,8": { x: -15.4, z: 13.4, ry: -1260 },
     "group@-14,40": { x: -16.65, z: 35.45, ry: -90 },
@@ -17757,53 +17758,1059 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     if (ui.blocked()) return;
     openPanel('dev');
   }, true);
-  (function () {
-    var canvasId = 'co-canvas';
-    function locked() { var c = document.getElementById(canvasId); return !!c && document.pointerLockElement === c; }
-    function editing() { return !!(CO.editor && CO.editor.on); }
-    function typing(t) { return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT'); }
-
-    // 1) the real E key is swallowed before the engine sees it (typing in a text box still works)
-    window.addEventListener('keydown', function (e) {
-      if (e.code === 'KeyE' && e.isTrusted && !typing(e.target)) { e.stopImmediatePropagation(); e.preventDefault(); }
-    }, true);
-    window.addEventListener('keyup', function (e) {
-      if (e.code === 'KeyE' && e.isTrusted && !typing(e.target)) e.stopImmediatePropagation();
-    }, true);
-
-    // 2) a left click while the mouse is captured sends the engine the same keypress E used to (Shift + click = the old Shift+E)
-    document.addEventListener('mousedown', function (e) {
-      if (e.button !== 0 || !locked() || editing()) return;
-      var opt = { code: 'KeyE', key: 'e', bubbles: true, cancelable: true, shiftKey: e.shiftKey };
-      document.dispatchEvent(new KeyboardEvent('keydown', opt));
-      document.dispatchEvent(new KeyboardEvent('keyup', opt));
-    });
-
-    // 3) every on-screen label that still says E is rewritten as it appears
-    var RULES = [
-      [/press E to/gi, 'left-click to'],
-      [/press E/gi, 'left-click'],
-      [/Shift\+E/g, 'Shift+click'],
-      [/, E to get out/g, ', left-click to get out'],
-      [/\bE or a step\b/g, 'left-click or a step'],
-      [/aim at a prop and E grabs/g, 'aim at a prop and left-click grabs'],
-      [/\bE places\b/g, 'left-click places']
-    ];
-    function fixText(s) { for (var i = 0; i < RULES.length; i++) s = s.replace(RULES[i][0], RULES[i][1]); return s; }
-    function sweep() {
-      pending = false;
-      var roots = document.querySelectorAll('#h-prompt, #h-toasts, #h-feed, #h-card, #dc-panel-body, #dc-menu-body, .pk-welcome-card');
-      for (var r = 0; r < roots.length; r++) {
-        var w = document.createTreeWalker(roots[r], NodeFilter.SHOW_TEXT, null), n;
-        while ((n = w.nextNode())) { var t = fixText(n.nodeValue); if (t !== n.nodeValue) n.nodeValue = t; }
-        var keys = roots[r].querySelectorAll('b, kbd');
-        for (var k = 0; k < keys.length; k++) if (keys[k].textContent.trim() === 'E') keys[k].textContent = (keys[k].tagName === 'B' ? 'LMB' : 'Left click');
+  // A narrow-gauge steam railway rings the park outside its fence: five stations, a depot siding north of the park and three level
+  // crossings. The route is a rounded rectangle (clockwise on the map, north is -z). Everything on it is built from the headless
+  // map of the world: W = -128 keeps the west run clear of the tree belt, E = 170 and S = 112 clear the Mountain King and the town.
+  // Local frame of anything standing on the line: +x is the way the train runs, +z is its right hand (the platform side, toward the park).
+  var TR = {
+    W: -128, E: 170, N: -134, S: 112, R: 24, GAUGE: 1.0,
+    main: null, byp: null, sJ1: 0, sJ2: 0, dL: 0, M: null,
+    st: [], xing: [], units: [], len: 56, built: false, t: null, depot: null
+  };
+  var TR_GAPS = [   // the gates the stations have in the park's palisade: { axis: the run's own axis, x, z, w }
+    { axis: 'z', x: -32.5, z: 62, w: 5 }, { axis: 'z', x: -72, z: -72, w: 5 },
+    { axis: 'z', x: 123, z: -2, w: 5 },   { axis: 'x', x: 95, z: 71, w: 5 }
+  ];
+  // the palisade steps around each gate: the run is cut in two and each half is built (and made solid) on its own
+  var _trPalisade = pkPalisade;
+  pkPalisade = function (x0, z0, x1, z1) {
+    for (var i = 0; i < TR_GAPS.length; i++) {
+      var g = TR_GAPS[i], h = g.w / 2;
+      if (g.axis === 'z' && Math.abs(x0 - g.x) < 0.01 && Math.abs(x1 - g.x) < 0.01 && g.z > Math.min(z0, z1) + h && g.z < Math.max(z0, z1) - h) {
+        var lo = Math.min(z0, z1), hi = Math.max(z0, z1);
+        pkPalisade(x0, lo, x0, g.z - h); pkPalisade(x0, g.z + h, x0, hi); return;
+      }
+      if (g.axis === 'x' && Math.abs(z0 - g.z) < 0.01 && Math.abs(z1 - g.z) < 0.01 && g.x > Math.min(x0, x1) + h && g.x < Math.max(x0, x1) - h) {
+        var l2 = Math.min(x0, x1), h2 = Math.max(x0, x1);
+        pkPalisade(l2, z0, g.x - h, z0); pkPalisade(g.x + h, z0, h2, z0); return;
       }
     }
-    var pending = false;
-    function queue() { if (!pending) { pending = true; requestAnimationFrame(sweep); } }
-    new MutationObserver(queue).observe(document.body, { childList: true, subtree: true, characterData: true });
-    queue();
-  })();
+    return _trPalisade(x0, z0, x1, z1);
+  };
+
+  // ── Materials ─────────────────────────────────────────────────────
+  function trMats() {
+    if (TR.M) return TR.M;
+    var M = TR.M = {}, P = pkMats();
+    M.ballast = std({ color: 0x5a5750, roughness: 1 });
+    M.sleeper = std({ color: 0x4b3a2a, roughness: 0.95 });
+    M.rail = std({ color: 0xaeb4ba, roughness: 0.32, metalness: 0.85 });
+    M.deck = std({ color: 0x3a3d42, roughness: 0.9 });
+    M.coal = std({ color: 0x15161a, roughness: 0.7, metalness: 0.2 });
+    M.green = pkPaint(0x1d5b3b, 0.38, 0.35);      // loco green
+    M.greenD = pkPaint(0x123a27, 0.4, 0.3);
+    M.black = pkPaint(0x14161a, 0.45, 0.4);
+    M.red = pkPaint(0xb3262b, 0.4, 0.3);
+    M.cream = pkPaint(0xefe3c2, 0.5, 0.1);
+    M.wood = std({ map: TEX.wood || null, color: 0x9a6b3d, roughness: 0.85 });
+    M.woodD = std({ color: 0x5a3b22, roughness: 0.9 });
+    M.brass = P.brass; M.gold = P.gold; M.iron = P.iron; M.stone = P.stone; M.stoneDark = P.stoneDark; M.cream2 = P.cream;
+    M.slateRed = P.slateRed; M.slate = P.slate; M.glass = P.glass; M.rubber = P.rubber; M.seat = P.seat; M.white = P.white;
+    M.led = new THREE.MeshBasicMaterial({ color: 0x331111 });          // swapped red/dark by the crossings: not a "glow" lens, so the park lights switch leaves it alone
+    M.ledOn = new THREE.MeshBasicMaterial({ color: 0xff2a1e });
+    M.ledGreen = new THREE.MeshBasicMaterial({ color: 0x3ddc6a }); M.ledAmber = new THREE.MeshBasicMaterial({ color: 0xffb02e }); M.ledOff = new THREE.MeshBasicMaterial({ color: 0x20262b });
+    M.lampOn = new THREE.MeshBasicMaterial({ color: 0xfff0c0 }); M.lampOff = new THREE.MeshBasicMaterial({ color: 0x59564c });
+    ['led', 'ledOn', 'ledGreen', 'ledAmber', 'ledOff', 'lampOn', 'lampOff'].forEach(function (k) { M[k].userData.noBake = true; keepShared(M[k]); });
+    return M;
+  }
+  var TR_UP = new THREE.Vector3(0, 1, 0);
+  function trCone(r, h, mat, x, y, z, parent, seg) { var m = new THREE.Mesh(new THREE.ConeGeometry(r, h, seg || 12), mat); m.position.set(x, y, z); m.castShadow = true; (parent || scene).add(m); return m; }
+  function trDyn(parent) { var g = new THREE.Group(); g.userData.dynamic = true; (parent || scene).add(g); return g; }
+  function trFrameGroup(x, z, yaw, parent) { var g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = yaw; (parent || scene).add(g); return g; }
+  function trInstanced(geo, mat, mats, shadow) {
+    var im = new THREE.InstancedMesh(geo, mat, mats.length);
+    for (var i = 0; i < mats.length; i++) im.setMatrixAt(i, mats[i]);
+    im.instanceMatrix.needsUpdate = true; im.castShadow = !!shadow; im.receiveShadow = true; im.frustumCulled = false; scene.add(im); return im;
+  }
+
+  // ── The route ─────────────────────────────────────────────────────
+  // a closed (or open) polyline resampled to an even step, so a distance along it is an index
+  function trResample(raw, closed) {
+    var n0 = raw.length, cum = [0], i;
+    for (i = 1; i < n0; i++) cum.push(cum[i - 1] + Math.hypot(raw[i][0] - raw[i - 1][0], raw[i][1] - raw[i - 1][1]));
+    var L = cum[n0 - 1];
+    if (closed) { L += Math.hypot(raw[0][0] - raw[n0 - 1][0], raw[0][1] - raw[n0 - 1][1]); cum.push(L); }
+    var n = Math.max(2, Math.round(L)), ds = closed ? L / n : L / (n - 1), xs = new Float32Array(n), zs = new Float32Array(n), j = 0;
+    for (i = 0; i < n; i++) {
+      var d = i * ds;
+      while (j < cum.length - 2 && cum[j + 1] < d) j++;
+      var a = raw[j], b = raw[(j + 1) % n0], seg = cum[j + 1] - cum[j] || 1, u = Math.max(0, Math.min(1, (d - cum[j]) / seg));
+      xs[i] = a[0] + (b[0] - a[0]) * u; zs[i] = a[1] + (b[1] - a[1]) * u;
+    }
+    return { x: xs, z: zs, n: n, ds: ds, L: closed ? L : (n - 1) * ds, closed: closed };
+  }
+  // a point, the heading (yaw for rotation.y and the unit vector) at distance s along a resampled path
+  function trSamp(P, s, o) {
+    var n = P.n, f = s / P.ds, i = Math.floor(f), u = f - i, i2, ia, ib;
+    if (P.closed) { i = ((i % n) + n) % n; i2 = (i + 1) % n; ia = (i + n - 1) % n; ib = (i + 2) % n; }
+    else { if (i < 0) { i = 0; u = 0; } if (i > n - 2) { i = n - 2; u = 1; } i2 = i + 1; ia = Math.max(0, i - 1); ib = Math.min(n - 1, i + 2); }
+    o.x = P.x[i] + (P.x[i2] - P.x[i]) * u; o.z = P.z[i] + (P.z[i2] - P.z[i]) * u;
+    var dx = P.x[ib] - P.x[ia], dz = P.z[ib] - P.z[ia], l = Math.hypot(dx, dz) || 1;
+    o.dx = dx / l; o.dz = dz / l; o.yaw = Math.atan2(-o.dz, o.dx); return o;
+  }
+  // the train's own coordinate s runs along the route it took: 'M' the main loop, 'D' the loop that passes through the depot
+  function trLoopLen(mode) { return TR.main.L + (mode === 'D' ? TR.dL : 0); }
+  function trPos(s, mode, o) {
+    var L = trLoopLen(mode); s = ((s % L) + L) % L;
+    if (mode === 'D' && s >= TR.sJ1) { if (s <= TR.sJ1 + TR.byp.L) return trSamp(TR.byp, s - TR.sJ1, o); s -= TR.dL; }
+    return trSamp(TR.main, s, o);
+  }
+  function trNearestS(x, z) {
+    var P = TR.main, best = 1e18, bi = 0;
+    for (var i = 0; i < P.n; i++) { var d = (P.x[i] - x) * (P.x[i] - x) + (P.z[i] - z) * (P.z[i] - z); if (d < best) { best = d; bi = i; } }
+    return bi * P.ds;
+  }
+  function trBuildRoute() {
+    var R = TR.R, W = TR.W, E = TR.E, N = TR.N, S = TR.S, cs = [[W, N], [E, N], [E, S], [W, S]], raw = [];
+    for (var i = 0; i < 4; i++) {
+      var p = cs[(i + 3) % 4], c = cs[i], nx = cs[(i + 1) % 4];
+      var d1x = Math.sign(c[0] - p[0]), d1z = Math.sign(c[1] - p[1]), d2x = Math.sign(nx[0] - c[0]), d2z = Math.sign(nx[1] - c[1]);
+      var ax = c[0] - d1x * R, az = c[1] - d1z * R, cx = ax + d2x * R, cz = az + d2z * R;
+      var a0 = Math.atan2(az - cz, ax - cx), a1 = Math.atan2(c[1] + d2z * R - cz, c[0] + d2x * R - cx), da = a1 - a0;
+      while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
+      for (var k = 0; k <= 24; k++) { var t = a0 + da * k / 24; raw.push([cx + Math.cos(t) * R, cz + Math.sin(t) * R]); }
+    }
+    TR.main = trResample(raw, true);
+    // the depot siding: it leaves the north run at x = J1, runs 12 m north through the shed and rejoins at x = J2
+    var J1 = -4, J2 = 140, H = 12, EASE = 46, bp = [];
+    for (var x = J1; x <= J2 + 0.01; x += 0.5) {
+      var off = x < J1 + EASE ? H * (1 - Math.cos(Math.PI * (x - J1) / EASE)) / 2 : x > J2 - EASE ? H * (1 - Math.cos(Math.PI * (J2 - x) / EASE)) / 2 : H;
+      bp.push([x, N - off]);
+    }
+    TR.byp = trResample(bp, false);
+    TR.sJ1 = trNearestS(J1, N); TR.sJ2 = trNearestS(J2, N); TR.dL = TR.byp.L - (TR.sJ2 - TR.sJ1);
+    TR.J1 = J1; TR.J2 = J2;
+  }
+
+  // ── The track: ballast, sleepers and rails ────────────────────────
+  function trRibbon(P, w, y, mat, s0, s1) {
+    var pos = [], idx = [], uv = [], o = {}, a = s0 === undefined ? 0 : s0, b = s1 === undefined ? P.L : s1, n = Math.max(2, Math.round((b - a) / 2)), k;
+    for (k = 0; k <= n; k++) {
+      var s = a + (b - a) * k / n; trSamp(P, s, o);
+      var rx = -o.dz, rz = o.dx;
+      pos.push(o.x - rx * w / 2, y, o.z - rz * w / 2, o.x + rx * w / 2, y, o.z + rz * w / 2); uv.push(0, s / 2, 1, s / 2);
+      if (k > 0) { var q = (k - 1) * 2; idx.push(q, q + 2, q + 1, q + 1, q + 2, q + 3); }
+    }
+    var g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+    var m = new THREE.Mesh(g, mat); m.receiveShadow = true; m.frustumCulled = false; scene.add(m); return m;
+  }
+  function trLayTrack(P, a, b) {
+    var M = trMats(), o = {}, sl = [], rl = [], mm = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(1, 1, 1), pv = new THREE.Vector3(), s;
+    for (s = a; s < b; s += 0.8) { trSamp(P, s, o); q.setFromAxisAngle(TR_UP, o.yaw); pv.set(o.x, 0.09, o.z); sl.push(new THREE.Matrix4().compose(pv.clone(), q.clone(), sc)); }
+    for (s = a; s < b; s += 1.0) {
+      trSamp(P, s + 0.5, o); q.setFromAxisAngle(TR_UP, o.yaw);
+      [-1, 1].forEach(function (side) { var rx = -o.dz * side * TR.GAUGE / 2, rz = o.dx * side * TR.GAUGE / 2; pv.set(o.x + rx, 0.2, o.z + rz); rl.push(new THREE.Matrix4().compose(pv.clone(), q.clone(), sc)); });
+    }
+    trInstanced(new THREE.BoxGeometry(0.2, 0.1, 1.9), M.sleeper, sl, false);
+    trInstanced(new THREE.BoxGeometry(1.08, 0.12, 0.08), M.rail, rl, false);
+  }
+  function trBuildTrack() {
+    var M = trMats();
+    trRibbon(TR.main, 3.3, 0.05, M.ballast); trLayTrack(TR.main, 0, TR.main.L);
+    trRibbon(TR.byp, 3.3, 0.05, M.ballast); trLayTrack(TR.byp, 0, TR.byp.L);
+    // the road west of the park ends at the line: a short stub so the west crossing has a road to cross
+    pkSlab(40, 8, -120, 76, 0.011, pkAsphalt());
+    box(40, 0.02, 0.14, MAT.whiteLine, -120, 0.022, 76);
+  }
+
+  // ── Level crossings ───────────────────────────────────────────────
+  // Poles that climb out of the ground either side of the line, red LEDs that flash in turn and a two-tone warning, from when the
+  // head of the train is 80 m out until the last wagon has cleared. lanes: where along the road the poles stand (the road's width).
+  var TR_XDEFS = [
+    { id: 'west', x: -128, z: 76, lanes: [-2.9, 0, 2.9], road: true },
+    { id: 'east', x: 170, z: 76, lanes: [-2.9, 0, 2.9], road: true },
+    { id: 'lane', x: -17, z: -134, lanes: [-1.4, 1.4], road: false }
+  ];
+  function trBuildCrossings() {
+    var M = trMats(), strip = pkStripes('#d83a34', '#f6f6f2');
+    TR_XDEFS.forEach(function (d) {
+      var s = trNearestS(d.x, d.z), o = trSamp(TR.main, s, {}), g = trFrameGroup(o.x, o.z, o.yaw), dyn = trDyn(g);
+      var X = { id: d.id, s: s, x: o.x, z: o.z, yaw: o.yaw, dx: o.dx, dz: o.dz, g: g, poles: [], leds: [], lanes: d.lanes, road: d.road, up: 0, active: false, beepT: 0, flip: 0, hold: false };
+      // the crossing deck: planks between and beside the rails
+      box(3.4, 0.07, d.road ? 8.4 : 3.6, M.deck, 0, 0.085, 0, g);
+      // a sleeper-and-sand apron at each side
+      [-1, 1].forEach(function (side) {
+        d.lanes.forEach(function (lane) {
+          var pole = new THREE.Group(); pole.position.set(lane, -1.35, side * 2.5); dyn.add(pole);
+          var p = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 1.4, 12), strip); p.position.y = 0.7; p.castShadow = true; pole.add(p);
+          sphere(0.1, M.iron, 0, 1.43, 0, pole);
+          var led = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), M.led); led.position.set(0, 1.3, side * -0.07); pole.add(led); led.userData.noBake = true;
+          X.poles.push(pole); X.leds.push({ m: led, phase: (side > 0 ? 0 : 1) });
+        });
+        // the signal mast: a cross-buck, two LED lenses and the horn, either side of the road
+        var mast = new THREE.Group(); mast.position.set(d.lanes[d.lanes.length - 1] + 1.9, 0, side * 3.3); g.add(mast);
+        pkRoundCyl(0.06, 3.1, M.iron, 0, 1.55, 0, mast, 8);
+        var bx = box(0.14, 0.9, 0.9, M.white, 0, 2.55, 0, mast); bx.rotation.x = 0;
+        [-0.25, 0.25].forEach(function (zz, k) { var lens = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), M.led); lens.position.set(0.08, 2.55, zz); mast.add(lens); lens.userData.noBake = true; X.leds.push({ m: lens, phase: k }); });
+        box(0.04, 0.6, 0.6, M.red, 0.075, 2.55, 0, mast);
+      });
+      TR.xing.push(X);
+    });
+  }
+  // the poles are a wall while they are up
+  function trXingBlocks(x, z) {
+    for (var i = 0; i < TR.xing.length; i++) {
+      var X = TR.xing[i]; if (X.up < 0.55) continue;
+      var dx = x - X.x, dz = z - X.z, lx = dx * X.dx + dz * X.dz, lz = -dx * X.dz + dz * X.dx;   // local to the line
+      if (Math.abs(lz) < 3.1 && Math.abs(lx) < 6.0 && Math.abs(lz) > 1.8) { return true; }
+    }
+    return false;
+  }
+  // ── The saved state ───────────────────────────────────────────────
+  function trState() {
+    var r = S.tr || (S.tr = {});
+    if (r.fuel === undefined) { r.fuel = 100; r.water = 100; r.wear = 0; r.dirt = 20; r.auto = false; r.points = 'main'; r.st = {}; r.laps = 0; }
+    return r;
+  }
+  var TR_STATIONS = [
+    { id: 'central', name: 'CENTRAL STATION', x: -128, z: 34, walk: [[-117.4, 34], [-117.4, 62], [-30, 62]], roof: 'slateRed' },
+    { id: 'woods', name: 'ELFIN WOODS', x: -128, z: -72, walk: [[-117.4, -72], [-68, -72]], roof: 'slateGreen' },
+    { id: 'windmill', name: 'WINDMILL HALT', x: -62, z: -134, walk: [[-62, -123.4], [-17, -123.4], [-17, -160]], roof: 'slateRed' },
+    { id: 'dragon', name: 'DRAGON GATE', x: 170, z: -2, walk: [[159.4, -2], [121, -2]], roof: 'slateGreen' },
+    { id: 'lake', name: 'LAKESIDE HALT', x: 95, z: 112, walk: [[95, 101.4], [95, 66]], roof: 'slateRed' }
+  ];
+  // wagon centres along a stopped train, in a station's local x (the front buffer stops 28 m ahead of the middle of the platform)
+  function trWagonX(k) { return 12.3 - 5.1 * k; }
+
+  // ── Floors: the platforms and the ramps up to them ────────────────
+  function trStationLocal(st, x, z) { var dx = x - st.x, dz = z - st.z; return { lx: dx * st.dx + dz * st.dz, lz: -dx * st.dz + dz * st.dx }; }
+  function trFloorAt(x, z) {
+    for (var i = 0; i < TR.st.length; i++) {
+      var st = TR.st[i]; if (Math.abs(x - st.x) > 40 && Math.abs(z - st.z) > 40) continue;
+      var l = trStationLocal(st, x, z);
+      if (Math.abs(l.lx) <= 32.2 && l.lz >= 1.9 && l.lz <= 7.3) return 0.95;
+      if (Math.abs(l.lx) <= 1.7 && l.lz > 7.3 && l.lz < 10.5) return 0.95 * (10.5 - l.lz) / 3.2;
+    }
+    return null;
+  }
+  var _trPrevFloor = GAME.floorY;
+  GAME.floorY = function (x, z, y) { var h = trFloorAt(x, z), b = _trPrevFloor ? _trPrevFloor(x, z, y) : 0; return h === null ? b : Math.max(h, b); };
+  var _trPrevCollides = GAME.collides;
+  GAME.collides = function (x, z, opt) { return (_trPrevCollides && _trPrevCollides(x, z, opt)) || trXingBlocks(x, z) || trGateBlocks(x, z); };
+  function trGateBlocks(x, z) {   // a shut platform gate is a wall along the edge
+    for (var i = 0; i < TR.st.length; i++) {
+      var st = TR.st[i]; if (st.gatesAmt > 0.5 || Math.abs(x - st.x) > 40 && Math.abs(z - st.z) > 40) continue;
+      var l = trStationLocal(st, x, z); if (Math.abs(l.lx) <= 32 && l.lz > 1.6 && l.lz < 2.45) return true;
+    }
+    return false;
+  }
+
+  // ── Small furniture ───────────────────────────────────────────────
+  function trBench(g, x, z, ry, y) {
+    var M = trMats(), b = new THREE.Group(); b.position.set(x, y, z); b.rotation.y = ry; g.add(b);
+    pkBevelBox(1.7, 0.07, 0.5, M.wood, 0, 0.46, 0, b, 0.02); pkBevelBox(1.7, 0.4, 0.06, M.wood, 0, 0.75, -0.23, b, 0.02);
+    [-0.75, 0.75].forEach(function (px) { box(0.08, 0.46, 0.46, M.iron, px, 0.23, 0, b); });
+    return b;
+  }
+  function trLamp(st, x, z, y) {
+    var M = trMats(), g = st.g;
+    pkRoundCyl(0.05, 3.2, M.iron, x, y + 1.6, z, g, 8); pkBevelBox(0.3, 0.1, 0.3, M.iron, x, y + 0.05, z, g, 0.03);
+    var lens = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 10), M.lampOff); lens.position.set(x, y + 3.35, z); lens.userData.noBake = true; g.add(lens);
+    cyl(0.04, 0.22, M.iron, x, y + 3.62, z, g, 6, 0.2); sphere(0.05, M.brass, x, y + 3.76, z, g);
+    st.lamps.push(lens);
+  }
+  function trPath(w, pts, y) {
+    var M = pkMats();
+    for (var i = 0; i < pts.length - 1; i++) {
+      var a = pts[i], b = pts[i + 1], horiz = Math.abs(b[1] - a[1]) < 0.01, len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (horiz) pkSlab(len + w, w, (a[0] + b[0]) / 2, a[1], y || 0.013, M.paversWarm); else pkSlab(w, len + w, a[0], (a[1] + b[1]) / 2, y || 0.013, M.paversWarm);
+    }
+  }
+  function trPortal(x, z, axis) {   // the little stone gate where a station path meets the park's palisade
+    var M = trMats(), g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+    var o = axis === 'z' ? [0, 2.9] : [2.9, 0];
+    [-1, 1].forEach(function (s) {
+      var px = o[0] * s, pz = o[1] * s;
+      pkBevelBox(0.7, 2.7, 0.7, M.stone, px, 1.35, pz, g, 0.05); pkBevelBox(0.9, 0.2, 0.9, M.stoneDark, px, 0.1, pz, g, 0.03);
+      trCone(0.5, 0.9, M.slateRed, px, 3.15, pz, g, 4); sphere(0.07, M.gold, px, 3.65, pz, g);
+      var l = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), M.lampOn); l.position.set(px, 2.9, pz); g.add(l); l.userData.noBake = true;
+    });
+    solid(x - 0.4 + (axis === 'z' ? 0 : -2.9), x + 0.4 + (axis === 'z' ? 0 : -2.9), z - 0.4 + (axis === 'z' ? -2.9 : 0), z + 0.4 + (axis === 'z' ? -2.9 : 0), 0, 3);
+    solid(x - 0.4 + (axis === 'z' ? 0 : 2.9), x + 0.4 + (axis === 'z' ? 0 : 2.9), z - 0.4 + (axis === 'z' ? 2.9 : 0), z + 0.4 + (axis === 'z' ? 2.9 : 0), 0, 3);
+  }
+
+  // ── A station ─────────────────────────────────────────────────────
+  function trBuildStation(def, idx) {
+    var M = trMats(), P = pkMats(), s = trNearestS(def.x, def.z), o = trSamp(TR.main, s, {});
+    var g = trFrameGroup(o.x, o.z, o.yaw), dyn = trDyn(g), R = trState(), mine = R.st[def.id] || (R.st[def.id] = { gates: false, lights: false });
+    var st = { def: def, id: def.id, name: def.name, idx: idx, s: s, x: o.x, z: o.z, dx: o.dx, dz: o.dz, yaw: o.yaw, g: g, dyn: dyn, lamps: [], gateLeaves: [], gatesAmt: mine.gates ? 1 : 0,
+      lightsOn: !!mine.lights, door: 0, doorWant: false, bellT: 0, bellG: null, board: null, light: null, sw: {}, led: {}, cabOpen: false, staff: 0 };
+    TR.st.push(st);
+    // the platform, edged in yellow, with steps down to the walk behind it
+    pkBevelBox(64, 0.95, 5.4, M.stone, 0, 0.475, 4.6, g, 0.04); pkBevelBox(64.3, 0.05, 5.6, M.stoneDark, 0, 0.95, 4.6, g, 0.02);
+    box(64, 0.02, 0.28, pkPaint(0xf0c63a, 0.6, 0.1), 0, 0.985, 2.3, g);
+    var ramp = box(3.3, 0.12, 3.5, M.stoneDark, 0, 0.47, 8.95, g); ramp.rotation.x = -Math.atan2(0.95, 3.2);
+    // the building: timber and cream, a steep gable roof, a clock tower with a pointed spire
+    pkBevelBox(12, 3.3, 4.4, P.cream, -22, 2.6, 9.8, g, 0.05);
+    box(12.2, 0.14, 4.6, M.woodD, -22, 0.97 + 0.05, 9.8, g);
+    for (var bx = -27.5; bx <= -16.5; bx += 2.2) box(0.14, 3.3, 0.1, M.woodD, bx, 2.6, 7.56, g);
+    box(12.1, 0.14, 0.1, M.woodD, -22, 4.2, 7.55, g); box(12.1, 0.14, 0.1, M.woodD, -22, 2.4, 7.55, g);
+    pkGableRoof(12, 4.4, 2.2, P[def.roof], P.cream, -22, 4.25, 9.8, g, 0.5);
+    [-26, -19].forEach(function (wx) { pkWindow(g, wx, 3.2, 7.55, 1.1, 1.3, Math.PI, P.white, P.pane); });
+    var door = pkBevelBox(1.1, 2.2, 0.1, M.wood, -22.5, 2.05, 7.55, g, 0.03); door.rotation.y = 0; sphere(0.05, M.brass, -22.2, 2.05, 7.48, g);
+    var tw = pkBevelBox(2.6, 6.6, 2.6, P.cream, -29.2, 4.25, 9.8, g, 0.05);
+    for (var ty = 1.6; ty < 7; ty += 2.2) box(2.7, 0.12, 2.7, M.woodD, -29.2, ty + 0.95, 9.8, g);
+    var sp = new THREE.Mesh(new THREE.ConeGeometry(2.0, 4.6, 8), P[def.roof]); sp.position.set(-29.2, 10.85, 9.8); sp.castShadow = true; g.add(sp);
+    sphere(0.12, M.gold, -29.2, 13.25, 9.8, g);
+    [[-29.2, 7.45, 0, Math.PI], [-27.88, 9.8, 1, Math.PI / 2]].forEach(function (c) {   // the clock, on the track side and the walk side
+      var face = new THREE.Mesh(new THREE.CircleGeometry(0.8, 24), std({ color: 0xf4efe0, roughness: 0.5 })); face.position.set(c[0], 6.7, c[1]); face.rotation.y = c[3]; g.add(face);
+      var hand = box(0.05, 0.6, 0.03, M.iron, c[0], 6.95, c[1] + (c[3] === Math.PI ? -0.03 : 0), g); hand.rotation.z = 0.5;
+    });
+    sign([def.name], 6.4, 0.7, -21, 4.7, 7.4, Math.PI, { w: 512, h: 64, bg: '#12301f', fg: '#f2e6b8' }, g);
+    // the canopy over the platform: iron posts, a sloping roof with a scalloped, painted valance
+    for (var px = -4; px >= -28; px -= 6) { pkRoundCyl(0.07, 3.2, M.iron, px, 2.55, 3.4, g, 8); }
+    var roof = pkBevelBox(28, 0.12, 6.2, P[def.roof], -16, 4.3, 5.9, g, 0.03); roof.rotation.x = 0.06;
+    for (var vx = -29.5; vx <= -2.5; vx += 0.9) { var sc = trCone(0.28, 0.45, [M.red, M.cream, M.green][Math.round((vx + 30) / 0.9) % 3], vx, 4.0, 2.9, g, 4); sc.rotation.x = Math.PI; }
+    // benches, lamps, bins
+    trBench(g, -8, 6.4, 0, 0.95); trBench(g, 6, 6.4, 0, 0.95); trBench(g, 16, 6.4, 0, 0.95); trBench(g, -15, 3.1, Math.PI, 0.95);
+    [-10, 2, 14, 24].forEach(function (lx) { trLamp(st, lx, 6.7, 0.95); });
+    st.light = new THREE.PointLight(0xffd9a0, 0, 26); st.light.position.set(-8, 4.0, 5); g.add(st.light);
+    // the departure board, hung under the canopy
+    var cv = document.createElement('canvas'); cv.width = 384; cv.height = 128; var tex = new THREE.CanvasTexture(cv);
+    var bm = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.8), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide })); bm.position.set(-8, 3.55, 3.4); bm.userData.noBake = true; g.add(bm);
+    box(2.5, 0.9, 0.06, M.iron, -8, 3.55, 3.44, g); st.board = { cv: cv, tex: tex, last: '' };
+    // the station gates: a rail along the platform edge with a pair of leaves at each wagon door
+    for (var k = 0; k < 8; k++) {
+      var cx = trWagonX(k);
+      [-1, 1].forEach(function (sd) {
+        var pv = new THREE.Group(); pv.position.set(cx + sd * 0.62, 0.95, 2.05); dyn.add(pv);
+        var leaf = pkBevelBox(0.62, 1.1, 0.05, M.wood, -sd * 0.31, 0.62, 0, pv, 0.01); box(0.62, 0.06, 0.07, M.brass, -sd * 0.31, 1.18, 0, pv);
+        st.gateLeaves.push({ pv: pv, sd: sd });
+      });
+      if (k < 7) { var fx = cx - 2.55; pkBevelBox(3.9, 0.06, 0.07, M.iron, fx, 2.0, 2.05, g, 0.01); pkBevelBox(3.9, 0.06, 0.07, M.iron, fx, 1.55, 2.05, g, 0.01); [-1.9, 1.9].forEach(function (pp) { box(0.07, 1.1, 0.07, M.iron, fx + pp, 1.5, 2.05, g); }); }
+    }
+    // the bell, on a bracket on the building: it swings while it rings
+    var bell = new THREE.Group(); bell.position.set(-14.5, 3.9, 7.1); g.add(bell); st.bellG = bell;
+    pkLathe([[0.02, 0.5], [0.12, 0.45], [0.2, 0.3], [0.3, 0.1], [0.34, 0], [0.3, 0]], M.brass, 0, -0.5, 0, bell, 16); sphere(0.05, M.iron, 0, -0.52, 0, bell);
+    box(0.1, 0.1, 0.7, M.iron, -14.5, 4.45, 6.95, g); pkRod(-14.5, 4.4, 7.1, -14.5, 4.4, 6.7, 0.03, M.iron, g, 6);
+    trBuildCabinet(st);
+    // the walk, and where it meets the palisade
+    var p0 = trLocalToWorld(st, 0, 10.7), pts = def.walk.slice(); pts[0] = [p0.x, p0.z]; trPath(3.4, pts);
+    trDrawBoard(st, true);
+    return st;
+  }
+  function trLocalToWorld(st, lx, lz) { return { x: st.x + st.dx * lx - st.dz * lz, z: st.z + st.dz * lx + st.dx * lz }; }
+
+  // ── The control cabinet: a locked door and, behind it, 3 switches and 2 buttons ──
+  function trBuildCabinet(st) {
+    var M = trMats(), g = st.g, dyn = st.dyn, cx = 8, zf = 6.7, zb = 7.3, zp = 7.22, y0 = 0.95, shell = pkPaint(0x3b4650, 0.5, 0.5);
+    pkBevelBox(1.2, 1.9, 0.06, shell, cx, y0 + 0.95, zb, g, 0.01);                                     // back
+    [-0.57, 0.57].forEach(function (sx) { pkBevelBox(0.06, 1.9, 0.6, shell, cx + sx, y0 + 0.95, (zf + zb) / 2, g, 0.01); });
+    pkBevelBox(1.2, 0.06, 0.6, shell, cx, y0 + 1.9, (zf + zb) / 2, g, 0.01); pkBevelBox(1.2, 0.06, 0.6, shell, cx, y0 + 0.03, (zf + zb) / 2, g, 0.01);
+    pkBevelBox(1.0, 1.7, 0.03, pkPaint(0x20262c, 0.8, 0.2), cx, y0 + 0.95, zp + 0.03, g, 0.005);       // the inner plate
+    sign(['TRAIN CONTROL'], 0.9, 0.16, cx, y0 + 2.05, zf - 0.02, Math.PI, { w: 256, h: 48, bg: '#1b232c', fg: '#f5b53d' }, g);
+    pkBevelBox(0.5, 0.06, 0.5, M.stoneDark, cx, y0 + 0.01, (zf + zb) / 2, g, 0.01);
+    var defs = [
+      { k: 'auto', x: -0.32, y: 1.45, label: 'AUTO', sw: true }, { k: 'gates', x: 0, y: 1.45, label: 'GATES', sw: true }, { k: 'lights', x: 0.32, y: 1.45, label: 'LIGHTS', sw: true },
+      { k: 'announce', x: -0.2, y: 0.78, label: 'ANNOUNCE', sw: false }, { k: 'bell', x: 0.2, y: 0.78, label: 'BELL', sw: false }
+    ];
+    defs.forEach(function (d) {
+      var wx = cx + d.x, wy = y0 + d.y;
+      sign([d.label], 0.28, 0.08, wx, wy + 0.22, zp - 0.005, Math.PI, { w: 192, h: 56, bg: '#1b232c', fg: '#f5f2e8' }, g);
+      if (d.sw) {
+        var base = pkRoundCyl(0.06, 0.04, M.brass, wx, wy, zp, g, 12); base.rotation.x = Math.PI / 2;
+        var lv = new THREE.Group(); lv.position.set(wx, wy, zp - 0.03); dyn.add(lv);
+        pkRoundCyl(0.016, 0.17, M.iron, 0, 0.085, 0, lv, 6); sphere(0.03, M.red, 0, 0.18, 0, lv);
+        st.sw[d.k] = lv;
+        var led = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), M.ledOff); led.position.set(wx, wy - 0.13, zp - 0.02); led.userData.noBake = true; g.add(led); st.led[d.k] = led;
+      } else {
+        var cap = pkRoundCyl(0.055, 0.05, d.k === 'bell' ? M.gold : M.red, wx, wy, zp - 0.05, dyn, 14); cap.rotation.x = Math.PI / 2; st.sw[d.k] = cap; cap.userData.rest = zp - 0.05;
+      }
+      var def = d;
+      hitBox(0.24, 0.3, 0.3, wx, wy + 0.04, zp - 0.1, {
+        prompt: function () { return st.cabOpen ? trSwitchPrompt(st, def.k) : ''; },
+        use: function () { trSwitchUse(st, def.k); }
+      }, g);
+    });
+    var pv = new THREE.Group(); pv.position.set(cx - 0.5, y0 + 0.95, zf); dyn.add(pv); st.doorPv = pv;   // the door hangs on its left edge
+    pkBevelBox(1.0, 1.8, 0.05, pkPaint(0x4a5a68, 0.45, 0.5), 0.5, 0, 0, pv, 0.01);
+    var lk = pkRoundCyl(0.05, 0.03, M.brass, 0.88, 0, -0.04, pv, 12); lk.rotation.x = Math.PI / 2; box(0.02, 0.07, 0.01, M.iron, 0.88, 0, -0.06, pv);   // the lock and its keyhole
+    sign(['STAFF ONLY'], 0.5, 0.1, 0.5, 0.55, -0.03, Math.PI, { w: 256, h: 48, bg: '#8a1f1f', fg: '#ffffff' }, pv);
+    hitBox(1.0, 1.8, 0.3, 0.5, 0, -0.1, {
+      prompt: function () { return st.cabOpen ? 'Close and lock the control cabinet' : 'Unlock the control cabinet with your key'; },
+      use: function () { st.cabOpen = !st.cabOpen; }
+    }, pv);
+  }
+  function trSwitchPrompt(st, k) {
+    var R = trState();
+    if (k === 'auto') return 'AUTO ' + (R.auto ? 'on' : 'off') + ' (all stations) - flip it';
+    if (k === 'gates') return 'Station gates ' + (st.gatesAmt > 0.5 ? 'open' : 'shut') + ' - flip them';
+    if (k === 'lights') return 'Station lights ' + (st.lightsOn ? 'on' : 'off') + ' - flip them';
+    if (k === 'announce') return 'Announce: the train is leaving soon';
+    return 'Ring the station bell';
+  }
+  function trSwitchUse(st, k) {
+    var R = trState();
+    if (k === 'auto') trSetAuto(!R.auto);
+    else if (k === 'gates') trSetGates(st, st.gatesAmt < 0.5);
+    else if (k === 'lights') { st.lightsOn = !st.lightsOn; R.st[st.id].lights = st.lightsOn; }
+    else if (k === 'announce') trAnnounce(st);
+    else trBell(st);
+    sfx('click');
+  }
+  function trSetGates(st, open) { st.gatesWant = open; trState().st[st.id].gates = open; }
+
+  // the departure board: the next stop and the time to go
+  function trDrawBoard(st, force) {
+    var t = TR.t, txt1 = st.name, txt2 = '';
+    if (t && t.at === st.idx && t.dwell > 0) { var d = Math.ceil(t.dwell); txt2 = 'DEPARTS IN ' + Math.floor(d / 60) + ':' + (d % 60 < 10 ? '0' : '') + (d % 60); }
+    else if (t && t.nextSt === st.idx && t.at < 0) txt2 = 'TRAIN APPROACHING';
+    else txt2 = 'NEXT TRAIN SOON';
+    var key = txt1 + txt2; if (!force && st.board.last === key) return; st.board.last = key;
+    var c = st.board.cv.getContext('2d'); if (!c) return;
+    c.fillStyle = '#0d1a12'; c.fillRect(0, 0, 384, 128); c.fillStyle = '#f5b53d'; c.font = 'bold 34px Bahnschrift, Arial, sans-serif'; c.textAlign = 'center'; c.fillText(txt1, 192, 48);
+    c.fillStyle = '#8ff0a8'; c.font = 'bold 30px Consolas, monospace'; c.fillText(txt2, 192, 100); st.board.tex.needsUpdate = true;
+  }
+
+  // ── The depot ─────────────────────────────────────────────────────
+  // the siding runs through a long shed north of the park: coal and water, a pit with a hoist, a wash. Between the points
+  // lever near the north run and the shed it is a loop-through, so the train never has to reverse.
+  function trBuildDepot() {
+    var M = trMats(), P = pkMats(), zc = TR.N - 12, D = TR.depot = { x0: 28, x1: 92, z: zc, bays: {} };
+    // the floor and the walls: open arches at both ends, tall windows along the south wall
+    pkSlab(70, 14.4, 60, zc, 0.02, std({ color: 0x6d6a64, roughness: 0.95 }));
+    pkBevelBox(70, 5.2, 0.5, P.cream, 60, 2.6, zc - 7.2, scene, 0.05);
+    pkBevelBox(70, 1.2, 0.5, P.cream, 60, 0.6, zc + 7.2, scene, 0.05); pkBevelBox(70, 0.9, 0.5, P.cream, 60, 4.75, zc + 7.2, scene, 0.05);
+    for (var px = 26; px <= 94; px += 4.25) box(0.4, 3.6, 0.5, M.woodD, px, 3.0, zc + 7.2, scene);
+    for (var wx = 28.1; wx < 94; wx += 4.25) { plane(3.2, 2.7, P.pane, wx + 1.9, 2.95, zc + 6.94, 0, Math.PI, scene); }
+    pkBevelBox(0.5, 5.2, 14.4, P.cream, 25.2, 2.6, zc, scene, 0.05); pkBevelBox(0.5, 5.2, 14.4, P.cream, 94.8, 2.6, zc, scene, 0.05);
+    // the arches: the end walls are cut open for the train (a lintel over a 3.6 m opening)
+    pkGableRoof(70, 15, 3.2, P.slate, P.cream, 60, 5.2, zc, scene, 0.6);
+    pkBevelBox(0.7, 1.4, 4.0, P.stoneDark, 25.1, 4.5, zc, scene, 0.05); pkBevelBox(0.7, 1.4, 4.0, P.stoneDark, 94.9, 4.5, zc, scene, 0.05);
+    sign(['LINDENBURG RAILWAY', 'LOCOMOTIVE DEPOT'], 6.4, 1.0, 60, 6.2, zc + 7.55, 0, { w: 640, h: 100, bg: '#12301f', fg: '#f2e6b8' }, scene);
+    // the pit between the rails, covered by gratings
+    box(14, 0.05, 0.9, std({ color: 0x0a0b0c, roughness: 1 }), 59, 0.075, zc);
+    for (var gx = 52.5; gx < 66; gx += 0.9) box(0.08, 0.04, 0.9, M.iron, gx, 0.115, zc);
+    // an overhead gantry: two columns and a rolling beam with a hoist
+    [zc - 5.5, zc + 5.5].forEach(function (zz) { pkBevelBox(0.35, 5, 0.35, M.iron, 59, 2.5, zz, scene, 0.03); });
+    box(0.4, 0.45, 11.6, pkPaint(0xe3a02e, 0.5, 0.4), 59, 4.8, zc, scene); var hoist = box(0.9, 0.5, 0.9, M.iron, 59, 4.35, zc - 1.5, scene); pkRod(59, 4.1, zc - 1.5, 59, 3.0, zc - 1.5, 0.02, M.iron, scene, 4);
+    // 1. the coal stage and the water crane
+    pkBevelBox(4.4, 2.6, 2.4, M.stoneDark, 40, 1.3, zc - 5.6, scene, 0.05); for (var c = 0; c < 9; c++) sphere(0.5 + (c % 3) * 0.12, M.coal, 38.6 + (c % 4) * 0.95, 2.7 + (c % 2) * 0.2, zc - 5.6 + ((c * 3) % 5 - 2) * 0.3, scene);
+    box(0.6, 0.12, 2.6, M.iron, 40, 2.4, zc - 3.4, scene).rotation.x = 0.5;
+    pkRoundCyl(0.12, 4.0, M.iron, 45, 2.0, zc + 3.3, scene, 10); pkRod(45, 3.9, zc + 3.3, 45, 3.5, zc + 1.2, 0.07, M.iron, scene, 8); pkRod(45, 3.5, zc + 1.2, 45, 2.3, zc + 1.2, 0.08, M.black, scene, 8);
+    // 2./3. the wash: a frame over the rails with two rotating brushes; and a console at each bay
+    [zc - 2.4, zc + 2.4].forEach(function (zz) { pkBevelBox(0.3, 3.8, 0.3, M.iron, 80, 1.9, zz, scene, 0.03); });
+    pkBevelBox(0.3, 0.3, 5.1, M.iron, 80, 3.8, zc, scene, 0.03);
+    D.brushes = []; [-1, 1].forEach(function (sd) { var br = trDyn(); br.position.set(80, 0, zc + sd * 1.9); pkRoundCyl(0.45, 2.6, pkPaint(0x2a7fd0, 0.9, 0), 0, 1.7, 0, br, 14); pkRoundCyl(0.05, 3.2, M.iron, 0, 1.7, 0, br, 6); D.brushes.push(br); });
+    D.spray = []; for (var n = 0; n < 8; n++) { var sp = new THREE.Mesh(new THREE.SphereGeometry(0.04, 4, 4), new THREE.MeshBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.8 })); sp.visible = false; sp.userData.noBake = true; scene.add(sp); D.spray.push(sp); }
+    function console3(x, label, cost, prompt, fn) {
+      pkBevelBox(0.9, 1.3, 0.5, pkPaint(0x3b4650, 0.5, 0.5), x, 0.65, zc + 5.9, scene, 0.03);
+      sign([label], 0.8, 0.2, x, 1.5, zc + 5.63, 0, { w: 256, h: 64, bg: '#1b232c', fg: '#f5b53d' }, scene);
+      hitBox(0.9, 1.4, 0.6, x, 0.7, zc + 5.7, { prompt: prompt, use: fn }, scene);
+    }
+    console3(38, 'COAL + WATER', 0, function () { return trInDepot() ? 'Fill up coal and water' + trFillCost() : 'Bring the train into the depot first'; }, function () { trDoFill(); });
+    console3(60, 'SERVICE', 0, function () { return trInDepot() ? 'Service the train - ' + trServiceCost() : 'Bring the train into the depot first'; }, function () { trDoService(); });
+    console3(80, 'WASH', 0, function () { return trInDepot() ? 'Wash the train ($30)' : 'Bring the train into the depot first'; }, function () { trDoWash(); });
+    // the yard: a water tower, a coal heap, a hut, a fence, and the lane in from the crossing
+    var wt = new THREE.Group(); wt.position.set(104, 0, zc - 20); scene.add(wt);
+    [[-1.4, -1.4], [1.4, -1.4], [-1.4, 1.4], [1.4, 1.4]].forEach(function (p) { pkRod(p[0], 0, p[1], p[0] * 0.8, 6, p[1] * 0.8, 0.12, M.woodD, wt, 8); });
+    pkRoundCyl(2.2, 3.4, M.woodD, 0, 7.7, 0, wt, 20); trCone(2.5, 1.8, M.slateRed, 0, 10.2, 0, wt, 20);
+    for (var h = 0; h < 4; h++) pkRoundCyl(2.24, 0.1, M.iron, 0, 6.4 + h * 0.9, 0, wt, 20);
+    solid(102.4, 105.6, zc - 21.6, zc - 18.4, 0, 12);
+    for (var cc = 0; cc < 6; cc++) trCone(2.0 - cc * 0.25, 1.6, M.coal, 20 + cc * 0.5, 0.8, zc - 14 + cc * 0.4, scene, 10);
+    solid(17, 25, zc - 17, zc - 11, 0, 3);
+    pkBevelBox(6, 3, 4, P.clapGrey, 56, 1.5, zc - 17, scene, 0.05); pkGableRoof(6, 4, 1.4, P.slate, P.clapGrey, 56, 3, zc - 17, scene, 0.3); solid(53, 59, zc - 19, zc - 15, 0, 4.5);
+    sign(['DEPOT OFFICE'], 2.6, 0.4, 56, 2.5, zc - 14.93, 0, { w: 320, h: 56, bg: '#1b232c', fg: '#f5b53d' }, scene);
+    trPath(3.0, [[-17, TR.N - 18], [-17, zc - 12], [56, zc - 12]], 0.013);
+    // the points lever, just south of the north run where the siding leaves it
+    var pl = new THREE.Group(); pl.position.set(TR.J1 + 4, 0, TR.N + 3.4); scene.add(pl);
+    pkBevelBox(0.5, 0.5, 0.7, M.stoneDark, 0, 0.25, 0, pl, 0.03); var lvDyn = trDyn(pl); lvDyn.position.set(0, 0.5, 0); D.lever = lvDyn;
+    pkRod(0, 0, 0, 0, 1.0, 0, 0.03, M.red, lvDyn, 6); sphere(0.07, M.red, 0, 1.0, 0, lvDyn);
+    var tgt = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.04), M.white); tgt.position.set(0, 1.9, 0); pl.add(tgt); pkRoundCyl(0.03, 1.5, M.iron, 0, 1.15, 0, pl, 6);
+    D.lamp = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), M.ledGreen); D.lamp.position.set(0, 2.2, 0); D.lamp.userData.noBake = true; pl.add(D.lamp);
+    hitBox(0.9, 2.4, 0.9, 0, 1.2, 0, {
+      prompt: function () { return trPointsLocked() ? 'Points are locked while a train is on them' : 'Points set to ' + (trState().points === 'depot' ? 'the DEPOT' : 'the MAIN line') + ' - throw them'; },
+      use: function () { trThrowPoints(); }
+    }, pl);
+    sign(['POINTS', 'MAIN / DEPOT'], 1.2, 0.34, 0, 2.7, 0, Math.PI, { w: 256, h: 96, bg: '#1b232c', fg: '#f5b53d' }, pl);
+  }
+  // and eight open fairy-tale wagons of four seats each. Every unit is a group in the line's frame (+x forward, +z right).
+  var TR_WAGONS = [
+    { n: 'SLEEPING BEAUTY', body: 0x8a6fb8, trim: 0xf3d36a, roof: 'spires' },
+    { n: 'SEVEN DWARFS', body: 0xb3262b, trim: 0xf6f0e2, roof: 'mushroom' },
+    { n: 'GINGERBREAD HOUSE', body: 0x8b5a2b, trim: 0xf6f0e2, roof: 'gingerbread' },
+    { n: 'THE FROG KING', body: 0x3f8f4a, trim: 0xf3d36a, roof: 'crown' },
+    { n: 'FATA MORGANA', body: 0x1fa9a3, trim: 0xf3d36a, roof: 'onion' },
+    { n: 'FAIRYTALE TREE', body: 0x6b4a2e, trim: 0x7fae52, roof: 'tree' },
+    { n: 'CARNIVAL FESTIVAL', body: 0xd94f4f, trim: 0xf6f0e2, roof: 'tent' },
+    { n: 'DREAM FLIGHT', body: 0x233a7a, trim: 0xf3d36a, roof: 'moon' }
+  ];
+  function trWheel(r, mat, rimMat, parent, x, y, z, spokes) {
+    var w = new THREE.Group(); w.position.set(x, y, z); parent.add(w);
+    var tire = new THREE.Mesh(new THREE.TorusGeometry(r - 0.04, 0.045, 6, 20), rimMat); w.add(tire); tire.castShadow = true;
+    var disc = new THREE.Mesh(new THREE.CylinderGeometry(r - 0.06, r - 0.06, 0.04, 18), mat); disc.rotation.x = Math.PI / 2; w.add(disc);
+    for (var i = 0; i < (spokes || 6); i++) { var sp = box(0.05, (r - 0.1) * 2, 0.05, rimMat, 0, 0, 0, w); sp.rotation.z = i * Math.PI / (spokes || 6); }
+    var hub = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.1, 10), rimMat); hub.rotation.x = Math.PI / 2; w.add(hub);
+    return w;
+  }
+  function trGauge(parent, x, y, z, ry, label, key) {   // a brass dial with a needle that the update turns
+    var M = trMats(), g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; parent.add(g);
+    var cv = document.createElement('canvas'); cv.width = cv.height = 128; var c = cv.getContext('2d');
+    if (c) { c.fillStyle = '#f4efe0'; c.beginPath(); c.arc(64, 64, 62, 0, 7); c.fill(); c.strokeStyle = '#222'; c.lineWidth = 3;
+      for (var i = 0; i <= 10; i++) { var a = (-0.75 + i * 0.15) * Math.PI * 1.0 - Math.PI / 2 + 0.0; var a2 = a; c.beginPath(); c.moveTo(64 + Math.cos(a2) * 50, 64 + Math.sin(a2) * 50); c.lineTo(64 + Math.cos(a2) * 58, 64 + Math.sin(a2) * 58); c.stroke(); }
+      c.fillStyle = '#222'; c.font = 'bold 15px Arial'; c.textAlign = 'center'; c.fillText(label, 64, 100); }
+    var face = new THREE.Mesh(new THREE.CircleGeometry(0.15, 20), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv) })); face.position.z = 0.012; g.add(face);
+    var ring = new THREE.Mesh(new THREE.TorusGeometry(0.155, 0.02, 6, 20), M.brass); g.add(ring);
+    var needle = new THREE.Group(); needle.position.z = 0.02; g.add(needle); box(0.012, 0.12, 0.004, M.black, 0, 0.05, 0, needle);
+    TR.gauges = TR.gauges || {}; TR.gauges[key] = needle; return g;
+  }
+  // ── The locomotive ────────────────────────────────────────────────
+  function trBuildLoco() {
+    var M = trMats(), P = pkMats(), g = trDyn(), u = { kind: 'loco', g: g, len: 8.4, d: 4.2, bf: 2.6, br: 2.6, wheels: [], drivers: [], rods: [] };
+    g.userData.unit = u;
+    var rim = M.black, red = pkPaint(0xb3262b, 0.45, 0.3);
+    // frame, running boards, buffer beams
+    pkBevelBox(8.4, 0.28, 1.7, M.black, 0, 1.06, 0, g, 0.03); pkBevelBox(0.3, 0.5, 2.2, M.red, 4.2, 1.1, 0, g, 0.03); pkBevelBox(0.3, 0.5, 2.2, M.red, -4.2, 1.1, 0, g, 0.03);
+    [-0.7, 0.7].forEach(function (z) { var b = pkRoundCyl(0.12, 0.3, M.iron, 4.45, 1.1, z, g, 10); b.rotation.z = Math.PI / 2; var d = pkRoundCyl(0.2, 0.05, M.iron, 4.62, 1.1, z, g, 12); d.rotation.z = Math.PI / 2; });
+    [-1, 1].forEach(function (s) { pkBevelBox(5.0, 0.07, 0.42, M.black, 1.7, 1.55, s * 0.98, g, 0.02); box(4.9, 0.03, 0.04, M.brass, 1.7, 1.6, s * 1.18, g); });
+    // the boiler, with brass bands, and the smokebox
+    var boiler = new THREE.Mesh(new THREE.CylinderGeometry(0.74, 0.74, 4.3, 24), M.green); boiler.rotation.z = Math.PI / 2; boiler.position.set(0.75, 2.0, 0); boiler.castShadow = true; g.add(boiler);
+    var sbx = new THREE.Mesh(new THREE.CylinderGeometry(0.77, 0.77, 1.1, 24), M.black); sbx.rotation.z = Math.PI / 2; sbx.position.set(3.45, 2.0, 0); sbx.castShadow = true; g.add(sbx);
+    var door = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.06, 20), M.black); door.rotation.z = Math.PI / 2; door.position.set(4.02, 2.0, 0); g.add(door);
+    var dring = new THREE.Mesh(new THREE.TorusGeometry(0.64, 0.03, 6, 22), M.brass); dring.rotation.y = Math.PI / 2; dring.position.set(4.04, 2.0, 0); g.add(dring);
+    sphere(0.07, M.brass, 4.08, 2.0, 0, g);
+    [-0.4, 1.0, 2.2].forEach(function (bx) { var t = new THREE.Mesh(new THREE.TorusGeometry(0.745, 0.035, 8, 28), M.brass); t.rotation.y = Math.PI / 2; t.position.set(bx, 2.0, 0); g.add(t); });
+    // chimney, domes, whistle, safety valves, headlamp
+    var ch = pkLathe([[0.01, 0], [0.19, 0], [0.2, 0.45], [0.33, 0.85], [0.42, 1.0], [0.3, 1.02], [0.02, 1.0]], M.black, 3.55, 2.72, 0, g, 16); u.chimney = new THREE.Vector3(3.55, 3.8, 0);
+    var ring = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.03, 6, 20), M.brass); ring.rotation.x = Math.PI / 2; ring.position.set(3.55, 3.72, 0); g.add(ring);
+    pkLathe([[0.01, 0], [0.5, 0], [0.5, 0.2], [0.32, 0.55], [0.2, 0.62], [0.01, 0.64]], M.green, 1.8, 2.72, 0, g, 18); pkRoundCyl(0.16, 0.2, M.brass, 1.8, 3.4, 0, g, 12); sphere(0.17, M.brass, 1.8, 3.5, 0, g);
+    pkLathe([[0.01, 0], [0.34, 0], [0.34, 0.18], [0.2, 0.42], [0.01, 0.46]], M.green, 0.5, 2.72, 0, g, 14); pkRoundCyl(0.1, 0.18, M.brass, 0.5, 3.2, 0, g, 10);
+    [-0.12, 0.12].forEach(function (z) { pkRoundCyl(0.04, 0.34, M.brass, -0.45, 2.88, z, g, 8); });
+    var wh = pkLathe([[0.01, 0], [0.08, 0], [0.09, 0.22], [0.14, 0.34], [0.09, 0.36], [0.01, 0.36]], M.brass, -0.8, 2.72, 0, g, 10); u.whistle = new THREE.Vector3(-0.8, 3.1, 0);
+    var hl = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.3, 14), M.black); hl.rotation.z = Math.PI / 2; hl.position.set(3.9, 3.04, 0); g.add(hl);
+    u.lamp = new THREE.Mesh(new THREE.CircleGeometry(0.17, 14), new THREE.MeshBasicMaterial({ color: 0x55503a })); u.lamp.rotation.y = Math.PI / 2; u.lamp.position.set(4.06, 3.04, 0); u.lamp.userData.noBake = true; g.add(u.lamp);
+    // the pilot: a slatted cow-catcher
+    for (var i = -3; i <= 3; i++) { var sl = box(0.9, 0.04, 0.07, M.iron, 4.55, 0.55 + 0.0, i * 0.28, g); sl.rotation.z = 0.6; sl.position.y = 0.55 + 0.02; }
+    // cylinders, cross-heads and the valve gear's silhouette
+    [-1, 1].forEach(function (s) {
+      var cy = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 1.0, 14), M.black); cy.rotation.z = Math.PI / 2; cy.position.set(2.7, 1.0, s * 1.05); g.add(cy);
+      var cap = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.06, 12), M.brass); cap.rotation.z = Math.PI / 2; cap.position.set(3.23, 1.0, s * 1.05); g.add(cap);
+      var rod = box(1, 0.1, 0.07, M.iron, 0, 0, s * 1.2, g), cross = box(0.22, 0.2, 0.1, M.iron, 0, 1.0, s * 1.12, g);
+      var coup = box(1, 0.1, 0.06, M.iron, 0, 0, s * 1.24, g), pr = box(0.9, 0.05, 0.05, M.iron, 0, 1.0, s * 1.05, g);
+      u.rods.push({ s: s, rod: rod, cross: cross, coup: coup, pr: pr });
+    });
+    // wheels: two big drivers each side, a leading truck of four small ones
+    [-1, 1].forEach(function (s) {
+      [-0.2, 1.4].forEach(function (x) { var w = trWheel(0.62, red, rim, g, x, 0.88, s * 0.82, 8); u.drivers.push({ w: w, x: x, s: s }); u.wheels.push({ w: w, r: 0.62 }); });
+      [2.9, 3.7].forEach(function (x) { var w = trWheel(0.3, M.black, rim, g, x, 0.56, s * 0.8, 6); u.wheels.push({ w: w, r: 0.3 }); });
+    });
+    pkBevelBox(1.6, 0.14, 1.8, M.black, 3.3, 0.9, 0, g, 0.02);
+    // the cab: green panels, brass trim, a cream roof, spectacle windows in front
+    pkBevelBox(3.1, 0.14, 2.3, M.woodD, -2.65, 1.28, 0, g, 0.02);   // the footplate
+    [-1, 1].forEach(function (s) {
+      pkBevelBox(3.1, 1.0, 0.08, M.green, -2.65, 1.85, s * 1.1, g, 0.02); box(3.1, 0.05, 0.1, M.brass, -2.65, 2.38, s * 1.1, g);
+      box(0.1, 1.1, 0.1, M.greenD, -4.15, 2.9, s * 1.1, g); box(0.1, 1.1, 0.1, M.greenD, -1.2, 2.9, s * 1.1, g); box(3.1, 0.07, 0.1, M.greenD, -2.65, 3.4, s * 1.1, g);
+      pkBevelBox(0.06, 0.2, 0.5, M.black, -4.12, 1.0, s * 1.2, g, 0.01);
+    });
+    pkBevelBox(0.08, 2.2, 2.3, M.green, -1.12, 2.4, 0, g, 0.02);   // the front wall: the backhead stands against it
+    [-0.55, 0.55].forEach(function (z) { var wn = new THREE.Mesh(new THREE.CircleGeometry(0.2, 18), M.glass); wn.rotation.y = -Math.PI / 2; wn.position.set(-1.07, 3.05, z); g.add(wn); var wr = new THREE.Mesh(new THREE.TorusGeometry(0.21, 0.025, 6, 18), M.brass); wr.rotation.y = Math.PI / 2; wr.position.set(-1.07, 3.05, z); g.add(wr); });
+    pkBevelBox(3.6, 0.16, 2.6, M.cream, -2.6, 3.58, 0, g, 0.04); pkBevelBox(3.2, 0.1, 2.2, P.cream, -2.6, 3.7, 0, g, 0.03); box(3.62, 0.04, 0.05, M.brass, -2.6, 3.52, 1.3, g); box(3.62, 0.04, 0.05, M.brass, -2.6, 3.52, -1.3, g);
+    var cl = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), M.lampOn); cl.position.set(-2.6, 3.35, 0); g.add(cl);
+    sign(['No. 1', 'LINDENBURG'], 1.2, 0.34, -2.65, 1.85, 1.15, 0, { w: 256, h: 96, bg: '#102a1c', fg: '#f3d36a' }, g); sign(['No. 1', 'LINDENBURG'], 1.2, 0.34, -2.65, 1.85, -1.15, Math.PI, { w: 256, h: 96, bg: '#102a1c', fg: '#f3d36a' }, g);
+    sign(['LINDENBURG'], 1.5, 0.3, 1.0, 2.05, 0.77, 0, { w: 384, h: 80, bg: '#1d5b3b', fg: '#f3d36a', plate: false }, g); sign(['LINDENBURG'], 1.5, 0.3, 1.0, 2.05, -0.77, Math.PI, { w: 384, h: 80, bg: '#1d5b3b', fg: '#f3d36a', plate: false }, g);
+    // the backhead: dials, levers, switches (their hit boxes are live while the driver is in the cab)
+    trBuildCabControls(g, u);
+    // the doorway: climb up into the cab
+    [-1, 1].forEach(function (s) { box(0.7, 0.06, 0.5, M.iron, -2.9, 0.75, s * 1.35, g); box(0.7, 0.06, 0.5, M.iron, -2.9, 1.02, s * 1.25, g); });
+    hitBox(1.2, 1.6, 1.0, -2.9, 1.9, 1.6, { prompt: function () { return trCanBoard() ? 'Climb into the cab' : ''; }, use: function () { trEnterCab(); } }, g);
+    hitBox(1.2, 1.6, 1.0, -2.9, 1.9, -1.6, { prompt: function () { return trCanBoard() ? 'Climb into the cab' : ''; }, use: function () { trEnterCab(); } }, g);
+    TR.units.push(u); return u;
+  }
+  // the controls: each is { group that moves, hit box }. Levers swing about z; the gas and the brake sit on the left, the switches and
+  // the horn on the right. The same actions are on the keyboard (see part 43).
+  function trBuildCabControls(g, u) {
+    var M = trMats(), X = -1.2;
+    pkBevelBox(0.1, 1.0, 1.9, pkPaint(0x1d2a24, 0.5, 0.4), X - 0.02, 2.0, 0, g, 0.02);
+    trGauge(g, X - 0.09, 2.45, -0.62, -Math.PI / 2, 'STEAM', 'press'); trGauge(g, X - 0.09, 2.45, 0.0, -Math.PI / 2, 'km/h', 'speed'); trGauge(g, X - 0.09, 2.45, 0.62, -Math.PI / 2, 'COAL', 'fuel');
+    // the water gauge glass
+    var gl = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 8), M.glass); gl.position.set(X - 0.1, 2.0, 0.85); g.add(gl);
+    var wl = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.5, 0.02), new THREE.MeshBasicMaterial({ color: 0x4aa8ff })); wl.position.set(X - 0.1, 1.76, 0.85); wl.geometry.translate(0, 0.25, 0); wl.position.y = 1.75; g.add(wl); TR.waterGlass = wl;
+    function lever(key, z, y, col, label, prompt, use) {
+      var pv = new THREE.Group(); pv.position.set(X - 0.08, y, z); g.add(pv);
+      pkBevelBox(0.14, 0.06, 0.3, M.brass, 0, 0, 0, pv, 0.01);
+      var st = new THREE.Group(); pv.add(st); pkRod(0, 0, 0, 0, 0.62, 0, 0.022, M.iron, st, 6); sphere(0.055, col, 0, 0.66, 0, st);
+      sign([label], 0.3, 0.07, X - 0.075, y - 0.16, z, -Math.PI / 2, { w: 192, h: 48, bg: '#1b232c', fg: '#f5f2e8' }, g);
+      hitBox(0.5, 0.9, 0.35, X - 0.3, y + 0.35, z, { prompt: function () { return TR.t && TR.t.driving ? prompt() : ''; }, use: use }, g);
+      u[key] = st; return st;
+    }
+    lever('gasLever', -0.62, 1.45, M.red, 'GAS', function () { return 'Gas: ' + Math.round(TR.t.throttle * 100) + '% (W / S)'; }, function () { TR.t.throttle = TR.t.throttle >= 0.99 ? 0 : Math.min(1, TR.t.throttle + 0.25); });
+    lever('brakeLever', -0.15, 1.45, pkPaint(0x2a5fd0, 0.4, 0.3), 'BRAKE', function () { return 'Brake: ' + Math.round(TR.t.brake * 100) + '% (Space)'; }, function () { TR.t.brake = TR.t.brake >= 0.99 ? 0 : Math.min(1, TR.t.brake + 0.5); });
+    lever('revLever', 0.3, 1.45, M.brass, 'REVERSER', function () { return 'Reverser: ' + (TR.t.dir > 0 ? 'FORWARD' : 'REVERSE') + ' (R)'; }, function () { trToggleDir(); });
+    function sw(key, z, y, label, prompt, use) {
+      var pv = new THREE.Group(); pv.position.set(X - 0.09, y, z); g.add(pv);
+      pkRoundCyl(0.06, 0.04, M.brass, 0, 0, 0, pv, 12).rotation.z = Math.PI / 2;
+      var lv = new THREE.Group(); pv.add(lv); pkRod(0, 0, 0, -0.0, 0.16, 0, 0.016, M.iron, lv, 6); sphere(0.03, M.red, 0, 0.17, 0, lv); u[key] = lv;
+      sign([label], 0.26, 0.07, X - 0.075, y + 0.22, z, -Math.PI / 2, { w: 160, h: 48, bg: '#1b232c', fg: '#f5f2e8' }, g);
+      var led = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 6), M.ledOff); led.position.set(-0.03, -0.13, 0); pv.add(led); led.userData.noBake = true; u[key + 'Led'] = led;
+      hitBox(0.3, 0.4, 0.3, X - 0.28, y + 0.05, z, { prompt: function () { return TR.t && TR.t.driving ? prompt() : ''; }, use: use }, g);
+    }
+    sw('engSw', 0.62, 1.8, 'ENGINE', function () { return 'Engine ' + (TR.t.engine ? 'ON' : 'off') + ' (Y)'; }, function () { trToggleEngine(); });
+    sw('doorSw', 0.9, 1.8, 'DOORS', function () { return 'Wagon doors ' + (TR.t.doorsOpen ? 'open' : 'shut') + ' (O)'; }, function () { trToggleDoors(); });
+    // the horn button and the whistle pull
+    var hb = pkRoundCyl(0.09, 0.06, M.red, X - 0.12, 1.6, 0.78, g, 14); hb.rotation.z = Math.PI / 2; u.hornBtn = hb; hb.userData.rest = hb.position.x;
+    sign(['HORN'], 0.22, 0.07, X - 0.075, 1.78, 0.78, -Math.PI / 2, { w: 128, h: 48, bg: '#1b232c', fg: '#f5f2e8' }, g);
+    hitBox(0.3, 0.3, 0.3, X - 0.3, 1.6, 0.78, { prompt: function () { return TR.t && TR.t.driving ? 'Horn (H - hold)' : ''; }, use: function () { trBlast('horn', 0.9); } }, g);
+    var cord = new THREE.Group(); cord.position.set(-1.6, 3.55, 0.45); g.add(cord); u.cord = cord; pkRod(0, 0, 0, 0, -0.9, 0, 0.012, M.black, cord, 4); sphere(0.06, M.brass, 0, -0.95, 0, cord);
+    hitBox(0.3, 0.5, 0.3, -1.6, 2.7, 0.45, { prompt: function () { return TR.t && TR.t.driving ? 'Steam whistle (F - hold)' : ''; }, use: function () { trBlast('whistle', 1.4); } }, g);
+  }
+  // ── The tender ────────────────────────────────────────────────────
+  function trBuildTender() {
+    var M = trMats(), g = trDyn(), u = { kind: 'tender', g: g, len: 4.0, d: 10.9, bf: 1.2, br: 1.2, wheels: [], rods: [], drivers: [] };
+    pkBevelBox(4.0, 0.26, 1.8, M.black, 0, 1.0, 0, g, 0.03);
+    pkBevelBox(3.8, 1.1, 1.9, M.green, 0, 1.7, 0, g, 0.03); box(3.8, 0.05, 1.95, M.brass, 0, 2.2, 0, g); box(3.9, 0.05, 1.95, M.brass, 0, 1.2, 0, g);
+    pkBevelBox(2.4, 0.4, 1.5, M.black, -0.5, 2.4, 0, g, 0.03);
+    for (var i = 0; i < 12; i++) sphere(0.28 + (i % 3) * 0.05, M.coal, -1.3 + (i % 5) * 0.55, 2.7 + (i % 2) * 0.12, ((i * 7) % 5 - 2) * 0.28, g);
+    pkBevelBox(0.9, 0.5, 1.9, M.green, 1.4, 2.5, 0, g, 0.03);   // the water filler hatch
+    sign(['LINDENBURG', 'RAILWAY'], 1.8, 0.5, 0, 1.7, 0.97, 0, { w: 384, h: 128, bg: '#102a1c', fg: '#f3d36a' }, g); sign(['LINDENBURG', 'RAILWAY'], 1.8, 0.5, 0, 1.7, -0.97, Math.PI, { w: 384, h: 128, bg: '#102a1c', fg: '#f3d36a' }, g);
+    [-1, 1].forEach(function (s) { [-1.2, 1.2].forEach(function (x) { var w = trWheel(0.34, M.black, M.black, g, x, 0.6, s * 0.85, 6); u.wheels.push({ w: w, r: 0.34 }); }); });
+    [-0.7, 0.7].forEach(function (z) { var b = pkRoundCyl(0.1, 0.3, M.iron, 2.2, 1.1, z, g, 10); b.rotation.z = Math.PI / 2; });
+    box(0.7, 0.1, 0.1, M.iron, -2.25, 1.1, 0, g);
+    TR.units.push(u); return u;
+  }
+  // ── A wagon: four seats, doors at the sides, a fairy-tale roof ────
+  function trBuildWagon(k) {
+    var M = trMats(), P = pkMats(), T = TR_WAGONS[k], g = trDyn(), u = { kind: 'wagon', g: g, idx: k, len: 4.6, d: 15.7 + 5.1 * k, bf: 1.5, br: 1.5, wheels: [], rods: [], drivers: [], doors: [], seats: [] };
+    var body = pkPaint(T.body, 0.45, 0.2), trim = pkPaint(T.trim, 0.4, 0.4);
+    pkBevelBox(4.6, 0.16, 2.3, M.black, 0, 0.86, 0, g, 0.02); pkBevelBox(4.5, 0.06, 2.2, M.wood, 0, 0.93, 0, g, 0.01);
+    // the half walls, with a gap at the door, and the doors themselves
+    [-1, 1].forEach(function (s) {
+      [-1.4, 1.4].forEach(function (x) { pkBevelBox(1.8, 0.62, 0.08, body, x, 1.27, s * 1.12, g, 0.02); box(1.8, 0.05, 0.1, trim, x, 1.6, s * 1.12, g); });
+      sign([T.n], 1.6, 0.2, -1.4, 1.27, s * 1.165, s > 0 ? 0 : Math.PI, { w: 384, h: 48, bg: '#' + ('000000' + T.body.toString(16)).slice(-6), fg: '#' + ('000000' + T.trim.toString(16)).slice(-6), plate: false }, g);
+      [-1, 1].forEach(function (h) {
+        var pv = new THREE.Group(); pv.position.set(h * 0.5, 1.27, s * 1.12); dyn_add(g, pv);
+        pkBevelBox(0.5, 0.62, 0.05, body, -h * 0.25, 0, 0, pv, 0.01); box(0.5, 0.05, 0.07, trim, -h * 0.25, 0.33, 0, pv); sphere(0.03, M.brass, -h * 0.4, 0.05, s * 0.04, pv);
+        u.doors.push({ pv: pv, side: s, h: h });
+      });
+    });
+    // corner posts, roof beams and lanterns
+    [[-2.2, -1.1], [2.2, -1.1], [-2.2, 1.1], [2.2, 1.1]].forEach(function (p) { pkRoundCyl(0.06, 1.6, trim, p[0], 1.75, p[1], g, 8); sphere(0.1, M.brass, p[0], 2.58, p[1], g); });
+    [-1.1, 1.1].forEach(function (z) { [-0.7, 0.7].forEach(function (x) { pkRoundCyl(0.04, 1.6, trim, x, 1.75, z * 0.98, g, 6); }); });
+    pkBevelBox(4.9, 0.12, 2.7, body, 0, 2.56, 0, g, 0.03); box(4.95, 0.06, 2.75, trim, 0, 2.5, 0, g);
+    for (var sc = -2.3; sc <= 2.3; sc += 0.46) { var s1 = trCone(0.16, 0.26, trim, sc, 2.38, 1.34, g, 4); s1.rotation.x = Math.PI; var s2 = trCone(0.16, 0.26, trim, sc, 2.38, -1.34, g, 4); s2.rotation.x = Math.PI; }
+    var lamp = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), M.lampOn); lamp.position.set(0, 2.38, 0); lamp.userData.noBake = true; g.add(lamp); u.lamp = lamp;
+    // two benches, face to face, two seats each: the aisle between them is the door
+    [-1, 1].forEach(function (b) {
+      var bx = b * 1.6, cush = pkPaint(0x7a1f2a, 0.8, 0.05);
+      pkBevelBox(0.62, 0.14, 2.0, cush, bx, 1.2, 0, g, 0.04); pkBevelBox(0.14, 0.7, 2.0, cush, bx + b * 0.34, 1.6, 0, g, 0.05); box(0.6, 0.22, 2.0, M.woodD, bx, 1.04, 0, g);
+      box(0.05, 0.06, 0.04, trim, bx, 1.21, 0, g);
+      [-0.5, 0.5].forEach(function (zz) { var seat = { x: bx - b * 0.05, y: 1.2, z: zz, face: b > 0 ? Math.PI : 0, taken: false }; u.seats.push(seat);
+        hitBox(0.8, 0.9, 0.9, bx, 1.5, zz, { prompt: function () { return trCanSit(u) ? 'Sit down' : (trSeatedIn() ? '' : (TR.t.v < 0.3 ? 'The doors are shut' : '')); }, use: function () { trSit(u, seat); } }, g); });
+    });
+    trWagonRoof(g, T.roof, k, u);
+    // wheels and couplings
+    [-1, 1].forEach(function (s) { [-1.5, -0.6, 0.6, 1.5].forEach(function (x) { var w = trWheel(0.32, M.black, M.black, g, x, 0.58, s * 0.72, 6); u.wheels.push({ w: w, r: 0.32 }); }); });
+    [-1, 1].forEach(function (e) { [-0.6, 0.6].forEach(function (z) { var bf = pkRoundCyl(0.09, 0.2, M.iron, e * 2.4, 0.9, z, g, 8); bf.rotation.z = Math.PI / 2; pkRoundCyl(0.16, 0.04, M.iron, e * 2.5, 0.9, z, g, 10).rotation.z = Math.PI / 2; }); });
+    box(0.6, 0.08, 0.1, M.iron, -2.55, 0.9, 0, g);
+    sign([String(k + 1)], 0.26, 0.26, 0, 2.05, 1.38, 0, { w: 96, h: 96, bg: '#1b232c', fg: '#f3d36a' }, g); sign([String(k + 1)], 0.26, 0.26, 0, 2.05, -1.38, Math.PI, { w: 96, h: 96, bg: '#1b232c', fg: '#f3d36a' }, g);
+    TR.units.push(u); return u;
+  }
+  function dyn_add(g, o) { g.add(o); return o; }
+  function trWagonRoof(g, kind, k, u) {
+    var M = trMats(), P = pkMats(), gold = M.gold, y = 2.64;
+    if (kind === 'spires') {
+      trCone(1.2, 2.4, pkPaint(0x6a4fa6, 0.4, 0.3), 0, y + 1.2, 0, g, 12); sphere(0.1, gold, 0, y + 2.45, 0, g);
+      [[-2.1, -1.0], [2.1, -1.0], [-2.1, 1.0], [2.1, 1.0]].forEach(function (p) { pkRoundCyl(0.2, 0.7, pkPaint(0xcdbbe8, 0.5, 0.2), p[0], y + 0.35, p[1], g, 10); trCone(0.28, 0.8, pkPaint(0x6a4fa6, 0.4, 0.3), p[0], y + 1.1, p[1], g, 10); sphere(0.05, gold, p[0], y + 1.55, p[1], g); });
+      for (var r = 0; r < 12; r++) { var a = r / 12 * 6.283; sphere(0.07, pkPaint(0xe0508a, 0.6, 0.1), Math.cos(a) * 1.6, y + 0.1, Math.sin(a) * 1.15, g); }   // the briar roses
+    } else if (kind === 'mushroom') {
+      pkLathe([[0.01, 1.05], [0.5, 1.0], [1.2, 0.75], [1.9, 0.35], [2.4, 0.0], [2.3, -0.05], [1.4, 0.05], [0.01, 0.1]], pkPaint(0xc4262b, 0.5, 0.1), 0, y + 0.05, 0, g, 24);
+      for (var d = 0; d < 10; d++) { var a2 = d * 2.4, rr = 0.5 + (d % 4) * 0.38, dh = 0.95 - rr * 0.37; var dt = sphere(0.19 - (d % 3) * 0.03, M.white, Math.cos(a2) * rr * 0.9, y + dh + 0.05, Math.sin(a2) * rr * 0.65, g); dt.scale.y = 0.35; }
+    } else if (kind === 'gingerbread') {
+      pkGableRoof(4.8, 2.6, 1.3, pkPaint(0x7a4a25, 0.8, 0), pkPaint(0x7a4a25, 0.8, 0), 0, y, 0, g, 0.25);
+      for (var ic = -2.2; ic <= 2.2; ic += 0.55) { [-1, 1].forEach(function (sd) { var dr = sphere(0.14, M.white, ic, y + 0.2, sd * 1.45, g); dr.scale.set(1, 1.5, 1); dr.position.y = y + 0.05; }); }
+      box(5.2, 0.1, 0.12, M.white, 0, y + 1.38, 0, g);
+      [-1.5, 0, 1.5].forEach(function (gx) { sphere(0.17, pkPaint(0xe24a7a, 0.4, 0.1), gx, y + 1.5, 0, g); });
+      var cane = pkStripes('#d83a34', '#f6f6f2'); [-2.3, 2.3].forEach(function (cx) { var c = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.3, 8), cane); c.position.set(cx, y + 0.65, 0); g.add(c); });
+    } else if (kind === 'crown') {
+      pkBevelBox(2.6, 0.45, 1.8, gold, 0, y + 0.3, 0, g, 0.06);
+      for (var c2 = 0; c2 < 7; c2++) { var cx2 = -1.1 + c2 * 0.37; trCone(0.16, 0.7, gold, cx2, y + 0.85, 0.7, g, 4); trCone(0.16, 0.7, gold, cx2, y + 0.85, -0.7, g, 4); sphere(0.07, pkPaint(0xd94f4f, 0.3, 0.2), cx2, y + 1.22, 0.7, g); sphere(0.07, pkPaint(0xd94f4f, 0.3, 0.2), cx2, y + 1.22, -0.7, g); }
+      var fg = pkPaint(0x58b84a, 0.5, 0.05); var fb = sphere(0.42, fg, 0, y + 0.95, 0, g); fb.scale.set(1.1, 0.8, 1);
+      [-0.2, 0.2].forEach(function (ez) { sphere(0.13, fg, 0.28, y + 1.3, ez, g); sphere(0.05, pkPaint(0x111111, 0.3, 0), 0.38, y + 1.33, ez, g); }); box(0.3, 0.03, 0.2, pkPaint(0xc7352f, 0.5, 0), 0.4, y + 0.9, 0, g);
+    } else if (kind === 'onion') {
+      pkLathe([[0.01, 0], [0.9, 0], [1.25, 0.3], [1.2, 0.7], [0.8, 1.2], [0.35, 1.7], [0.1, 2.1], [0.02, 2.3]], gold, 0, y, 0, g, 24);
+      [[-2.1, -1.0], [2.1, -1.0], [-2.1, 1.0], [2.1, 1.0]].forEach(function (p) { pkRoundCyl(0.12, 1.0, pkPaint(0xe9f7f5, 0.5, 0.1), p[0], y + 0.5, p[1], g, 8); pkLathe([[0.01, 0], [0.22, 0], [0.26, 0.2], [0.14, 0.45], [0.02, 0.6]], gold, p[0], y + 1.0, p[1], g, 12); });
+      var cr = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.05, 6, 14, Math.PI * 1.5), gold); cr.position.set(0, y + 2.45, 0); g.add(cr);
+    } else if (kind === 'tree') {
+      var cols = P.leaves; [[0, 1.0, 0, 1.2], [-1.0, 0.6, 0.4, 0.9], [1.0, 0.7, -0.3, 0.95], [0.4, 0.5, 0.8, 0.8], [-0.5, 0.55, -0.8, 0.85], [1.5, 0.45, 0.6, 0.7], [-1.6, 0.45, -0.3, 0.75]].forEach(function (b, i) { sphere(b[3], cols[i % cols.length], b[0], y + b[1], b[2], g); });
+      var ow = sphere(0.22, pkPaint(0x8a6a44, 0.9, 0), 0.3, y + 2.2, 0.1, g); ow.scale.y = 1.3; sphere(0.06, M.white, 0.45, y + 2.28, 0.0, g); sphere(0.06, M.white, 0.45, y + 2.28, 0.22, g); sphere(0.025, M.black, 0.5, y + 2.28, 0.0, g); sphere(0.025, M.black, 0.5, y + 2.28, 0.22, g);
+    } else if (kind === 'tent') {
+      var st = pkStripes('#d94f4f', '#f6f6f2'); var tent = new THREE.Mesh(new THREE.ConeGeometry(2.0, 1.8, 12), st); tent.position.set(0, y + 0.9, 0); tent.scale.set(1.25, 1, 0.8); tent.castShadow = true; g.add(tent);
+      pkRod(0, y + 1.7, 0, 0, y + 2.6, 0, 0.025, M.iron, g, 6); var fl = box(0.7, 0.4, 0.02, pkPaint(0xf3d36a, 0.6, 0), 0.35, y + 2.45, 0, g); u.flag = fl; sphere(0.06, gold, 0, y + 2.62, 0, g);
+      var bl = []; for (var q = 0; q <= 8; q++) { var tq = q / 8; bl.push([-2.2 + 4.4 * tq, y + 0.05 - Math.sin(tq * Math.PI) * 0.18, 1.45]); } pkBulbs(bl, M.bulbWarm || pkMats().bulbWarm, 0.06, g);
+    } else {   // moon
+      var moon = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.16, 8, 28, Math.PI * 1.45), gold); moon.position.set(0, y + 1.2, 0); moon.rotation.z = 0.8; moon.rotation.y = Math.PI / 2; moon.castShadow = true; g.add(moon);
+      [[-1.6, 0.6, 0.7], [1.4, 0.5, -0.8], [0.3, 1.0, 0.9], [-0.8, 0.9, -0.9], [1.9, 0.4, 0.5], [-2.0, 0.4, -0.4]].forEach(function (p, i) { var s2 = new THREE.Mesh(new THREE.OctahedronGeometry(0.1 + (i % 3) * 0.03), gold); s2.position.set(p[0], y + p[1], p[2]); g.add(s2); });
+    }
+  }
+  // ── Putting the whole train on the line ───────────────────────────
+  function trBuildTrain() {
+    TR.units = []; trBuildLoco(); trBuildTender(); for (var k = 0; k < 8; k++) trBuildWagon(k);
+    var last = TR.units[TR.units.length - 1]; TR.len = last.d + last.len / 2;
+  }
+  var _trA = {}, _trB = {};
+  function trPlaceUnits() {
+    var t = TR.t, mode = t.mode;
+    for (var i = 0; i < TR.units.length; i++) {
+      var u = TR.units[i], pf = trPos(t.s - (u.d - u.bf), mode, _trA), fx = pf.x, fz = pf.z, pr = trPos(t.s - (u.d + u.br), mode, _trB);
+      u.g.position.set((fx + pr.x) / 2, 0, (fz + pr.z) / 2); u.g.rotation.y = Math.atan2(-(fz - pr.z), fx - pr.x);
+    }
+  }
+  // ── Building everything ───────────────────────────────────────────
+  function trBuildAll() {
+    if (TR.built) return;
+    var R = trState();
+    trMats(); trBuildRoute(); trBuildTrack(); trBuildCrossings();
+    TR_STATIONS.forEach(function (d, i) { trBuildStation(d, i); });
+    TR_GAPS.forEach(function (g) { trPortal(g.axis === 'z' ? g.x : g.x, g.axis === 'z' ? g.z : g.z, g.axis); });
+    trBuildDepot(); trBuildTrain();
+    TR.t = { s: 0, mode: 'M', v: 0, dir: 1, throttle: 0, brake: 1, engine: false, press: 0, doorsOpen: false, doorAmt: 0, driving: false, seat: null, look: { yaw: 0, pitch: 0 },
+      at: 0, departFrom: -1, nextSt: 1, dwell: 0, announced: false, belled: false, atb: '', washT: 0, chuff: 0, idleT: 0, hornOn: false, whistleOn: false, serviceT: 0, msgT: 0, hudT: 0, lapSeen: 0 };
+    R.auto = !!R.auto && pkOpCount() > 0;
+    trResetToStation(0);
+    trBuildHud();
+    TR.built = true;
+  }
+  function trResetToStation(i) {
+    var t = TR.t, st = TR.st[i]; t.mode = 'M'; t.s = st.s + 28; t.v = 0; t.at = i; t.nextSt = (i + 1) % TR.st.length; t.dwell = 0; t.brake = 1; t.throttle = 0;
+    trPlaceUnits();
+  }
+  var _trPrevBuildWorld = GAME.buildWorld;
+  GAME.buildWorld = function (loaded) { var r = _trPrevBuildWorld ? _trPrevBuildWorld(loaded) : undefined; try { trBuildAll(); } catch (e) { if (window.console) console.error('railway build failed', e); } return r; };
+  var _trPrevTick = GAME.tick;
+  GAME.tick = function (dt) { if (_trPrevTick) _trPrevTick(dt); if (TR.built) { try { trTick(dt); } catch (e) { if (!TR.errShown) { TR.errShown = true; if (window.console) console.error('railway tick failed', e); } } } };
+  var _trPrevT = GAME.T;
+  GAME.T = function () { var t = _trPrevT ? _trPrevT() : {}; t.TR = TR; t.trTick = trTick; t.trState = trState; return t; };
+  var _trPrevGuide = pkGuide;
+  pkGuide = function () {
+    return _trPrevGuide() + '<p><b>The Lindenburg Railway.</b> A steam train rings the park outside its fence: Central Station by the car park, Elfin Woods, Windmill Halt, Dragon Gate and Lakeside Halt, and the depot behind the park. At every station a locked cabinet holds the controls: AUTO (the same everywhere; it needs a hired operator), the platform gates, the lights, ANNOUNCE and the BELL. ' +
+      'Climb into the cab from the platform. <b>W/S</b> gas, <b>Space</b> brake, <b>H</b> horn, <b>F</b> whistle, <b>Y</b> engine, <b>O</b> wagon doors, <b>R</b> reverser, <b>E</b> out. The train waits two minutes at every station and will not leave with the doors open. ' +
+      'Throw the points near the north run to send it through the depot shed, where you can fuel, service and wash it.</p>';
+  };
+
+  // ── Sound ─────────────────────────────────────────────────────────
+  function trVol(x, z) {   // how loud a thing at (x, z) is for whoever is looking
+    var d = Math.hypot(camera.position.x - x, camera.position.z - z); return Math.max(0, Math.min(1, 1.1 - d / 120)) * (d < 8 ? 1 : 8 / d + 0.1);
+  }
+  function trOk() { try { audio(); return !!AC; } catch (e) { return false; } }
+  function trTone(type, f, dur, gain, x, z, opts) { if (!trOk()) return; var v = trVol(x, z) * gain; if (v < 0.002) return; sTone(type, f, AC.currentTime, dur, v, opts); }
+  function trHeadPos() { var g = TR.units[0].g; return g.position; }
+  // a held whistle or horn: oscillators through one gain that is raised and let fall by hand
+  var TR_VOICE = {};
+  function trVoice(kind, on) {
+    if (!trOk()) return; var V = TR_VOICE[kind];
+    if (!V) {
+      var gn = AC.createGain(); gn.gain.value = 0; var lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = kind === 'horn' ? 900 : 3200; gn.connect(lp); lp.connect(sfxBus);
+      var fs = kind === 'horn' ? [196, 247] : [523, 659, 784], ty = kind === 'horn' ? 'sawtooth' : 'triangle', os = fs.map(function (f) { var o = AC.createOscillator(); o.type = ty; o.frequency.value = f; o.connect(gn); o.start(); return o; });
+      var lfo = AC.createOscillator(); lfo.frequency.value = 6; var lg = AC.createGain(); lg.gain.value = kind === 'horn' ? 1.5 : 4; lfo.connect(lg); os.forEach(function (o) { lg.connect(o.frequency); }); lfo.start();
+      V = TR_VOICE[kind] = { gn: gn, on: false };
+    }
+    V.on = on;
+  }
+  function trVoiceTick(dt) {
+    var p = trHeadPos(), vol = TR.t.driving ? 1 : trVol(p.x, p.z);
+    ['horn', 'whistle'].forEach(function (k) { var V = TR_VOICE[k]; if (!V) return; var tgt = V.on ? (k === 'horn' ? 0.16 : 0.12) * vol : 0; V.gn.gain.value += (tgt - V.gn.gain.value) * Math.min(1, dt * (V.on ? 14 : 7)); });
+  }
+  function trBlast(kind, secs) {   // a short press from a click; the keys hold it
+    var t = TR.t; trVoice(kind, true); t[kind === 'horn' ? 'hornOn' : 'whistleOn'] = true; t[kind + 'Auto'] = secs;
+    if (kind === 'whistle') burst(trWorldOf(TR.units[0], TR.units[0].whistle).x, 3.3, trWorldOf(TR.units[0], TR.units[0].whistle).z, 0xffffff, 6, 'smoke');
+  }
+  function trWorldOf(u, v) { var g = u.g, c = Math.cos(g.rotation.y), s = Math.sin(g.rotation.y); return { x: g.position.x + v.x * c + v.z * s, z: g.position.z - v.x * s + v.z * c }; }
+  function trBell(st) { st.bellT = 6.5; st.strikeT = 0; toast('The station bell rings', ''); }
+  function trChime(st) {
+    if (!trOk()) return; var t0 = AC.currentTime, x = st.x, z = st.z;
+    [[784, 0], [659, 0.55], [523, 1.1]].forEach(function (n) { var v = trVol(x, z) * 0.18; if (v > 0.002) { sTone('sine', n[0], t0 + n[1], 1.2, v, { attack: 0.01 }); sTone('sine', n[0] * 2.01, t0 + n[1], 0.8, v * 0.3, {}); } });
+  }
+  function trAnnounce(st) {
+    trChime(st); toast('Announcement: the train is leaving soon', ''); logEvent(st.name + ': the train is leaving soon', '');
+    try { if (window.speechSynthesis && window.SpeechSynthesisUtterance) { var u = new SpeechSynthesisUtterance('Attention please. The train at ' + st.name.toLowerCase() + ' is leaving soon. Please stand clear of the doors.'); u.rate = 0.92; u.volume = Math.max(0.15, trVol(st.x, st.z)); setTimeout(function () { try { window.speechSynthesis.speak(u); } catch (e) {} }, 1700); } } catch (e) {}
+  }
+
+  // ── Switches, buttons, services ───────────────────────────────────
+  function trSetAuto(on) {
+    var R = trState();
+    if (on && pkOpCount() < 1) { sfx('bad'); toast('AUTO needs a hired operator: hire one in the Park office', 'bad'); return; }
+    R.auto = on; toast('Railway AUTO ' + (on ? 'on' : 'off'), on ? 'good' : ''); logEvent('Railway AUTO ' + (on ? 'on' : 'off'), '');
+    if (on && !TR.t.engine) trToggleEngine();
+    if (!on) { TR.t.throttle = 0; }
+  }
+  function trToggleEngine() {
+    var t = TR.t, R = trState();
+    if (!t.engine) { if (R.fuel <= 0 || R.water <= 0) { sfx('bad'); toast('No ' + (R.fuel <= 0 ? 'coal' : 'water') + ' to light the boiler', 'bad'); return; } if (R.wear >= 100) { toast('The engine needs a service first', 'bad'); return; } t.engine = true; toast('Engine on: the boiler is coming up to pressure', ''); }
+    else { t.engine = false; toast('Engine off', ''); }
+  }
+  function trToggleDoors(want) {
+    var t = TR.t, open = want === undefined ? !t.doorsOpen : want;
+    if (open && t.v > 0.3) { sfx('bad'); toast('Doors are locked while the train moves', 'bad'); return; }
+    t.doorsOpen = open; sfx('click');
+  }
+  function trToggleDir() { var t = TR.t; if (t.v > 0.2) { toast('Stop first to change direction', 'bad'); return; } t.dir = -t.dir; }
+  function trPointsLocked() { return TR.t.mode === 'D'; }
+  function trThrowPoints() { var R = trState(); if (trPointsLocked()) { toast('The points are locked: the train is on them', 'bad'); return; } R.points = R.points === 'depot' ? 'main' : 'depot'; toast('Points set to ' + (R.points === 'depot' ? 'the depot' : 'the main line'), ''); }
+  function trInDepot() {
+    var t = TR.t; if (t.mode !== 'D' || t.v > 0.25) return false;
+    var a = TR.units[0].g.position, b = TR.units[TR.units.length - 1].g.position; return a.x <= 93.5 && b.x >= 26.5 && a.z < TR.N - 8 && b.z < TR.N - 8;
+  }
+  function trFillCost() { var R = trState(); return ' ($' + Math.round((100 - R.fuel) * 1.5 + (100 - R.water) * 0.2) + ')'; }
+  function trServiceCost() { var R = trState(); return '$' + Math.round(40 + R.wear * 2.5); }
+  function trPaid(n, why) { if (S.bank < n) { sfx('bad'); toast('Not enough money', 'bad'); return false; } if (n > 0) pay(-n, why); return true; }
+  function trDoFill() { var R = trState(); if (!trInDepot()) return; var c = Math.round((100 - R.fuel) * 1.5 + (100 - R.water) * 0.2); if (c < 1) { toast('The tender is already full', ''); return; } if (!trPaid(c, 'Railway fuel')) return; R.fuel = 100; R.water = 100; sfx('ok'); toast('Coal and water filled', 'good'); logEvent('The train is fuelled', 'good'); }
+  function trDoService() { var R = trState(); if (!trInDepot()) return; var c = Math.round(40 + R.wear * 2.5); if (!trPaid(c, 'Railway service')) return; R.wear = 0; sfx('ok'); toast('The train is serviced', 'good'); logEvent('The train is serviced', 'good'); }
+  function trDoWash() { var R = trState(), t = TR.t; if (!trInDepot() || t.washT > 0) return; if (!trPaid(30, 'Railway wash')) return; t.washT = 10; toast('Washing the train', ''); }
+
+  // ── Player: the cab and the seats ─────────────────────────────────
+  function trSeatedIn() { return !!TR.t.seat; }
+  function trCanBoard() { var t = TR.t; return !t.driving && !t.seat && t.v < 0.3; }
+  function trCanSit(u) { var t = TR.t; if (t.driving || t.seat || t.v > 0.3 || !t.doorsOpen) return false; var st = trStationAtHead(); return !st || st.gatesAmt > 0.5; }
+  function trStationAtHead() { return TR.t.at >= 0 ? TR.st[TR.t.at] : null; }
+  function trEnterCab() { var t = TR.t; if (!trCanBoard()) return; t.driving = true; t.look.yaw = 0; t.look.pitch = -0.05; toast('In the cab: W/S gas, Space brake, H horn, F whistle, Y engine, O doors, R reverser, E to get out', ''); sfx('click'); }
+  function trSit(u, seat) { var t = TR.t; if (!trCanSit(u)) return; t.seat = { u: u, seat: seat }; t.look.yaw = 0; t.look.pitch = -0.08; seat.taken = true; toast('Seated. E to get up when the train has stopped', ''); sfx('click'); }
+  function trLeave() {
+    var t = TR.t, u = t.driving ? TR.units[0] : (t.seat ? t.seat.u : null); if (!u) return false;
+    if (t.v > 0.3) { toast('Stay on board until the train has stopped', 'bad'); return true; }
+    if (t.seat && !t.doorsOpen) { toast('The doors are shut: ask the driver', 'bad'); return true; }
+    var g = u.g, c = Math.cos(g.rotation.y), s = Math.sin(g.rotation.y), lx = t.driving ? -2.9 : 0, lz = 2.7;
+    var ex = g.position.x + lx * c + lz * s, ez = g.position.z - lx * s + lz * c;
+    player.x = ex; player.z = ez; player.y = floorY(ex, ez); player.vy = 0; player.yaw = g.rotation.y - Math.PI / 2 - Math.PI / 2 + t.look.yaw; player.pitch = 0;
+    if (t.seat) t.seat.seat.taken = false; t.seat = null; t.driving = false; trVoice('horn', false); trVoice('whistle', false); sfx('click'); return true;
+  }
+  var _trPrevKey = GAME.key;
+  GAME.key = function (e) {
+    var t = TR.t;
+    if (TR.built && t && (t.driving || t.seat) && !e.repeat) {
+      if (e.code === 'KeyE') { if (t.driving && focusText) return false; return trLeave(); }
+      if (t.driving) {
+        if (e.code === 'KeyY') { trToggleEngine(); return true; }
+        if (e.code === 'KeyO') { trToggleDoors(); return true; }
+        if (e.code === 'KeyR') { trToggleDir(); return true; }
+      }
+    }
+    return _trPrevKey ? _trPrevKey(e) : false;
+  };
+  var _trPrevMouse = GAME.mouseLook;
+  GAME.mouseLook = function (e, sx, iy) {
+    var t = TR.t;
+    if (TR.built && t && (t.driving || t.seat)) { t.look.yaw -= e.movementX * sx; t.look.pitch = Math.max(-1.3, Math.min(1.3, t.look.pitch - e.movementY * sx * iy)); t.look.yaw = Math.max(-2.6, Math.min(2.6, t.look.yaw)); return true; }
+    return _trPrevMouse ? _trPrevMouse(e, sx, iy) : false;
+  };
+  var _trPrevOverride = GAME.playerOverride;
+  GAME.playerOverride = function (dt) {
+    var t = TR.t;
+    if (TR.built && t && (t.driving || t.seat)) {
+      var u = t.driving ? TR.units[0] : t.seat.u, g = u.g, c = Math.cos(g.rotation.y), s = Math.sin(g.rotation.y);
+      var lx = t.driving ? -2.35 : t.seat.seat.x, ly = t.driving ? 2.95 : t.seat.seat.y + 0.75, lz = t.driving ? 0.15 : t.seat.seat.z, face = t.driving ? 0 : t.seat.seat.face;
+      var wx = g.position.x + lx * c + lz * s, wz = g.position.z - lx * s + lz * c;
+      player.x = wx; player.z = wz; player.y = ly - 1.62 + (t.driving ? 0 : 0); player.vy = 0;
+      camera.position.set(wx, ly, wz); camera.rotation.order = 'YXZ'; camera.rotation.set(t.look.pitch, g.rotation.y - Math.PI / 2 + face + t.look.yaw, 0);
+      player.yaw = camera.rotation.y; player.pitch = t.look.pitch;
+      return true;
+    }
+    return _trPrevOverride ? _trPrevOverride(dt) : false;
+  };
+
+  // ── The train's tick ──────────────────────────────────────────────
+  function trCurveLimit(s, mode) {
+    var a = trPos(s, mode, _trA), y0 = a.yaw, b = trPos(s + 8, mode, _trB), d = Math.abs(b.yaw - y0); if (d > Math.PI) d = 2 * Math.PI - d; return d / 8 > 0.012 ? 6.5 : 9;
+  }
+  function trFwdDist(t, target) { var L = trLoopLen(t.mode), d = ((target - t.s) % L + L) % L; return d; }
+  function trTargetS(i, mode) { var s = TR.st[i].s + 28; if (mode === 'D' && s > TR.sJ2) s += TR.dL; return s; }
+  function trTick(dt) {
+    var t = TR.t, R = trState(), i, k;
+    dt = Math.min(dt, 0.1);
+    // staff: the boiler comes up to pressure, or falls
+    if (t.engine && R.fuel > 0 && R.water > 0 && R.wear < 100) t.press = Math.min(1, t.press + dt / 25); else t.press = Math.max(0, t.press - dt / (t.engine ? 12 : 90));
+    if (t.engine && (R.fuel <= 0 || R.water <= 0)) { t.engine = false; toast('Out of ' + (R.fuel <= 0 ? 'coal' : 'water') + ': the fire goes out', 'bad'); }
+    if (R.auto && pkOpCount() < 1) { R.auto = false; toast('AUTO off: there is no operator', 'bad'); }
+    // the player's hands
+    var keys = player.keys || {};
+    if (t.driving) {
+      if (keys.KeyW) t.throttle = Math.min(1, t.throttle + dt * 0.5); if (keys.KeyS) t.throttle = Math.max(0, t.throttle - dt * 0.6);
+      t.brakeKey = !!keys.Space;
+      if (keys.KeyH !== !!t.hornKey) { t.hornKey = !!keys.KeyH; trVoice('horn', t.hornKey || t.hornAutoT > 0); }
+      if (keys.KeyF !== !!t.whistleKey) { t.whistleKey = !!keys.KeyF; trVoice('whistle', t.whistleKey || t.whistleAutoT > 0); }
+    } else { t.brakeKey = false; if (t.hornKey) { t.hornKey = false; trVoice('horn', false); } if (t.whistleKey) { t.whistleKey = false; trVoice('whistle', false); } }
+    ['horn', 'whistle'].forEach(function (kd) { var key = kd + 'Auto'; if (t[key] > 0) { t[key] -= dt; if (t[key] <= 0 && !(kd === 'horn' ? t.hornKey : t.whistleKey)) { trVoice(kd, false); t[kd === 'horn' ? 'hornOn' : 'whistleOn'] = false; } } });
+    if (R.auto) trAuto(dt);
+    // the speed limit and the safety system (ATB)
+    var lim = trCurveLimit(t.s, t.mode), want = t.brakeKey ? 1 : t.brake, thr = t.throttle; t.atb = '';
+    if (R.wear > 80) lim = Math.min(lim, 5);
+    if (t.mode === 'D') lim = Math.min(lim, 4);
+    if (t.at >= 0 && t.mode === 'M' && (t.dwell > 0 || t.doorsOpen)) { if (thr > 0.01 && t.v < 0.3) { t.atb = 'DEPARTURE LOCKED'; if (t.msgT <= 0) { t.msgT = 4; toast(t.doorsOpen ? 'Departure locked: the doors are open' : 'Departure locked: ' + Math.ceil(t.dwell) + ' s of waiting left', 'bad'); } } thr = 0; want = 1; }
+    if (t.v > lim + 0.8) { want = 1; thr = 0; t.atb = 'ATB: OVERSPEED'; }
+    t.msgT -= dt;
+    // physics
+    var thrust = (t.engine && t.press > 0.35) ? thr * 1.1 * Math.min(1, t.press) * (1 - R.wear / 220) : 0;
+    var drag = 0.012 * t.v + (t.v > 0.02 ? 0.05 : 0);
+    var a = thrust - drag - want * 3.0 * (t.v > 0.02 ? 1 : 0);
+    if (!t.engine || t.press < 0.35) a -= 0.0;
+    t.v = Math.max(0, Math.min(11, t.v + a * dt)); if (want >= 0.99 && thrust < 0.05 && t.v < 0.08) t.v = 0;
+    var ds = t.v * dt * t.dir, prev = t.s; t.s += ds;
+    // the loop, the points, the depot loop
+    var L = trLoopLen(t.mode); if (t.s >= L) { t.s -= L; R.laps++; } else if (t.s < 0) t.s += L;
+    if (t.mode === 'M' && ds > 0 && prev < TR.sJ1 && t.s >= TR.sJ1) { if (R.points === 'depot') t.mode = 'D'; }
+    if (t.mode === 'D' && ds > 0 && t.s - TR.len > TR.sJ1 + TR.byp.L) { t.mode = 'M'; t.s -= TR.dL; R.points = 'main'; }
+    if (t.mode === 'D' && ds < 0 && t.s < TR.sJ1) { t.mode = 'M'; }
+    // fuel, water, wear, dirt
+    var run = Math.abs(ds);
+    if (t.engine) { R.fuel = Math.max(0, R.fuel - (0.006 + 0.035 * thrust * (t.v > 0.2 ? 1 : 0)) * dt); R.water = Math.max(0, R.water - (0.008 + 0.045 * thrust * (t.v > 0.2 ? 1 : 0)) * dt); }
+    R.wear = Math.min(100, R.wear + run * 0.004); R.dirt = Math.min(100, R.dirt + run * 0.006);
+    if (R.wear >= 100 && t.engine) { t.engine = false; toast('The engine has broken down: it needs a service in the depot', 'bad'); }
+    // stations: stopped on a stop line
+    var atNow = -1;
+    if (t.mode === 'M') for (i = 0; i < TR.st.length; i++) { var dd = Math.abs(trFwdDist(t, TR.st[i].s + 28)); dd = Math.min(dd, trLoopLen('M') - dd); if (i === t.departFrom) { if (dd > 5) t.departFrom = -1; continue; } if (dd < 1.6 && t.v < 0.25) atNow = i; }
+    if (atNow >= 0 && t.at !== atNow) { t.at = atNow; t.nextSt = (atNow + 1) % TR.st.length; t.dwell = 120; t.announced = false; t.belled = false; if (!R.auto) toast('Arrived at ' + TR.st[atNow].name + '. Wait time: 2 minutes', ''); }
+    if (t.at >= 0 && atNow < 0 && t.v > 0.6) { t.at = -1; }
+    if (t.at >= 0 && t.v < 0.25) t.dwell = Math.max(0, t.dwell - dt);
+    if (TR.washing) { }
+    trServicesTick(dt);
+    trPlaceUnits();
+    trAnimate(dt, run);
+    trCrossingsTick(dt);
+    trStationsTick(dt);
+    trVoiceTick(dt);
+    trHud(dt);
+  }
+  // ── AUTO ──────────────────────────────────────────────────────────
+  function trAuto(dt) {
+    var t = TR.t, R = trState(), st;
+    if (!t.engine) { trToggleEngine(); }
+    if (!t.engine) return;
+    var needs = R.fuel < 18 || R.water < 18 || R.wear > 85 || R.dirt > 92;
+    if (t.mode === 'D' && t.v < 0.25 && trInDepot()) {   // in the shed: the hired staff do the work, then she goes on
+      t.throttle = 0; t.brake = 1; t.serviceT += dt;
+      if (t.serviceT > 22) { t.serviceT = 0; var c = Math.round((100 - R.fuel) * 1.5 + (100 - R.water) * 0.2 + (R.wear > 0 ? 40 + R.wear * 2.5 : 0) + 30); if (S.bank >= c) { pay(-c, 'Railway depot'); R.fuel = 100; R.water = 100; R.wear = 0; t.washT = 10; R.dirt = 0; toast('The depot crew serviced the train ($' + c + ')', 'good'); } else { toast('The depot crew cannot work: not enough money', 'bad'); return; } }
+      else if (t.serviceT > 20) { }
+      if (R.fuel < 99 || R.wear > 0) return; if (t.washT > 0) return;
+    }
+    if (t.at >= 0) {   // standing at a platform
+      st = TR.st[t.at]; t.throttle = 0; t.brake = 1;
+      if (t.dwell > 0) {
+        st.gatesWant = true; if (!t.doorsOpen) trToggleDoors(true); st.cabOpen = true;
+        if (t.dwell <= 30 && !t.announced) { t.announced = true; trAnnounce(st); }
+        if (t.dwell <= 10 && !t.belled) { t.belled = true; trBell(st); }
+      } else {
+        if (t.doorsOpen) trToggleDoors(false); st.gatesWant = false; trState().st[st.id].gates = false;
+        if (t.doorAmt < 0.03 && st.gatesAmt < 0.03) { st.cabOpen = false; t.brake = 0; t.departFrom = t.at; t.at = -1; t.dwell = 0; }
+      }
+      return;
+    }
+    // running: head for the next stop line; go through the depot when she needs it
+    if (needs && t.mode === 'M' && R.points === 'main') { var dj = trFwdDist(t, TR.sJ1); if (dj < 200 && dj > 40) R.points = 'depot'; }
+    var tgt, dist;
+    if (t.mode === 'D') { tgt = TR.sJ1 + trBypassStopS(); dist = trFwdDist(t, tgt); if (!(R.fuel < 99 || R.wear > 0 || R.dirt > 5) || t.serviceT === 0 && dist > 400) { tgt = trTargetS(t.nextSt, 'D'); dist = trFwdDist(t, tgt); } }
+    else { tgt = trTargetS(t.nextSt, 'M'); dist = trFwdDist(t, tgt); }
+    if (dist > trLoopLen(t.mode) - 3) dist = 0;
+    var lim = Math.min(trCurveLimit(t.s, t.mode), 8.2), vT = Math.min(lim, Math.sqrt(2 * 0.9 * Math.max(0, dist - 0.8))); if (dist < 0.5) vT = 0;
+    t.brake = 0;
+    if (t.v < vT - 0.25) { t.throttle = Math.min(0.8, 0.25 + (vT - t.v) * 0.3); }
+    else if (t.v > vT + 0.35) { t.throttle = 0; t.brake = Math.min(1, (t.v - vT) / 2 + 0.1); }
+    else t.throttle = 0.18;
+    if (vT === 0 && t.v < 0.6) { t.throttle = 0; t.brake = 1; }
+    if (R.fuel <= 0 || R.water <= 0) { t.throttle = 0; t.brake = 1; }
+  }
+  function trBypassStopS() {   // where on the siding the loco's front stops: just inside the east end of the shed
+    if (TR.bypStop !== undefined) return TR.bypStop; var P = TR.byp, best = 1e9, bi = 0; for (var i = 0; i < P.n; i++) { var d = Math.abs(P.x[i] - 88.5); if (d < best) { best = d; bi = i; } } return TR.bypStop = bi * P.ds;
+  }
+  // ── What the depot does while the train is in the shed ────────────
+  function trServicesTick(dt) {
+    var t = TR.t, R = trState(), D = TR.depot; if (!D) return;
+    if (t.washT > 0) {
+      t.washT -= dt; D.brushes.forEach(function (b) { b.rotation.y += dt * 9; });
+      for (var i = 0; i < D.spray.length; i++) { var sp = D.spray[i]; sp.visible = true; var ph = (t.washT * 2 + i * 0.37) % 1; sp.position.set(80 + (i % 2 ? 1 : -1) * 1.0 * (1 - ph), 3.6 - ph * 3.2, D.z + (i - 3.5) * 0.5); }
+      R.dirt = Math.max(0, R.dirt - dt * 12);
+      if (t.washT <= 0) { D.spray.forEach(function (s) { s.visible = false; }); R.dirt = 0; toast('The train is clean', 'good'); }
+    }
+    D.lever.rotation.z = R.points === 'depot' ? 0.6 : -0.6; D.lamp.material = R.points === 'depot' ? trMats().ledAmber : trMats().ledGreen;
+    var soot = R.dirt / 100; trMats().green.color.setHex(0x1d5b3b).lerp(new THREE.Color(0x151a17), soot * 0.55);
+  }
+  // ── Animation of the rolling stock ────────────────────────────────
+  function trAnimate(dt, run) {
+    var t = TR.t, R = trState(), i, k;
+    t.doorAmt += ((t.doorsOpen ? 1 : 0) - t.doorAmt) * Math.min(1, dt * 3.5);
+    if (Math.abs((t.doorsOpen ? 1 : 0) - t.doorAmt) < 0.004) t.doorAmt = t.doorsOpen ? 1 : 0;
+    var signed = run * (t.dir >= 0 ? 1 : -1);
+    for (i = 0; i < TR.units.length; i++) {
+      var u = TR.units[i];
+      for (k = 0; k < u.wheels.length; k++) u.wheels[k].w.rotation.z -= signed / u.wheels[k].r;
+      if (u.doors) for (k = 0; k < u.doors.length; k++) { var d = u.doors[k]; d.pv.rotation.y = d.side * d.h * (Math.PI / 2) * t.doorAmt; }
+      if (u.flag) u.flag.rotation.y = Math.sin(performance.now() / 180) * 0.3;
+      if (u.lamp && u.kind === 'wagon') u.lamp.material = (S.time < 7 || S.time > 18.5) ? trMats().lampOn : trMats().lampOff;
+    }
+    var lo = TR.units[0];
+    // the valve gear: connecting rods follow the crank pins
+    lo.rods.forEach(function (r) {
+      var s = r.s, drv = null, d2 = null; lo.drivers.forEach(function (dv) { if (dv.s === s && dv.x > 1) drv = dv; if (dv.s === s && dv.x < 1) d2 = dv; });
+      var a = drv.w.rotation.z + (s > 0 ? 0 : Math.PI / 2), rc = 0.22, px = drv.x + Math.cos(a) * rc, py = 0.88 + Math.sin(a) * rc, cxp = px + Math.sqrt(1.44 - (1.0 - py) * (1.0 - py));
+      var mx = (px + cxp) / 2, my = (py + 1.0) / 2, len = Math.hypot(cxp - px, 1.0 - py);
+      r.rod.position.set(mx, my, s * 1.2); r.rod.scale.x = len; r.rod.rotation.z = Math.atan2(1.0 - py, cxp - px);
+      r.cross.position.set(cxp, 1.0, s * 1.12); r.pr.scale.x = Math.max(0.2, 3.2 - cxp) / 0.9; r.pr.position.set((cxp + 3.2) / 2, 1.0, s * 1.05);
+      var a2 = d2.w.rotation.z + (s > 0 ? 0 : Math.PI / 2); r.coup.position.set((d2.x + drv.x) / 2 + Math.cos(a2) * rc, 0.88 + Math.sin(a2) * rc, s * 1.24); r.coup.scale.x = (drv.x - d2.x);
+    });
+    // chuffs and smoke
+    var cw = TR.units[0].g, ch = trWorldOf(lo, lo.chimney);
+    if (t.engine && t.press > 0.3) {
+      t.chuff += run; var step = 0.97;
+      if (run > 0 && t.chuff > step) { t.chuff = 0; burst(ch.x, 3.9, ch.z, 0xdadde0, 3 + Math.round(t.throttle * 5), 'smoke'); trTone('triangle', 90, 0.12, 0.2, ch.x, ch.z, { f1: 55 }); if (trOk()) sNoise(AC.currentTime, 0.1, trVol(ch.x, ch.z) * 0.09, { type: 'lowpass', freq: 500, fade: true }); }
+      else if (t.v < 0.3) { t.idleT -= dt; if (t.idleT <= 0) { t.idleT = 2.6; burst(ch.x, 3.9, ch.z, 0xe9ecee, 2, 'smoke'); } }
+    }
+    lo.lamp.material.color.setHex(t.engine && (S.time < 7 || S.time > 18.5 || true) ? 0xfff0b0 : 0x55503a);
+    // the cab
+    lo.gasLever.rotation.z = 0.5 - t.throttle; lo.brakeLever.rotation.z = 0.5 - (t.brakeKey ? 1 : t.brake); lo.revLever.rotation.z = t.dir > 0 ? -0.5 : 0.5;
+    lo.engSw.rotation.z = t.engine ? 0.6 : -0.6; lo.doorSw.rotation.z = t.doorsOpen ? 0.6 : -0.6;
+    lo.engSwLed.material = t.engine ? trMats().ledGreen : trMats().ledOff; lo.doorSwLed.material = t.doorsOpen ? trMats().ledAmber : trMats().ledOff;
+    lo.hornBtn.position.x = lo.hornBtn.userData.rest + ((t.hornKey || t.hornAuto > 0) ? 0.03 : 0); lo.cord.position.y = 3.55 - ((t.whistleKey || t.whistleAuto > 0) ? 0.12 : 0);
+    var G = TR.gauges; if (G) { G.press.rotation.z = 1.1 - t.press * 2.2; G.speed.rotation.z = 1.1 - Math.min(1, t.v * 3.6 / 40) * 2.2; G.fuel.rotation.z = 1.1 - R.fuel / 100 * 2.2; }
+    if (TR.waterGlass) TR.waterGlass.scale.y = Math.max(0.02, R.water / 100);
+  }
+  // ── The crossings ─────────────────────────────────────────────────
+  function trCrossingsTick(dt) {
+    var t = TR.t, M = trMats(), i, j, k;
+    for (i = 0; i < TR.xing.length; i++) {
+      var X = TR.xing[i], act = false, p;
+      for (j = 0; j < TR.units.length && !act; j++) { p = TR.units[j].g.position; if (Math.hypot(p.x - X.x, p.z - X.z) < 8.5) act = true; }
+      if (!act && t.v > 0.3) for (k = 0; k < 8 && !act; k++) { var pp = trPos(t.s + t.dir * (k * 12 + 2), t.mode, _trA); if (Math.hypot(pp.x - X.x, pp.z - X.z) < 6) act = true; }
+      X.active = act; X.up += ((act ? 1 : 0) - X.up) * Math.min(1, dt * 1.6); if (Math.abs(X.up - (act ? 1 : 0)) < 0.01) X.up = act ? 1 : 0;
+      for (j = 0; j < X.poles.length; j++) X.poles[j].position.y = -1.35 + 1.35 * Math.min(1, X.up);
+      if (act) { X.flip += dt * 2.2; X.beepT -= dt; if (X.beepT <= 0 && X.up > 0.1) { X.beepT = 0.42; var hi = Math.floor(X.flip * 2) % 2 === 0; trTone('square', hi ? 1040 : 760, 0.18, 0.1, X.x, X.z, { lp: 2600 }); } }
+      for (j = 0; j < X.leds.length; j++) { var on = act && X.up > 0.2 && ((Math.floor(X.flip * 2) + X.leds[j].phase) % 2 === 0); X.leds[j].m.material = on ? M.ledOn : M.led; }
+      if (typeof traffic !== 'undefined' && traffic && traffic.cars && X.road) traffic.cars.forEach(function (c) {
+        if (c.road) return; var cp = c.g.position, near = Math.abs(cp.z - X.z) < 6 && Math.abs(cp.x - X.x) < 16 && (X.x - cp.x) * c.dir > 0;
+        if (act && near) { if (c.hold === undefined) { c.hold = c.v; c.v = 0; } } else if (c.hold !== undefined && !act) { c.v = c.hold; c.hold = undefined; }
+      });
+    }
+  }
+  // ── The stations ──────────────────────────────────────────────────
+  function trStationsTick(dt) {
+    var t = TR.t, R = trState(), M = trMats(), night = S.time < 7 || S.time > 18.5, i, k;
+    for (i = 0; i < TR.st.length; i++) {
+      var st = TR.st[i];
+      if (st.gatesWant !== undefined) { st.gatesAmt += ((st.gatesWant ? 1 : 0) - st.gatesAmt) * Math.min(1, dt * 2.2); if (Math.abs((st.gatesWant ? 1 : 0) - st.gatesAmt) < 0.01) st.gatesAmt = st.gatesWant ? 1 : 0; }
+      for (k = 0; k < st.gateLeaves.length; k++) { var gl = st.gateLeaves[k]; gl.pv.rotation.y = -gl.sd * (Math.PI / 2) * st.gatesAmt; }
+      var want = st.cabOpen ? 1 : 0; st.cabAmt = (st.cabAmt || 0) + (want - (st.cabAmt || 0)) * Math.min(1, dt * 5); st.doorPv.rotation.y = st.cabAmt * 1.8;
+      st.sw.auto.rotation.x = R.auto ? -0.6 : 0.6; st.sw.gates.rotation.x = st.gatesAmt > 0.5 ? -0.6 : 0.6; st.sw.lights.rotation.x = st.lightsOn ? -0.6 : 0.6;
+      st.led.auto.material = R.auto ? M.ledGreen : M.ledOff; st.led.gates.material = st.gatesAmt > 0.5 ? M.ledAmber : M.ledOff; st.led.lights.material = st.lightsOn ? M.lampOn : M.ledOff;
+      st.sw.bell.position.z = st.sw.bell.userData.rest + (st.bellT > 0 ? 0.015 : 0); st.sw.announce.position.z = st.sw.announce.userData.rest;
+      for (k = 0; k < st.lamps.length; k++) st.lamps[k].material = st.lightsOn ? M.lampOn : M.lampOff;
+      st.light.intensity = st.lightsOn ? (night ? 1.5 : 0.35) : 0;
+      if (st.bellT > 0) {   // tring-tring: a bright double strike every 0.22 s for at least five seconds
+        st.bellT -= dt; st.strikeT -= dt; st.bellG.rotation.z = Math.sin(performance.now() / 55) * 0.55 * Math.min(1, st.bellT);
+        if (st.strikeT <= 0) { st.strikeT = 0.22; var bx = st.x, bz = st.z; if (trOk()) { var v = trVol(bx, bz) * 0.22; if (v > 0.002) { sTone('sine', 1480, AC.currentTime, 0.4, v, { attack: 0.002 }); sTone('sine', 2960, AC.currentTime, 0.25, v * 0.5, { attack: 0.002 }); sTone('sine', 1975, AC.currentTime + 0.05, 0.3, v * 0.4, { attack: 0.002 }); } } }
+      } else st.bellG.rotation.z *= 0.9;
+      if (!st.boardT || (st.boardT -= dt) <= 0) { st.boardT = 0.5; trDrawBoard(st); }
+    }
+  }
+  // ── The driver's head-up line ─────────────────────────────────────
+  function trBuildHud() {
+    var el = document.createElement('div'); el.id = 'tr-hud'; el.hidden = true;
+    el.style.cssText = 'position:fixed;left:50%;bottom:14px;transform:translateX(-50%);background:rgba(5,8,12,0.78);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:8px 14px;color:#eef1f5;font:13px/1.45 Consolas,monospace;pointer-events:none;z-index:20;text-align:center;white-space:pre';
+    document.body.appendChild(el); TR.hud = el;
+  }
+  function trHud(dt) {
+    var t = TR.t, R = trState(); if (!TR.hud) return; t.hudT -= dt; if (t.hudT > 0) return; t.hudT = 0.12;
+    if (!(t.driving || t.seat)) { if (!TR.hud.hidden) TR.hud.hidden = true; return; }
+    var st = TR.st[t.nextSt], dist = Math.round(trFwdDist(t, trTargetS(t.nextSt, t.mode)));
+    var l1 = (t.driving ? 'GAS ' + Math.round(t.throttle * 100) + '%   BRAKE ' + Math.round((t.brakeKey ? 1 : t.brake) * 100) + '%   ' : '') + Math.round(t.v * 3.6) + ' km/h   ' + (t.dir > 0 ? 'FWD' : 'REV') + (t.atb ? '   [' + t.atb + ']' : '');
+    var l2 = 'STEAM ' + Math.round(t.press * 100) + '%   COAL ' + Math.round(R.fuel) + '%   WATER ' + Math.round(R.water) + '%   WEAR ' + Math.round(R.wear) + '%   DIRT ' + Math.round(R.dirt) + '%';
+    var l3 = (t.at >= 0 ? 'AT ' + TR.st[t.at].name + (t.dwell > 0 ? '   DEPARTS IN ' + Math.ceil(t.dwell) + ' s' : '   READY') : 'NEXT ' + st.name + '   ' + dist + ' m') + '   DOORS ' + (t.doorsOpen ? 'OPEN' : 'SHUT') + (R.auto ? '   AUTO' : '') + (t.mode === 'D' ? '   DEPOT LINE' : '');
+    TR.hud.textContent = l1 + '\n' + l2 + '\n' + l3; TR.hud.hidden = false;
+  }
   CO.boot(GAME);
 })();
