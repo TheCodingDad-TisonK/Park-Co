@@ -1,7 +1,7 @@
 {
   "name": "park-co",
   "productName": "Park Co",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "description": "Run a small theme park: sell the tickets, work the rides, keep the queue moving.",
   "main": "main.js",
   "author": "",

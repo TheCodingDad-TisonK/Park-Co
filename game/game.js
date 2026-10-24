@@ -18174,7 +18174,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
 
   // ── The control cabinet ──────────────────────────────────────────
   function trBuildCabinet(st) {
-    var M = trMats(), g = st.g, dyn = st.dyn, cx = 8, zf = 10.4, zb = 11.0, zp = 10.92, y0 = 0.95, shell = pkPaint(0x3b4650, 0.5, 0.5);
+    var M = trMats(), g = st.g, dyn = st.dyn, cx = 8, zf = 5.9, zb = 6.5, zp = 6.34, y0 = 0.95, shell = pkPaint(0x3b4650, 0.5, 0.5);
     pkBevelBox(1.2, 1.9, 0.06, shell, cx, y0 + 0.95, zb, g, 0.01);
     [-0.57, 0.57].forEach(function (sx) { pkBevelBox(0.06, 1.9, 0.6, shell, cx + sx, y0 + 0.95, (zf + zb) / 2, g, 0.01); });
     pkBevelBox(1.2, 0.06, 0.6, shell, cx, y0 + 1.9, (zf + zb) / 2, g, 0.01); pkBevelBox(1.2, 0.06, 0.6, shell, cx, y0 + 0.03, (zf + zb) / 2, g, 0.01);
