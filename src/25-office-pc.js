@@ -129,6 +129,7 @@
   function pkPCWords(id) { var s = String(id).replace(/([A-Z])/g, ' $1').toLowerCase(); return s.charAt(0).toUpperCase() + s.slice(1); }
   function pkPCDraw(c, sc) {
     var W = PK_PC_W, H = PK_PC_H;
+    var tabletOpen = typeof PK_TABLET !== 'undefined' && sc === PK_TABLET.sc && PK_TABLET.open;
     if (!PK_PC.awake) return pkPCLock(c, sc);
     // the desktop: a deep wallpaper, the top bar, the dock
     var g = c.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#0e1620'); g.addColorStop(1, '#101d1a'); c.fillStyle = g; c.fillRect(0, 0, W, H);
@@ -136,7 +137,7 @@
     pkPCText(c, 'PARK OS', 12, 20, 13, '#f5b53d', true);
     var app = PK_PC_APPS.filter(function (a) { return a[0] === PK_PC.app; })[0];
     pkPCText(c, app ? app[1] : '', 92, 20, 13, '#d7dee4');
-    pkPCText(c, 'Day ' + S.day + '   ' + fmtTime(S.time) + '   ' + money(S.bank), W - 14, 20, 13, '#d7dee4', false, 'right');
+    pkPCText(c, 'Day ' + S.day + '   ' + fmtTime(S.time) + '   ' + money(S.bank), tabletOpen ? W - 54 : W - 14, 20, 13, '#d7dee4', false, 'right');
     c.fillStyle = PK.closed ? '#ff6b5e' : '#5fd38d'; c.beginPath(); c.arc(W - 250, 15, 4, 0, 6.283); c.fill();
     pkPCText(c, PK.closed ? 'CLOSED' : 'OPEN', W - 240, 20, 11, PK.closed ? '#ff6b5e' : '#5fd38d', true);
     // the dock
@@ -149,7 +150,7 @@
       pkPCText(c, a[1], 50, y + 23, 14, on ? '#ffffff' : '#c3ccd4', on);
       pkPCZone(sc, 6, y, PK_PC_SIDE - 12, 36, a[1], function () { PK_PC.app = a[0]; PK_PC.page = 0; });
     });
-    pkPCBtn(sc, 10, H - 82, PK_PC_SIDE - 20, 30, 'Full panel', function () { openPanel('admin'); });
+    pkPCBtn(sc, 10, H - 82, PK_PC_SIDE - 20, 30, 'Full panel', function () { if (tabletOpen) pkTabletToggle(false); openPanel('admin'); });
     pkPCBtn(sc, 10, H - 44, PK_PC_SIDE - 20, 30, 'Lock', function () { PK_PC.awake = false; }, false);
     var X = PK_PC_SIDE + 12, Y = PK_PC_TOP + 12, CW = W - X - 12, CH = H - Y - 12;
     ({ home: pkPCHome, money: pkPCMoney, rides: pkPCRides, guests: pkPCGuests, staff: pkPCStaff, cctv: pkPCCctv, mail: pkPCMail }[PK_PC.app] || pkPCHome)(c, sc, X, Y, CW, CH);
