@@ -8,7 +8,7 @@
     TR_GAPS.forEach(function (g) { trPortal(g.axis === 'z' ? g.x : g.x, g.axis === 'z' ? g.z : g.z, g.axis); });
     trBuildDepot(); trBuildTrain();
     TR.t = { s: 0, mode: 'M', v: 0, dir: 1, throttle: 0, brake: 1, engine: false, press: 0, doorsOpen: false, doorAmt: 0, driving: false, seat: null, look: { yaw: 0, pitch: 0 },
-      at: 0, departFrom: -1, nextSt: 1, dwell: 0, announced: false, belled: false, atb: '', washT: 0, chuff: 0, idleT: 0, hornOn: false, whistleOn: false, serviceT: 0, msgT: 0, hudT: 0, lapSeen: 0 };
+      at: 0, departFrom: -1, nextSt: 1, dwell: 0, announced: false, belled: false, atb: '', washT: 0, chuff: 0, idleT: 0, hornOn: false, whistleOn: false, serviceT: 0, msgT: 0, hudT: 0, lapSeen: 0, riders: 0, passengerRoutePage: false, cabDisplayT: 0 };
     R.auto = !!R.auto && pkOpCount() > 0;
     trResetToStation(0);
     trBuildHud();
@@ -27,7 +27,7 @@
   var _trPrevGuide = pkGuide;
   pkGuide = function () {
     return _trPrevGuide() + '<p><b>The Lindenburg Railway.</b> A steam train rings the park outside its fence: Central Station by the car park, Elfin Woods, Windmill Halt, Dragon Gate and Lakeside Halt, and the depot behind the park. At every station a locked cabinet holds the controls: AUTO (the same everywhere; it needs a hired operator), the platform gates, the lights, ANNOUNCE and the BELL. ' +
-      'Climb into the cab from the platform. <b>W/S</b> gas, <b>Space</b> brake, <b>H</b> horn, <b>F</b> whistle, <b>Y</b> engine, <b>O</b> wagon doors, <b>R</b> reverser, <b>E</b> out. The train waits two minutes at every station and will not leave with the doors open. ' +
+      'Climb into the cab from the platform. <b>W/S</b> gas, <b>Space</b> brake, <b>H</b> horn, <b>F</b> whistle, <b>I</b> engine, <b>U</b> wagon doors, <b>R</b> reverser, <b>E</b> out. The train waits two minutes at every station and will not leave with the doors open. ' +
       'Throw the points near the north run to send it through the depot shed, where you can fuel, service and wash it.</p>';
   };
 
@@ -68,6 +68,25 @@
     trChime(st); toast('Announcement: the train is leaving soon', ''); logEvent(st.name + ': the train is leaving soon', '');
     try { if (window.speechSynthesis && window.SpeechSynthesisUtterance) { var u = new SpeechSynthesisUtterance('Attention please. The train at ' + st.name.toLowerCase() + ' is leaving soon. Please stand clear of the doors.'); u.rate = 0.92; u.volume = Math.max(0.15, trVol(st.x, st.z)); setTimeout(function () { try { window.speechSynthesis.speak(u); } catch (e) {} }, 1700); } } catch (e) {}
   }
+  function trTogglePassengerPage() {
+    var t = TR.t; if (!t || !t.driving) return;
+    t.passengerRoutePage = !t.passengerRoutePage;
+    sfx('click'); toast('Passenger display: ' + (t.passengerRoutePage ? 'route list' : 'next stop'), '');
+    trCabDisplaysTick(1);
+  }
+  function trRepeatPassengerInfo() {
+    var t = TR.t; if (!t || !t.driving) return;
+    var i = t.at >= 0 ? t.at : t.nextSt, st = TR.st[i]; if (!st) return;
+    var message = t.at >= 0 ? 'We are now at ' + st.name.toLowerCase() + '. Please mind the gap when leaving the train.' : 'The next stop is ' + st.name.toLowerCase() + '. Please remain seated until the train has stopped.';
+    sfx('click'); trChime(st); toast('Passenger announcement: ' + st.name, '');
+    try {
+      if (window.speechSynthesis && window.SpeechSynthesisUtterance) {
+        window.speechSynthesis.cancel();
+        var speech = new SpeechSynthesisUtterance(message); speech.rate = 0.92; speech.volume = Math.max(0.15, trVol(camera.position.x, camera.position.z));
+        window.speechSynthesis.speak(speech);
+      }
+    } catch (e) {}
+  }
 
   // ── Switches, buttons, services ───────────────────────────────────
   function trSetAuto(on) {
@@ -106,8 +125,19 @@
   function trCanBoard() { var t = TR.t; return !t.driving && !t.seat && t.v < 0.3; }
   function trCanSit(u) { var t = TR.t; if (t.driving || t.seat || t.v > 0.3 || !t.doorsOpen) return false; var st = trStationAtHead(); return !st || st.gatesAmt > 0.5; }
   function trStationAtHead() { return TR.t.at >= 0 ? TR.st[TR.t.at] : null; }
-  function trEnterCab() { var t = TR.t; if (!trCanBoard()) return; t.driving = true; t.look.yaw = 0; t.look.pitch = -0.05; toast('In the cab: W/S gas, Space brake, H horn, F whistle, Y engine, O doors, R reverser, E to get out', ''); sfx('click'); }
-  function trSit(u, seat) { var t = TR.t; if (!trCanSit(u)) return; t.seat = { u: u, seat: seat }; t.look.yaw = 0; t.look.pitch = -0.08; seat.taken = true; toast('Seated. E to get up when the train has stopped', ''); sfx('click'); }
+  
+  function trEnterCab() { 
+    var t = TR.t; if (!trCanBoard()) return; 
+    t.driving = true; t.look.yaw = 0; t.look.pitch = -0.05; 
+    toast('In the cab: W/S gas, Space brake, H horn, F whistle, I engine, U doors, R reverser, E to get out. C for 3rd person, scroll to zoom.', ''); sfx('click'); 
+  }
+  
+  function trSit(u, seat) { 
+    var t = TR.t; if (!trCanSit(u)) return; 
+    t.seat = { u: u, seat: seat }; t.look.yaw = 0; t.look.pitch = -0.08; seat.taken = true; 
+    toast('Seated. E to get up when the train has stopped. C for 3rd person.', ''); sfx('click'); 
+  }
+  
   function trLeave() {
     var t = TR.t, u = t.driving ? TR.units[0] : (t.seat ? t.seat.u : null); if (!u) return false;
     if (t.v > 0.3) { toast('Stay on board until the train has stopped', 'bad'); return true; }
@@ -115,36 +145,80 @@
     var g = u.g, c = Math.cos(g.rotation.y), s = Math.sin(g.rotation.y), lx = t.driving ? -2.9 : 0, lz = 2.7;
     var ex = g.position.x + lx * c + lz * s, ez = g.position.z - lx * s + lz * c;
     player.x = ex; player.z = ez; player.y = floorY(ex, ez); player.vy = 0; player.yaw = g.rotation.y - Math.PI / 2 - Math.PI / 2 + t.look.yaw; player.pitch = 0;
-    if (t.seat) t.seat.seat.taken = false; t.seat = null; t.driving = false; trVoice('horn', false); trVoice('whistle', false); sfx('click'); return true;
+    if (t.seat) t.seat.seat.taken = false; t.seat = null; t.driving = false; trVoice('horn', false); trVoice('whistle', false); 
+    sfx('click'); return true;
   }
+  
   var _trPrevKey = GAME.key;
   GAME.key = function (e) {
     var t = TR.t;
     if (TR.built && t && (t.driving || t.seat) && !e.repeat) {
       if (e.code === 'KeyE') { if (t.driving && focusText) return false; return trLeave(); }
       if (t.driving) {
-        if (e.code === 'KeyY') { trToggleEngine(); return true; }
-        if (e.code === 'KeyO') { trToggleDoors(); return true; }
+        if (e.code === 'KeyI') { trToggleEngine(); return true; }
+        if (e.code === 'KeyU') { trToggleDoors(); return true; }
         if (e.code === 'KeyR') { trToggleDir(); return true; }
       }
     }
     return _trPrevKey ? _trPrevKey(e) : false;
   };
+  
+  var _trPrevWheel = GAME.wheel;
+  GAME.wheel = function (dir, e) {
+    var t = TR.t;
+    if (TR.built && t && (t.driving || t.seat) && t.thirdPerson) {
+      t.camDist = clamp(t.camDist + dir * 0.5, 2, 15);
+      return true;
+    }
+    return _trPrevWheel ? _trPrevWheel(dir, e) : false;
+  };
+  
   var _trPrevMouse = GAME.mouseLook;
   GAME.mouseLook = function (e, sx, iy) {
     var t = TR.t;
-    if (TR.built && t && (t.driving || t.seat)) { t.look.yaw -= e.movementX * sx; t.look.pitch = Math.max(-1.3, Math.min(1.3, t.look.pitch - e.movementY * sx * iy)); t.look.yaw = Math.max(-2.6, Math.min(2.6, t.look.yaw)); return true; }
+    if (TR.built && t && (t.driving || t.seat)) { 
+      t.look.yaw -= e.movementX * sx; 
+      t.look.pitch = Math.max(-1.3, Math.min(1.3, t.look.pitch - e.movementY * sx * iy)); 
+      t.look.yaw = Math.max(-2.6, Math.min(2.6, t.look.yaw)); 
+      return true; 
+    }
     return _trPrevMouse ? _trPrevMouse(e, sx, iy) : false;
   };
+  
   var _trPrevOverride = GAME.playerOverride;
   GAME.playerOverride = function (dt) {
     var t = TR.t;
     if (TR.built && t && (t.driving || t.seat)) {
       var u = t.driving ? TR.units[0] : t.seat.u, g = u.g, c = Math.cos(g.rotation.y), s = Math.sin(g.rotation.y);
-      var lx = t.driving ? -2.35 : t.seat.seat.x, ly = t.driving ? 2.95 : t.seat.seat.y + 0.75, lz = t.driving ? 0.15 : t.seat.seat.z, face = t.driving ? 0 : t.seat.seat.face;
+      var lx = t.driving ? -2.55 : t.seat.seat.x, ly = t.driving ? 3.02 : t.seat.seat.y + 0.75, lz = t.driving ? 0 : t.seat.seat.z, face = t.driving ? 0 : t.seat.seat.face;
       var wx = g.position.x + lx * c + lz * s, wz = g.position.z - lx * s + lz * c;
       player.x = wx; player.z = wz; player.y = ly - 1.62 + (t.driving ? 0 : 0); player.vy = 0;
-      camera.position.set(wx, ly, wz); camera.rotation.order = 'YXZ'; camera.rotation.set(t.look.pitch, g.rotation.y - Math.PI / 2 + face + t.look.yaw, 0);
+      
+      if (t.thirdPerson) {
+        // Position the player body at the cab/seating spot, facing the right way
+        if (!t.playerBody) {
+          t.playerBody = makeHuman({ shirt: std({ color: 0x2a3f5f, roughness: 0.8 }), pants: std({ color: 0x1a1a1a, roughness: 0.9 }) });
+          t.playerBody.visible = false;
+          t.playerBody.userData.dynamic = true;
+          scene.add(t.playerBody);
+        }
+        t.playerBody.visible = true;
+        t.playerBody.position.set(wx, player.y, wz);
+        t.playerBody.rotation.y = g.rotation.y - Math.PI / 2 + face + t.look.yaw;
+        animateHuman(t.playerBody, dt, t.driving ? 'idle' : 'sit', 0, null, false);
+        
+        // Place the camera behind the player, looking at them
+        var cx = wx + Math.sin(g.rotation.y - Math.PI / 2 + face + t.look.yaw) * t.camDist;
+        var cz = wz + Math.cos(g.rotation.y - Math.PI / 2 + face + t.look.yaw) * t.camDist;
+        var cy = ly + 0.5 + t.look.pitch * t.camDist;
+        camera.position.set(cx, cy, cz);
+        camera.lookAt(wx, ly, wz);
+      } else {
+        if (t.playerBody) t.playerBody.visible = false;
+        camera.position.set(wx, ly, wz); 
+        camera.rotation.order = 'YXZ'; 
+        camera.rotation.set(t.look.pitch, g.rotation.y - Math.PI / 2 + face + t.look.yaw, 0);
+      }
       player.yaw = camera.rotation.y; player.pitch = t.look.pitch;
       return true;
     }
@@ -212,6 +286,7 @@
     trStationsTick(dt);
     trVoiceTick(dt);
     trHud(dt);
+    trCabDisplaysTick(dt);
   }
   // ── AUTO ──────────────────────────────────────────────────────────
   function trAuto(dt) {
@@ -299,7 +374,9 @@
     lo.lamp.material.color.setHex(t.engine && (S.time < 7 || S.time > 18.5 || true) ? 0xfff0b0 : 0x55503a);
     // the cab
     lo.gasLever.rotation.z = 0.5 - t.throttle; lo.brakeLever.rotation.z = 0.5 - (t.brakeKey ? 1 : t.brake); lo.revLever.rotation.z = t.dir > 0 ? -0.5 : 0.5;
-    lo.engSw.rotation.z = t.engine ? 0.6 : -0.6; lo.doorSw.rotation.z = t.doorsOpen ? 0.6 : -0.6;
+    // The toggle handles pivot in the panel face. Positive X sends the handle clockwise as seen from the cab.
+    lo.engSw.rotation.z = 0; lo.doorSw.rotation.z = 0;
+    lo.engSw.rotation.x = t.engine ? 0.6 : -0.6; lo.doorSw.rotation.x = t.doorsOpen ? 0.6 : -0.6;
     lo.engSwLed.material = t.engine ? trMats().ledGreen : trMats().ledOff; lo.doorSwLed.material = t.doorsOpen ? trMats().ledAmber : trMats().ledOff;
     lo.hornBtn.position.x = lo.hornBtn.userData.rest + ((t.hornKey || t.hornAuto > 0) ? 0.03 : 0); lo.cord.position.y = 3.55 - ((t.whistleKey || t.whistleAuto > 0) ? 0.12 : 0);
     var G = TR.gauges; if (G) { G.press.rotation.z = 1.1 - t.press * 2.2; G.speed.rotation.z = 1.1 - Math.min(1, t.v * 3.6 / 40) * 2.2; G.fuel.rotation.z = 1.1 - R.fuel / 100 * 2.2; }

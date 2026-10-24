@@ -4517,7 +4517,7 @@
     "group@-105.9,83.23": { x: -101.85, z: 85.35 },
     "group@-11.44,-17.88": { x: -11.45, z: -17.9, hidden: true },
     "group@-112.28,84.24": { x: -109.25, z: 85.2 },
-    "group@-128,-72.01": { sz: 0.95 },
+    "group@-128,-72.01": { sz: 0.95, hidden: true },
     "group@-13,33": { x: -13.05, z: 35.35, hidden: true },
     "group@-13,8": { x: -15.4, z: 13.4, ry: -1260 },
     "group@-14,40": { x: -16.65, z: 35.45, ry: -90 },
@@ -15483,6 +15483,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   function pkPCWords(id) { var s = String(id).replace(/([A-Z])/g, ' $1').toLowerCase(); return s.charAt(0).toUpperCase() + s.slice(1); }
   function pkPCDraw(c, sc) {
     var W = PK_PC_W, H = PK_PC_H;
+    var tabletOpen = typeof PK_TABLET !== 'undefined' && sc === PK_TABLET.sc && PK_TABLET.open;
     if (!PK_PC.awake) return pkPCLock(c, sc);
     // the desktop: a deep wallpaper, the top bar, the dock
     var g = c.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#0e1620'); g.addColorStop(1, '#101d1a'); c.fillStyle = g; c.fillRect(0, 0, W, H);
@@ -15490,7 +15491,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     pkPCText(c, 'PARK OS', 12, 20, 13, '#f5b53d', true);
     var app = PK_PC_APPS.filter(function (a) { return a[0] === PK_PC.app; })[0];
     pkPCText(c, app ? app[1] : '', 92, 20, 13, '#d7dee4');
-    pkPCText(c, 'Day ' + S.day + '   ' + fmtTime(S.time) + '   ' + money(S.bank), W - 14, 20, 13, '#d7dee4', false, 'right');
+    pkPCText(c, 'Day ' + S.day + '   ' + fmtTime(S.time) + '   ' + money(S.bank), tabletOpen ? W - 54 : W - 14, 20, 13, '#d7dee4', false, 'right');
     c.fillStyle = PK.closed ? '#ff6b5e' : '#5fd38d'; c.beginPath(); c.arc(W - 250, 15, 4, 0, 6.283); c.fill();
     pkPCText(c, PK.closed ? 'CLOSED' : 'OPEN', W - 240, 20, 11, PK.closed ? '#ff6b5e' : '#5fd38d', true);
     // the dock
@@ -15503,7 +15504,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       pkPCText(c, a[1], 50, y + 23, 14, on ? '#ffffff' : '#c3ccd4', on);
       pkPCZone(sc, 6, y, PK_PC_SIDE - 12, 36, a[1], function () { PK_PC.app = a[0]; PK_PC.page = 0; });
     });
-    pkPCBtn(sc, 10, H - 82, PK_PC_SIDE - 20, 30, 'Full panel', function () { openPanel('admin'); });
+    pkPCBtn(sc, 10, H - 82, PK_PC_SIDE - 20, 30, 'Full panel', function () { if (tabletOpen) pkTabletToggle(false); openPanel('admin'); });
     pkPCBtn(sc, 10, H - 44, PK_PC_SIDE - 20, 30, 'Lock', function () { PK_PC.awake = false; }, false);
     var X = PK_PC_SIDE + 12, Y = PK_PC_TOP + 12, CW = W - X - 12, CH = H - Y - 12;
     ({ home: pkPCHome, money: pkPCMoney, rides: pkPCRides, guests: pkPCGuests, staff: pkPCStaff, cctv: pkPCCctv, mail: pkPCMail }[PK_PC.app] || pkPCHome)(c, sc, X, Y, CW, CH);
@@ -16031,18 +16032,31 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // button included. Open, it releases the mouse: a real cursor aims and clicks the screen (no crosshair-and-E aiming),
   // the same way every other panel in the game already works. A child of the camera, so it always sits in view.
   var PK_TABLET = { open: false, g: null, sc: null };
-  var PK_TAB_PW = 0.42, PK_TAB_PH = PK_TAB_PW * PK_PC_H / PK_PC_W;
+  var PK_TAB_PW = 0.46, PK_TAB_PH = PK_TAB_PW * PK_PC_H / PK_PC_W;
   var PK_TAB_MOUSE = new THREE.Vector2(0, 0), PK_TAB_RAY = new THREE.Raycaster();
   function pkBuildTablet() {
     if (camera.parent !== scene) scene.add(camera);   // items held on the camera only render once the camera is in the scene graph; the bake already excludes anything under it (11-bake.js)
-    var dark = MAT.steelDark, chrome = MAT.chrome || pkPaint(0xd8dde2, 0.15, 0.9);
+    var dark = MAT.steelDark, chrome = MAT.chrome || pkPaint(0xd8dde2, 0.15, 0.9), green = pkPaint(0x245342, 0.35, 0.55), gold = MAT.gold || pkPaint(0xd8ad55, 0.35, 0.7);
     var g = new THREE.Group(); g.position.set(0.0, 0.0, -0.55); g.rotation.x = 0.16; g.visible = false; camera.add(g);
-    pkBevelBox(PK_TAB_PW + 0.035, PK_TAB_PH + 0.045, 0.014, dark, 0, 0, -0.008, g, 0.012);
-    pkBevelBox(PK_TAB_PW + 0.012, PK_TAB_PH + 0.014, 0.004, chrome, 0, 0, -0.0005, g, 0.006);
-    sphere(0.004, MAT.black, 0, PK_TAB_PH / 2 + 0.012, -0.003, g);
+    pkBevelBox(PK_TAB_PW + 0.05, PK_TAB_PH + 0.065, 0.018, dark, 0, 0, -0.01, g, 0.014);
+    pkBevelBox(PK_TAB_PW + 0.025, PK_TAB_PH + 0.04, 0.006, green, 0, 0, -0.001, g, 0.01);
+    pkBevelBox(PK_TAB_PW + 0.012, PK_TAB_PH + 0.014, 0.004, chrome, 0, 0, 0.002, g, 0.006);
+    box(PK_TAB_PW * 0.62, 0.0025, 0.002, gold, 0, -PK_TAB_PH / 2 - 0.016, 0.005, g);
+    for (var speaker = -2; speaker <= 2; speaker++) sphere(0.0018, MAT.black, speaker * 0.006, -PK_TAB_PH / 2 - 0.007, 0.005, g);
+    var homeRing = new THREE.Mesh(new THREE.TorusGeometry(0.006, 0.0012, 5, 16), chrome); homeRing.position.set(PK_TAB_PW / 2 - 0.016, -PK_TAB_PH / 2 - 0.012, 0.005); g.add(homeRing);
+    sphere(0.004, MAT.black, 0, PK_TAB_PH / 2 + 0.016, 0.001, g);
     var sc = touchScreen({ w: PK_PC_W, h: PK_PC_H, res: 1.2, pw: PK_TAB_PW, ph: PK_TAB_PH, x: 0, y: 0, z: 0.004, parent: g, title: 'Tablet', draw: pkPCDraw });
     sc.mesh.raycast = pkTabletNoRaycast;   // shut until Tab opens it (three.js raycasts invisible meshes too, so visible alone will not gate it)
     PK_TABLET.g = g; PK_TABLET.sc = sc;
+    var drawTabletOS = sc.draw;
+    sc.draw = function (c, screen) {
+      drawTabletOS(c, screen);
+      if (!PK_TABLET.open) return;
+      var x = screen.w - 48, y = 3, w = 42, h = 24;
+      pkPCRound(c, x, y, w, h, 7); c.fillStyle = '#6d3431'; c.fill(); c.strokeStyle = 'rgba(255,255,255,0.35)'; c.lineWidth = 1; c.stroke();
+      pkPCText(c, 'CLOSE', x + w / 2, y + 16, 10, '#ffffff', true, 'center');
+      screen.zones.unshift({ x: x, y: y, w: w, h: h, label: 'Close tablet', act: function () { pkTabletToggle(false); } });
+    };
     PK_BK_LIVE.push({ sc: sc, g: g, every: 0.5 });
   }
   function pkTabletNoRaycast() {}
@@ -16091,6 +16105,10 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     if (e.code === 'Tab' && !e.repeat) { e.preventDefault(); pkTabletToggle(); return true; }
     return _pkTabletPrevKey ? _pkTabletPrevKey(e) : false;
   };
+  document.addEventListener('keydown', function (e) {
+    if (!PK_TABLET.open || e.code !== 'Tab' || e.repeat) return;
+    e.preventDefault(); e.stopImmediatePropagation(); pkTabletToggle(false);
+  }, true);
   // Esc is checked before the engine's own blocked-gate (90-boot.js), which is how a blocked screen gets to close itself
   var _pkTabletPrevEscape = GAME.escape;
   GAME.escape = function () { if (PK_TABLET.open) { pkTabletToggle(false); return true; } return _pkTabletPrevEscape ? _pkTabletPrevEscape() : false; };
@@ -17976,10 +17994,12 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   function trStationLocal(st, x, z) { var dx = x - st.x, dz = z - st.z; return { lx: dx * st.dx + dz * st.dz, lz: -dx * st.dz + dz * st.dx }; }
   function trFloorAt(x, z) {
     for (var i = 0; i < TR.st.length; i++) {
-      var st = TR.st[i]; if (Math.abs(x - st.x) > 40 && Math.abs(z - st.z) > 40) continue;
+      var st = TR.st[i]; if (Math.abs(x - st.x) > 45 && Math.abs(z - st.z) > 45) continue;
       var l = trStationLocal(st, x, z);
+      // platform floor
       if (Math.abs(l.lx) <= 32.2 && l.lz >= 1.9 && l.lz <= 7.3) return 0.95;
-      if (Math.abs(l.lx) <= 1.7 && l.lz > 7.3 && l.lz < 10.5) return 0.95 * (10.5 - l.lz) / 3.2;
+      // the new ramp sloping down away from the track
+      if (Math.abs(l.lx) <= 1.7 && l.lz > 7.3 && l.lz < 12.5) return 0.95 * (12.5 - l.lz) / 5.2;
     }
     return null;
   }
@@ -17989,7 +18009,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   GAME.collides = function (x, z, opt) { return (_trPrevCollides && _trPrevCollides(x, z, opt)) || trXingBlocks(x, z) || trGateBlocks(x, z); };
   function trGateBlocks(x, z) {   // a shut platform gate is a wall along the edge
     for (var i = 0; i < TR.st.length; i++) {
-      var st = TR.st[i]; if (st.gatesAmt > 0.5 || Math.abs(x - st.x) > 40 && Math.abs(z - st.z) > 40) continue;
+      var st = TR.st[i]; if (st.gatesAmt > 0.5 || Math.abs(x - st.x) > 45 && Math.abs(z - st.z) > 45) continue;
       var l = trStationLocal(st, x, z); if (Math.abs(l.lx) <= 32 && l.lz > 1.6 && l.lz < 2.45) return true;
     }
     return false;
@@ -18002,12 +18022,30 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     [-0.75, 0.75].forEach(function (px) { box(0.08, 0.46, 0.46, M.iron, px, 0.23, 0, b); });
     return b;
   }
+  function trBin(g, x, z, y) {
+    var M = trMats(), b = new THREE.Group(); b.position.set(x, y, z); g.add(b);
+    pkLathe([[0.01, 0], [0.18, 0], [0.2, 0.1], [0.22, 0.55], [0.24, 0.6], [0.01, 0.6]], pkPaint(0x2f4a35, 0.6, 0.3), 0, 0, 0, b, 12);
+    box(0.48, 0.04, 0.48, M.iron, 0, 0.62, 0, b);
+    return b;
+  }
   function trLamp(st, x, z, y) {
     var M = trMats(), g = st.g;
     pkRoundCyl(0.05, 3.2, M.iron, x, y + 1.6, z, g, 8); pkBevelBox(0.3, 0.1, 0.3, M.iron, x, y + 0.05, z, g, 0.03);
     var lens = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 10), M.lampOff); lens.position.set(x, y + 3.35, z); lens.userData.noBake = true; g.add(lens);
     cyl(0.04, 0.22, M.iron, x, y + 3.62, z, g, 6, 0.2); sphere(0.05, M.brass, x, y + 3.76, z, g);
+    var cage = new THREE.Group(); cage.position.set(x, y + 3.35, z); g.add(cage);
+    for (var i = 0; i < 4; i++) { var a = i * Math.PI / 2; pkRod(Math.cos(a) * 0.19, 0.2, Math.sin(a) * 0.19, Math.cos(a) * 0.26, -0.2, Math.sin(a) * 0.26, 0.012, M.iron, cage, 4); }
     st.lamps.push(lens);
+  }
+  function trClockPole(g, x, z, y) {
+    var M = trMats();
+    pkRoundCyl(0.06, 2.6, M.iron, x, y + 1.3, z, g, 8); pkBevelBox(0.5, 0.1, 0.5, M.stoneDark, x, y + 0.05, z, g, 0.02);
+    var face = new THREE.Mesh(new THREE.CircleGeometry(0.34, 22), std({ color: 0xf4efe0, roughness: 0.5 })); face.position.set(x, y + 2.62, z + 0.03); face.userData.noBake = true; g.add(face);
+    var back = new THREE.Mesh(new THREE.CircleGeometry(0.34, 22), std({ color: 0xf4efe0, roughness: 0.5 })); back.position.set(x, y + 2.62, z - 0.03); back.rotation.y = Math.PI; back.userData.noBake = true; g.add(back);
+    var ring = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.03, 6, 22), M.iron); ring.position.set(x, y + 2.62, z); g.add(ring);
+    box(0.03, 0.24, 0.02, M.iron, x, y + 2.72, z + 0.05, g); box(0.16, 0.03, 0.02, M.iron, x + 0.06, y + 2.62, z + 0.05, g);
+    sphere(0.04, M.brass, x, y + 3.02, z, g);
+    return g;
   }
   function trPath(w, pts, y) {
     var M = pkMats();
@@ -18034,70 +18072,113 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var M = trMats(), P = pkMats(), s = trNearestS(def.x, def.z), o = trSamp(TR.main, s, {});
     var g = trFrameGroup(o.x, o.z, o.yaw), dyn = trDyn(g), R = trState(), mine = R.st[def.id] || (R.st[def.id] = { gates: false, lights: false });
     var st = { def: def, id: def.id, name: def.name, idx: idx, s: s, x: o.x, z: o.z, dx: o.dx, dz: o.dz, yaw: o.yaw, g: g, dyn: dyn, lamps: [], gateLeaves: [], gatesAmt: mine.gates ? 1 : 0,
-      lightsOn: !!mine.lights, door: 0, doorWant: false, bellT: 0, bellG: null, board: null, light: null, sw: {}, led: {}, cabOpen: false, staff: 0 };
+      lightsOn: !!mine.lights, door: 0, doorWant: false, bellT: 0, bellG: null, board: null, light: null, sw: {}, led: {}, cabOpen: false, staff: 0, clockHands: null };
     TR.st.push(st);
+    
     // the platform, edged in yellow, with steps down to the walk behind it
     pkBevelBox(64, 0.95, 5.4, M.stone, 0, 0.475, 4.6, g, 0.04); pkBevelBox(64.3, 0.05, 5.6, M.stoneDark, 0, 0.95, 4.6, g, 0.02);
     box(64, 0.02, 0.28, pkPaint(0xf0c63a, 0.6, 0.1), 0, 0.985, 2.3, g);
-    var ramp = box(3.3, 0.12, 3.5, M.stoneDark, 0, 0.47, 8.95, g); ramp.rotation.x = -Math.atan2(0.95, 3.2);
-    // the building: timber and cream, a steep gable roof, a clock tower with a pointed spire
+    // a tactile strip and a white edge line, a little more believable
+    box(63.6, 0.015, 0.12, pkPaint(0xf6f2e6, 0.7, 0.05), 0, 0.986, 2.52, g);
+    for (var tb = -31; tb <= 31; tb += 0.6) box(0.18, 0.02, 0.18, pkPaint(0xf0c63a, 0.6, 0.1), tb, 0.99, 2.72, g);
+    
+    // FIXED: The ramp properly slopes away from the platform down to the ground
+    var ramp = box(3.3, 0.12, 5.2, M.stoneDark, 0, 0.47, 10.0, g); ramp.rotation.x = Math.atan2(0.95, 5.2);
+    
+    // a low back wall behind the platform, capped with stone, so the platform reads as raised ground
+    pkBevelBox(64, 0.55, 0.35, M.stone, 0, 0.72, 7.28, g, 0.03); pkBevelBox(64.2, 0.08, 0.45, M.stoneDark, 0, 1.02, 7.28, g, 0.02);
+    
+    // Keep the station house on its original setback so the Elfin Woods building clears the theater.
     pkBevelBox(12, 3.3, 4.4, P.cream, -22, 2.6, 9.8, g, 0.05);
     box(12.2, 0.14, 4.6, M.woodD, -22, 0.97 + 0.05, 9.8, g);
     for (var bx = -27.5; bx <= -16.5; bx += 2.2) box(0.14, 3.3, 0.1, M.woodD, bx, 2.6, 7.56, g);
     box(12.1, 0.14, 0.1, M.woodD, -22, 4.2, 7.55, g); box(12.1, 0.14, 0.1, M.woodD, -22, 2.4, 7.55, g);
     pkGableRoof(12, 4.4, 2.2, P[def.roof], P.cream, -22, 4.25, 9.8, g, 0.5);
+    
+    box(12.4, 0.12, 0.1, M.woodD, -22, 4.28, 7.52, g);
+    var gut = pkRoundCyl(0.06, 12.2, M.iron, -22, 4.2, 7.62, g, 6); gut.rotation.z = Math.PI / 2;
     [-26, -19].forEach(function (wx) { pkWindow(g, wx, 3.2, 7.55, 1.1, 1.3, Math.PI, P.white, P.pane); });
+    [-26, -19].forEach(function (wx) { box(1.2, 0.22, 0.26, M.woodD, wx, 2.42, 7.42, g); for (var f = 0; f < 5; f++) sphere(0.08, pkPaint([0xd94f4f, 0xf3d36a, 0xe9f7f5][f % 3], 0.6, 0.1), wx - 0.44 + f * 0.22, 2.58, 7.42, g); });
     var door = pkBevelBox(1.1, 2.2, 0.1, M.wood, -22.5, 2.05, 7.55, g, 0.03); door.rotation.y = 0; sphere(0.05, M.brass, -22.2, 2.05, 7.48, g);
+    
+    var porch = pkBevelBox(1.8, 0.1, 1.1, P[def.roof], -22.5, 3.5, 7.2, g, 0.02); porch.rotation.x = -0.18;
+    [-23.2, -21.8].forEach(function (px) { pkRoundCyl(0.05, 1.4, M.iron, px, 2.6, 6.8, g, 6); });
+    
     var tw = pkBevelBox(2.6, 6.6, 2.6, P.cream, -29.2, 4.25, 9.8, g, 0.05);
     for (var ty = 1.6; ty < 7; ty += 2.2) box(2.7, 0.12, 2.7, M.woodD, -29.2, ty + 0.95, 9.8, g);
     var sp = new THREE.Mesh(new THREE.ConeGeometry(2.0, 4.6, 8), P[def.roof]); sp.position.set(-29.2, 10.85, 9.8); sp.castShadow = true; g.add(sp);
     sphere(0.12, M.gold, -29.2, 13.25, 9.8, g);
-    [[-29.2, 7.45, 0, Math.PI], [-27.88, 9.8, 1, Math.PI / 2]].forEach(function (c) {   // the clock, on the track side and the walk side
+    
+    pkRod(-29.2, 13.2, 9.8, -29.2, 14.2, 9.8, 0.02, M.iron, g, 6);
+    var vane = box(0.6, 0.03, 0.03, M.iron, -29.2, 14.1, 9.8, g); box(0.12, 0.2, 0.02, M.iron, -29.0, 14.2, 9.8, g); sphere(0.05, M.gold, -29.2, 14.2, 9.8, g);
+    
+    [[-29.2, 7.45, 0, Math.PI], [-27.88, 9.8, 1, Math.PI / 2]].forEach(function (c) {   // the clock
       var face = new THREE.Mesh(new THREE.CircleGeometry(0.8, 24), std({ color: 0xf4efe0, roughness: 0.5 })); face.position.set(c[0], 6.7, c[1]); face.rotation.y = c[3]; g.add(face);
       var hand = box(0.05, 0.6, 0.03, M.iron, c[0], 6.95, c[1] + (c[3] === Math.PI ? -0.03 : 0), g); hand.rotation.z = 0.5;
+      var cr = new THREE.Mesh(new THREE.TorusGeometry(0.82, 0.04, 6, 24), M.brass); cr.position.set(c[0], 6.7, c[1] + (c[3] === Math.PI ? -0.02 : 0.02)); cr.rotation.y = c[3]; g.add(cr);
     });
+    
     sign([def.name], 6.4, 0.7, -21, 4.7, 7.4, Math.PI, { w: 512, h: 64, bg: '#12301f', fg: '#f2e6b8' }, g);
-    // the canopy over the platform: iron posts, a sloping roof with a scalloped, painted valance
-    for (var px = -4; px >= -28; px -= 6) { pkRoundCyl(0.07, 3.2, M.iron, px, 2.55, 3.4, g, 8); }
+    
+    // the canopy over the platform
+    for (var px = -4; px >= -28; px -= 6) { pkRoundCyl(0.07, 3.2, M.iron, px, 2.55, 3.4, g, 8); pkRoundCyl(0.12, 0.16, M.stoneDark, px, 0.02, 3.4, g, 10); }
     var roof = pkBevelBox(28, 0.12, 6.2, P[def.roof], -16, 4.3, 5.9, g, 0.03); roof.rotation.x = 0.06;
+    for (var bx2 = -29; bx2 <= -3; bx2 += 6) box(0.1, 0.14, 6.0, M.woodD, bx2, 4.18, 5.9, g);
     for (var vx = -29.5; vx <= -2.5; vx += 0.9) { var sc = trCone(0.28, 0.45, [M.red, M.cream, M.green][Math.round((vx + 30) / 0.9) % 3], vx, 4.0, 2.9, g, 4); sc.rotation.x = Math.PI; }
-    // benches, lamps, bins
-    trBench(g, -8, 6.4, 0, 0.95); trBench(g, 6, 6.4, 0, 0.95); trBench(g, 16, 6.4, 0, 0.95); trBench(g, -15, 3.1, Math.PI, 0.95);
+    
+    // FIXED: Benches now face the track properly
+    trBench(g, -8, 6.4, 0, 0.95); 
+    trBench(g, 6, 6.4, 0, 0.95); 
+    trBench(g, 16, 6.4, 0, 0.95); 
+    trBench(g, -15, 3.1, Math.PI, 0.95);
+    
+    trBin(g, -4.5, 6.6, 0.95); trBin(g, 20.5, 6.6, 0.95);
     [-10, 2, 14, 24].forEach(function (lx) { trLamp(st, lx, 6.7, 0.95); });
+    trClockPole(g, 25.5, 4.6, 0.95);
+    
+    pkBevelBox(0.5, 0.36, 0.28, M.woodD, -7.2, 1.13, 5.9, g, 0.03); box(0.5, 0.04, 0.04, M.brass, -7.2, 1.3, 5.9, g);
+    pkBevelBox(0.42, 0.3, 0.24, pkPaint(0x6b4a2e, 0.6, 0.2), -6.5, 1.1, 6.2, g, 0.03);
+    
     st.light = new THREE.PointLight(0xffd9a0, 0, 26); st.light.position.set(-8, 4.0, 5); g.add(st.light);
-    // the departure board, hung under the canopy
+    
     var cv = document.createElement('canvas'); cv.width = 384; cv.height = 128; var tex = new THREE.CanvasTexture(cv);
     var bm = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.8), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide })); bm.position.set(-8, 3.55, 3.4); bm.userData.noBake = true; g.add(bm);
-    box(2.5, 0.9, 0.06, M.iron, -8, 3.55, 3.44, g); st.board = { cv: cv, tex: tex, last: '' };
-    // the station gates: a rail along the platform edge with a pair of leaves at each wagon door
+    box(2.5, 0.9, 0.06, M.iron, -8, 3.55, 3.44, g);
+    [-8.9, -7.1].forEach(function (rx) { pkRod(rx, 3.95, 3.44, rx, 4.18, 3.44, 0.015, M.iron, g, 4); });
+    st.board = { cv: cv, tex: tex, last: '' };
+    
+    // the station gates
     for (var k = 0; k < 8; k++) {
       var cx = trWagonX(k);
       [-1, 1].forEach(function (sd) {
         var pv = new THREE.Group(); pv.position.set(cx + sd * 0.62, 0.95, 2.05); dyn.add(pv);
         var leaf = pkBevelBox(0.62, 1.1, 0.05, M.wood, -sd * 0.31, 0.62, 0, pv, 0.01); box(0.62, 0.06, 0.07, M.brass, -sd * 0.31, 1.18, 0, pv);
+        sign([String(k + 1)], 0.12, 0.12, -sd * 0.31, 0.75, -0.03, Math.PI, { w: 96, h: 96, bg: '#1b232c', fg: '#f3d36a' }, pv);
         st.gateLeaves.push({ pv: pv, sd: sd });
       });
       if (k < 7) { var fx = cx - 2.55; pkBevelBox(3.9, 0.06, 0.07, M.iron, fx, 2.0, 2.05, g, 0.01); pkBevelBox(3.9, 0.06, 0.07, M.iron, fx, 1.55, 2.05, g, 0.01); [-1.9, 1.9].forEach(function (pp) { box(0.07, 1.1, 0.07, M.iron, fx + pp, 1.5, 2.05, g); }); }
     }
-    // the bell, on a bracket on the building: it swings while it rings
+    
+    // the bell
     var bell = new THREE.Group(); bell.position.set(-14.5, 3.9, 7.1); g.add(bell); st.bellG = bell;
     pkLathe([[0.02, 0.5], [0.12, 0.45], [0.2, 0.3], [0.3, 0.1], [0.34, 0], [0.3, 0]], M.brass, 0, -0.5, 0, bell, 16); sphere(0.05, M.iron, 0, -0.52, 0, bell);
     box(0.1, 0.1, 0.7, M.iron, -14.5, 4.45, 6.95, g); pkRod(-14.5, 4.4, 7.1, -14.5, 4.4, 6.7, 0.03, M.iron, g, 6);
+    
     trBuildCabinet(st);
-    // the walk, and where it meets the palisade
-    var p0 = trLocalToWorld(st, 0, 10.7), pts = def.walk.slice(); pts[0] = [p0.x, p0.z]; trPath(3.4, pts);
+    
+    var p0 = trLocalToWorld(st, 0, 9.8), pts = def.walk.slice(); pts[0] = [p0.x, p0.z]; trPath(3.4, pts);
     trDrawBoard(st, true);
     return st;
   }
   function trLocalToWorld(st, lx, lz) { return { x: st.x + st.dx * lx - st.dz * lz, z: st.z + st.dz * lx + st.dx * lz }; }
 
-  // ── The control cabinet: a locked door and, behind it, 3 switches and 2 buttons ──
+  // ── The control cabinet ──────────────────────────────────────────
   function trBuildCabinet(st) {
-    var M = trMats(), g = st.g, dyn = st.dyn, cx = 8, zf = 6.7, zb = 7.3, zp = 7.22, y0 = 0.95, shell = pkPaint(0x3b4650, 0.5, 0.5);
-    pkBevelBox(1.2, 1.9, 0.06, shell, cx, y0 + 0.95, zb, g, 0.01);                                     // back
+    var M = trMats(), g = st.g, dyn = st.dyn, cx = 8, zf = 10.4, zb = 11.0, zp = 10.92, y0 = 0.95, shell = pkPaint(0x3b4650, 0.5, 0.5);
+    pkBevelBox(1.2, 1.9, 0.06, shell, cx, y0 + 0.95, zb, g, 0.01);
     [-0.57, 0.57].forEach(function (sx) { pkBevelBox(0.06, 1.9, 0.6, shell, cx + sx, y0 + 0.95, (zf + zb) / 2, g, 0.01); });
     pkBevelBox(1.2, 0.06, 0.6, shell, cx, y0 + 1.9, (zf + zb) / 2, g, 0.01); pkBevelBox(1.2, 0.06, 0.6, shell, cx, y0 + 0.03, (zf + zb) / 2, g, 0.01);
-    pkBevelBox(1.0, 1.7, 0.03, pkPaint(0x20262c, 0.8, 0.2), cx, y0 + 0.95, zp + 0.03, g, 0.005);       // the inner plate
+    pkBevelBox(1.0, 1.7, 0.03, pkPaint(0x20262c, 0.8, 0.2), cx, y0 + 0.95, zp + 0.03, g, 0.005);
     sign(['TRAIN CONTROL'], 0.9, 0.16, cx, y0 + 2.05, zf - 0.02, Math.PI, { w: 256, h: 48, bg: '#1b232c', fg: '#f5b53d' }, g);
     pkBevelBox(0.5, 0.06, 0.5, M.stoneDark, cx, y0 + 0.01, (zf + zb) / 2, g, 0.01);
     var defs = [
@@ -18122,9 +18203,9 @@ function pkBuildParkCabinet(px, py, pz, ry) {
         use: function () { trSwitchUse(st, def.k); }
       }, g);
     });
-    var pv = new THREE.Group(); pv.position.set(cx - 0.5, y0 + 0.95, zf); dyn.add(pv); st.doorPv = pv;   // the door hangs on its left edge
+    var pv = new THREE.Group(); pv.position.set(cx - 0.5, y0 + 0.95, zf); dyn.add(pv); st.doorPv = pv;
     pkBevelBox(1.0, 1.8, 0.05, pkPaint(0x4a5a68, 0.45, 0.5), 0.5, 0, 0, pv, 0.01);
-    var lk = pkRoundCyl(0.05, 0.03, M.brass, 0.88, 0, -0.04, pv, 12); lk.rotation.x = Math.PI / 2; box(0.02, 0.07, 0.01, M.iron, 0.88, 0, -0.06, pv);   // the lock and its keyhole
+    var lk = pkRoundCyl(0.05, 0.03, M.brass, 0.88, 0, -0.04, pv, 12); lk.rotation.x = Math.PI / 2; box(0.02, 0.07, 0.01, M.iron, 0.88, 0, -0.06, pv);
     sign(['STAFF ONLY'], 0.5, 0.1, 0.5, 0.55, -0.03, Math.PI, { w: 256, h: 48, bg: '#8a1f1f', fg: '#ffffff' }, pv);
     hitBox(1.0, 1.8, 0.3, 0.5, 0, -0.1, {
       prompt: function () { return st.cabOpen ? 'Close and lock the control cabinet' : 'Unlock the control cabinet with your key'; },
@@ -18150,7 +18231,6 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   }
   function trSetGates(st, open) { st.gatesWant = open; trState().st[st.id].gates = open; }
 
-  // the departure board: the next stop and the time to go
   function trDrawBoard(st, force) {
     var t = TR.t, txt1 = st.name, txt2 = '';
     if (t && t.at === st.idx && t.dwell > 0) { var d = Math.ceil(t.dwell); txt2 = 'DEPARTS IN ' + Math.floor(d / 60) + ':' + (d % 60 < 10 ? '0' : '') + (d % 60); }
@@ -18163,32 +18243,24 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   }
 
   // ── The depot ─────────────────────────────────────────────────────
-  // the siding runs through a long shed north of the park: coal and water, a pit with a hoist, a wash. Between the points
-  // lever near the north run and the shed it is a loop-through, so the train never has to reverse.
   function trBuildDepot() {
     var M = trMats(), P = pkMats(), zc = TR.N - 12, D = TR.depot = { x0: 28, x1: 92, z: zc, bays: {} };
-    // the floor and the walls: open arches at both ends, tall windows along the south wall
     pkSlab(70, 14.4, 60, zc, 0.02, std({ color: 0x6d6a64, roughness: 0.95 }));
     pkBevelBox(70, 5.2, 0.5, P.cream, 60, 2.6, zc - 7.2, scene, 0.05);
     pkBevelBox(70, 1.2, 0.5, P.cream, 60, 0.6, zc + 7.2, scene, 0.05); pkBevelBox(70, 0.9, 0.5, P.cream, 60, 4.75, zc + 7.2, scene, 0.05);
     for (var px = 26; px <= 94; px += 4.25) box(0.4, 3.6, 0.5, M.woodD, px, 3.0, zc + 7.2, scene);
     for (var wx = 28.1; wx < 94; wx += 4.25) { plane(3.2, 2.7, P.pane, wx + 1.9, 2.95, zc + 6.94, 0, Math.PI, scene); }
     pkBevelBox(0.5, 5.2, 14.4, P.cream, 25.2, 2.6, zc, scene, 0.05); pkBevelBox(0.5, 5.2, 14.4, P.cream, 94.8, 2.6, zc, scene, 0.05);
-    // the arches: the end walls are cut open for the train (a lintel over a 3.6 m opening)
     pkGableRoof(70, 15, 3.2, P.slate, P.cream, 60, 5.2, zc, scene, 0.6);
     pkBevelBox(0.7, 1.4, 4.0, P.stoneDark, 25.1, 4.5, zc, scene, 0.05); pkBevelBox(0.7, 1.4, 4.0, P.stoneDark, 94.9, 4.5, zc, scene, 0.05);
     sign(['LINDENBURG RAILWAY', 'LOCOMOTIVE DEPOT'], 6.4, 1.0, 60, 6.2, zc + 7.55, 0, { w: 640, h: 100, bg: '#12301f', fg: '#f2e6b8' }, scene);
-    // the pit between the rails, covered by gratings
     box(14, 0.05, 0.9, std({ color: 0x0a0b0c, roughness: 1 }), 59, 0.075, zc);
     for (var gx = 52.5; gx < 66; gx += 0.9) box(0.08, 0.04, 0.9, M.iron, gx, 0.115, zc);
-    // an overhead gantry: two columns and a rolling beam with a hoist
     [zc - 5.5, zc + 5.5].forEach(function (zz) { pkBevelBox(0.35, 5, 0.35, M.iron, 59, 2.5, zz, scene, 0.03); });
     box(0.4, 0.45, 11.6, pkPaint(0xe3a02e, 0.5, 0.4), 59, 4.8, zc, scene); var hoist = box(0.9, 0.5, 0.9, M.iron, 59, 4.35, zc - 1.5, scene); pkRod(59, 4.1, zc - 1.5, 59, 3.0, zc - 1.5, 0.02, M.iron, scene, 4);
-    // 1. the coal stage and the water crane
     pkBevelBox(4.4, 2.6, 2.4, M.stoneDark, 40, 1.3, zc - 5.6, scene, 0.05); for (var c = 0; c < 9; c++) sphere(0.5 + (c % 3) * 0.12, M.coal, 38.6 + (c % 4) * 0.95, 2.7 + (c % 2) * 0.2, zc - 5.6 + ((c * 3) % 5 - 2) * 0.3, scene);
     box(0.6, 0.12, 2.6, M.iron, 40, 2.4, zc - 3.4, scene).rotation.x = 0.5;
     pkRoundCyl(0.12, 4.0, M.iron, 45, 2.0, zc + 3.3, scene, 10); pkRod(45, 3.9, zc + 3.3, 45, 3.5, zc + 1.2, 0.07, M.iron, scene, 8); pkRod(45, 3.5, zc + 1.2, 45, 2.3, zc + 1.2, 0.08, M.black, scene, 8);
-    // 2./3. the wash: a frame over the rails with two rotating brushes; and a console at each bay
     [zc - 2.4, zc + 2.4].forEach(function (zz) { pkBevelBox(0.3, 3.8, 0.3, M.iron, 80, 1.9, zz, scene, 0.03); });
     pkBevelBox(0.3, 0.3, 5.1, M.iron, 80, 3.8, zc, scene, 0.03);
     D.brushes = []; [-1, 1].forEach(function (sd) { var br = trDyn(); br.position.set(80, 0, zc + sd * 1.9); pkRoundCyl(0.45, 2.6, pkPaint(0x2a7fd0, 0.9, 0), 0, 1.7, 0, br, 14); pkRoundCyl(0.05, 3.2, M.iron, 0, 1.7, 0, br, 6); D.brushes.push(br); });
@@ -18201,7 +18273,6 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     console3(38, 'COAL + WATER', 0, function () { return trInDepot() ? 'Fill up coal and water' + trFillCost() : 'Bring the train into the depot first'; }, function () { trDoFill(); });
     console3(60, 'SERVICE', 0, function () { return trInDepot() ? 'Service the train - ' + trServiceCost() : 'Bring the train into the depot first'; }, function () { trDoService(); });
     console3(80, 'WASH', 0, function () { return trInDepot() ? 'Wash the train ($30)' : 'Bring the train into the depot first'; }, function () { trDoWash(); });
-    // the yard: a water tower, a coal heap, a hut, a fence, and the lane in from the crossing
     var wt = new THREE.Group(); wt.position.set(104, 0, zc - 20); scene.add(wt);
     [[-1.4, -1.4], [1.4, -1.4], [-1.4, 1.4], [1.4, 1.4]].forEach(function (p) { pkRod(p[0], 0, p[1], p[0] * 0.8, 6, p[1] * 0.8, 0.12, M.woodD, wt, 8); });
     pkRoundCyl(2.2, 3.4, M.woodD, 0, 7.7, 0, wt, 20); trCone(2.5, 1.8, M.slateRed, 0, 10.2, 0, wt, 20);
@@ -18212,7 +18283,6 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     pkBevelBox(6, 3, 4, P.clapGrey, 56, 1.5, zc - 17, scene, 0.05); pkGableRoof(6, 4, 1.4, P.slate, P.clapGrey, 56, 3, zc - 17, scene, 0.3); solid(53, 59, zc - 19, zc - 15, 0, 4.5);
     sign(['DEPOT OFFICE'], 2.6, 0.4, 56, 2.5, zc - 14.93, 0, { w: 320, h: 56, bg: '#1b232c', fg: '#f5b53d' }, scene);
     trPath(3.0, [[-17, TR.N - 18], [-17, zc - 12], [56, zc - 12]], 0.013);
-    // the points lever, just south of the north run where the siding leaves it
     var pl = new THREE.Group(); pl.position.set(TR.J1 + 4, 0, TR.N + 3.4); scene.add(pl);
     pkBevelBox(0.5, 0.5, 0.7, M.stoneDark, 0, 0.25, 0, pl, 0.03); var lvDyn = trDyn(pl); lvDyn.position.set(0, 0.5, 0); D.lever = lvDyn;
     pkRod(0, 0, 0, 0, 1.0, 0, 0.03, M.red, lvDyn, 6); sphere(0.07, M.red, 0, 1.0, 0, lvDyn);
@@ -18264,7 +18334,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     [-0.7, 0.7].forEach(function (z) { var b = pkRoundCyl(0.12, 0.3, M.iron, 4.45, 1.1, z, g, 10); b.rotation.z = Math.PI / 2; var d = pkRoundCyl(0.2, 0.05, M.iron, 4.62, 1.1, z, g, 12); d.rotation.z = Math.PI / 2; });
     [-1, 1].forEach(function (s) { pkBevelBox(5.0, 0.07, 0.42, M.black, 1.7, 1.55, s * 0.98, g, 0.02); box(4.9, 0.03, 0.04, M.brass, 1.7, 1.6, s * 1.18, g); });
     // the boiler, with brass bands, and the smokebox
-    var boiler = new THREE.Mesh(new THREE.CylinderGeometry(0.74, 0.74, 4.3, 24), M.green); boiler.rotation.z = Math.PI / 2; boiler.position.set(0.75, 2.0, 0); boiler.castShadow = true; g.add(boiler);
+    var boiler = new THREE.Mesh(new THREE.CylinderGeometry(0.74, 0.74, 3.5, 24), M.green); boiler.rotation.z = Math.PI / 2; boiler.position.set(1.15, 2.0, 0); boiler.castShadow = true; g.add(boiler);
     var sbx = new THREE.Mesh(new THREE.CylinderGeometry(0.77, 0.77, 1.1, 24), M.black); sbx.rotation.z = Math.PI / 2; sbx.position.set(3.45, 2.0, 0); sbx.castShadow = true; g.add(sbx);
     var door = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.06, 20), M.black); door.rotation.z = Math.PI / 2; door.position.set(4.02, 2.0, 0); g.add(door);
     var dring = new THREE.Mesh(new THREE.TorusGeometry(0.64, 0.03, 6, 22), M.brass); dring.rotation.y = Math.PI / 2; dring.position.set(4.04, 2.0, 0); g.add(dring);
@@ -18273,7 +18343,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     // chimney, domes, whistle, safety valves, headlamp
     var ch = pkLathe([[0.01, 0], [0.19, 0], [0.2, 0.45], [0.33, 0.85], [0.42, 1.0], [0.3, 1.02], [0.02, 1.0]], M.black, 3.55, 2.72, 0, g, 16); u.chimney = new THREE.Vector3(3.55, 3.8, 0);
     var ring = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.03, 6, 20), M.brass); ring.rotation.x = Math.PI / 2; ring.position.set(3.55, 3.72, 0); g.add(ring);
-    pkLathe([[0.01, 0], [0.5, 0], [0.5, 0.2], [0.32, 0.55], [0.2, 0.62], [0.01, 0.64]], M.green, 1.8, 2.72, 0, g, 18); pkRoundCyl(0.16, 0.2, M.brass, 1.8, 3.4, 0, g, 12); sphere(0.17, M.brass, 1.8, 3.5, 0, g);
+    pkLathe([[0.01, 0], [0.5, 0], [0.5, 0.2], [0.32, 0.55], [0.2, 0.62], [0.01, 0.64]], M.green, 1.4, 2.72, 0, g, 18); pkRoundCyl(0.16, 0.2, M.brass, 1.4, 3.4, 0, g, 12); sphere(0.17, M.brass, 1.4, 3.5, 0, g);
     pkLathe([[0.01, 0], [0.34, 0], [0.34, 0.18], [0.2, 0.42], [0.01, 0.46]], M.green, 0.5, 2.72, 0, g, 14); pkRoundCyl(0.1, 0.18, M.brass, 0.5, 3.2, 0, g, 10);
     [-0.12, 0.12].forEach(function (z) { pkRoundCyl(0.04, 0.34, M.brass, -0.45, 2.88, z, g, 8); });
     var wh = pkLathe([[0.01, 0], [0.08, 0], [0.09, 0.22], [0.14, 0.34], [0.09, 0.36], [0.01, 0.36]], M.brass, -0.8, 2.72, 0, g, 10); u.whistle = new THREE.Vector3(-0.8, 3.1, 0);
@@ -18295,64 +18365,213 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       [2.9, 3.7].forEach(function (x) { var w = trWheel(0.3, M.black, rim, g, x, 0.56, s * 0.8, 6); u.wheels.push({ w: w, r: 0.3 }); });
     });
     pkBevelBox(1.6, 0.14, 1.8, M.black, 3.3, 0.9, 0, g, 0.02);
+    
     // the cab: green panels, brass trim, a cream roof, spectacle windows in front
     pkBevelBox(3.1, 0.14, 2.3, M.woodD, -2.65, 1.28, 0, g, 0.02);   // the footplate
     [-1, 1].forEach(function (s) {
-      pkBevelBox(3.1, 1.0, 0.08, M.green, -2.65, 1.85, s * 1.1, g, 0.02); box(3.1, 0.05, 0.1, M.brass, -2.65, 2.38, s * 1.1, g);
+      // Taller side panel carries the cab hardware farther up toward the window line.
+      pkBevelBox(3.1, 1.2, 0.08, M.green, -2.65, 1.95, s * 1.1, g, 0.02); box(3.1, 0.05, 0.1, M.brass, -2.65, 2.58, s * 1.1, g);
       box(0.1, 1.1, 0.1, M.greenD, -4.15, 2.9, s * 1.1, g); box(0.1, 1.1, 0.1, M.greenD, -1.2, 2.9, s * 1.1, g); box(3.1, 0.07, 0.1, M.greenD, -2.65, 3.4, s * 1.1, g);
       pkBevelBox(0.06, 0.2, 0.5, M.black, -4.12, 1.0, s * 1.2, g, 0.01);
     });
-    pkBevelBox(0.08, 2.2, 2.3, M.green, -1.12, 2.4, 0, g, 0.02);   // the front wall: the backhead stands against it
-    [-0.55, 0.55].forEach(function (z) { var wn = new THREE.Mesh(new THREE.CircleGeometry(0.2, 18), M.glass); wn.rotation.y = -Math.PI / 2; wn.position.set(-1.07, 3.05, z); g.add(wn); var wr = new THREE.Mesh(new THREE.TorusGeometry(0.21, 0.025, 6, 18), M.brass); wr.rotation.y = Math.PI / 2; wr.position.set(-1.07, 3.05, z); g.add(wr); });
-    pkBevelBox(3.6, 0.16, 2.6, M.cream, -2.6, 3.58, 0, g, 0.04); pkBevelBox(3.2, 0.1, 2.2, P.cream, -2.6, 3.7, 0, g, 0.03); box(3.62, 0.04, 0.05, M.brass, -2.6, 3.52, 1.3, g); box(3.62, 0.04, 0.05, M.brass, -2.6, 3.52, -1.3, g);
+    // Build the front wall around two openings so the portholes are clear from inside.
+    pkBevelBox(0.08, 1.1, 2.3, M.green, -1.12, 1.85, 0, g, 0.02); // below windows
+    pkBevelBox(0.08, 0.12, 2.3, M.green, -1.12, 3.38, 0, g, 0.02); // above windows
+    pkBevelBox(0.08, 0.94, 0.12, M.green, -1.12, 2.85, 0, g, 0.02); // slim centre mullion
+    pkBevelBox(0.08, 0.94, 0.16, M.green, -1.12, 2.85, -1.07, g, 0.02); // outer edges
+    pkBevelBox(0.08, 0.94, 0.16, M.green, -1.12, 2.85, 1.07, g, 0.02);
+    
+    // Roof spans exactly between the rear posts and front wall; it should read as a seated cab ceiling, not an overhang.
+    pkBevelBox(3.1, 0.16, 2.6, M.cream, -2.65, 3.58, 0, g, 0.04); pkBevelBox(2.75, 0.1, 2.2, P.cream, -2.65, 3.7, 0, g, 0.03); box(3.12, 0.04, 0.05, M.brass, -2.65, 3.52, 1.3, g); box(3.12, 0.04, 0.05, M.brass, -2.65, 3.52, -1.3, g);
     var cl = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), M.lampOn); cl.position.set(-2.6, 3.35, 0); g.add(cl);
     sign(['No. 1', 'LINDENBURG'], 1.2, 0.34, -2.65, 1.85, 1.15, 0, { w: 256, h: 96, bg: '#102a1c', fg: '#f3d36a' }, g); sign(['No. 1', 'LINDENBURG'], 1.2, 0.34, -2.65, 1.85, -1.15, Math.PI, { w: 256, h: 96, bg: '#102a1c', fg: '#f3d36a' }, g);
     sign(['LINDENBURG'], 1.5, 0.3, 1.0, 2.05, 0.77, 0, { w: 384, h: 80, bg: '#1d5b3b', fg: '#f3d36a', plate: false }, g); sign(['LINDENBURG'], 1.5, 0.3, 1.0, 2.05, -0.77, Math.PI, { w: 384, h: 80, bg: '#1d5b3b', fg: '#f3d36a', plate: false }, g);
-    // the backhead: dials, levers, switches (their hit boxes are live while the driver is in the cab)
+    
+    // the backhead: dials, levers, switches
     trBuildCabControls(g, u);
+    
     // the doorway: climb up into the cab
     [-1, 1].forEach(function (s) { box(0.7, 0.06, 0.5, M.iron, -2.9, 0.75, s * 1.35, g); box(0.7, 0.06, 0.5, M.iron, -2.9, 1.02, s * 1.25, g); });
     hitBox(1.2, 1.6, 1.0, -2.9, 1.9, 1.6, { prompt: function () { return trCanBoard() ? 'Climb into the cab' : ''; }, use: function () { trEnterCab(); } }, g);
     hitBox(1.2, 1.6, 1.0, -2.9, 1.9, -1.6, { prompt: function () { return trCanBoard() ? 'Climb into the cab' : ''; }, use: function () { trEnterCab(); } }, g);
     TR.units.push(u); return u;
   }
-  // the controls: each is { group that moves, hit box }. Levers swing about z; the gas and the brake sit on the left, the switches and
-  // the horn on the right. The same actions are on the keyboard (see part 43).
+
+  // ── The cab interior: a proper little room inside the green shell ──
   function trBuildCabControls(g, u) {
-    var M = trMats(), X = -1.2;
-    pkBevelBox(0.1, 1.0, 1.9, pkPaint(0x1d2a24, 0.5, 0.4), X - 0.02, 2.0, 0, g, 0.02);
-    trGauge(g, X - 0.09, 2.45, -0.62, -Math.PI / 2, 'STEAM', 'press'); trGauge(g, X - 0.09, 2.45, 0.0, -Math.PI / 2, 'km/h', 'speed'); trGauge(g, X - 0.09, 2.45, 0.62, -Math.PI / 2, 'COAL', 'fuel');
+    var M = trMats(), P = pkMats(), X = -1.2;
+    var wood = M.woodD, brass = M.brass, iron = M.iron;
+    
+    // --- the cab floor and a little rug ---
+    pkBevelBox(3.0, 0.08, 2.15, std({ color: 0x6b4a2e, roughness: 0.9 }), -2.65, 1.32, 0, g, 0.02);
+    for (var fp = -4.1; fp <= -1.2; fp += 0.32) box(0.05, 0.012, 2.1, pkPaint(0x4a3420, 0.9, 0), fp, 1.37, 0, g);
+    var rug = box(1.0, 0.012, 1.2, pkPaint(0x7a1f2a, 0.9, 0.05), -3.2, 1.38, 0, g);
+    
+    // --- the backhead: a dark riveted plate against the front wall ---
+    pkBevelBox(0.12, 1.26, 1.78, pkPaint(0x1d2a24, 0.55, 0.45), X - 0.02, 2.1, 0, g, 0.02);
+    for (var rv = 0; rv < 12; rv++) { sphere(0.018, brass, X - 0.09, 1.55 + (rv % 6) * 0.19, -0.8 + Math.floor(rv / 6) * 1.6, g); }
+    
+    // --- the firebox door: moved to the far left corner so it doesn't block the view ---
+    var fbGlow = new THREE.Mesh(new THREE.CircleGeometry(0.12, 18), new THREE.MeshBasicMaterial({ color: 0xff8a2a })); fbGlow.rotation.y = -Math.PI / 2; fbGlow.position.set(X - 0.11, 1.72, -0.65); fbGlow.userData.noBake = true; g.add(fbGlow);
+    var fbRing = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.03, 6, 18), brass); fbRing.rotation.y = Math.PI / 2; fbRing.position.set(X - 0.1, 1.72, -0.65); g.add(fbRing);
+    var fbDoor = new THREE.Group(); fbDoor.position.set(X - 0.12, 1.72, -0.82); g.add(fbDoor);
+    var fbPlate = new THREE.Mesh(new THREE.CircleGeometry(0.12, 18), pkPaint(0x2a1a12, 0.7, 0.3)); fbPlate.rotation.y = -Math.PI / 2; fbDoor.add(fbPlate);
+    box(0.03, 0.18, 0.03, brass, X - 0.14, 1.72, -0.7, g);
+    var fbLever = new THREE.Group(); fbLever.position.set(X - 0.13, 1.9, -0.5); g.add(fbLever); pkRod(0, 0, 0, 0, -0.2, 0, 0.018, iron, fbLever, 5); sphere(0.035, brass, 0, -0.21, 0, fbLever);
+    hitBox(0.3, 0.4, 0.35, X - 0.3, 1.8, -0.45, { prompt: function () { return TR.t && TR.t.driving ? 'Open the firebox door' : ''; }, use: function () { sfx('click'); TR.fireOpen = !TR.fireOpen; } }, g);
+    u.fbLever = fbLever; u.fbDoor = fbDoor; u.fbGlow = fbGlow;
+    
+    // --- the gauge panel: moved to the center-right ---
+    var panel = new THREE.Group(); panel.position.set(X - 0.08, 2.48, 0); g.add(panel);
+    trGauge(panel, 0, 0, -0.52, -Math.PI / 2, 'STEAM', 'press');
+    trGauge(panel, 0, 0, 0.0, -Math.PI / 2, 'km/h', 'speed');
+    trGauge(panel, 0, 0, 0.52, -Math.PI / 2, 'COAL', 'fuel');
+    
     // the water gauge glass
-    var gl = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 8), M.glass); gl.position.set(X - 0.1, 2.0, 0.85); g.add(gl);
-    var wl = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.5, 0.02), new THREE.MeshBasicMaterial({ color: 0x4aa8ff })); wl.position.set(X - 0.1, 1.76, 0.85); wl.geometry.translate(0, 0.25, 0); wl.position.y = 1.75; g.add(wl); TR.waterGlass = wl;
+    var gl = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 8), M.glass); gl.position.set(X - 0.12, 2.0, 0.8); g.add(gl);
+    var wl = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.5, 0.02), new THREE.MeshBasicMaterial({ color: 0x4aa8ff })); wl.position.set(X - 0.12, 1.75, 0.8); wl.geometry.translate(0, 0.25, 0); wl.position.y = 1.75; g.add(wl); TR.waterGlass = wl;
+    box(0.04, 0.1, 0.1, brass, X - 0.12, 2.26, 0.8, g); box(0.04, 0.1, 0.1, brass, X - 0.12, 1.74, 0.8, g);
+    
+    // --- levers and switches ---
+    // Set the controls slightly back from the front wall so they sit within easy reach in the cab.
+    var leverX = X - 0.45;
     function lever(key, z, y, col, label, prompt, use) {
-      var pv = new THREE.Group(); pv.position.set(X - 0.08, y, z); g.add(pv);
-      pkBevelBox(0.14, 0.06, 0.3, M.brass, 0, 0, 0, pv, 0.01);
-      var st = new THREE.Group(); pv.add(st); pkRod(0, 0, 0, 0, 0.62, 0, 0.022, M.iron, st, 6); sphere(0.055, col, 0, 0.66, 0, st);
-      sign([label], 0.3, 0.07, X - 0.075, y - 0.16, z, -Math.PI / 2, { w: 192, h: 48, bg: '#1b232c', fg: '#f5f2e8' }, g);
-      hitBox(0.5, 0.9, 0.35, X - 0.3, y + 0.35, z, { prompt: function () { return TR.t && TR.t.driving ? prompt() : ''; }, use: use }, g);
+      var pv = new THREE.Group(); pv.position.set(leverX, y, z); g.add(pv);
+      pkBevelBox(0.14, 0.06, 0.3, brass, 0, 0, 0, pv, 0.01);
+      var st = new THREE.Group(); pv.add(st); pkRod(0, 0, 0, 0, 0.62, 0, 0.022, iron, st, 6); sphere(0.055, col, 0, 0.66, 0, st);
+      sign([label], 0.38, 0.09, leverX + 0.01, y - 0.16, z, -Math.PI / 2, { w: 192, h: 48, bg: '#1b232c', fg: '#f5f2e8' }, g);
+      // Thin target hugging its own lever: roomy on the panel, without masking adjacent controls along the sight line.
+      hitBox(0.20, 0.85, 0.32, leverX, y + 0.34, z, { prompt: function () { return TR.t && TR.t.driving ? prompt() : ''; }, use: use }, g);
       u[key] = st; return st;
     }
-    lever('gasLever', -0.62, 1.45, M.red, 'GAS', function () { return 'Gas: ' + Math.round(TR.t.throttle * 100) + '% (W / S)'; }, function () { TR.t.throttle = TR.t.throttle >= 0.99 ? 0 : Math.min(1, TR.t.throttle + 0.25); });
-    lever('brakeLever', -0.15, 1.45, pkPaint(0x2a5fd0, 0.4, 0.3), 'BRAKE', function () { return 'Brake: ' + Math.round(TR.t.brake * 100) + '% (Space)'; }, function () { TR.t.brake = TR.t.brake >= 0.99 ? 0 : Math.min(1, TR.t.brake + 0.5); });
-    lever('revLever', 0.3, 1.45, M.brass, 'REVERSER', function () { return 'Reverser: ' + (TR.t.dir > 0 ? 'FORWARD' : 'REVERSE') + ' (R)'; }, function () { trToggleDir(); });
+    lever('gasLever', -0.55, 1.55, M.red, 'GAS', function () { return 'Gas: ' + Math.round(TR.t.throttle * 100) + '% (W / S)'; }, function () { TR.t.throttle = TR.t.throttle >= 0.99 ? 0 : Math.min(1, TR.t.throttle + 0.25); });
+    lever('brakeLever', -0.05, 1.55, pkPaint(0x2a5fd0, 0.4, 0.3), 'BRAKE', function () { return 'Brake: ' + Math.round(TR.t.brake * 100) + '% (Space)'; }, function () { TR.t.brake = TR.t.brake >= 0.99 ? 0 : Math.min(1, TR.t.brake + 0.5); });
+    lever('revLever', 0.45, 1.55, brass, 'REVERSER', function () { return 'Reverser: ' + (TR.t.dir > 0 ? 'FORWARD' : 'REVERSE') + ' (R)'; }, function () { trToggleDir(); });
+    
     function sw(key, z, y, label, prompt, use) {
-      var pv = new THREE.Group(); pv.position.set(X - 0.09, y, z); g.add(pv);
-      pkRoundCyl(0.06, 0.04, M.brass, 0, 0, 0, pv, 12).rotation.z = Math.PI / 2;
-      var lv = new THREE.Group(); pv.add(lv); pkRod(0, 0, 0, -0.0, 0.16, 0, 0.016, M.iron, lv, 6); sphere(0.03, M.red, 0, 0.17, 0, lv); u[key] = lv;
-      sign([label], 0.26, 0.07, X - 0.075, y + 0.22, z, -Math.PI / 2, { w: 160, h: 48, bg: '#1b232c', fg: '#f5f2e8' }, g);
+      var pv = new THREE.Group(); pv.position.set(X - 0.11, y, z); g.add(pv);
+      pkRoundCyl(0.06, 0.04, brass, 0, 0, 0, pv, 12).rotation.z = Math.PI / 2;
+      var lv = new THREE.Group(); pv.add(lv); pkRod(0, 0, 0, -0.0, 0.16, 0, 0.016, iron, lv, 6); sphere(0.03, M.red, 0, 0.17, 0, lv); u[key] = lv;
+      sign([label], 0.34, 0.08, X - 0.09, y + 0.22, z, -Math.PI / 2, { w: 160, h: 48, bg: '#1b232c', fg: '#f5f2e8' }, g);
       var led = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 6), M.ledOff); led.position.set(-0.03, -0.13, 0); pv.add(led); led.userData.noBake = true; u[key + 'Led'] = led;
-      hitBox(0.3, 0.4, 0.3, X - 0.28, y + 0.05, z, { prompt: function () { return TR.t && TR.t.driving ? prompt() : ''; }, use: use }, g);
+      hitBox(0.12, 0.50, 0.30, X - 0.17, y + 0.05, z, { prompt: function () { return TR.t && TR.t.driving ? prompt() : ''; }, use: use }, g);
     }
-    sw('engSw', 0.62, 1.8, 'ENGINE', function () { return 'Engine ' + (TR.t.engine ? 'ON' : 'off') + ' (Y)'; }, function () { trToggleEngine(); });
-    sw('doorSw', 0.9, 1.8, 'DOORS', function () { return 'Wagon doors ' + (TR.t.doorsOpen ? 'open' : 'shut') + ' (O)'; }, function () { trToggleDoors(); });
-    // the horn button and the whistle pull
-    var hb = pkRoundCyl(0.09, 0.06, M.red, X - 0.12, 1.6, 0.78, g, 14); hb.rotation.z = Math.PI / 2; u.hornBtn = hb; hb.userData.rest = hb.position.x;
-    sign(['HORN'], 0.22, 0.07, X - 0.075, 1.78, 0.78, -Math.PI / 2, { w: 128, h: 48, bg: '#1b232c', fg: '#f5f2e8' }, g);
-    hitBox(0.3, 0.3, 0.3, X - 0.3, 1.6, 0.78, { prompt: function () { return TR.t && TR.t.driving ? 'Horn (H - hold)' : ''; }, use: function () { trBlast('horn', 0.9); } }, g);
-    var cord = new THREE.Group(); cord.position.set(-1.6, 3.55, 0.45); g.add(cord); u.cord = cord; pkRod(0, 0, 0, 0, -0.9, 0, 0.012, M.black, cord, 4); sphere(0.06, M.brass, 0, -0.95, 0, cord);
-    hitBox(0.3, 0.5, 0.3, -1.6, 2.7, 0.45, { prompt: function () { return TR.t && TR.t.driving ? 'Steam whistle (F - hold)' : ''; }, use: function () { trBlast('whistle', 1.4); } }, g);
+    sw('engSw', 0.45, 1.9, 'ENGINE', function () { return 'Engine ' + (TR.t.engine ? 'ON' : 'off') + ' (I)'; }, function () { trToggleEngine(); });
+    sw('doorSw', 0.84, 1.9, 'DOORS', function () { return 'Wagon doors ' + (TR.t.doorsOpen ? 'open' : 'shut') + ' (U)'; }, function () { trToggleDoors(); });
+    
+    // horn and whistle
+    var hb = pkRoundCyl(0.09, 0.06, M.red, X - 0.14, 1.62, 0.5, g, 14); hb.rotation.z = Math.PI / 2; u.hornBtn = hb; hb.userData.rest = hb.position.x;
+    sign(['HORN'], 0.22, 0.07, X - 0.09, 1.8, 0.5, -Math.PI / 2, { w: 128, h: 48, bg: '#1b232c', fg: '#f5f2e8' }, g);
+    hitBox(0.14, 0.34, 0.26, X - 0.20, 1.62, 0.5, { prompt: function () { return TR.t && TR.t.driving ? 'Horn (H - hold)' : ''; }, use: function () { trBlast('horn', 0.9); } }, g);
+    
+    var cord = new THREE.Group(); cord.position.set(-1.6, 3.55, 0.6); g.add(cord); u.cord = cord; pkRod(0, 0, 0, 0, -0.9, 0, 0.012, M.black, cord, 4); sphere(0.06, brass, 0, -0.95, 0, cord);
+    hitBox(0.3, 0.5, 0.3, -1.6, 2.7, 0.6, { prompt: function () { return TR.t && TR.t.driving ? 'Steam whistle (F - hold)' : ''; }, use: function () { trBlast('whistle', 1.4); } }, g);
+    
+    // --- the roof lining and its lamps ---
+    pkBevelBox(3.0, 0.05, 2.1, pkPaint(0x3a2a20, 0.8, 0.1), -2.65, 3.48, 0, g, 0.02);
+    [-3.6, -1.8].forEach(function (lx) { var cl = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), M.lampOn); cl.position.set(lx, 3.4, 0); cl.userData.noBake = true; g.add(cl); });
+    
+    // --- side shelves ---
+    [-1, 1].forEach(function (side) {
+      box(1.1, 0.05, 0.22, wood, -3.2, 2.45, side * 0.99, g);
+      [-3.7, -2.7].forEach(function (bxx) { box(0.05, 0.2, 0.2, iron, bxx, 2.34, side * 0.99, g); });
+    });
+
+    // --- operator alignment monitor and passenger information screen ---
+    function cabDisplay(x, y, z, w, h, ry) {
+      var frame = new THREE.Group(); frame.position.set(x, y, z); frame.rotation.y = ry; g.add(frame);
+      // A wide backplate and bolts make this read as a wall-mounted display rather than a floating screen.
+      pkBevelBox(w + 0.16, h + 0.16, 0.018, M.black, 0, 0, -0.055, frame, 0.012);
+      pkBevelBox(w + 0.1, h + 0.1, 0.1, M.black, 0, 0, 0, frame, 0.025);
+      pkBevelBox(w + 0.02, h + 0.02, 0.02, brass, 0, 0, 0.052, frame, 0.01);
+      [-1, 1].forEach(function (bx) { [-1, 1].forEach(function (by) { sphere(0.012, brass, bx * (w / 2 + 0.055), by * (h / 2 + 0.055), 0.012, frame); }); });
+      var cv = document.createElement('canvas'); cv.width = 512; cv.height = 300;
+      var tex = new THREE.CanvasTexture(cv);
+      var screen = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
+      screen.position.z = 0.066; screen.userData.noBake = true; frame.add(screen);
+      return { canvas: cv, tex: tex };
+    }
+    TR.cabDisplays = {
+      alignment: cabDisplay(-3.72, 1.95, -1.01, 0.54, 0.32, 0),
+      passenger: cabDisplay(-2.58, 1.95, -1.01, 0.54, 0.32, 0)
+    };
+    pkBevelBox(0.16, 0.13, 0.06, M.black, -2.88, 1.62, -1.04, g, 0.015);
+    sign(['PAGE'], 0.26, 0.09, -2.88, 1.43, -0.96, 0, { w: 128, h: 48, bg: '#1b232c', fg: '#f5f2e8' }, g);
+    var pageLever = new THREE.Group(); pageLever.position.set(-2.88, 1.62, -0.98); g.add(pageLever);
+    pkRod(0, 0, 0, 0, 0.09, 0, 0.014, iron, pageLever, 5); sphere(0.028, M.brass, 0, 0.1, 0, pageLever);
+    TR.cabDisplays.pageLever = pageLever;
+    hitBox(0.26, 0.32, 0.26, -2.88, 1.62, -0.82, {
+      prompt: function () { return TR.t && TR.t.driving ? 'Passenger display: change page' : ''; },
+      use: function () { trTogglePassengerPage(); }
+    }, g);
+    pkBevelBox(0.16, 0.13, 0.06, M.black, -2.22, 1.62, -1.04, g, 0.015);
+    var paBtn = new THREE.Mesh(new THREE.SphereGeometry(0.04, 14, 10), M.red); paBtn.position.set(-2.22, 1.62, -0.96); g.add(paBtn); paBtn.userData.noBake = true;
+    sign(['REPEAT'], 0.3, 0.09, -2.22, 1.43, -0.96, 0, { w: 144, h: 48, bg: '#1b232c', fg: '#f5f2e8' }, g);
+    hitBox(0.26, 0.3, 0.26, -2.22, 1.62, -0.82, {
+      prompt: function () { return TR.t && TR.t.driving ? 'Repeat passenger announcement' : ''; },
+      use: function () { trRepeatPassengerInfo(); }
+    }, g);
+    
+    // props on the shelves
+    var mug = pkRoundCyl(0.06, 0.12, pkPaint(0xe9f7f5, 0.5, 0.1), -3.5, 2.54, -0.99, g, 10); 
+    var handle = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.014, 5, 10, Math.PI), pkPaint(0xe9f7f5, 0.5, 0.1)); 
+    handle.position.set(-3.44, 2.54, -0.99); handle.rotation.y = Math.PI / 2; g.add(handle);
+    
+    pkBevelBox(0.4, 0.2, 0.24, pkPaint(0x8a1f1f, 0.6, 0.3), -2.95, 2.6, -0.99, g, 0.02); 
+    box(0.4, 0.03, 0.05, brass, -2.95, 2.63, -0.99, g);
+    pkBevelBox(0.5, 0.16, 0.3, pkPaint(0x2a3f6a, 0.9, 0.05), -3.1, 2.56, 0.99, g, 0.04);
+    
+    // a small coal scuttle by the fireman's side
+    var sc = new THREE.Group(); sc.position.set(-3.9, 1.42, 0.9); g.add(sc);
+    pkLathe([[0.01, 0], [0.16, 0], [0.18, 0.28], [0.2, 0.32], [0.01, 0.32]], iron, 0, 0, 0, sc, 12); 
+    sphere(0.05, M.coal, 0, 0.3, 0, sc); sphere(0.05, M.coal, 0.06, 0.28, 0.04, sc);
   }
+
+  function trCabDisplaysTick(dt) {
+    var t = TR.t, D = TR.cabDisplays;
+    if (!t || !D) return;
+    t.cabDisplayT = (t.cabDisplayT || 0) + dt;
+    if (t.cabDisplayT < 0.35) return;
+    t.cabDisplayT = 0;
+    var stopIndex = t.at >= 0 ? t.at : t.nextSt, st = TR.st[stopIndex], next = TR.st[t.nextSt];
+    var distance = next ? Math.max(0, Math.round(trFwdDist(t, trTargetS(t.nextSt, t.mode)))) : 0;
+    if (D.pageLever) D.pageLever.rotation.z = t.passengerRoutePage ? -0.45 : 0.45;
+
+    var a = D.alignment, c = a.canvas.getContext('2d');
+    if (c) {
+      c.fillStyle = '#10211b'; c.fillRect(0, 0, 512, 300); c.strokeStyle = '#c9a45e'; c.lineWidth = 4; c.strokeRect(7, 7, 498, 286);
+      c.textAlign = 'left'; c.fillStyle = '#f2d48c'; c.font = 'bold 25px Consolas, monospace'; c.fillText('PLATFORM ALIGNMENT', 24, 43);
+      c.fillStyle = '#dbe8d7'; c.font = '20px Consolas, monospace'; c.fillText(st ? st.name : 'ROUTE UNKNOWN', 24, 88);
+      c.fillStyle = t.at >= 0 && t.v < 0.25 ? '#83e5a3' : '#f2c75c'; c.font = 'bold 25px Consolas, monospace';
+      c.fillText(t.at >= 0 && t.v < 0.25 ? 'STOP POSITION: ALIGNED' : 'STOP IN: ' + distance + ' m', 24, 139);
+      c.fillStyle = '#dbe8d7'; c.font = '20px Consolas, monospace';
+      c.fillText('SPEED: ' + Math.round(t.v * 3.6) + ' km/h', 24, 192);
+      c.fillText('PLATFORM GATES: ' + (st && st.gatesAmt > 0.5 ? 'OPEN' : 'CLOSED'), 24, 230);
+      c.fillText('WAGON DOORS: ' + (t.doorsOpen ? 'OPEN' : 'SHUT'), 24, 268);
+      a.tex.needsUpdate = true;
+    }
+
+    var p = D.passenger, pc = p.canvas.getContext('2d');
+    if (pc) {
+      pc.fillStyle = '#10211b'; pc.fillRect(0, 0, 512, 300); pc.strokeStyle = '#c9a45e'; pc.lineWidth = 4; pc.strokeRect(7, 7, 498, 286);
+      pc.textAlign = 'left'; pc.fillStyle = '#f2d48c'; pc.font = 'bold 23px Consolas, monospace'; pc.fillText('LINDENBURG RAILWAY', 24, 42);
+      if (!t.passengerRoutePage) {
+        pc.fillStyle = '#83e5a3'; pc.font = 'bold 21px Consolas, monospace'; pc.fillText(t.at >= 0 ? 'NOW AT' : 'NEXT STOP', 24, 93);
+        pc.fillStyle = '#ffffff'; pc.font = 'bold 28px Arial, sans-serif'; pc.fillText(st ? st.name : 'PLEASE WAIT', 24, 143);
+        pc.fillStyle = '#dbe8d7'; pc.font = '17px Arial, sans-serif'; pc.fillText(t.at >= 0 ? 'Please remain seated until the train stops.' : 'Please remain seated until your stop.', 24, 197);
+        pc.fillText('Thank you for travelling with us.', 24, 231);
+      } else {
+        pc.fillStyle = '#83e5a3'; pc.font = 'bold 21px Consolas, monospace'; pc.fillText('ROUTE', 24, 80);
+        pc.font = '19px Arial, sans-serif';
+        TR.st.forEach(function (station, i) {
+          pc.fillStyle = i === stopIndex ? '#f2d48c' : '#dbe8d7';
+          pc.fillText((i === stopIndex ? '> ' : '  ') + station.name, 28, 116 + i * 31);
+        });
+      }
+      p.tex.needsUpdate = true;
+    }
+  }
+
   // ── The tender ────────────────────────────────────────────────────
   function trBuildTender() {
     var M = trMats(), g = trDyn(), u = { kind: 'tender', g: g, len: 4.0, d: 10.9, bf: 1.2, br: 1.2, wheels: [], rods: [], drivers: [] };
@@ -18367,6 +18586,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     box(0.7, 0.1, 0.1, M.iron, -2.25, 1.1, 0, g);
     TR.units.push(u); return u;
   }
+
   // ── A wagon: four seats, doors at the sides, a fairy-tale roof ────
   function trBuildWagon(k) {
     var M = trMats(), P = pkMats(), T = TR_WAGONS[k], g = trDyn(), u = { kind: 'wagon', g: g, idx: k, len: 4.6, d: 15.7 + 5.1 * k, bf: 1.5, br: 1.5, wheels: [], rods: [], drivers: [], doors: [], seats: [] };
@@ -18381,6 +18601,14 @@ function pkBuildParkCabinet(px, py, pz, ry) {
         pkBevelBox(0.5, 0.62, 0.05, body, -h * 0.25, 0, 0, pv, 0.01); box(0.5, 0.05, 0.07, trim, -h * 0.25, 0.33, 0, pv); sphere(0.03, M.brass, -h * 0.4, 0.05, s * 0.04, pv);
         u.doors.push({ pv: pv, side: s, h: h });
       });
+      // Proper framed passenger windows rather than an open-sided shell.
+      [-1.4, 1.4].forEach(function (wx) {
+        pkBevelBox(1.58, 0.84, 0.055, trim, wx, 2.0, s * 1.125, g, 0.015);
+        box(1.38, 0.64, 0.016, M.glass, wx, 2.0, s * 1.16, g);
+        box(0.045, 0.69, 0.026, trim, wx, 2.0, s * 1.17, g);
+        box(1.44, 0.035, 0.026, trim, wx, 2.0, s * 1.17, g);
+      });
+      [-0.62, 0.62].forEach(function (dx) { pkRoundCyl(0.022, 0.56, M.brass, dx, 1.63, s * 1.17, g, 6); });
     });
     // corner posts, roof beams and lanterns
     [[-2.2, -1.1], [2.2, -1.1], [-2.2, 1.1], [2.2, 1.1]].forEach(function (p) { pkRoundCyl(0.06, 1.6, trim, p[0], 1.75, p[1], g, 8); sphere(0.1, M.brass, p[0], 2.58, p[1], g); });
@@ -18388,6 +18616,20 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     pkBevelBox(4.9, 0.12, 2.7, body, 0, 2.56, 0, g, 0.03); box(4.95, 0.06, 2.75, trim, 0, 2.5, 0, g);
     for (var sc = -2.3; sc <= 2.3; sc += 0.46) { var s1 = trCone(0.16, 0.26, trim, sc, 2.38, 1.34, g, 4); s1.rotation.x = Math.PI; var s2 = trCone(0.16, 0.26, trim, sc, 2.38, -1.34, g, 4); s2.rotation.x = Math.PI; }
     var lamp = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), M.lampOn); lamp.position.set(0, 2.38, 0); lamp.userData.noBake = true; g.add(lamp); u.lamp = lamp;
+    // Interior luggage racks and reading lamps make every carriage feel occupied and usable.
+    var caseCols = [0x7b2530, 0x254a78, 0x6a4b2d, 0x40552b];
+    [-1, 1].forEach(function (side) {
+      [-1.4, 1.4].forEach(function (rx, ri) {
+        box(1.5, 0.05, 0.22, M.woodD, rx, 2.31, side * 0.9, g);
+        box(1.5, 0.025, 0.03, trim, rx, 2.35, side * 0.98, g);
+        [-0.62, 0.62].forEach(function (off) { pkRoundCyl(0.025, 0.23, trim, rx + off, 2.18, side * 0.92, g, 6); });
+        if ((ri + k + (side > 0 ? 1 : 0)) % 2 === 0) {
+          pkBevelBox(0.34, 0.18, 0.2, pkPaint(caseCols[(k + ri) % caseCols.length], 0.7, 0.15), rx + (ri ? -0.28 : 0.28), 2.43, side * 0.9, g, 0.025);
+          box(0.23, 0.022, 0.03, M.brass, rx + (ri ? -0.28 : 0.28), 2.46, side * 1.01, g);
+        }
+      });
+      [-1.4, 1.4].forEach(function (lx) { var rl = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), M.lampOn); rl.position.set(lx, 2.34, side * 0.99); rl.userData.noBake = true; g.add(rl); });
+    });
     // two benches, face to face, two seats each: the aisle between them is the door
     [-1, 1].forEach(function (b) {
       var bx = b * 1.6, cush = pkPaint(0x7a1f2a, 0.8, 0.05);
@@ -18399,6 +18641,8 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     trWagonRoof(g, T.roof, k, u);
     // wheels and couplings
     [-1, 1].forEach(function (s) { [-1.5, -0.6, 0.6, 1.5].forEach(function (x) { var w = trWheel(0.32, M.black, M.black, g, x, 0.58, s * 0.72, 6); u.wheels.push({ w: w, r: 0.32 }); }); });
+    [-1.5, -0.6, 0.6, 1.5].forEach(function (ax) { var axle = pkRoundCyl(0.045, 1.65, M.iron, ax, 0.58, 0, g, 8); axle.rotation.x = Math.PI / 2; });
+    [-1.05, 1.05].forEach(function (bx) { pkBevelBox(1.15, 0.12, 1.52, M.iron, bx, 0.72, 0, g, 0.02); });
     [-1, 1].forEach(function (e) { [-0.6, 0.6].forEach(function (z) { var bf = pkRoundCyl(0.09, 0.2, M.iron, e * 2.4, 0.9, z, g, 8); bf.rotation.z = Math.PI / 2; pkRoundCyl(0.16, 0.04, M.iron, e * 2.5, 0.9, z, g, 10).rotation.z = Math.PI / 2; }); });
     box(0.6, 0.08, 0.1, M.iron, -2.55, 0.9, 0, g);
     sign([String(k + 1)], 0.26, 0.26, 0, 2.05, 1.38, 0, { w: 96, h: 96, bg: '#1b232c', fg: '#f3d36a' }, g); sign([String(k + 1)], 0.26, 0.26, 0, 2.05, -1.38, Math.PI, { w: 96, h: 96, bg: '#1b232c', fg: '#f3d36a' }, g);
@@ -18441,6 +18685,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       [[-1.6, 0.6, 0.7], [1.4, 0.5, -0.8], [0.3, 1.0, 0.9], [-0.8, 0.9, -0.9], [1.9, 0.4, 0.5], [-2.0, 0.4, -0.4]].forEach(function (p, i) { var s2 = new THREE.Mesh(new THREE.OctahedronGeometry(0.1 + (i % 3) * 0.03), gold); s2.position.set(p[0], y + p[1], p[2]); g.add(s2); });
     }
   }
+
   // ── Putting the whole train on the line ───────────────────────────
   function trBuildTrain() {
     TR.units = []; trBuildLoco(); trBuildTender(); for (var k = 0; k < 8; k++) trBuildWagon(k);
@@ -18463,7 +18708,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     TR_GAPS.forEach(function (g) { trPortal(g.axis === 'z' ? g.x : g.x, g.axis === 'z' ? g.z : g.z, g.axis); });
     trBuildDepot(); trBuildTrain();
     TR.t = { s: 0, mode: 'M', v: 0, dir: 1, throttle: 0, brake: 1, engine: false, press: 0, doorsOpen: false, doorAmt: 0, driving: false, seat: null, look: { yaw: 0, pitch: 0 },
-      at: 0, departFrom: -1, nextSt: 1, dwell: 0, announced: false, belled: false, atb: '', washT: 0, chuff: 0, idleT: 0, hornOn: false, whistleOn: false, serviceT: 0, msgT: 0, hudT: 0, lapSeen: 0 };
+      at: 0, departFrom: -1, nextSt: 1, dwell: 0, announced: false, belled: false, atb: '', washT: 0, chuff: 0, idleT: 0, hornOn: false, whistleOn: false, serviceT: 0, msgT: 0, hudT: 0, lapSeen: 0, riders: 0, passengerRoutePage: false, cabDisplayT: 0 };
     R.auto = !!R.auto && pkOpCount() > 0;
     trResetToStation(0);
     trBuildHud();
@@ -18482,7 +18727,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   var _trPrevGuide = pkGuide;
   pkGuide = function () {
     return _trPrevGuide() + '<p><b>The Lindenburg Railway.</b> A steam train rings the park outside its fence: Central Station by the car park, Elfin Woods, Windmill Halt, Dragon Gate and Lakeside Halt, and the depot behind the park. At every station a locked cabinet holds the controls: AUTO (the same everywhere; it needs a hired operator), the platform gates, the lights, ANNOUNCE and the BELL. ' +
-      'Climb into the cab from the platform. <b>W/S</b> gas, <b>Space</b> brake, <b>H</b> horn, <b>F</b> whistle, <b>Y</b> engine, <b>O</b> wagon doors, <b>R</b> reverser, <b>E</b> out. The train waits two minutes at every station and will not leave with the doors open. ' +
+      'Climb into the cab from the platform. <b>W/S</b> gas, <b>Space</b> brake, <b>H</b> horn, <b>F</b> whistle, <b>I</b> engine, <b>U</b> wagon doors, <b>R</b> reverser, <b>E</b> out. The train waits two minutes at every station and will not leave with the doors open. ' +
       'Throw the points near the north run to send it through the depot shed, where you can fuel, service and wash it.</p>';
   };
 
@@ -18523,6 +18768,25 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     trChime(st); toast('Announcement: the train is leaving soon', ''); logEvent(st.name + ': the train is leaving soon', '');
     try { if (window.speechSynthesis && window.SpeechSynthesisUtterance) { var u = new SpeechSynthesisUtterance('Attention please. The train at ' + st.name.toLowerCase() + ' is leaving soon. Please stand clear of the doors.'); u.rate = 0.92; u.volume = Math.max(0.15, trVol(st.x, st.z)); setTimeout(function () { try { window.speechSynthesis.speak(u); } catch (e) {} }, 1700); } } catch (e) {}
   }
+  function trTogglePassengerPage() {
+    var t = TR.t; if (!t || !t.driving) return;
+    t.passengerRoutePage = !t.passengerRoutePage;
+    sfx('click'); toast('Passenger display: ' + (t.passengerRoutePage ? 'route list' : 'next stop'), '');
+    trCabDisplaysTick(1);
+  }
+  function trRepeatPassengerInfo() {
+    var t = TR.t; if (!t || !t.driving) return;
+    var i = t.at >= 0 ? t.at : t.nextSt, st = TR.st[i]; if (!st) return;
+    var message = t.at >= 0 ? 'We are now at ' + st.name.toLowerCase() + '. Please mind the gap when leaving the train.' : 'The next stop is ' + st.name.toLowerCase() + '. Please remain seated until the train has stopped.';
+    sfx('click'); trChime(st); toast('Passenger announcement: ' + st.name, '');
+    try {
+      if (window.speechSynthesis && window.SpeechSynthesisUtterance) {
+        window.speechSynthesis.cancel();
+        var speech = new SpeechSynthesisUtterance(message); speech.rate = 0.92; speech.volume = Math.max(0.15, trVol(camera.position.x, camera.position.z));
+        window.speechSynthesis.speak(speech);
+      }
+    } catch (e) {}
+  }
 
   // ── Switches, buttons, services ───────────────────────────────────
   function trSetAuto(on) {
@@ -18561,8 +18825,19 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   function trCanBoard() { var t = TR.t; return !t.driving && !t.seat && t.v < 0.3; }
   function trCanSit(u) { var t = TR.t; if (t.driving || t.seat || t.v > 0.3 || !t.doorsOpen) return false; var st = trStationAtHead(); return !st || st.gatesAmt > 0.5; }
   function trStationAtHead() { return TR.t.at >= 0 ? TR.st[TR.t.at] : null; }
-  function trEnterCab() { var t = TR.t; if (!trCanBoard()) return; t.driving = true; t.look.yaw = 0; t.look.pitch = -0.05; toast('In the cab: W/S gas, Space brake, H horn, F whistle, Y engine, O doors, R reverser, E to get out', ''); sfx('click'); }
-  function trSit(u, seat) { var t = TR.t; if (!trCanSit(u)) return; t.seat = { u: u, seat: seat }; t.look.yaw = 0; t.look.pitch = -0.08; seat.taken = true; toast('Seated. E to get up when the train has stopped', ''); sfx('click'); }
+  
+  function trEnterCab() { 
+    var t = TR.t; if (!trCanBoard()) return; 
+    t.driving = true; t.look.yaw = 0; t.look.pitch = -0.05; 
+    toast('In the cab: W/S gas, Space brake, H horn, F whistle, I engine, U doors, R reverser, E to get out. C for 3rd person, scroll to zoom.', ''); sfx('click'); 
+  }
+  
+  function trSit(u, seat) { 
+    var t = TR.t; if (!trCanSit(u)) return; 
+    t.seat = { u: u, seat: seat }; t.look.yaw = 0; t.look.pitch = -0.08; seat.taken = true; 
+    toast('Seated. E to get up when the train has stopped. C for 3rd person.', ''); sfx('click'); 
+  }
+  
   function trLeave() {
     var t = TR.t, u = t.driving ? TR.units[0] : (t.seat ? t.seat.u : null); if (!u) return false;
     if (t.v > 0.3) { toast('Stay on board until the train has stopped', 'bad'); return true; }
@@ -18570,36 +18845,80 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var g = u.g, c = Math.cos(g.rotation.y), s = Math.sin(g.rotation.y), lx = t.driving ? -2.9 : 0, lz = 2.7;
     var ex = g.position.x + lx * c + lz * s, ez = g.position.z - lx * s + lz * c;
     player.x = ex; player.z = ez; player.y = floorY(ex, ez); player.vy = 0; player.yaw = g.rotation.y - Math.PI / 2 - Math.PI / 2 + t.look.yaw; player.pitch = 0;
-    if (t.seat) t.seat.seat.taken = false; t.seat = null; t.driving = false; trVoice('horn', false); trVoice('whistle', false); sfx('click'); return true;
+    if (t.seat) t.seat.seat.taken = false; t.seat = null; t.driving = false; trVoice('horn', false); trVoice('whistle', false); 
+    sfx('click'); return true;
   }
+  
   var _trPrevKey = GAME.key;
   GAME.key = function (e) {
     var t = TR.t;
     if (TR.built && t && (t.driving || t.seat) && !e.repeat) {
       if (e.code === 'KeyE') { if (t.driving && focusText) return false; return trLeave(); }
       if (t.driving) {
-        if (e.code === 'KeyY') { trToggleEngine(); return true; }
-        if (e.code === 'KeyO') { trToggleDoors(); return true; }
+        if (e.code === 'KeyI') { trToggleEngine(); return true; }
+        if (e.code === 'KeyU') { trToggleDoors(); return true; }
         if (e.code === 'KeyR') { trToggleDir(); return true; }
       }
     }
     return _trPrevKey ? _trPrevKey(e) : false;
   };
+  
+  var _trPrevWheel = GAME.wheel;
+  GAME.wheel = function (dir, e) {
+    var t = TR.t;
+    if (TR.built && t && (t.driving || t.seat) && t.thirdPerson) {
+      t.camDist = clamp(t.camDist + dir * 0.5, 2, 15);
+      return true;
+    }
+    return _trPrevWheel ? _trPrevWheel(dir, e) : false;
+  };
+  
   var _trPrevMouse = GAME.mouseLook;
   GAME.mouseLook = function (e, sx, iy) {
     var t = TR.t;
-    if (TR.built && t && (t.driving || t.seat)) { t.look.yaw -= e.movementX * sx; t.look.pitch = Math.max(-1.3, Math.min(1.3, t.look.pitch - e.movementY * sx * iy)); t.look.yaw = Math.max(-2.6, Math.min(2.6, t.look.yaw)); return true; }
+    if (TR.built && t && (t.driving || t.seat)) { 
+      t.look.yaw -= e.movementX * sx; 
+      t.look.pitch = Math.max(-1.3, Math.min(1.3, t.look.pitch - e.movementY * sx * iy)); 
+      t.look.yaw = Math.max(-2.6, Math.min(2.6, t.look.yaw)); 
+      return true; 
+    }
     return _trPrevMouse ? _trPrevMouse(e, sx, iy) : false;
   };
+  
   var _trPrevOverride = GAME.playerOverride;
   GAME.playerOverride = function (dt) {
     var t = TR.t;
     if (TR.built && t && (t.driving || t.seat)) {
       var u = t.driving ? TR.units[0] : t.seat.u, g = u.g, c = Math.cos(g.rotation.y), s = Math.sin(g.rotation.y);
-      var lx = t.driving ? -2.35 : t.seat.seat.x, ly = t.driving ? 2.95 : t.seat.seat.y + 0.75, lz = t.driving ? 0.15 : t.seat.seat.z, face = t.driving ? 0 : t.seat.seat.face;
+      var lx = t.driving ? -2.55 : t.seat.seat.x, ly = t.driving ? 3.02 : t.seat.seat.y + 0.75, lz = t.driving ? 0 : t.seat.seat.z, face = t.driving ? 0 : t.seat.seat.face;
       var wx = g.position.x + lx * c + lz * s, wz = g.position.z - lx * s + lz * c;
       player.x = wx; player.z = wz; player.y = ly - 1.62 + (t.driving ? 0 : 0); player.vy = 0;
-      camera.position.set(wx, ly, wz); camera.rotation.order = 'YXZ'; camera.rotation.set(t.look.pitch, g.rotation.y - Math.PI / 2 + face + t.look.yaw, 0);
+      
+      if (t.thirdPerson) {
+        // Position the player body at the cab/seating spot, facing the right way
+        if (!t.playerBody) {
+          t.playerBody = makeHuman({ shirt: std({ color: 0x2a3f5f, roughness: 0.8 }), pants: std({ color: 0x1a1a1a, roughness: 0.9 }) });
+          t.playerBody.visible = false;
+          t.playerBody.userData.dynamic = true;
+          scene.add(t.playerBody);
+        }
+        t.playerBody.visible = true;
+        t.playerBody.position.set(wx, player.y, wz);
+        t.playerBody.rotation.y = g.rotation.y - Math.PI / 2 + face + t.look.yaw;
+        animateHuman(t.playerBody, dt, t.driving ? 'idle' : 'sit', 0, null, false);
+        
+        // Place the camera behind the player, looking at them
+        var cx = wx + Math.sin(g.rotation.y - Math.PI / 2 + face + t.look.yaw) * t.camDist;
+        var cz = wz + Math.cos(g.rotation.y - Math.PI / 2 + face + t.look.yaw) * t.camDist;
+        var cy = ly + 0.5 + t.look.pitch * t.camDist;
+        camera.position.set(cx, cy, cz);
+        camera.lookAt(wx, ly, wz);
+      } else {
+        if (t.playerBody) t.playerBody.visible = false;
+        camera.position.set(wx, ly, wz); 
+        camera.rotation.order = 'YXZ'; 
+        camera.rotation.set(t.look.pitch, g.rotation.y - Math.PI / 2 + face + t.look.yaw, 0);
+      }
       player.yaw = camera.rotation.y; player.pitch = t.look.pitch;
       return true;
     }
@@ -18667,6 +18986,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     trStationsTick(dt);
     trVoiceTick(dt);
     trHud(dt);
+    trCabDisplaysTick(dt);
   }
   // ── AUTO ──────────────────────────────────────────────────────────
   function trAuto(dt) {
@@ -18754,7 +19074,9 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     lo.lamp.material.color.setHex(t.engine && (S.time < 7 || S.time > 18.5 || true) ? 0xfff0b0 : 0x55503a);
     // the cab
     lo.gasLever.rotation.z = 0.5 - t.throttle; lo.brakeLever.rotation.z = 0.5 - (t.brakeKey ? 1 : t.brake); lo.revLever.rotation.z = t.dir > 0 ? -0.5 : 0.5;
-    lo.engSw.rotation.z = t.engine ? 0.6 : -0.6; lo.doorSw.rotation.z = t.doorsOpen ? 0.6 : -0.6;
+    // The toggle handles pivot in the panel face. Positive X sends the handle clockwise as seen from the cab.
+    lo.engSw.rotation.z = 0; lo.doorSw.rotation.z = 0;
+    lo.engSw.rotation.x = t.engine ? 0.6 : -0.6; lo.doorSw.rotation.x = t.doorsOpen ? 0.6 : -0.6;
     lo.engSwLed.material = t.engine ? trMats().ledGreen : trMats().ledOff; lo.doorSwLed.material = t.doorsOpen ? trMats().ledAmber : trMats().ledOff;
     lo.hornBtn.position.x = lo.hornBtn.userData.rest + ((t.hornKey || t.hornAuto > 0) ? 0.03 : 0); lo.cord.position.y = 3.55 - ((t.whistleKey || t.whistleAuto > 0) ? 0.12 : 0);
     var G = TR.gauges; if (G) { G.press.rotation.z = 1.1 - t.press * 2.2; G.speed.rotation.z = 1.1 - Math.min(1, t.v * 3.6 / 40) * 2.2; G.fuel.rotation.z = 1.1 - R.fuel / 100 * 2.2; }
@@ -18812,5 +19134,99 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var l3 = (t.at >= 0 ? 'AT ' + TR.st[t.at].name + (t.dwell > 0 ? '   DEPARTS IN ' + Math.ceil(t.dwell) + ' s' : '   READY') : 'NEXT ' + st.name + '   ' + dist + ' m') + '   DOORS ' + (t.doorsOpen ? 'OPEN' : 'SHUT') + (R.auto ? '   AUTO' : '') + (t.mode === 'D' ? '   DEPOT LINE' : '');
     TR.hud.textContent = l1 + '\n' + l2 + '\n' + l3; TR.hud.hidden = false;
   }
+(function() {
+  var PK_3P = { on: false, camDist: 5.5, body: null };
+  Object.defineProperty(GAME, 'crosshair', {
+    configurable: true,
+    get: function () { return !(PK_3P.on || (TR && TR.t && TR.t.thirdPerson)); }
+  });
+
+  // Create the body when needed
+  function ensureBody() {
+    if (!PK_3P.body) {
+      PK_3P.body = makeHuman({ shirt: std({ color: 0x2a3f5f, roughness: 0.8 }), pants: std({ color: 0x1a1a1a, roughness: 0.9 }) });
+      PK_3P.body.visible = false;
+      PK_3P.body.userData.dynamic = true;
+      scene.add(PK_3P.body);
+    }
+  }
+
+  // Toggle 3rd person
+  function toggle3P() {
+    PK_3P.on = !PK_3P.on;
+    ensureBody();
+    if (!PK_3P.on) {
+      PK_3P.body.visible = false;
+    }
+    sfx('click');
+    if (PK_3P.on) toast('3rd person view. Scroll to zoom.', '');
+    else toast('1st person view.', '');
+  }
+
+  // Handle C key
+  var _prevKey = GAME.key;
+  GAME.key = function(e) {
+    if (e.code === 'KeyC' && !e.repeat && ui.started && !ui.blocked()) {
+      // Ignore if we are in the train, train logic handles its own 3rd person
+      if (TR && TR.t && (TR.t.driving || TR.t.seat)) return _prevKey ? _prevKey(e) : false;
+      toggle3P();
+      return true;
+    }
+    return _prevKey ? _prevKey(e) : false;
+  };
+
+  // Handle Scroll Wheel zoom
+  var _prevWheel = GAME.wheel;
+  GAME.wheel = function(dir, e) {
+    if (PK_3P.on && !(TR && TR.t && (TR.t.driving || TR.t.seat))) {
+      PK_3P.camDist = clamp(PK_3P.camDist + dir * 0.5, 1.5, 15);
+      return true;
+    }
+    return _prevWheel ? _prevWheel(dir, e) : false;
+  };
+
+  // Keep train camera ownership in the train hook. Free-roam movement remains with the engine.
+  var _prevOverride = GAME.playerOverride;
+  GAME.playerOverride = function(dt) {
+    if (TR && TR.t && (TR.t.driving || TR.t.seat)) {
+      if (PK_3P.on) toggle3P();
+      return _prevOverride ? _prevOverride(dt) : false;
+    }
+    return _prevOverride ? _prevOverride(dt) : false;
+  };
+
+  // Present runs after the engine moves the player and sets the first-person camera.
+  // Updating the third-person view here keeps normal walking and gravity active.
+  var _prevPresent = GAME.present;
+  GAME.present = function(dt) {
+    var result = _prevPresent ? _prevPresent(dt) : undefined;
+    if (PK_3P.on && ui.started && !ui.blocked() && !(TR && TR.t && (TR.t.driving || TR.t.seat))) {
+      ensureBody();
+      var px = player.x, py = player.y, pz = player.z, yaw = player.yaw;
+      PK_3P.body.visible = true;
+      PK_3P.body.rotation.y = yaw + Math.PI;
+      animateHuman(PK_3P.body, dt, player.keys && (player.keys.KeyW || player.keys.KeyA || player.keys.KeyS || player.keys.KeyD) ? 'walk' : 'idle', 1, null, false);
+      // animateHuman resets the model's vertical offset, so reapply the player's position after animating.
+      PK_3P.body.position.set(px, py, pz);
+      if (!player.grounded) {
+        var B = PK_3P.body.userData;
+        B.legs[0].rotation.x = -0.6; B.legs[1].rotation.x = -0.85;
+        B.legs[0].userData.knee.rotation.x = 0.65; B.legs[1].userData.knee.rotation.x = 0.9;
+        B.arms[0].rotation.x = -1.0; B.arms[1].rotation.x = -1.0;
+        B.arms[0].userData.elbow.rotation.x = -0.25; B.arms[1].userData.elbow.rotation.x = -0.25;
+      }
+
+      // Camera follows behind the direction the player is facing.
+      var cx = px + Math.sin(yaw) * PK_3P.camDist;
+      var cz = pz + Math.cos(yaw) * PK_3P.camDist;
+      var cy = py + 1.5 - Math.sin(player.pitch) * PK_3P.camDist;
+      camera.position.set(cx, cy, cz);
+      camera.lookAt(px, py + 1.5, pz);
+    } else if (PK_3P.body) {
+      PK_3P.body.visible = false;
+    }
+    return result;
+  };
+})();
   CO.boot(GAME);
 })();
