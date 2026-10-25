@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.14 (2026-10-25): World Update
+
+- Entrance make-over
+
 ## 1.0.13 (2026-10-25): World Update
 
 - Removed tree's that where on the train tracks
