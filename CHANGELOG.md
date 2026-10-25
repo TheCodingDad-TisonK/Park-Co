@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.16 (2026-10-25): World Update
+
+- Removed overlapping fence on the south station
+- Removed tree inside the train depot
+- Opened north and south wall inside the depot
+- Removed several tree's leftover on the track
+- Added a path from dragon gate station to the east side of the park
+- Removed 2 stray benches that where sitting outside of the park
+
 ## 1.0.15 (2026-10-25): Make the use button a setting: E key or left mouse button
 
 Use button is now a setting

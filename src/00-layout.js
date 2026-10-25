@@ -30,8 +30,6 @@
       { id: "cp-mvm9t0vj-l", type: "pkBench", x: 15.75, z: 42.2, rot: 3, h: 0 },
       { id: "cp-mvm9tchw-m", type: "pkBench", x: 15.65, z: 45.85, rot: 3, h: 0 },
       { id: "cp-mvm9tr0v-n", type: "pkBench", x: 15.55, z: 49.5, rot: 3, h: 0 },
-      { id: "cp-mvntxov8-l", type: "pkBench", x: 6, z: 85.05, rot: 0, h: 0 },
-      { id: "cp-mvnty3tc-o", type: "pkBench", x: 6, z: 84.45, rot: 0, h: 0 },
       { id: "cp-mvnu3d0n-z", type: "pkBench", x: -16.2, z: 46.05, rot: 1, h: 0 },
       { id: "cp-mvnu45s8-11", type: "pkBench", x: -16.4, z: 39.1, rot: 1, h: 0 },
       { id: "cp-mvnu7v0z-14", type: "pkSign", x: 0.1, z: 57, rot: 0, h: 0 },
