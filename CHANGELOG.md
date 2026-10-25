@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.13 (2026-10-25): World Update
+
+- Removed tree's that where on the train tracks
+
 ## 1.0.12 (2026-10-24): World Update
 
 - Maintenance release.
