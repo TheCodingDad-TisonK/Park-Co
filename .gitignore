@@ -3,7 +3,7 @@ dist/
 build/
 brand/png/
 shots/
-tests/shots/
+tests/
 *.log
 .DS_Store
 Thumbs.db
