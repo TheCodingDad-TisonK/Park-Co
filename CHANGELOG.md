@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.15 (2026-10-25): Make the use button a setting: E key or left mouse button
+
+Use button is now a setting
+
+You can now choose how you interact with the park. Pick the E key or
+the left mouse button, whichever feels better.
+
+- Find it under Settings > Use button, or press F6 at any time to
+  switch.
+- Left mouse button stays the default, so nothing changes unless you
+  want it to.
+- Your choice is remembered between sessions.
+- On-screen prompts follow your choice, and the guide now refers to
+  "E or left-click" at the ticket window.
+
 ## 1.0.14 (2026-10-25): World Update
 
 - Entrance make-over
