@@ -340,6 +340,23 @@
         if (qseed % 4 === 0) pkConifer(qx, qz, sc, null, qseed); else pkTree(qx, qz, sc, null, qseed);
       }
     }
+    // the outer woods: the forest above is only a ring, and past it the ground runs on to the edge of the world as bare lawn.
+    // Plant the rest of it. Its own seed, so the trees above keep their places; a coarser grid, because nobody walks out here.
+    // PK_WOODS_STEP is the dial if the frame rate suffers: a bigger step is fewer trees.
+    var PK_WOODS_EDGE = 204, PK_WOODS_STEP = 10;
+    var rng5 = pkRng(51907);
+    for (var ox = -PK_WOODS_EDGE; ox <= PK_WOODS_EDGE; ox += PK_WOODS_STEP) {
+      for (var oz = -PK_WOODS_EDGE; oz <= PK_WOODS_EDGE; oz += PK_WOODS_STEP) {
+        // draw all four numbers first, so skipping a spot never shifts the trees after it
+        var ojx = (rng5() - 0.5) * 6, ojz = (rng5() - 0.5) * 6, othin = rng5(), osc = 0.95 + rng5() * 1.2;
+        if (ox > -92 && ox < 140 && oz > -131 && oz < 92) continue;                // the park and the ring above
+        if (oz > 66 && oz < 98 && ox > -126 && ox < 106) continue;                  // the road, its pavement and what stands along it
+        if (othin < 0.3) continue;                                                  // thin it a little, as the ring is
+        var ofx = ox + ojx, ofz = oz + ojz, oseed = Math.abs(Math.round(ofx * 13 + ofz * 7));
+        if (typeof pkThemeKeepClear === 'function' && pkThemeKeepClear(ofx, ofz)) continue;
+        if (oseed % 4 === 0) pkConifer(ofx, ofz, osc, null, oseed); else pkTree(ofx, ofz, osc, null, oseed);
+      }
+    }
     // flower beds either side of the gate
     [[-13, 33], [13, 33]].forEach(function (p) { pkFlowerBed(p[0], p[1], 3.0, 1.6); });
     // the park sign on the forecourt, beside the walk up from the car park
