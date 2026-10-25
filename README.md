@@ -1,6 +1,6 @@
 # Park Co - By TheCodingDad-TisonK
 
-> [DISCLAIMERS]
+# [DISCLAIMERS]
 > 1. Please be aware that this game is ENTIRELY made out of code.. No 3D models are used.
 > 2. This project (and [Depot Co](https://github.com/ThecodingDad-TisonK/Depot-Co), [Grow Co](https://github.com/ThecodingDad-TisonK/Grow-Co) & [Garage Co](https://github.com/ThecodingDad-TisonK/Garage-Co)) are written within [Co-Engine](https://github.com/ThecodingDad-TisonK/Co-Engine) (custom engine also made by me that allows me to make these type of games)
 > 3. Yes... AI is used in shaping and writing my brilliant ideas into something beautiful. I have coded with AI for over 2 years now; And i feel like its paying off <3
