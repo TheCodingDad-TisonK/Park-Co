@@ -45,7 +45,7 @@ module.exports = `
       return Math.sqrt(dx * dx + dz * dz) < 2.6 && Math.abs(a.x - a.plot.x) < 0.01;   // 2.6: the control houses are bigger rooms
     }), 'ride screens sit on their booth wall, inside the room');
     ok(attractions.every((a) => { const sc = a.boothScreen; return sc.ctx.getImageData(20, 20, 1, 1).data[3] === 255 && sc.zones.length === 0; }), 'all ride screens are status displays: painted, with no button row');
-    ok(attractions.every((a) => !!a.boothPanel && !!a.boothPanel.buttons.dispatch && !!a.boothPanel.stop && !!a.boothPanel.load), 'every booth desk has real hardware: buttons, a stop and a load gauge');
+    ok(attractions.every((a) => !!a.boothPanel && !!a.boothPanel.buttons.gates && !!a.boothPanel.stop && !!a.boothPanel.load), 'every booth desk has real hardware: buttons, a stop and a load gauge');
     ok(attractions.every((a) => !!a.boothCabinet && !!a.boothCabinet.key && !!a.boothCabinet.amps && Object.keys(a.boothCabinet.lamps).length === 7), 'every booth has its ride control cabinet: key switch, meters and a lamp column');
     { const f = T.PK.attrById.carousel.boothFrame;
       ok(!!f && T.pkBkFloorAt(f.x, f.z) === 0.45 && T.pkFloor(f.x, f.z) === 0.45, 'a booth floor stands up its steps: ' + (f && T.pkBkFloorAt(f.x, f.z))); } }

@@ -85,7 +85,7 @@
   function pkOpWalkThrough(op, pts) { op.path = pts.map(function (p) { return { x: p.x, z: p.z }; }); op.faceYaw = null; }
 
   // ── At the desk ───────────────────────────────────────────────────
-  function pkOpPress(op, part) { var P = op.ride.boothPanel; return pkOpDo(op, function () { var b = part === 'auto' ? null : P.buttons[part]; if (b) return b.press(); if (part === 'auto') return pkBoothAuto(op.ride); }); }
+  function pkOpPress(op, part) { var P = op.ride.boothPanel; return pkOpDo(op, function () { if (part === 'auto') return pkBoothAuto(op.ride); if (part === 'dispatch') return pkBoothDispatch(op.ride); var b = P.buttons[part]; if (b) return b.press(); }); }
   function pkOpLeaveRide(op) {
     var a = op.ride; if (!a) return;
     if (a.ctl && !a.ctl.auto) pkOpDo(op, function () { pkBoothAuto(a); });   // never leave a ride on MANUAL with nobody in the booth

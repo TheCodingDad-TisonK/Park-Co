@@ -731,7 +731,7 @@
   function pkStationGates() {
     var R = PK.ride;
     R.stationGates = R.stationGates === false ? true : false;
-    if (!R.stationGates) PK.gates.forEach(function (gt) { gt.open = false; });
+    PK.gates.forEach(function (gt) { gt.open = R.stationGates; });
     sfx('click'); toast('Station gates ' + (R.stationGates ? 'open' : 'shut'), R.stationGates ? '' : 'bad');
     hudDirty = true; screenDirtyAll(); return true;
   }
