@@ -257,11 +257,11 @@
       spine.push(p.clone().addScaledVector(up, -0.56));
     }
     [railA, railB].forEach(function (rp) {
-      var c = new THREE.CatmullRomCurve3(rp, true, 'catmullrom', 0.5);
+      var c = new THREE.CatmullRomCurve3(rp, true, 'centripetal');
       var m = new THREE.Mesh(new THREE.TubeGeometry(c, N, 0.075, 6, true), railMat);
       m.castShadow = true; m.receiveShadow = true; g.add(m);
     });
-    var sp = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(spine, true, 'catmullrom', 0.5), N, 0.15, 10, true), spineMat);
+    var sp = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(spine, true, 'centripetal'), N, 0.15, 10, true), spineMat);
     sp.castShadow = true; sp.receiveShadow = true; g.add(sp);
     // ties
     var tieN = Math.max(8, Math.round(E.len / 1.7));
@@ -303,10 +303,11 @@
   // ── The station ───────────────────────────────────────────────────
   // A kerbed platform, a row of boom gates that rise off the platform edge, and a cantilevered canopy
   // carrying the name. The lane's own gate is the barrier; these are the gates at the train itself.
-  function pkCoGates(g, xs, z, C) {
+  function pkCoGates(g, xs, z, C, y) {
+    var lift = (y === undefined ? 0.18 : y) - 0.18;
     xs.forEach(function (x) {
-      pkRoundCyl(0.09, 1.06, MAT.steelDark, x, 0.53, z, g, 8);
-      var boom = new THREE.Group(); boom.position.set(x, 0.92, z); g.add(boom);
+      pkRoundCyl(0.09, 1.06, MAT.steelDark, x, 0.53 + lift, z, g, 8);
+      var boom = new THREE.Group(); boom.position.set(x, 0.92 + lift, z); g.add(boom);
       box(0.92, 0.09, 0.07, MAT.hazard, 0.46, 0, 0, boom, { r: 0.02 });
       box(0.92, 0.05, 0.05, MAT.steel, 0.46, -0.2, 0, boom);
       for (var i = 0; i < 4; i++) box(0.04, 0.22, 0.04, MAT.steel, 0.12 + i * 0.24, -0.11, 0, boom);
@@ -314,33 +315,36 @@
       C.gateObjs.push(function (t) { boom.rotation.z = t * Math.PI / 2.1; });
     });
   }
-  function pkCoCanopy(g, x0, x1, zSouth, depth, label, th) {
+  function pkCoCanopy(g, x0, x1, zSouth, depth, label, th, y) {
+    var lift = (y === undefined ? 0.18 : y) - 0.18;
     var i, x;
     for (i = 0; i < 4; i++) {
       x = x0 + 0.45 + (x1 - x0 - 0.9) * i / 3;
-      pkRoundCyl(0.085, 3.0, MAT.steelDark, x, 1.5, zSouth, g, 8);
-      pkRod(x, 3.0, zSouth, x, 3.0, zSouth - depth + 0.2, 0.05, MAT.steel, g, 6);
-      solid(x - 0.14, x + 0.14, zSouth - 0.14, zSouth + 0.14, 0, 3.0);
+      pkRoundCyl(0.085, 3.0, MAT.steelDark, x, 1.5 + lift, zSouth, g, 8);
+      pkRod(x, 3.0 + lift, zSouth, x, 3.0 + lift, zSouth - depth + 0.2, 0.05, MAT.steel, g, 6);
+      solid(x - 0.14, x + 0.14, zSouth - 0.14, zSouth + 0.14, lift, 3.0 + lift);
     }
     var mid = (x0 + x1) / 2;
-    box(x1 - x0, 0.1, depth, pkMats().roof, mid, 3.06, zSouth - depth / 2, g);
-    box(x1 - x0, 0.06, depth - 0.3, std({ color: th.a, roughness: 0.6 }), mid, 3.12, zSouth - depth / 2, g);
-    box(x1 - x0, 0.34, 0.1, MAT.steelDark, mid, 3.02, zSouth + 0.02, g);
-    pkSign3D([label], Math.min(4.8, x1 - x0 - 1.2), 0.28, mid, 3.02, zSouth + 0.08, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
+    box(x1 - x0, 0.1, depth, pkMats().roof, mid, 3.06 + lift, zSouth - depth / 2, g);
+    box(x1 - x0, 0.06, depth - 0.3, std({ color: th.a, roughness: 0.6 }), mid, 3.12 + lift, zSouth - depth / 2, g);
+    box(x1 - x0, 0.34, 0.1, MAT.steelDark, mid, 3.02 + lift, zSouth + 0.02, g);
+    pkSign3D([label], Math.min(4.8, x1 - x0 - 1.2), 0.28, mid, 3.02 + lift, zSouth + 0.08, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
     [-1, 1].forEach(function (sx) {
-      pkRoundCyl(0.16, 0.22, MAT.bulb, mid + sx * (x1 - x0) / 4, 2.86, zSouth - 0.6, g, 10);
+      pkRoundCyl(0.16, 0.22, MAT.bulb, mid + sx * (x1 - x0) / 4, 2.86 + lift, zSouth - 0.6, g, 10);
     });
   }
   // a coaster platform: kerb, deck, edge stripe, a plant tub and a lamp at each end
-  function pkCoPlatform(g, x0, x1, zN, zS, th) {
-    box(x1 - x0, 0.12, zS - zN, pkMats().kerb, (x0 + x1) / 2, 0.06, (zN + zS) / 2, g);
-    box(x1 - x0 - 0.12, 0.07, zS - zN - 0.12, pkMats().pavers, (x0 + x1) / 2, 0.145, (zN + zS) / 2, g);
-    box(x1 - x0, 0.03, 0.16, MAT.hazard, (x0 + x1) / 2, 0.17, zN + 0.08, g);
+  function pkCoPlatform(g, x0, x1, zN, zS, th, y) {
+    var lift = (y === undefined ? 0.18 : y) - 0.18;
+    if (lift > 0.02) box(x1 - x0, lift, zS - zN, pkMats().kerb, (x0 + x1) / 2, lift / 2, (zN + zS) / 2, g);
+    box(x1 - x0, 0.12, zS - zN, pkMats().kerb, (x0 + x1) / 2, 0.06 + lift, (zN + zS) / 2, g);
+    box(x1 - x0 - 0.12, 0.07, zS - zN - 0.12, pkMats().pavers, (x0 + x1) / 2, 0.145 + lift, (zN + zS) / 2, g);
+    box(x1 - x0, 0.03, 0.16, MAT.hazard, (x0 + x1) / 2, 0.17 + lift, zN + 0.08, g);
     [x0 + 0.5, x1 - 0.5].forEach(function (x) {
-      pkRoundCyl(0.26, 0.5, MAT.stone, x, 0.25, zS - 0.4, g, 12);
-      pkRoundCyl(0.3, 0.08, MAT.stone, x, 0.52, zS - 0.4, g, 12);
-      pkRoundCyl(0.04, 2.5, MAT.steelDark, x, 1.25, zS - 0.34, g, 8);
-      pkRoundCyl(0.17, 0.24, MAT.bulb, x, 2.6, zS - 0.34, g, 10);
+      pkRoundCyl(0.26, 0.5, MAT.stone, x, 0.25 + lift, zS - 0.4, g, 12);
+      pkRoundCyl(0.3, 0.08, MAT.stone, x, 0.52 + lift, zS - 0.4, g, 12);
+      pkRoundCyl(0.04, 2.5, MAT.steelDark, x, 1.25 + lift, zS - 0.34, g, 8);
+      pkRoundCyl(0.17, 0.24, MAT.bulb, x, 2.6 + lift, zS - 0.34, g, 10);
     });
   }
   // a lone support tower for the steep stretches the sampler rightly refuses: a column beside the
@@ -396,7 +400,7 @@
     pkCoBrace(g, 69.2, -86.6, 15.6, 67.3, 15.2, -86.7, supMat);
     pkCoPlan(E);
     // the station: platform, boom gates, canopy
-    pkCoPlatform(g, 47.0, 58.6, -69.35, -66.85, th);
+    pkCoPlatform(g, 47.0, 58.6, -69.35, -66.85, th, 1.05);
     var a = pkAttr({
       id: 'serpent', name: 'The Serpent', x: p.x, z: p.z,
       qx: p.q[0], qz: p.q[1], qdx: -1, g: g, seats: seats,
@@ -405,8 +409,8 @@
     });
     var C = pkCtl(a);
     E.a = a;
-    pkCoGates(g, [57.4, 55.05, 52.7, 50.35, 48.0], -69.42, C);
-    pkCoCanopy(g, 47.9, 58.5, -66.95, 2.3, 'THE SERPENT', th);
+    pkCoGates(g, [57.4, 55.05, 52.7, 50.35, 48.0], -69.42, C, 1.05);
+    pkCoCanopy(g, 47.9, 58.5, -66.95, 2.3, 'THE SERPENT', th, 1.05);
     E.cars.forEach(function (c) {
       C.barObjs.push(function (b) { c.bar.rotation.x = -1.35 * (1 - b); });
     });
@@ -507,7 +511,7 @@
       pkBoulder(pT.x + tT.x * rk[1] + rightT.x * rk[0], pT.z + tT.z * rk[1] + rightT.z * rk[0], rk[2], g, 0);
     });
     // the station: platform, boom gates, canopy
-    pkCoPlatform(g, 48.5, 57.9, 16.35, 18.55, th);
+    pkCoPlatform(g, 48.5, 57.9, 16.35, 18.55, th, 0.95);
     var a = pkAttr({
       id: 'baron', name: "Baron's Drop", x: p.x, z: p.z,
       qx: p.q[0], qz: p.q[1], qdx: -1, g: g, seats: seats,
@@ -516,8 +520,8 @@
     });
     var C = pkCtl(a);
     E.a = a;
-    pkCoGates(g, [56.8, 54.4, 52.0, 49.6], 16.3, C);
-    pkCoCanopy(g, 48.7, 57.7, 18.5, 2.0, "BARON'S DROP", th);
+    pkCoGates(g, [56.8, 54.4, 52.0, 49.6], 16.3, C, 0.95);
+    pkCoCanopy(g, 48.7, 57.7, 18.5, 2.0, "BARON'S DROP", th, 0.95);
     E.cars.forEach(function (c) {
       C.barObjs.push(function (b) { c.bar.rotation.x = -1.35 * (1 - b); });
     });
@@ -1018,7 +1022,7 @@
     });
     pkCoPlan(E, RIDE);
     // the station inside: kerbed platform, the boom gates at the car doors, hanging lamps
-    pkCoPlatform(g, Math.min(AX + s * 0.6, AX + s * 14.8), Math.max(AX + s * 0.6, AX + s * 14.8), -82.8, -80.2, th);
+    pkCoPlatform(g, Math.min(AX + s * 0.6, AX + s * 14.8), Math.max(AX + s * 0.6, AX + s * 14.8), -82.8, -80.2, th, 1.0);
     var stationShade = std({ color: 0xfff3d6, emissive: 0xffdda0, emissiveIntensity: 0.5, roughness: 0.55 });
     [AX + s * 3, AX + s * 8, AX + s * 13].forEach(function (lx) {
       pkRoundCyl(0.045, PK_HALL_CEIL - 5.9, MAT.gold, lx, (PK_HALL_CEIL + 5.9) / 2, -81.5, g, 6);
@@ -1039,7 +1043,7 @@
     });
     var C = pkCtl(a);
     E.a = a;
-    pkCoGates(g, [AX + s * 12.0, AX + s * 9.6, AX + s * 7.2, AX + s * 4.8], -82.85, C);
+    pkCoGates(g, [AX + s * 12.0, AX + s * 9.6, AX + s * 7.2, AX + s * 4.8], -82.85, C, 1.0);
     E.cars.forEach(function (c) {
       C.barObjs.push(function (bb) { c.bar.rotation.x = -1.35 * (1 - bb); });
     });
@@ -1140,7 +1144,7 @@
       var q = curve.getPointAt(s / len);
       pkRoundCyl(0.055, q.y, std({ color: 0x4a443c, roughness: 0.8 }), q.x, q.y / 2, q.z, g, 6);
     }
-    pkCoPlatform(g, -63.5, -56.5, 43.9, 45.3, th);
+    pkCoPlatform(g, -63.5, -56.5, 43.9, 45.3, th, 0.4);
     // a row of planted rocks down the middle of the loop, clear of the track all round
     [-66.0, -63.5, -61.0, -58.5, -56.2].forEach(function (rx) {
       pkRoundCyl(0.34, 0.42, std({ color: 0x7a6a52, roughness: 0.85 }), rx, 0.21, 41.2, g, 12);

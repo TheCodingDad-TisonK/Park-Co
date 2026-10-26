@@ -123,17 +123,20 @@
   })();
 
   // a station along z: kerbed deck, pavers, the hazard edge on the track side, lamps at each end
-  function pkEastPlatform(g, x0, x1, z0, z1, edgeX) {
-    box(x1 - x0, 0.12, z1 - z0, pkMats().kerb, (x0 + x1) / 2, 0.06, (z0 + z1) / 2, g);
-    box(x1 - x0 - 0.12, 0.07, z1 - z0 - 0.12, pkMats().pavers, (x0 + x1) / 2, 0.145, (z0 + z1) / 2, g);
-    box(0.16, 0.03, z1 - z0, MAT.hazard, edgeX, 0.17, (z0 + z1) / 2, g);
+  function pkEastPlatform(g, x0, x1, z0, z1, edgeX, y) {
+    var lift = (y === undefined ? 0.18 : y) - 0.18;
+    if (lift > 0.02) box(x1 - x0, lift, z1 - z0, pkMats().kerb, (x0 + x1) / 2, lift / 2, (z0 + z1) / 2, g);
+    box(x1 - x0, 0.12, z1 - z0, pkMats().kerb, (x0 + x1) / 2, 0.06 + lift, (z0 + z1) / 2, g);
+    box(x1 - x0 - 0.12, 0.07, z1 - z0 - 0.12, pkMats().pavers, (x0 + x1) / 2, 0.145 + lift, (z0 + z1) / 2, g);
+    box(0.16, 0.03, z1 - z0, MAT.hazard, edgeX, 0.17 + lift, (z0 + z1) / 2, g);
     [z0 + 0.5, z1 - 0.5].forEach(function (z) { pkLamp(Math.min(x0, x1) + 0.4, z, 3.0, g); });
   }
   // the boom gates along a platform that runs along z: each boom lies along z and lifts about x
-  function pkEastGates(g, zs, x, C) {
+  function pkEastGates(g, zs, x, C, y) {
+    var lift = (y === undefined ? 0.18 : y) - 0.18;
     zs.forEach(function (z) {
-      pkRoundCyl(0.09, 1.06, MAT.steelDark, x, 0.53, z, g, 8);
-      var boom = new THREE.Group(); boom.position.set(x, 0.92, z); g.add(boom);
+      pkRoundCyl(0.09, 1.06, MAT.steelDark, x, 0.53 + lift, z, g, 8);
+      var boom = new THREE.Group(); boom.position.set(x, 0.92 + lift, z); g.add(boom);
       box(0.07, 0.09, 0.92, MAT.hazard, 0, 0, -0.46, boom, { r: 0.02 });
       box(0.05, 0.05, 0.92, MAT.steel, 0, -0.2, -0.46, boom);
       for (var i = 0; i < 4; i++) box(0.04, 0.22, 0.04, MAT.steel, 0, -0.11, -0.12 - i * 0.24, boom);
@@ -187,7 +190,7 @@
     pkCoPlan(E, opt);
     // the station along the west side of the track, the control house beyond its far end, a paved forecourt to the walk
     pkPaved(ax - 77, 34, pkMats().pavers, (77 + ax) / 2 - 0.6, 0.02, az + 14, 2.4);
-    pkEastPlatform(g, ax - 4.0, ax - 1.0, az + 0.2, az + 20.4, ax - 1.08);
+    pkEastPlatform(g, ax - 4.0, ax - 1.0, az + 0.2, az + 20.4, ax - 1.08, 0.6);
     // the canopy over the platform: posts along the back edge, a slate roof along the station, the name on its gable end
     var cg = new THREE.Group(); cg.position.set(ax - 2.5, 0, az + 10.3); cg.rotation.y = Math.PI / 2; g.add(cg);
     pkGableRoof(20.4, 3.6, 1.1, pkFtM().slate, pkFtM().cream, 0, 3.15, 0, cg, 0.3);
@@ -201,7 +204,7 @@
     var C = pkCtl(a);
     E.a = a;
     var gz = []; for (i = 0; i < 5; i++) gz.push(az + 15 - i * 2.35);
-    pkEastGates(g, gz, ax - 1.1, C);
+    pkEastGates(g, gz, ax - 1.1, C, 0.6);
     E.cars.forEach(function (c) { C.barObjs.push(function (b) { c.bar.rotation.x = -1.35 * (1 - b); }); });
     pkCoPlace(E, E.uPark);
     // the control house: the room is the halls' cabin kit, bigger, with its long window on the platform side (north)

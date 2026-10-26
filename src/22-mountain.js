@@ -175,7 +175,7 @@
     });
     pkCoPlan(E, opt);
     // the platform south of the station track, the gates, the canopy lamps
-    pkCoPlatform(g, 96.4, 111.4, 64.75, 67.6, th);
+    pkCoPlatform(g, 96.4, 111.4, 64.75, 67.6, th, 0.6);
     var a = pkAttr({
       id: 'mountain', name: 'The Mountain King', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], qdx: -1, g: g, seats: seats,
       board: 11, run: E.run, unload: 6, exit: [97.2, 67.2],
@@ -184,7 +184,7 @@
     var C = pkCtl(a);
     E.a = a;
     var gx = []; for (i = 0; i < 5; i++) gx.push(K.park[0] - i * 2.35);
-    pkCoGates(g, gx, 64.8, C);
+    pkCoGates(g, gx, 64.8, C, 0.6);
     E.cars.forEach(function (c) { C.barObjs.push(function (b) { c.bar.rotation.x = -1.35 * (1 - b); }); });
     pkCoPlace(E, E.uPark);
     // the control cabin at the platform's east end, its long window over the station turn
