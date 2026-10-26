@@ -312,7 +312,7 @@
       box(0.92, 0.05, 0.05, MAT.steel, 0.46, -0.2, 0, boom);
       for (var i = 0; i < 4; i++) box(0.04, 0.22, 0.04, MAT.steel, 0.12 + i * 0.24, -0.11, 0, boom);
       box(0.1, 0.14, 0.1, MAT.red, 0.9, 0, 0, boom);
-      C.gateObjs.push(function (t) { boom.rotation.z = t * Math.PI / 2.1; });
+      C.stationGateObjs.push(function (t) { boom.rotation.z = t * Math.PI / 2.1; });
     });
   }
   function pkCoCanopy(g, x0, x1, zSouth, depth, label, th, y) {
@@ -335,7 +335,7 @@
   }
   // a coaster platform: kerb, deck, edge stripe, a plant tub and a lamp at each end
   function pkCoPlatform(g, x0, x1, zN, zS, th, y) {
-    var lift = (y === undefined ? 0.18 : y) - 0.18;
+    var surf = y === undefined ? 0.18 : y, lift = surf - 0.18;
     if (lift > 0.02) box(x1 - x0, lift, zS - zN, pkMats().kerb, (x0 + x1) / 2, lift / 2, (zN + zS) / 2, g);
     box(x1 - x0, 0.12, zS - zN, pkMats().kerb, (x0 + x1) / 2, 0.06 + lift, (zN + zS) / 2, g);
     box(x1 - x0 - 0.12, 0.07, zS - zN - 0.12, pkMats().pavers, (x0 + x1) / 2, 0.145 + lift, (zN + zS) / 2, g);
@@ -346,6 +346,12 @@
       pkRoundCyl(0.04, 2.5, MAT.steelDark, x, 1.25 + lift, zS - 0.34, g, 8);
       pkRoundCyl(0.17, 0.24, MAT.bulb, x, 2.6 + lift, zS - 0.34, g, 10);
     });
+    if (lift > 0.02) {
+      var rampLen = Math.max(2, lift * 2);
+      var ramp = box(x1 - x0, 0.1, rampLen, pkMats().kerb, (x0 + x1) / 2, lift / 2, zS + rampLen / 2, g);
+      ramp.rotation.x = -Math.atan2(lift, rampLen);
+      PK_FLOOR_RECTS.push({ axis: 'z', x0: x0, x1: x1, z0: zN, z1: zS, y: surf, ramp: rampLen });
+    }
   }
   // a lone support tower for the steep stretches the sampler rightly refuses: a column beside the
   // track with a rod out to the spine

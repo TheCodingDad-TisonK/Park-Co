@@ -5369,9 +5369,27 @@
   }
   // the platform sits south of the track, so the queue and the guests reach it without crossing the rails.
   // a short ramp at its south edge carries the player and the guests up the 0.6 m step.
+  var PK_FLOOR_RECTS = [];
+  function pkRaisedFloor(x, z) {
+    for (var i = 0; i < PK_FLOOR_RECTS.length; i++) {
+      var r = PK_FLOOR_RECTS[i];
+      if (r.axis === 'z') {
+        if (x <= r.x0 || x >= r.x1 || z <= r.z0) continue;
+        if (z < r.z1) return r.y;
+        if (r.ramp && z < r.z1 + r.ramp) return r.y * (1 - (z - r.z1) / r.ramp);
+      } else {
+        if (z <= r.z0 || z >= r.z1 || x <= r.x0) continue;
+        if (x < r.x1) return r.y;
+        if (r.ramp && x < r.x1 + r.ramp) return r.y * (1 - (x - r.x1) / r.ramp);
+      }
+    }
+    return null;
+  }
   function pkFloor(x, z) {
     if (pkOnPlatform(x, z)) return PK_PLATFORM_Y;
     if (x > -10 && x < 10 && z >= -0.6 && z < 0.4) return PK_PLATFORM_Y * (0.4 - z);
+    var rf = pkRaisedFloor(x, z);
+    if (rf !== null) return rf;
     return pkBkFloorAt(x, z);            // up the steps into a ride's booth (part 17)
   }
   function pkOnPlatform(x, z) { return x > -10 && x < 10 && z > -3.6 && z < -0.6; }
@@ -6278,7 +6296,6 @@
     PK.stationU = pkNearestU(4, PK_PLATFORM_Y, PK_STATION_Z);
     PK.stationX0 = PK.curve.getPointAt(PK.stationU).x;
     PK.ride.u = PK.stationU;
-    PK.ride.stationGates = true;
     // the lift is the sustained climb to the lap's highest point, found from the track as for the kit coasters
     var P0 = pkCoProfile(PK.curve, PK.len, PK.stationU);
     PK.liftU = [(PK.stationU + P0.lift[0] / P0.K) % 1, (PK.stationU + P0.lift[1] / P0.K) % 1];
@@ -6309,7 +6326,8 @@
     box(20.4, 0.2, 3.4, MAT.roof, 0, 3.9, -2.1);
     sign(['PARK CO', 'the coaster'], 3.2, 0.8, 0, 3.0, -4.4, 0, { bg: '#1b232c', fg: '#f5b53d' });
     // the gates along the platform edge, one per car door
-    [-6, -2, 2, 6].forEach(function (x) {
+    for (var ci = 0; ci < PK_CAR_N; ci++) {
+      var x = PK.stationX0 - ci * PK.carGap;
       var g = new THREE.Group(); g.position.set(x, PK_PLATFORM_Y, -3.6); scene.add(g);
       box(0.14, 1.0, 0.14, MAT.steelDark, 0, 0.5, 0, g);          // the hinge post
       var arm = new THREE.Group(); arm.position.set(0, 0.9, 0); g.add(arm);
@@ -6318,7 +6336,7 @@
       for (var m = 0; m < 5; m++) box(0.05, 0.42, 0.05, MAT.steel, 0.12 + m * 0.19, -0.07, 0, arm);
       box(0.12, 0.12, 0.12, MAT.red, 0.98, 0.14, 0, arm);         // the end cap
       PK.gates.push({ x: x, z: -3.6, g: g, leaf: arm, bar: arm, open: false, t: 0 });
-    });
+    }
   }
   function pkTrain() {
     for (var i = 0; i < PK_CAR_N; i++) {
@@ -6912,7 +6930,6 @@
     if (!S.coasterKey) return pkRefuse('The coaster is locked - turn the operator key on');
     if (PK.closed) return pkRefuse('The park is closed');
     if (R.fault) return pkRefuse('The ride is stopped');
-    if (R.stationGates === false) return pkRefuse('Open the station gates first');
     if (!pkCoasterAuto() && R.state === 'unload' && (R.riders > 0 || R.bars > 0.05)) return pkRefuse('Raise the restraints to let the riders off');
     if (R.state === 'dispatch' || R.state === 'running' || R.state === 'arrive') return pkRefuse('Not while the train is moving');
     PK.gates.forEach(function (gt) { gt.open = true; });
@@ -6927,10 +6944,9 @@
     sfx('lock'); hudDirty = true; return true;
   }
   function pkStationGates() {
-    var R = PK.ride;
-    R.stationGates = R.stationGates === false ? true : false;
-    PK.gates.forEach(function (gt) { gt.open = R.stationGates; });
-    sfx('click'); toast('Station gates ' + (R.stationGates ? 'open' : 'shut'), R.stationGates ? '' : 'bad');
+    var open = !PK.gates[0].open;
+    PK.gates.forEach(function (gt) { gt.open = open; });
+    sfx('click'); toast('Station gates ' + (open ? 'open' : 'shut'), open ? '' : 'bad');
     hudDirty = true; screenDirtyAll(); return true;
   }
   // one button for the gates: open to start boarding, close once the cars are full - whenever the train is in the station,
@@ -7078,7 +7094,7 @@
     var R = PK.ride;
     pkOpSignal();
     // the gates and the restraints ease to where they were told to be
-    PK.gates.forEach(function (gt) { gt.t += (((gt.open && R.stationGates !== false) ? 1 : 0) - gt.t) * Math.min(1, dt * 4); gt.bar.rotation.z = gt.t * Math.PI / 2; });
+    PK.gates.forEach(function (gt) { gt.t += ((gt.open ? 1 : 0) - gt.t) * Math.min(1, dt * 4); gt.bar.rotation.z = gt.t * Math.PI / 2; });
     R.bars += (R.barsWant - R.bars) * Math.min(1, dt * 3);
     PK.cars.forEach(function (car) { car.userData.bars.forEach(function (b) { b.rotation.x = -1.3 * (1 - R.bars); }); });
     // once the operator has raised the restraints on a manual unload, the riders step off
@@ -7481,10 +7497,13 @@
     if (!a.open) return;
     var C = pkCtl(a), auto = pkCtlAuto(a);   // AUTO is the desk's switch alone: on MANUAL nothing moves until someone works the desk
     // the gates and the restraints ease to where they were told to be, and the desk's lights follow
-    C.gateT += (((C.gates && a.stationGates !== false) ? 1 : 0) - C.gateT) * Math.min(1, dt * 3.5);
+    C.gateT += ((C.gates ? 1 : 0) - C.gateT) * Math.min(1, dt * 3.5);
     C.bars += (C.barsWant - C.bars) * Math.min(1, dt * 3);
     for (var gi = 0; gi < C.gateObjs.length; gi++) C.gateObjs[gi](C.gateT);
-    if (a.stationGate) a.stationGate.rotation.y = (a.stationGates === false ? 0 : 1.5);
+    var sgOpen = (a.stationGates !== false) && a.state !== 'running' && a.state !== 'dispatch';
+    C.sgT = (C.sgT || 0) + ((sgOpen ? 1 : 0) - (C.sgT || 0)) * Math.min(1, dt * 3.5);
+    for (var si = 0; si < (C.stationGateObjs || []).length; si++) C.stationGateObjs[si](C.sgT);
+    if (a.stationGate) a.stationGate.rotation.y = C.sgT * 1.5;
     for (var bi = 0; bi < C.barObjs.length; bi++) C.barObjs[bi](C.bars);
     pkCtlLamps(a);
     // the drive: up to speed while running, and wound down over the last few seconds so it stops before anyone gets off
@@ -9392,6 +9411,7 @@ function pkCtl(a) {
     bars: 0,           // current restraint position, eased
     gateT: 0,          // current gate position, eased (0 closed, 1 open)
     gateObjs: [],      // callbacks (t) -> move the gates
+    stationGateObjs: [],   // callbacks (t) -> move the station platform gates
     barObjs: [],       // callbacks (b) -> move the restraints
     spd: 0,            // drive speed (0..1)
     fault: '',         // fault string; stops everything when set
@@ -9495,7 +9515,6 @@ function pkBoothGates(a) {
   if (!C.key) return pkBoothRefuse(a.name + ' is locked - turn the operator key on');
   if (C.fault) return pkBoothRefuse('Reset ' + a.name + ' first');
   if (C.maint) return pkBoothRefuse(a.name + ' is locked out - turn the key to RUN');
-  if (a.stationGates === false) return pkBoothRefuse('Open the station gates first');
   if (a.state === 'running') return pkBoothRefuse('Not while ' + a.name + ' is running');
   if (a.awaitBars) return pkBoothRefuse('Raise the restraints first: the riders are still aboard ' + a.name);
   if (C.gates && a.state !== 'idle') {   // an idle ride's gates count as shut: a press there always opens them
@@ -9517,7 +9536,6 @@ function pkBoothGates(a) {
 // the station platform gates: a master barrier across the platform entrance, independent of the boarding gates
 function pkStationGatesRide(a, on) {
   a.stationGates = on === undefined ? (a.stationGates === false ? true : false) : !!on;
-  if (!a.stationGates && a.ctl) a.ctl.gates = false;
   sfx('click'); toast(a.name + ': station gates ' + (a.stationGates ? 'open' : 'shut'), a.stationGates ? '' : 'bad');
   screenDirtyAll(); return true;
 }
@@ -11366,7 +11384,7 @@ function pkBuildCoasterConsole(at) {
       buttons.gates.setLit(ready && (R.state === 'idle' || R.state === 'unload'));
       buttons.barsDown.setLit(ready && R.barsWant < 0.5);
       buttons.barsUp.setLit(ready && R.barsWant > 0.5);
-      buttons.station.setLit(ready && R.stationGates === false);
+      buttons.station.setLit(ready && PK.gates.length > 0 && !PK.gates[0].open);
       buttons.reset.setLit(live && !!R.fault);
       buttons.test.setLit(ready && R.state === 'idle');
       buttons.maint.setLit(live && (S.wear || 0) > 0);
@@ -12235,7 +12253,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       box(0.92, 0.05, 0.05, MAT.steel, 0.46, -0.2, 0, boom);
       for (var i = 0; i < 4; i++) box(0.04, 0.22, 0.04, MAT.steel, 0.12 + i * 0.24, -0.11, 0, boom);
       box(0.1, 0.14, 0.1, MAT.red, 0.9, 0, 0, boom);
-      C.gateObjs.push(function (t) { boom.rotation.z = t * Math.PI / 2.1; });
+      C.stationGateObjs.push(function (t) { boom.rotation.z = t * Math.PI / 2.1; });
     });
   }
   function pkCoCanopy(g, x0, x1, zSouth, depth, label, th, y) {
@@ -12258,7 +12276,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   }
   // a coaster platform: kerb, deck, edge stripe, a plant tub and a lamp at each end
   function pkCoPlatform(g, x0, x1, zN, zS, th, y) {
-    var lift = (y === undefined ? 0.18 : y) - 0.18;
+    var surf = y === undefined ? 0.18 : y, lift = surf - 0.18;
     if (lift > 0.02) box(x1 - x0, lift, zS - zN, pkMats().kerb, (x0 + x1) / 2, lift / 2, (zN + zS) / 2, g);
     box(x1 - x0, 0.12, zS - zN, pkMats().kerb, (x0 + x1) / 2, 0.06 + lift, (zN + zS) / 2, g);
     box(x1 - x0 - 0.12, 0.07, zS - zN - 0.12, pkMats().pavers, (x0 + x1) / 2, 0.145 + lift, (zN + zS) / 2, g);
@@ -12269,6 +12287,12 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       pkRoundCyl(0.04, 2.5, MAT.steelDark, x, 1.25 + lift, zS - 0.34, g, 8);
       pkRoundCyl(0.17, 0.24, MAT.bulb, x, 2.6 + lift, zS - 0.34, g, 10);
     });
+    if (lift > 0.02) {
+      var rampLen = Math.max(2, lift * 2);
+      var ramp = box(x1 - x0, 0.1, rampLen, pkMats().kerb, (x0 + x1) / 2, lift / 2, zS + rampLen / 2, g);
+      ramp.rotation.x = -Math.atan2(lift, rampLen);
+      PK_FLOOR_RECTS.push({ axis: 'z', x0: x0, x1: x1, z0: zN, z1: zS, y: surf, ramp: rampLen });
+    }
   }
   // a lone support tower for the steep stretches the sampler rightly refuses: a column beside the
   // track with a rod out to the spine
@@ -14899,12 +14923,18 @@ function pkBuildParkCabinet(px, py, pz, ry) {
 
   // a station along z: kerbed deck, pavers, the hazard edge on the track side, lamps at each end
   function pkEastPlatform(g, x0, x1, z0, z1, edgeX, y) {
-    var lift = (y === undefined ? 0.18 : y) - 0.18;
+    var surf = y === undefined ? 0.18 : y, lift = surf - 0.18;
     if (lift > 0.02) box(x1 - x0, lift, z1 - z0, pkMats().kerb, (x0 + x1) / 2, lift / 2, (z0 + z1) / 2, g);
     box(x1 - x0, 0.12, z1 - z0, pkMats().kerb, (x0 + x1) / 2, 0.06 + lift, (z0 + z1) / 2, g);
     box(x1 - x0 - 0.12, 0.07, z1 - z0 - 0.12, pkMats().pavers, (x0 + x1) / 2, 0.145 + lift, (z0 + z1) / 2, g);
     box(0.16, 0.03, z1 - z0, MAT.hazard, edgeX, 0.17 + lift, (z0 + z1) / 2, g);
     [z0 + 0.5, z1 - 0.5].forEach(function (z) { pkLamp(Math.min(x0, x1) + 0.4, z, 3.0, g); });
+    if (lift > 0.02) {
+      var rampLen = Math.max(2, lift * 2);
+      var ramp = box(rampLen, 0.1, z1 - z0, pkMats().kerb, x1 + rampLen / 2, lift / 2, (z0 + z1) / 2, g);
+      ramp.rotation.z = Math.atan2(lift, rampLen);
+      PK_FLOOR_RECTS.push({ axis: 'x', x0: x0, x1: x1, z0: z0, z1: z1, y: surf, ramp: rampLen });
+    }
   }
   // the boom gates along a platform that runs along z: each boom lies along z and lifts about x
   function pkEastGates(g, zs, x, C, y) {
@@ -14916,7 +14946,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       box(0.05, 0.05, 0.92, MAT.steel, 0, -0.2, -0.46, boom);
       for (var i = 0; i < 4; i++) box(0.04, 0.22, 0.04, MAT.steel, 0, -0.11, -0.12 - i * 0.24, boom);
       box(0.1, 0.14, 0.1, MAT.red, 0, 0, -0.9, boom);
-      C.gateObjs.push(function (t) { boom.rotation.x = t * Math.PI / 2.1; });
+      C.stationGateObjs.push(function (t) { boom.rotation.x = t * Math.PI / 2.1; });
     });
   }
   // the control house's outside, round the cabin: a brick plinth, cream walls with timber framing, a slate hip roof with

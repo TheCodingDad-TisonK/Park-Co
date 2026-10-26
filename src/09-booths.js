@@ -17,6 +17,7 @@ function pkCtl(a) {
     bars: 0,           // current restraint position, eased
     gateT: 0,          // current gate position, eased (0 closed, 1 open)
     gateObjs: [],      // callbacks (t) -> move the gates
+    stationGateObjs: [],   // callbacks (t) -> move the station platform gates
     barObjs: [],       // callbacks (b) -> move the restraints
     spd: 0,            // drive speed (0..1)
     fault: '',         // fault string; stops everything when set
@@ -120,7 +121,6 @@ function pkBoothGates(a) {
   if (!C.key) return pkBoothRefuse(a.name + ' is locked - turn the operator key on');
   if (C.fault) return pkBoothRefuse('Reset ' + a.name + ' first');
   if (C.maint) return pkBoothRefuse(a.name + ' is locked out - turn the key to RUN');
-  if (a.stationGates === false) return pkBoothRefuse('Open the station gates first');
   if (a.state === 'running') return pkBoothRefuse('Not while ' + a.name + ' is running');
   if (a.awaitBars) return pkBoothRefuse('Raise the restraints first: the riders are still aboard ' + a.name);
   if (C.gates && a.state !== 'idle') {   // an idle ride's gates count as shut: a press there always opens them
@@ -142,7 +142,6 @@ function pkBoothGates(a) {
 // the station platform gates: a master barrier across the platform entrance, independent of the boarding gates
 function pkStationGatesRide(a, on) {
   a.stationGates = on === undefined ? (a.stationGates === false ? true : false) : !!on;
-  if (!a.stationGates && a.ctl) a.ctl.gates = false;
   sfx('click'); toast(a.name + ': station gates ' + (a.stationGates ? 'open' : 'shut'), a.stationGates ? '' : 'bad');
   screenDirtyAll(); return true;
 }

@@ -80,7 +80,6 @@
     PK.stationU = pkNearestU(4, PK_PLATFORM_Y, PK_STATION_Z);
     PK.stationX0 = PK.curve.getPointAt(PK.stationU).x;
     PK.ride.u = PK.stationU;
-    PK.ride.stationGates = true;
     // the lift is the sustained climb to the lap's highest point, found from the track as for the kit coasters
     var P0 = pkCoProfile(PK.curve, PK.len, PK.stationU);
     PK.liftU = [(PK.stationU + P0.lift[0] / P0.K) % 1, (PK.stationU + P0.lift[1] / P0.K) % 1];
@@ -111,7 +110,8 @@
     box(20.4, 0.2, 3.4, MAT.roof, 0, 3.9, -2.1);
     sign(['PARK CO', 'the coaster'], 3.2, 0.8, 0, 3.0, -4.4, 0, { bg: '#1b232c', fg: '#f5b53d' });
     // the gates along the platform edge, one per car door
-    [-6, -2, 2, 6].forEach(function (x) {
+    for (var ci = 0; ci < PK_CAR_N; ci++) {
+      var x = PK.stationX0 - ci * PK.carGap;
       var g = new THREE.Group(); g.position.set(x, PK_PLATFORM_Y, -3.6); scene.add(g);
       box(0.14, 1.0, 0.14, MAT.steelDark, 0, 0.5, 0, g);          // the hinge post
       var arm = new THREE.Group(); arm.position.set(0, 0.9, 0); g.add(arm);
@@ -120,7 +120,7 @@
       for (var m = 0; m < 5; m++) box(0.05, 0.42, 0.05, MAT.steel, 0.12 + m * 0.19, -0.07, 0, arm);
       box(0.12, 0.12, 0.12, MAT.red, 0.98, 0.14, 0, arm);         // the end cap
       PK.gates.push({ x: x, z: -3.6, g: g, leaf: arm, bar: arm, open: false, t: 0 });
-    });
+    }
   }
   function pkTrain() {
     for (var i = 0; i < PK_CAR_N; i++) {
@@ -714,7 +714,6 @@
     if (!S.coasterKey) return pkRefuse('The coaster is locked - turn the operator key on');
     if (PK.closed) return pkRefuse('The park is closed');
     if (R.fault) return pkRefuse('The ride is stopped');
-    if (R.stationGates === false) return pkRefuse('Open the station gates first');
     if (!pkCoasterAuto() && R.state === 'unload' && (R.riders > 0 || R.bars > 0.05)) return pkRefuse('Raise the restraints to let the riders off');
     if (R.state === 'dispatch' || R.state === 'running' || R.state === 'arrive') return pkRefuse('Not while the train is moving');
     PK.gates.forEach(function (gt) { gt.open = true; });
@@ -729,10 +728,9 @@
     sfx('lock'); hudDirty = true; return true;
   }
   function pkStationGates() {
-    var R = PK.ride;
-    R.stationGates = R.stationGates === false ? true : false;
-    PK.gates.forEach(function (gt) { gt.open = R.stationGates; });
-    sfx('click'); toast('Station gates ' + (R.stationGates ? 'open' : 'shut'), R.stationGates ? '' : 'bad');
+    var open = !PK.gates[0].open;
+    PK.gates.forEach(function (gt) { gt.open = open; });
+    sfx('click'); toast('Station gates ' + (open ? 'open' : 'shut'), open ? '' : 'bad');
     hudDirty = true; screenDirtyAll(); return true;
   }
   // one button for the gates: open to start boarding, close once the cars are full - whenever the train is in the station,
@@ -880,7 +878,7 @@
     var R = PK.ride;
     pkOpSignal();
     // the gates and the restraints ease to where they were told to be
-    PK.gates.forEach(function (gt) { gt.t += (((gt.open && R.stationGates !== false) ? 1 : 0) - gt.t) * Math.min(1, dt * 4); gt.bar.rotation.z = gt.t * Math.PI / 2; });
+    PK.gates.forEach(function (gt) { gt.t += ((gt.open ? 1 : 0) - gt.t) * Math.min(1, dt * 4); gt.bar.rotation.z = gt.t * Math.PI / 2; });
     R.bars += (R.barsWant - R.bars) * Math.min(1, dt * 3);
     PK.cars.forEach(function (car) { car.userData.bars.forEach(function (b) { b.rotation.x = -1.3 * (1 - R.bars); }); });
     // once the operator has raised the restraints on a manual unload, the riders step off
