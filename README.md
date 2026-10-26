@@ -149,7 +149,11 @@ The narrow-gauge steam train running the Lindenburg loop can be controlled from 
 
 ## 📸 Screenshots
 
-> *Screenshots coming soon!*
+| | | |
+| :--: | :--: | :--: |
+| ![Park approach](shots/01-approach.jpg) | ![Entrance](shots/02-entrance.jpg) | ![Ticket window](shots/03-ticket-window.jpg) |
+| ![Midway](shots/04-midway.jpg) | ![Station](shots/05-station.jpg) | ![The coaster](shots/06-coaster.jpg) |
+| ![Operator room](shots/08-operator-room.jpg) | ![Overview](shots/10-overview.jpg) | |
 
 ---
 
@@ -157,7 +161,7 @@ The narrow-gauge steam train running the Lindenburg loop can be controlled from 
 
 Get the latest version of Park Co from the [**Releases Page**](https://github.com/TheCodingDad-TisonK/Park-Co/releases).
 
-1. Download `Park-Co-Setup-1.0.14.exe` from the latest release
+1. Download `Park-Co-Setup-1.0.16.exe` from the latest release
 2. Run the installer
 3. Launch Park Co and start building your dream park!
 
