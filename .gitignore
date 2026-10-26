@@ -2,8 +2,7 @@ node_modules/
 dist/
 build/
 brand/png/
-shots/
-tests/
+tests/shots/
 *.log
 .DS_Store
 Thumbs.db
