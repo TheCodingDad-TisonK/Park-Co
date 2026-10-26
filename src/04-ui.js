@@ -61,6 +61,7 @@
     PK.snackOpen = !!S.snackOpen; PK.train2 = !!S.train2; PK.lights = !!S.lights; PK.rideLights = !!S.rideLights;
     PK.today = S.today || (S.today = { tickets: 0, snacks: 0, rides: 0, earned: 0 });
     PK.lastDay = S.day;
+    PK.stnShut = !!S.stnShut;   // the coaster's station gates remember where they were left
     screenDirtyAll(); hudDirty = true;
   }
   // ── The panel ─────────────────────────────────────────────────────

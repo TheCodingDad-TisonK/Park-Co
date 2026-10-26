@@ -307,7 +307,7 @@
     var lift = (y === undefined ? 0.18 : y) - 0.18;
     xs.forEach(function (x) {
       pkRoundCyl(0.09, 1.06, MAT.steelDark, x, 0.53 + lift, z, g, 8);
-      var boom = new THREE.Group(); boom.position.set(x, 0.92 + lift, z); g.add(boom);
+      var boom = new THREE.Group(); boom.position.set(x, 0.92 + lift, z); boom.userData.dynamic = true; boom.userData.keep = true; g.add(boom);
       box(0.92, 0.09, 0.07, MAT.hazard, 0.46, 0, 0, boom, { r: 0.02 });
       box(0.92, 0.05, 0.05, MAT.steel, 0.46, -0.2, 0, boom);
       for (var i = 0; i < 4; i++) box(0.04, 0.22, 0.04, MAT.steel, 0.12 + i * 0.24, -0.11, 0, boom);
