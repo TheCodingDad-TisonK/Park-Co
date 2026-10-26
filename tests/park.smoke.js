@@ -326,14 +326,14 @@ module.exports = `
     for (let k = 0; k < 60 && a.state !== 'running'; k++) T.run(0.1);
     ok(a.state === 'running', 'the teacups run');
     T.run(a.run + 0.2); ok(a.state === 'unloading' && a.cycles === c0 + 1, 'the teacups finish a cycle'); }
-  { const a = T.PK.attrById.teacups, guest = T.pkSpawnGuest(); a.state = 'idle'; a.ctl.auto = false; a.queue.length = 0; a.riders = 0; T.pkAttrUnseatAll(a); guest.state = 'qwait'; guest.attr = a.id; guest.slot = 0; const s0 = T.pkAttrSlot(a, 0); guest.rec.x = s0.x; guest.rec.z = s0.z; a.queue.push(guest);
+  { const keep = T.PK.guests.slice(); T.PK.guests.length = 0; const a = T.PK.attrById.teacups, guest = T.pkSpawnGuest(); a.state = 'idle'; a.ctl.auto = false; a.queue.length = 0; a.riders = 0; T.pkAttrUnseatAll(a); guest.state = 'qwait'; guest.attr = a.id; guest.slot = 0; const s0 = T.pkAttrSlot(a, 0); guest.rec.x = s0.x; guest.rec.z = s0.z; a.queue.push(guest);
     ok(guest.state === 'qwait' && a.riders === 0, 'the guest waits in the lane until the operator opens the gates');
     ok(T.pkBoothGates(a) === true && a.state === 'boarding', 'manual attraction opens boarding from idle');
     for (let i = 0; i < 1200 && a.riders === 0; i++) { T.pkAttrTick(a, 0.05); T.pkGuestTick(0.05); }
     ok(a.riders === 1 && a.queue.length === 0, 'manual boarding waits for the guest to reach a seat');
       a.ctl.barsWant = 1; a.ctl.gates = false; a.state = 'ready';
      ok(T.pkBoothDispatch(a) === true && a.state === 'running', 'manual dispatch waits until queue and boarding paths clear');
-    T.pkCtl(a).fault = ''; a.state = 'unloading'; a.t = a.unload; a.queue.length = 0; a.riders = 0; T.pkAttrTick(a, 0.05); T.pkAttrUnseatAll(a); }
+    T.pkCtl(a).fault = ''; a.state = 'unloading'; a.t = a.unload; a.queue.length = 0; a.riders = 0; T.pkAttrTick(a, 0.05); T.pkAttrUnseatAll(a); guest.state = 'gone'; T.pkGuestTick(0.01); T.PK.guests.push(...keep); }
   // the real queue lanes and the player's own turn on the rides
   ok(T.pkLanes().length === 19 && T.pkLanes().every((L) => L.a && !!L.leafL && !!L.leafR), 'every ride has a fenced queue lane and a boarding gate');
   // the arena's lane holds a sixty-seat show's line, so it runs deeper than a ride's three rows; it still folds and still keeps to 8.5 m
