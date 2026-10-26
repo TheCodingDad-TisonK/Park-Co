@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.1.0 (2026-10-26): Big Update
+
+## Fixes
+- Coaster headlight no longer stays on all day (removed a stray `|| true` that ignored the day/night check)
+- E-stop mushroom now physically latches down when a fault is set from anywhere (added `setLatched` sync)
+- Removed the redundant green DISPATCH button on the coaster desk — the dispatch lever is the single dispatch control
+- Teacups "manual boarding" smoke test no longer flakes (hermetic guest isolation)
+- Dropped dead code in the railway (three no-op lines)
+- Fixed coaster rails twisting and kinking through loops and turns (rail tubes now use centripetal curves)
+- Raised every coaster's station platform up to its track height, so you step across instead of climbing onto the car
+
+## Features
+- Added STATION GATES open/close to the coaster desk and every ride booth — a safety barrier on the platform that blocks boarding while shut (flat rides got a new entrance gate; the theatre is unaffected)
+- Train Cab got a remodel
+
+## Docs & metadata
+- Backfilled the CHANGELOG: replaced all 12 "Maintenance release." placeholders (1.0.1–1.0.12) with real descriptions
+- Fixed changelog typos ("tree's that where" → "trees that were")
+- README: bumped the download reference to 1.0.16
+- README: added a screenshot gallery (8 shots)
+- package.json: set author to TheCodingDad-TisonK, license to SEE LICENSE IN LICENSE
+- Rewrote TODO.md as the current single source of truth (shipped summary + loose ends)
+- Removed `tests/` from .gitignore so the smoke suite is versioned as first-class
+
+## Assets
+- Compressed the screenshot set from 34 MB PNG to 3.1 MB JPEG (20 shots)
+
 ## 1.0.16 (2026-10-25): World Update
 
 - Removed overlapping fence on the south station

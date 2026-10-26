@@ -691,7 +691,7 @@ function pkBuildCoasterConsole(at) {
       buttons.gates.setLit(ready && (R.state === 'idle' || R.state === 'unload'));
       buttons.barsDown.setLit(ready && R.barsWant < 0.5);
       buttons.barsUp.setLit(ready && R.barsWant > 0.5);
-      buttons.station.setLit(ready && PK.gates.length > 0 && !PK.gates[0].open);
+      buttons.station.setLit(ready && !pkStnOpen());   // lit while the station gates are shut, like the ride desks
       buttons.reset.setLit(live && !!R.fault);
       buttons.test.setLit(ready && R.state === 'idle');
       buttons.maint.setLit(live && (S.wear || 0) > 0);
