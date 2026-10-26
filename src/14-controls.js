@@ -359,7 +359,8 @@ function pkCtlMushroom(g, x, y, o) {
     press: function () {
       if (api.latched) { api.latched = false; target = 0; sfx('click'); if (o.release) o.release(); }
       else { api.latched = true; target = -0.012; sfx('bad'); if (o.act) o.act(); }
-    }
+    },
+    setLatched: function (v) { api.latched = !!v; target = api.latched ? -0.012 : 0; }
   };
   pkCtlLive({ tick: function (dt) { down += (target - down) * Math.min(1, dt * 20); head.position.z = 0.028 + down; } });
   hitBox(r * 3.0, r * 3.0, 0.09, x, y, 0.030, {
@@ -697,7 +698,7 @@ function pkBuildCoasterConsole(at) {
       if (toggles.powerSw.on !== C.on) toggles.powerSw.set(C.on);
       if (toggles.lampSw.on !== C.lamps) toggles.lampSw.set(C.lamps);
       // the stop stays latched while the ride is faulted
-      if (stop.latched !== !!R.fault) { stop.latched = !!R.fault; }
+      if (stop.latched !== !!R.fault) stop.setLatched(!!R.fault);
     }
   });
   // the console is a fixture of the room: it is solid so nobody walks through the doors
@@ -877,7 +878,7 @@ function pkBoothPanel(a, con) {
       var live = !C.fault && !!C.key;
       if (parts.key.on !== !!C.key) parts.key.set(!!C.key);
       if (parts.auto.on !== C.auto) parts.auto.set(C.auto);
-      if (parts.stop.latched !== !!C.fault) parts.stop.latched = !!C.fault;
+      if (parts.stop.latched !== !!C.fault) parts.stop.setLatched(!!C.fault);
       parts.buttons.gates.setLit(live && (a.state === 'idle' || a.state === 'unloading' || a.state === 'boarding'));
       parts.buttons.dispatch.setLit(live && !PK.closed && (a.state === 'boarding' || a.state === 'ready') && !a.queue.length && !a.boarding && a.riders > 0);
       parts.buttons.test.setLit(live && !PK.closed && a.state === 'idle' && !a.queue.length && !a.riders);
@@ -896,7 +897,7 @@ function pkBoothPanel(a, con) {
       var live = power && !C.fault && !!C.key;
       if (parts.key.on !== !!C.key) parts.key.set(!!C.key);
       if (parts.auto.on !== C.auto) parts.auto.set(C.auto);
-      if (parts.stop.latched !== !!C.fault) parts.stop.latched = !!C.fault;
+      if (parts.stop.latched !== !!C.fault) parts.stop.setLatched(!!C.fault);
       // the key window follows the key itself, so it still shows ON while a fault holds the rest of the panel dead
       A.key.on = power && !!C.key; A.auto.on = live && !!C.auto; A.gates.on = live && !!C.gates; A.bars.on = live && C.barsWant > 0.5;
       A.run.on = live && a.state === 'running';

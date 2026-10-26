@@ -11011,7 +11011,8 @@ function pkCtlMushroom(g, x, y, o) {
     press: function () {
       if (api.latched) { api.latched = false; target = 0; sfx('click'); if (o.release) o.release(); }
       else { api.latched = true; target = -0.012; sfx('bad'); if (o.act) o.act(); }
-    }
+    },
+    setLatched: function (v) { api.latched = !!v; target = api.latched ? -0.012 : 0; }
   };
   pkCtlLive({ tick: function (dt) { down += (target - down) * Math.min(1, dt * 20); head.position.z = 0.028 + down; } });
   hitBox(r * 3.0, r * 3.0, 0.09, x, y, 0.030, {
@@ -11349,7 +11350,7 @@ function pkBuildCoasterConsole(at) {
       if (toggles.powerSw.on !== C.on) toggles.powerSw.set(C.on);
       if (toggles.lampSw.on !== C.lamps) toggles.lampSw.set(C.lamps);
       // the stop stays latched while the ride is faulted
-      if (stop.latched !== !!R.fault) { stop.latched = !!R.fault; }
+      if (stop.latched !== !!R.fault) stop.setLatched(!!R.fault);
     }
   });
   // the console is a fixture of the room: it is solid so nobody walks through the doors
@@ -11529,7 +11530,7 @@ function pkBoothPanel(a, con) {
       var live = !C.fault && !!C.key;
       if (parts.key.on !== !!C.key) parts.key.set(!!C.key);
       if (parts.auto.on !== C.auto) parts.auto.set(C.auto);
-      if (parts.stop.latched !== !!C.fault) parts.stop.latched = !!C.fault;
+      if (parts.stop.latched !== !!C.fault) parts.stop.setLatched(!!C.fault);
       parts.buttons.gates.setLit(live && (a.state === 'idle' || a.state === 'unloading' || a.state === 'boarding'));
       parts.buttons.dispatch.setLit(live && !PK.closed && (a.state === 'boarding' || a.state === 'ready') && !a.queue.length && !a.boarding && a.riders > 0);
       parts.buttons.test.setLit(live && !PK.closed && a.state === 'idle' && !a.queue.length && !a.riders);
@@ -11548,7 +11549,7 @@ function pkBoothPanel(a, con) {
       var live = power && !C.fault && !!C.key;
       if (parts.key.on !== !!C.key) parts.key.set(!!C.key);
       if (parts.auto.on !== C.auto) parts.auto.set(C.auto);
-      if (parts.stop.latched !== !!C.fault) parts.stop.latched = !!C.fault;
+      if (parts.stop.latched !== !!C.fault) parts.stop.setLatched(!!C.fault);
       // the key window follows the key itself, so it still shows ON while a fault holds the rest of the panel dead
       A.key.on = power && !!C.key; A.auto.on = live && !!C.auto; A.gates.on = live && !!C.gates; A.bars.on = live && C.barsWant > 0.5;
       A.run.on = live && a.state === 'running';
@@ -19088,7 +19089,6 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var thrust = (t.engine && t.press > 0.35) ? thr * 1.1 * Math.min(1, t.press) * (1 - R.wear / 220) : 0;
     var drag = 0.012 * t.v + (t.v > 0.02 ? 0.05 : 0);
     var a = thrust - drag - want * 3.0 * (t.v > 0.02 ? 1 : 0);
-    if (!t.engine || t.press < 0.35) a -= 0.0;
     t.v = Math.max(0, Math.min(11, t.v + a * dt)); if (want >= 0.99 && thrust < 0.05 && t.v < 0.08) t.v = 0;
     var ds = t.v * dt * t.dir, prev = t.s; t.s += ds;
     // the loop, the points, the depot loop
@@ -19107,7 +19107,6 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     if (atNow >= 0 && t.at !== atNow) { t.at = atNow; t.nextSt = (atNow + 1) % TR.st.length; t.dwell = 120; t.announced = false; t.belled = false; if (!R.auto) toast('Arrived at ' + TR.st[atNow].name + '. Wait time: 2 minutes', ''); }
     if (t.at >= 0 && atNow < 0 && t.v > 0.6) { t.at = -1; }
     if (t.at >= 0 && t.v < 0.25) t.dwell = Math.max(0, t.dwell - dt);
-    if (TR.washing) { }
     trServicesTick(dt);
     trPlaceUnits();
     trAnimate(dt, run);
@@ -19126,7 +19125,6 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     if (t.mode === 'D' && t.v < 0.25 && trInDepot()) {   // in the shed: the hired staff do the work, then she goes on
       t.throttle = 0; t.brake = 1; t.serviceT += dt;
       if (t.serviceT > 22) { t.serviceT = 0; var c = Math.round((100 - R.fuel) * 1.5 + (100 - R.water) * 0.2 + (R.wear > 0 ? 40 + R.wear * 2.5 : 0) + 30); if (S.bank >= c) { pay(-c, 'Railway depot'); R.fuel = 100; R.water = 100; R.wear = 0; t.washT = 10; R.dirt = 0; toast('The depot crew serviced the train ($' + c + ')', 'good'); } else { toast('The depot crew cannot work: not enough money', 'bad'); return; } }
-      else if (t.serviceT > 20) { }
       if (R.fuel < 99 || R.wear > 0) return; if (t.washT > 0) return;
     }
     if (t.at >= 0) {   // standing at a platform
@@ -19200,7 +19198,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       if (run > 0 && t.chuff > step) { t.chuff = 0; burst(ch.x, 3.9, ch.z, 0xdadde0, 3 + Math.round(t.throttle * 5), 'smoke'); trTone('triangle', 90, 0.12, 0.2, ch.x, ch.z, { f1: 55 }); if (trOk()) sNoise(AC.currentTime, 0.1, trVol(ch.x, ch.z) * 0.09, { type: 'lowpass', freq: 500, fade: true }); }
       else if (t.v < 0.3) { t.idleT -= dt; if (t.idleT <= 0) { t.idleT = 2.6; burst(ch.x, 3.9, ch.z, 0xe9ecee, 2, 'smoke'); } }
     }
-    lo.lamp.material.color.setHex(t.engine && (S.time < 7 || S.time > 18.5 || true) ? 0xfff0b0 : 0x55503a);
+    lo.lamp.material.color.setHex(t.engine && (S.time < 7 || S.time > 18.5) ? 0xfff0b0 : 0x55503a);
     // the cab
     lo.gasLever.rotation.z = 0.5 - t.throttle; lo.brakeLever.rotation.z = 0.5 - (t.brakeKey ? 1 : t.brake); lo.revLever.rotation.z = t.dir > 0 ? -0.5 : 0.5;
     // The toggle handles pivot in the panel face. Positive X sends the handle clockwise as seen from the cab.

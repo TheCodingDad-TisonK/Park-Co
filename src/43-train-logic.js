@@ -259,7 +259,6 @@
     var thrust = (t.engine && t.press > 0.35) ? thr * 1.1 * Math.min(1, t.press) * (1 - R.wear / 220) : 0;
     var drag = 0.012 * t.v + (t.v > 0.02 ? 0.05 : 0);
     var a = thrust - drag - want * 3.0 * (t.v > 0.02 ? 1 : 0);
-    if (!t.engine || t.press < 0.35) a -= 0.0;
     t.v = Math.max(0, Math.min(11, t.v + a * dt)); if (want >= 0.99 && thrust < 0.05 && t.v < 0.08) t.v = 0;
     var ds = t.v * dt * t.dir, prev = t.s; t.s += ds;
     // the loop, the points, the depot loop
@@ -278,7 +277,6 @@
     if (atNow >= 0 && t.at !== atNow) { t.at = atNow; t.nextSt = (atNow + 1) % TR.st.length; t.dwell = 120; t.announced = false; t.belled = false; if (!R.auto) toast('Arrived at ' + TR.st[atNow].name + '. Wait time: 2 minutes', ''); }
     if (t.at >= 0 && atNow < 0 && t.v > 0.6) { t.at = -1; }
     if (t.at >= 0 && t.v < 0.25) t.dwell = Math.max(0, t.dwell - dt);
-    if (TR.washing) { }
     trServicesTick(dt);
     trPlaceUnits();
     trAnimate(dt, run);
@@ -297,7 +295,6 @@
     if (t.mode === 'D' && t.v < 0.25 && trInDepot()) {   // in the shed: the hired staff do the work, then she goes on
       t.throttle = 0; t.brake = 1; t.serviceT += dt;
       if (t.serviceT > 22) { t.serviceT = 0; var c = Math.round((100 - R.fuel) * 1.5 + (100 - R.water) * 0.2 + (R.wear > 0 ? 40 + R.wear * 2.5 : 0) + 30); if (S.bank >= c) { pay(-c, 'Railway depot'); R.fuel = 100; R.water = 100; R.wear = 0; t.washT = 10; R.dirt = 0; toast('The depot crew serviced the train ($' + c + ')', 'good'); } else { toast('The depot crew cannot work: not enough money', 'bad'); return; } }
-      else if (t.serviceT > 20) { }
       if (R.fuel < 99 || R.wear > 0) return; if (t.washT > 0) return;
     }
     if (t.at >= 0) {   // standing at a platform
@@ -371,7 +368,7 @@
       if (run > 0 && t.chuff > step) { t.chuff = 0; burst(ch.x, 3.9, ch.z, 0xdadde0, 3 + Math.round(t.throttle * 5), 'smoke'); trTone('triangle', 90, 0.12, 0.2, ch.x, ch.z, { f1: 55 }); if (trOk()) sNoise(AC.currentTime, 0.1, trVol(ch.x, ch.z) * 0.09, { type: 'lowpass', freq: 500, fade: true }); }
       else if (t.v < 0.3) { t.idleT -= dt; if (t.idleT <= 0) { t.idleT = 2.6; burst(ch.x, 3.9, ch.z, 0xe9ecee, 2, 'smoke'); } }
     }
-    lo.lamp.material.color.setHex(t.engine && (S.time < 7 || S.time > 18.5 || true) ? 0xfff0b0 : 0x55503a);
+    lo.lamp.material.color.setHex(t.engine && (S.time < 7 || S.time > 18.5) ? 0xfff0b0 : 0x55503a);
     // the cab
     lo.gasLever.rotation.z = 0.5 - t.throttle; lo.brakeLever.rotation.z = 0.5 - (t.brakeKey ? 1 : t.brake); lo.revLever.rotation.z = t.dir > 0 ? -0.5 : 0.5;
     // The toggle handles pivot in the panel face. Positive X sends the handle clockwise as seen from the cab.
