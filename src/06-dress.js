@@ -247,6 +247,10 @@
       pkSign3D([th.name.toUpperCase()], 2.6, 0.36, 0, -0.32, 0.98, 0, { bg: '#151a20', fg: '#f5d38a' }, porch);
     }
     [-1, 1].forEach(function (s) { pkRoundCyl(0.11, 0.24, glowMat(0xfff2c0, 1.0), s * 1.3, -0.3, arch ? 0.15 : 0.9, porch, 10); });
+    var gatePiv = new THREE.Group(); gatePiv.position.set(ex, 0.95, ez); gatePiv.rotation.y = Math.atan2(out[0], out[1]); parent.add(gatePiv);
+    var gateLeaf = new THREE.Group(); gatePiv.add(gateLeaf);
+    box(1.15, 0.09, 0.05, iron, 0.575, 0, 0, gateLeaf, { r: 0.02 });
+    a.stationGate = gateLeaf;
     });
     // the exit: two posts, an EXIT board facing out, and the riders come off just outside it
     var xx = cx + Math.cos(aOut) * R, xz = cz + Math.sin(aOut) * R, o2 = [Math.cos(aOut), Math.sin(aOut)], t2 = [-Math.sin(aOut), Math.cos(aOut)];

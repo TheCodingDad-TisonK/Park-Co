@@ -168,9 +168,10 @@
     if (!a.open) return;
     var C = pkCtl(a), auto = pkCtlAuto(a);   // AUTO is the desk's switch alone: on MANUAL nothing moves until someone works the desk
     // the gates and the restraints ease to where they were told to be, and the desk's lights follow
-    C.gateT += ((C.gates ? 1 : 0) - C.gateT) * Math.min(1, dt * 3.5);
+    C.gateT += (((C.gates && a.stationGates !== false) ? 1 : 0) - C.gateT) * Math.min(1, dt * 3.5);
     C.bars += (C.barsWant - C.bars) * Math.min(1, dt * 3);
     for (var gi = 0; gi < C.gateObjs.length; gi++) C.gateObjs[gi](C.gateT);
+    if (a.stationGate) a.stationGate.rotation.y = (a.stationGates === false ? 0 : 1.5);
     for (var bi = 0; bi < C.barObjs.length; bi++) C.barObjs[bi](C.bars);
     pkCtlLamps(a);
     // the drive: up to speed while running, and wound down over the last few seconds so it stops before anyone gets off
