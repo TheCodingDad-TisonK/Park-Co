@@ -33,7 +33,7 @@ module.exports = `
   // the world
   ok(!!T.pkTrack() && T.pkTrack().getLength() > 100, 'the coaster is a closed circuit ' + T.pkTrack().getLength().toFixed(0) + ' m long');
   ok(T.pkTrain().length === 3 && T.pkSeats().length === 12, 'three cars and twelve seats');
-  ok(T.pkTurnstiles().length === 4 && T.pkGates().length === 4, 'four turnstiles at the gate and four platform gates');
+  ok(T.pkTurnstiles().length === 4 && T.pkGates().length === 3, 'four turnstiles at the gate and three platform gates');
   ok(T.pkBooths().length === 2 && !!T.pkBooths()[0].screen && !!T.pkBooths()[1].screen, 'two ticket windows, a screen each');
   ok(!!T.pkScreen() && !!T.pkSnack() && !!T.pkConsole() && !!T.pkConsole().parts.buttons.gates && !!T.pkConsole().parts.gauges.speed && !!T.pkConsole().parts.lever, 'the operator room has its screen and a real desk: buttons, a throttle and gauges');
   ok(T.pkScreen().zones.length === 0, 'the room screen reports the ride; it does not take taps');

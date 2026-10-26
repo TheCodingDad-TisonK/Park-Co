@@ -124,12 +124,18 @@
 
   // a station along z: kerbed deck, pavers, the hazard edge on the track side, lamps at each end
   function pkEastPlatform(g, x0, x1, z0, z1, edgeX, y) {
-    var lift = (y === undefined ? 0.18 : y) - 0.18;
+    var surf = y === undefined ? 0.18 : y, lift = surf - 0.18;
     if (lift > 0.02) box(x1 - x0, lift, z1 - z0, pkMats().kerb, (x0 + x1) / 2, lift / 2, (z0 + z1) / 2, g);
     box(x1 - x0, 0.12, z1 - z0, pkMats().kerb, (x0 + x1) / 2, 0.06 + lift, (z0 + z1) / 2, g);
     box(x1 - x0 - 0.12, 0.07, z1 - z0 - 0.12, pkMats().pavers, (x0 + x1) / 2, 0.145 + lift, (z0 + z1) / 2, g);
     box(0.16, 0.03, z1 - z0, MAT.hazard, edgeX, 0.17 + lift, (z0 + z1) / 2, g);
     [z0 + 0.5, z1 - 0.5].forEach(function (z) { pkLamp(Math.min(x0, x1) + 0.4, z, 3.0, g); });
+    if (lift > 0.02) {
+      var rampLen = Math.max(2, lift * 2);
+      var ramp = box(rampLen, 0.1, z1 - z0, pkMats().kerb, x1 + rampLen / 2, lift / 2, (z0 + z1) / 2, g);
+      ramp.rotation.z = Math.atan2(lift, rampLen);
+      PK_FLOOR_RECTS.push({ axis: 'x', x0: x0, x1: x1, z0: z0, z1: z1, y: surf, ramp: rampLen });
+    }
   }
   // the boom gates along a platform that runs along z: each boom lies along z and lifts about x
   function pkEastGates(g, zs, x, C, y) {
@@ -141,7 +147,7 @@
       box(0.05, 0.05, 0.92, MAT.steel, 0, -0.2, -0.46, boom);
       for (var i = 0; i < 4; i++) box(0.04, 0.22, 0.04, MAT.steel, 0, -0.11, -0.12 - i * 0.24, boom);
       box(0.1, 0.14, 0.1, MAT.red, 0, 0, -0.9, boom);
-      C.gateObjs.push(function (t) { boom.rotation.x = t * Math.PI / 2.1; });
+      C.stationGateObjs.push(function (t) { boom.rotation.x = t * Math.PI / 2.1; });
     });
   }
   // the control house's outside, round the cabin: a brick plinth, cream walls with timber framing, a slate hip roof with

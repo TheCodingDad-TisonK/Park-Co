@@ -120,9 +120,27 @@
   }
   // the platform sits south of the track, so the queue and the guests reach it without crossing the rails.
   // a short ramp at its south edge carries the player and the guests up the 0.6 m step.
+  var PK_FLOOR_RECTS = [];
+  function pkRaisedFloor(x, z) {
+    for (var i = 0; i < PK_FLOOR_RECTS.length; i++) {
+      var r = PK_FLOOR_RECTS[i];
+      if (r.axis === 'z') {
+        if (x <= r.x0 || x >= r.x1 || z <= r.z0) continue;
+        if (z < r.z1) return r.y;
+        if (r.ramp && z < r.z1 + r.ramp) return r.y * (1 - (z - r.z1) / r.ramp);
+      } else {
+        if (z <= r.z0 || z >= r.z1 || x <= r.x0) continue;
+        if (x < r.x1) return r.y;
+        if (r.ramp && x < r.x1 + r.ramp) return r.y * (1 - (x - r.x1) / r.ramp);
+      }
+    }
+    return null;
+  }
   function pkFloor(x, z) {
     if (pkOnPlatform(x, z)) return PK_PLATFORM_Y;
     if (x > -10 && x < 10 && z >= -0.6 && z < 0.4) return PK_PLATFORM_Y * (0.4 - z);
+    var rf = pkRaisedFloor(x, z);
+    if (rf !== null) return rf;
     return pkBkFloorAt(x, z);            // up the steps into a ride's booth (part 17)
   }
   function pkOnPlatform(x, z) { return x > -10 && x < 10 && z > -3.6 && z < -0.6; }
