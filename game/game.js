@@ -11170,7 +11170,6 @@ function pkBuildCoasterConsole(at) {
     ['gates', 'GATES', 'green', -0.35, 0.17],
     ['barsDown', 'BARS DN', 'amber', -0.11, 0.17],
     ['barsUp', 'BARS UP', 'white', 0.13, 0.17],
-    ['dispatch', 'DISPATCH', 'green', 0.37, 0.17],
     ['reset', 'RESET', 'white', -0.35, -0.04],
     ['test', 'TEST RUN', 'blue', -0.11, -0.04],
     ['maint', 'MAINT', 'amber', 0.13, -0.04],
@@ -11253,7 +11252,6 @@ function pkBuildCoasterConsole(at) {
         if (id === 'gates') return pkGatesToggle();
         if (id === 'barsDown') return pkBarsDown();
         if (id === 'barsUp') return pkBarsUp();
-        if (id === 'dispatch') return pkCtlState().mode === 2 ? pkTestRun() : pkDispatch();
         if (id === 'reset') return pkReset();
         if (id === 'test') return pkTestRun();
         if (id === 'maint') return pkService();
@@ -11343,7 +11341,6 @@ function pkBuildCoasterConsole(at) {
       buttons.gates.setLit(ready && (R.state === 'idle' || R.state === 'unload'));
       buttons.barsDown.setLit(ready && R.barsWant < 0.5);
       buttons.barsUp.setLit(ready && R.barsWant > 0.5);
-      buttons.dispatch.setLit(ready && (R.state === 'ready' || (R.state === 'loading' && R.riders > 0)));
       buttons.reset.setLit(live && !!R.fault);
       buttons.test.setLit(ready && R.state === 'idle');
       buttons.maint.setLit(live && (S.wear || 0) > 0);
