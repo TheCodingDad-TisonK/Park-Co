@@ -800,7 +800,7 @@ function pkBoothPanel(a, con) {
   var B = [
     ['gates', 'GATES', 'green', -0.18],
     ['bars', 'BARS', 'amber', 0.04],
-    ['dispatch', 'DISPATCH', 'green', 0.26],
+    ['station', 'STN GATES', 'white', 0.26],
     ['test', 'TEST', 'blue', 0.48]
   ];
   var P = pkCtlPanel({
@@ -815,7 +815,6 @@ function pkBoothPanel(a, con) {
       R2.txt('SPEED', -0.50, -0.092, 0.019, '#aebcc4');
       for (var i = 0; i < B.length; i++) R2.txt(B[i][1], B[i][3], 0.192, 0.021, '#d6dee3');
       R2.txt('AUTO', -0.18, -0.206, 0.018, '#aebcc4');
-      R2.txt('STN GATES', -0.42, -0.206, 0.014, '#aebcc4');
       R2.txt('E-STOP', 0.04, -0.206, 0.018, '#d6dee3');
       R2.txt('RESET', 0.26, -0.206, 0.018, '#aebcc4');
       R2.txt('DISPATCH', 0.66, -0.206, 0.018, '#d6dee3');
@@ -842,7 +841,7 @@ function pkBoothPanel(a, con) {
           sfx('click'); toast(a.name + ': restraints ' + (C.barsWant > 0.5 ? 'down' : 'up'), '');
           screenDirtyAll(); return true;
         }
-        if (id === 'dispatch') return pkBoothDispatch(a);
+        if (id === 'station') return pkStationGatesRide(a);
         if (id === 'test') return pkBoothTest(a);
       }
     });
@@ -850,10 +849,6 @@ function pkBoothPanel(a, con) {
   parts.auto = pkCtlToggle(P, -0.18, -0.135, {
     id: 'auto', on: C.auto, prompt: 'Automatic cycle',
     act: function () { pkBoothAuto(a); }
-  });
-  parts.station = pkCtlToggle(P, -0.42, -0.135, {
-    id: 'station', on: a.stationGates !== false, prompt: 'Station gates',
-    act: function (on) { pkStationGatesRide(a, on); }
   });
   parts.stop = pkCtlMushroom(P, 0.04, -0.118, {
     id: 'stop', r: 0.050, prompt: 'Emergency stop',
@@ -883,10 +878,9 @@ function pkBoothPanel(a, con) {
       var live = !C.fault && !!C.key;
       if (parts.key.on !== !!C.key) parts.key.set(!!C.key);
       if (parts.auto.on !== C.auto) parts.auto.set(C.auto);
-      if (parts.station.on !== (a.stationGates !== false)) parts.station.set(a.stationGates !== false);
       if (parts.stop.latched !== !!C.fault) parts.stop.setLatched(!!C.fault);
       parts.buttons.gates.setLit(live && (a.state === 'idle' || a.state === 'unloading' || a.state === 'boarding'));
-      parts.buttons.dispatch.setLit(live && !PK.closed && (a.state === 'boarding' || a.state === 'ready') && !a.queue.length && !a.boarding && a.riders > 0);
+      parts.buttons.station.setLit(live && a.stationGates === false);
       parts.buttons.test.setLit(live && !PK.closed && a.state === 'idle' && !a.queue.length && !a.riders);
     }
   });
@@ -903,7 +897,6 @@ function pkBoothPanel(a, con) {
       var live = power && !C.fault && !!C.key;
       if (parts.key.on !== !!C.key) parts.key.set(!!C.key);
       if (parts.auto.on !== C.auto) parts.auto.set(C.auto);
-      if (parts.station.on !== (a.stationGates !== false)) parts.station.set(a.stationGates !== false);
       if (parts.stop.latched !== !!C.fault) parts.stop.setLatched(!!C.fault);
       // the key window follows the key itself, so it still shows ON while a fault holds the rest of the panel dead
       A.key.on = power && !!C.key; A.auto.on = live && !!C.auto; A.gates.on = live && !!C.gates; A.bars.on = live && C.barsWant > 0.5;
@@ -911,7 +904,7 @@ function pkBoothPanel(a, con) {
       // the fault lamp has to stay lit while the ride is faulted, even though a fault drops the rest of the panel dead
       A.fault.on = power && !!C.key && ((C.fault || C.maint) ? 'flash' : false);
       parts.buttons.gates.setLit(live && (a.state === 'idle' || a.state === 'unloading' || a.state === 'boarding'));
-      parts.buttons.dispatch.setLit(live && !PK.closed && (a.state === 'boarding' || a.state === 'ready') && !a.queue.length && !a.boarding && a.riders > 0);
+      parts.buttons.station.setLit(live && a.stationGates === false);
       parts.buttons.test.setLit(live && !PK.closed && a.state === 'idle' && !a.queue.length && !a.riders);
       parts.readout.setPower(power);
       if (!power) { parts.readout.set(['NO POWER', 'BREAKER OFF']); return; }

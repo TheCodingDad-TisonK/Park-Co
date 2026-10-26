@@ -250,6 +250,7 @@
     var gatePiv = new THREE.Group(); gatePiv.position.set(ex, 0.95, ez); gatePiv.rotation.y = Math.atan2(out[0], out[1]); parent.add(gatePiv);
     var gateLeaf = new THREE.Group(); gatePiv.add(gateLeaf);
     box(1.15, 0.09, 0.05, iron, 0.575, 0, 0, gateLeaf, { r: 0.02 });
+    box(1.15, 0.09, 0.05, iron, 0.575, -0.55, 0, gateLeaf, { r: 0.02 });
     a.stationGate = gateLeaf;
     });
     // the exit: two posts, an EXIT board facing out, and the riders come off just outside it
