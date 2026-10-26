@@ -80,6 +80,7 @@
     PK.stationU = pkNearestU(4, PK_PLATFORM_Y, PK_STATION_Z);
     PK.stationX0 = PK.curve.getPointAt(PK.stationU).x;
     PK.ride.u = PK.stationU;
+    PK.ride.stationGates = true;
     // the lift is the sustained climb to the lap's highest point, found from the track as for the kit coasters
     var P0 = pkCoProfile(PK.curve, PK.len, PK.stationU);
     PK.liftU = [(PK.stationU + P0.lift[0] / P0.K) % 1, (PK.stationU + P0.lift[1] / P0.K) % 1];
@@ -713,6 +714,7 @@
     if (!S.coasterKey) return pkRefuse('The coaster is locked - turn the operator key on');
     if (PK.closed) return pkRefuse('The park is closed');
     if (R.fault) return pkRefuse('The ride is stopped');
+    if (R.stationGates === false) return pkRefuse('Open the station gates first');
     if (!pkCoasterAuto() && R.state === 'unload' && (R.riders > 0 || R.bars > 0.05)) return pkRefuse('Raise the restraints to let the riders off');
     if (R.state === 'dispatch' || R.state === 'running' || R.state === 'arrive') return pkRefuse('Not while the train is moving');
     PK.gates.forEach(function (gt) { gt.open = true; });
@@ -725,6 +727,13 @@
     if (R.state === 'ready' || R.state === 'dispatch' || R.state === 'running' || R.state === 'arrive') return pkRefuse('Not while the train is moving');
     PK.gates.forEach(function (gt) { gt.open = false; });
     sfx('lock'); hudDirty = true; return true;
+  }
+  function pkStationGates() {
+    var R = PK.ride;
+    R.stationGates = R.stationGates === false ? true : false;
+    if (!R.stationGates) PK.gates.forEach(function (gt) { gt.open = false; });
+    sfx('click'); toast('Station gates ' + (R.stationGates ? 'open' : 'shut'), R.stationGates ? '' : 'bad');
+    hudDirty = true; screenDirtyAll(); return true;
   }
   // one button for the gates: open to start boarding, close once the cars are full - whenever the train is in the station,
   // line or no line, bars up or down. The state decides, not the gate leaf, so after a manual train comes home and the
@@ -871,7 +880,7 @@
     var R = PK.ride;
     pkOpSignal();
     // the gates and the restraints ease to where they were told to be
-    PK.gates.forEach(function (gt) { gt.t += ((gt.open ? 1 : 0) - gt.t) * Math.min(1, dt * 4); gt.bar.rotation.z = gt.t * Math.PI / 2; });
+    PK.gates.forEach(function (gt) { gt.t += (((gt.open && R.stationGates !== false) ? 1 : 0) - gt.t) * Math.min(1, dt * 4); gt.bar.rotation.z = gt.t * Math.PI / 2; });
     R.bars += (R.barsWant - R.bars) * Math.min(1, dt * 3);
     PK.cars.forEach(function (car) { car.userData.bars.forEach(function (b) { b.rotation.x = -1.3 * (1 - R.bars); }); });
     // once the operator has raised the restraints on a manual unload, the riders step off

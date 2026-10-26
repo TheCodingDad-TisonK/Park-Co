@@ -518,6 +518,7 @@ function pkBuildCoasterConsole(at) {
     ['gates', 'GATES', 'green', -0.35, 0.17],
     ['barsDown', 'BARS DN', 'amber', -0.11, 0.17],
     ['barsUp', 'BARS UP', 'white', 0.13, 0.17],
+    ['station', 'STN GATES', 'white', 0.37, 0.17],
     ['reset', 'RESET', 'white', -0.35, -0.04],
     ['test', 'TEST RUN', 'blue', -0.11, -0.04],
     ['maint', 'MAINT', 'amber', 0.13, -0.04],
@@ -600,6 +601,7 @@ function pkBuildCoasterConsole(at) {
         if (id === 'gates') return pkGatesToggle();
         if (id === 'barsDown') return pkBarsDown();
         if (id === 'barsUp') return pkBarsUp();
+        if (id === 'station') return pkStationGates();
         if (id === 'reset') return pkReset();
         if (id === 'test') return pkTestRun();
         if (id === 'maint') return pkService();
@@ -689,6 +691,7 @@ function pkBuildCoasterConsole(at) {
       buttons.gates.setLit(ready && (R.state === 'idle' || R.state === 'unload'));
       buttons.barsDown.setLit(ready && R.barsWant < 0.5);
       buttons.barsUp.setLit(ready && R.barsWant > 0.5);
+      buttons.station.setLit(ready && R.stationGates === false);
       buttons.reset.setLit(live && !!R.fault);
       buttons.test.setLit(ready && R.state === 'idle');
       buttons.maint.setLit(live && (S.wear || 0) > 0);
@@ -812,6 +815,7 @@ function pkBoothPanel(a, con) {
       R2.txt('SPEED', -0.50, -0.092, 0.019, '#aebcc4');
       for (var i = 0; i < B.length; i++) R2.txt(B[i][1], B[i][3], 0.192, 0.021, '#d6dee3');
       R2.txt('AUTO', -0.18, -0.206, 0.018, '#aebcc4');
+      R2.txt('STN GATES', -0.42, -0.206, 0.014, '#aebcc4');
       R2.txt('E-STOP', 0.04, -0.206, 0.018, '#d6dee3');
       R2.txt('RESET', 0.26, -0.206, 0.018, '#aebcc4');
       R2.txt('DISPATCH', 0.66, -0.206, 0.018, '#d6dee3');
@@ -847,6 +851,10 @@ function pkBoothPanel(a, con) {
     id: 'auto', on: C.auto, prompt: 'Automatic cycle',
     act: function () { pkBoothAuto(a); }
   });
+  parts.station = pkCtlToggle(P, -0.42, -0.135, {
+    id: 'station', on: a.stationGates !== false, prompt: 'Station gates',
+    act: function (on) { pkStationGatesRide(a, on); }
+  });
   parts.stop = pkCtlMushroom(P, 0.04, -0.118, {
     id: 'stop', r: 0.050, prompt: 'Emergency stop',
     act: function () { pkBoothStop(a); }
@@ -875,6 +883,7 @@ function pkBoothPanel(a, con) {
       var live = !C.fault && !!C.key;
       if (parts.key.on !== !!C.key) parts.key.set(!!C.key);
       if (parts.auto.on !== C.auto) parts.auto.set(C.auto);
+      if (parts.station.on !== (a.stationGates !== false)) parts.station.set(a.stationGates !== false);
       if (parts.stop.latched !== !!C.fault) parts.stop.setLatched(!!C.fault);
       parts.buttons.gates.setLit(live && (a.state === 'idle' || a.state === 'unloading' || a.state === 'boarding'));
       parts.buttons.dispatch.setLit(live && !PK.closed && (a.state === 'boarding' || a.state === 'ready') && !a.queue.length && !a.boarding && a.riders > 0);
@@ -894,6 +903,7 @@ function pkBoothPanel(a, con) {
       var live = power && !C.fault && !!C.key;
       if (parts.key.on !== !!C.key) parts.key.set(!!C.key);
       if (parts.auto.on !== C.auto) parts.auto.set(C.auto);
+      if (parts.station.on !== (a.stationGates !== false)) parts.station.set(a.stationGates !== false);
       if (parts.stop.latched !== !!C.fault) parts.stop.setLatched(!!C.fault);
       // the key window follows the key itself, so it still shows ON while a fault holds the rest of the panel dead
       A.key.on = power && !!C.key; A.auto.on = live && !!C.auto; A.gates.on = live && !!C.gates; A.bars.on = live && C.barsWant > 0.5;

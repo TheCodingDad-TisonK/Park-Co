@@ -6278,6 +6278,7 @@
     PK.stationU = pkNearestU(4, PK_PLATFORM_Y, PK_STATION_Z);
     PK.stationX0 = PK.curve.getPointAt(PK.stationU).x;
     PK.ride.u = PK.stationU;
+    PK.ride.stationGates = true;
     // the lift is the sustained climb to the lap's highest point, found from the track as for the kit coasters
     var P0 = pkCoProfile(PK.curve, PK.len, PK.stationU);
     PK.liftU = [(PK.stationU + P0.lift[0] / P0.K) % 1, (PK.stationU + P0.lift[1] / P0.K) % 1];
@@ -6911,6 +6912,7 @@
     if (!S.coasterKey) return pkRefuse('The coaster is locked - turn the operator key on');
     if (PK.closed) return pkRefuse('The park is closed');
     if (R.fault) return pkRefuse('The ride is stopped');
+    if (R.stationGates === false) return pkRefuse('Open the station gates first');
     if (!pkCoasterAuto() && R.state === 'unload' && (R.riders > 0 || R.bars > 0.05)) return pkRefuse('Raise the restraints to let the riders off');
     if (R.state === 'dispatch' || R.state === 'running' || R.state === 'arrive') return pkRefuse('Not while the train is moving');
     PK.gates.forEach(function (gt) { gt.open = true; });
@@ -6923,6 +6925,13 @@
     if (R.state === 'ready' || R.state === 'dispatch' || R.state === 'running' || R.state === 'arrive') return pkRefuse('Not while the train is moving');
     PK.gates.forEach(function (gt) { gt.open = false; });
     sfx('lock'); hudDirty = true; return true;
+  }
+  function pkStationGates() {
+    var R = PK.ride;
+    R.stationGates = R.stationGates === false ? true : false;
+    if (!R.stationGates) PK.gates.forEach(function (gt) { gt.open = false; });
+    sfx('click'); toast('Station gates ' + (R.stationGates ? 'open' : 'shut'), R.stationGates ? '' : 'bad');
+    hudDirty = true; screenDirtyAll(); return true;
   }
   // one button for the gates: open to start boarding, close once the cars are full - whenever the train is in the station,
   // line or no line, bars up or down. The state decides, not the gate leaf, so after a manual train comes home and the
@@ -7069,7 +7078,7 @@
     var R = PK.ride;
     pkOpSignal();
     // the gates and the restraints ease to where they were told to be
-    PK.gates.forEach(function (gt) { gt.t += ((gt.open ? 1 : 0) - gt.t) * Math.min(1, dt * 4); gt.bar.rotation.z = gt.t * Math.PI / 2; });
+    PK.gates.forEach(function (gt) { gt.t += (((gt.open && R.stationGates !== false) ? 1 : 0) - gt.t) * Math.min(1, dt * 4); gt.bar.rotation.z = gt.t * Math.PI / 2; });
     R.bars += (R.barsWant - R.bars) * Math.min(1, dt * 3);
     PK.cars.forEach(function (car) { car.userData.bars.forEach(function (b) { b.rotation.x = -1.3 * (1 - R.bars); }); });
     // once the operator has raised the restraints on a manual unload, the riders step off
@@ -7472,9 +7481,10 @@
     if (!a.open) return;
     var C = pkCtl(a), auto = pkCtlAuto(a);   // AUTO is the desk's switch alone: on MANUAL nothing moves until someone works the desk
     // the gates and the restraints ease to where they were told to be, and the desk's lights follow
-    C.gateT += ((C.gates ? 1 : 0) - C.gateT) * Math.min(1, dt * 3.5);
+    C.gateT += (((C.gates && a.stationGates !== false) ? 1 : 0) - C.gateT) * Math.min(1, dt * 3.5);
     C.bars += (C.barsWant - C.bars) * Math.min(1, dt * 3);
     for (var gi = 0; gi < C.gateObjs.length; gi++) C.gateObjs[gi](C.gateT);
+    if (a.stationGate) a.stationGate.rotation.y = (a.stationGates === false ? 0 : 1.5);
     for (var bi = 0; bi < C.barObjs.length; bi++) C.barObjs[bi](C.bars);
     pkCtlLamps(a);
     // the drive: up to speed while running, and wound down over the last few seconds so it stops before anyone gets off
@@ -8391,6 +8401,10 @@
       pkSign3D([th.name.toUpperCase()], 2.6, 0.36, 0, -0.32, 0.98, 0, { bg: '#151a20', fg: '#f5d38a' }, porch);
     }
     [-1, 1].forEach(function (s) { pkRoundCyl(0.11, 0.24, glowMat(0xfff2c0, 1.0), s * 1.3, -0.3, arch ? 0.15 : 0.9, porch, 10); });
+    var gatePiv = new THREE.Group(); gatePiv.position.set(ex, 0.95, ez); gatePiv.rotation.y = Math.atan2(out[0], out[1]); parent.add(gatePiv);
+    var gateLeaf = new THREE.Group(); gatePiv.add(gateLeaf);
+    box(1.15, 0.09, 0.05, iron, 0.575, 0, 0, gateLeaf, { r: 0.02 });
+    a.stationGate = gateLeaf;
     });
     // the exit: two posts, an EXIT board facing out, and the riders come off just outside it
     var xx = cx + Math.cos(aOut) * R, xz = cz + Math.sin(aOut) * R, o2 = [Math.cos(aOut), Math.sin(aOut)], t2 = [-Math.sin(aOut), Math.cos(aOut)];
@@ -9480,6 +9494,7 @@ function pkBoothGates(a) {
   if (!C.key) return pkBoothRefuse(a.name + ' is locked - turn the operator key on');
   if (C.fault) return pkBoothRefuse('Reset ' + a.name + ' first');
   if (C.maint) return pkBoothRefuse(a.name + ' is locked out - turn the key to RUN');
+  if (a.stationGates === false) return pkBoothRefuse('Open the station gates first');
   if (a.state === 'running') return pkBoothRefuse('Not while ' + a.name + ' is running');
   if (a.awaitBars) return pkBoothRefuse('Raise the restraints first: the riders are still aboard ' + a.name);
   if (C.gates && a.state !== 'idle') {   // an idle ride's gates count as shut: a press there always opens them
@@ -9497,6 +9512,13 @@ function pkBoothGates(a) {
   sfx('ok'); toast(a.name + ': gates open', 'good');
   screenDirtyAll();
   return true;
+}
+// the station platform gates: a master barrier across the platform entrance, independent of the boarding gates
+function pkStationGatesRide(a, on) {
+  a.stationGates = on === undefined ? (a.stationGates === false ? true : false) : !!on;
+  if (!a.stationGates && a.ctl) a.ctl.gates = false;
+  sfx('click'); toast(a.name + ': station gates ' + (a.stationGates ? 'open' : 'shut'), a.stationGates ? '' : 'bad');
+  screenDirtyAll(); return true;
 }
 
 function pkBoothDispatch(a) {
@@ -11170,6 +11192,7 @@ function pkBuildCoasterConsole(at) {
     ['gates', 'GATES', 'green', -0.35, 0.17],
     ['barsDown', 'BARS DN', 'amber', -0.11, 0.17],
     ['barsUp', 'BARS UP', 'white', 0.13, 0.17],
+    ['station', 'STN GATES', 'white', 0.37, 0.17],
     ['reset', 'RESET', 'white', -0.35, -0.04],
     ['test', 'TEST RUN', 'blue', -0.11, -0.04],
     ['maint', 'MAINT', 'amber', 0.13, -0.04],
@@ -11252,6 +11275,7 @@ function pkBuildCoasterConsole(at) {
         if (id === 'gates') return pkGatesToggle();
         if (id === 'barsDown') return pkBarsDown();
         if (id === 'barsUp') return pkBarsUp();
+        if (id === 'station') return pkStationGates();
         if (id === 'reset') return pkReset();
         if (id === 'test') return pkTestRun();
         if (id === 'maint') return pkService();
@@ -11341,6 +11365,7 @@ function pkBuildCoasterConsole(at) {
       buttons.gates.setLit(ready && (R.state === 'idle' || R.state === 'unload'));
       buttons.barsDown.setLit(ready && R.barsWant < 0.5);
       buttons.barsUp.setLit(ready && R.barsWant > 0.5);
+      buttons.station.setLit(ready && R.stationGates === false);
       buttons.reset.setLit(live && !!R.fault);
       buttons.test.setLit(ready && R.state === 'idle');
       buttons.maint.setLit(live && (S.wear || 0) > 0);
@@ -11464,6 +11489,7 @@ function pkBoothPanel(a, con) {
       R2.txt('SPEED', -0.50, -0.092, 0.019, '#aebcc4');
       for (var i = 0; i < B.length; i++) R2.txt(B[i][1], B[i][3], 0.192, 0.021, '#d6dee3');
       R2.txt('AUTO', -0.18, -0.206, 0.018, '#aebcc4');
+      R2.txt('STN GATES', -0.42, -0.206, 0.014, '#aebcc4');
       R2.txt('E-STOP', 0.04, -0.206, 0.018, '#d6dee3');
       R2.txt('RESET', 0.26, -0.206, 0.018, '#aebcc4');
       R2.txt('DISPATCH', 0.66, -0.206, 0.018, '#d6dee3');
@@ -11499,6 +11525,10 @@ function pkBoothPanel(a, con) {
     id: 'auto', on: C.auto, prompt: 'Automatic cycle',
     act: function () { pkBoothAuto(a); }
   });
+  parts.station = pkCtlToggle(P, -0.42, -0.135, {
+    id: 'station', on: a.stationGates !== false, prompt: 'Station gates',
+    act: function (on) { pkStationGatesRide(a, on); }
+  });
   parts.stop = pkCtlMushroom(P, 0.04, -0.118, {
     id: 'stop', r: 0.050, prompt: 'Emergency stop',
     act: function () { pkBoothStop(a); }
@@ -11527,6 +11557,7 @@ function pkBoothPanel(a, con) {
       var live = !C.fault && !!C.key;
       if (parts.key.on !== !!C.key) parts.key.set(!!C.key);
       if (parts.auto.on !== C.auto) parts.auto.set(C.auto);
+      if (parts.station.on !== (a.stationGates !== false)) parts.station.set(a.stationGates !== false);
       if (parts.stop.latched !== !!C.fault) parts.stop.setLatched(!!C.fault);
       parts.buttons.gates.setLit(live && (a.state === 'idle' || a.state === 'unloading' || a.state === 'boarding'));
       parts.buttons.dispatch.setLit(live && !PK.closed && (a.state === 'boarding' || a.state === 'ready') && !a.queue.length && !a.boarding && a.riders > 0);
@@ -11546,6 +11577,7 @@ function pkBoothPanel(a, con) {
       var live = power && !C.fault && !!C.key;
       if (parts.key.on !== !!C.key) parts.key.set(!!C.key);
       if (parts.auto.on !== C.auto) parts.auto.set(C.auto);
+      if (parts.station.on !== (a.stationGates !== false)) parts.station.set(a.stationGates !== false);
       if (parts.stop.latched !== !!C.fault) parts.stop.setLatched(!!C.fault);
       // the key window follows the key itself, so it still shows ON while a fault holds the rest of the panel dead
       A.key.on = power && !!C.key; A.auto.on = live && !!C.auto; A.gates.on = live && !!C.gates; A.bars.on = live && C.barsWant > 0.5;
