@@ -18,58 +18,133 @@
     var hub = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.1, 10), rimMat); hub.rotation.x = Math.PI / 2; w.add(hub);
     return w;
   }
-  function trGauge(parent, x, y, z, ry, label, key) {   // a brass dial with a needle that the update turns
-    var M = trMats(), g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; parent.add(g);
-    var cv = document.createElement('canvas'); cv.width = cv.height = 128; var c = cv.getContext('2d');
-    if (c) { c.fillStyle = '#f4efe0'; c.beginPath(); c.arc(64, 64, 62, 0, 7); c.fill(); c.strokeStyle = '#222'; c.lineWidth = 3;
-      for (var i = 0; i <= 10; i++) { var a = (-0.75 + i * 0.15) * Math.PI * 1.0 - Math.PI / 2 + 0.0; var a2 = a; c.beginPath(); c.moveTo(64 + Math.cos(a2) * 50, 64 + Math.sin(a2) * 50); c.lineTo(64 + Math.cos(a2) * 58, 64 + Math.sin(a2) * 58); c.stroke(); }
-      c.fillStyle = '#222'; c.font = 'bold 15px Arial'; c.textAlign = 'center'; c.fillText(label, 64, 100); }
-    var face = new THREE.Mesh(new THREE.CircleGeometry(0.15, 20), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv) })); face.position.z = 0.012; g.add(face);
-    var ring = new THREE.Mesh(new THREE.TorusGeometry(0.155, 0.02, 6, 20), M.brass); g.add(ring);
-    var needle = new THREE.Group(); needle.position.z = 0.02; g.add(needle); box(0.012, 0.12, 0.004, M.black, 0, 0.05, 0, needle);
+  function trGauge(parent, x, y, z, ry, label, key, rad) {   // a brass dial with a needle that the update turns
+    var M = trMats(), R = rad || 0.15, g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; parent.add(g);
+    var cv = document.createElement('canvas'); cv.width = cv.height = 192; var c = cv.getContext('2d');
+    var cx = 96, cr = 90, a0 = -Math.PI / 2 - 1.1, a1 = -Math.PI / 2 + 1.1;
+    if (c) {
+      c.fillStyle = '#f6f0df'; c.beginPath(); c.arc(cx, cx, cr, 0, 7); c.fill();
+      c.strokeStyle = '#b9ad8c'; c.lineWidth = 4; c.beginPath(); c.arc(cx, cx, cr - 3, 0, 7); c.stroke();
+      // a red band over the top quarter of the scale, so a full boiler reads at a glance
+      c.strokeStyle = '#a2321f'; c.lineWidth = 8; c.beginPath(); c.arc(cx, cx, cr - 13, a0 + (a1 - a0) * 0.78, a1); c.stroke();
+      for (var i = 0; i <= 10; i++) {
+        var a = a0 + (a1 - a0) * i / 10, big = i % 2 === 0;
+        c.strokeStyle = '#22231f'; c.lineWidth = big ? 3.2 : 1.8;
+        c.beginPath(); c.moveTo(cx + Math.cos(a) * (cr - 20), cx + Math.sin(a) * (cr - 20));
+        c.lineTo(cx + Math.cos(a) * (cr - (big ? 30 : 26)), cx + Math.sin(a) * (cr - (big ? 30 : 26))); c.stroke();
+        if (big) { c.fillStyle = '#22231f'; c.font = 'bold 15px Arial'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(i), cx + Math.cos(a) * (cr - 42), cx + Math.sin(a) * (cr - 42)); }
+      }
+      c.fillStyle = '#22231f'; c.font = 'bold 19px Bahnschrift, Arial, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(label, cx, cx + 36);
+      c.strokeStyle = 'rgba(255,255,255,0.7)'; c.lineWidth = 6; c.beginPath(); c.arc(cx, cx, cr - 14, Math.PI * 1.08, Math.PI * 1.34); c.stroke();
+    }
+    var back = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.014, R + 0.014, 0.03, 24), M.iron); back.rotation.x = Math.PI / 2; back.position.z = -0.018; g.add(back);
+    var face = new THREE.Mesh(new THREE.CircleGeometry(R, 24), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv) })); face.position.z = 0.012; g.add(face);
+    var ring = new THREE.Mesh(new THREE.TorusGeometry(R + 0.005, R * 0.1, 6, 26), M.brass); ring.position.z = 0.016; g.add(ring);
+    for (var sc = 0; sc < 4; sc++) { var sa = Math.PI / 4 + sc * Math.PI / 2; sphere(R * 0.045, M.brass, Math.cos(sa) * R * 0.86, Math.sin(sa) * R * 0.86, 0.018, g); }
+    var needle = new THREE.Group(); needle.position.z = 0.022; g.add(needle);
+    box(R * 0.055, R * 0.9, 0.004, M.black, 0, R * 0.42, 0, needle);
+    sphere(R * 0.07, M.brass, 0, 0, 0.004, needle);
     TR.gauges = TR.gauges || {}; TR.gauges[key] = needle; return g;
   }
   // ── The locomotive ────────────────────────────────────────────────
+  // A wheel for the engine and its tender: tyre, open spokes, a brass hub and, on the drivers (o.pin set), a counterweight
+  // and a crank pin. o.pin is the crank angle in the wheel's own frame - the valve gear in the update follows it.
+  function trLocoWheel(r, mat, rimMat, parent, x, y, z, spokes, o) {
+    o = o || {}; var M = trMats(), s = o.s || 1, n = spokes || 5, w = new THREE.Group(); w.position.set(x, y, z); parent.add(w);
+    var tire = new THREE.Mesh(new THREE.TorusGeometry(r - 0.05, 0.055, 8, 32), rimMat); tire.castShadow = true; w.add(tire);
+    var fl = new THREE.Mesh(new THREE.TorusGeometry(r - 0.075, 0.03, 6, 32), rimMat); fl.position.z = -s * 0.05; w.add(fl);
+    var inner = new THREE.Mesh(new THREE.TorusGeometry(r * 0.62, 0.03, 6, 24), mat); w.add(inner);
+    for (var i = 0; i < n; i++) { var sp = box(0.06, (r - 0.1) * 2, 0.045, mat, 0, 0, 0, w); sp.rotation.z = i * Math.PI / n; }
+    var boss = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.2, r * 0.2, 0.1, 14), rimMat); boss.rotation.x = Math.PI / 2; w.add(boss);
+    var hub = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.12, r * 0.12, 0.15, 12), M.brass); hub.rotation.x = Math.PI / 2; w.add(hub);
+    if (o.pin !== undefined) {
+      var ca = Math.cos(o.pin), sa = Math.sin(o.pin), sh = new THREE.Shape();
+      sh.absarc(0, 0, r - 0.1, o.pin + Math.PI - 0.95, o.pin + Math.PI + 0.95, false); sh.absarc(0, 0, r * 0.22, o.pin + Math.PI + 0.95, o.pin + Math.PI - 0.95, true);
+      var cw = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.07, bevelEnabled: false, curveSegments: 10 }), o.cwMat || rimMat); cw.position.z = -0.035; cw.castShadow = true; w.add(cw);
+      var pin = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.42, 10), M.brass); pin.rotation.x = Math.PI / 2; pin.position.set(ca * 0.22, sa * 0.22, s * 0.2); w.add(pin);
+      sphere(0.075, M.brass, ca * 0.22, sa * 0.22, s * 0.42, w);
+    }
+    return w;
+  }
   function trBuildLoco() {
     var M = trMats(), P = pkMats(), g = trDyn(), u = { kind: 'loco', g: g, len: 8.4, d: 4.2, bf: 2.6, br: 2.6, wheels: [], drivers: [], rods: [] };
     g.userData.unit = u;
-    var rim = M.black, red = pkPaint(0xb3262b, 0.45, 0.3);
-    // frame, running boards, buffer beams
-    pkBevelBox(8.4, 0.28, 1.7, M.black, 0, 1.06, 0, g, 0.03); pkBevelBox(0.3, 0.5, 2.2, M.red, 4.2, 1.1, 0, g, 0.03); pkBevelBox(0.3, 0.5, 2.2, M.red, -4.2, 1.1, 0, g, 0.03);
-    [-0.7, 0.7].forEach(function (z) { var b = pkRoundCyl(0.12, 0.3, M.iron, 4.45, 1.1, z, g, 10); b.rotation.z = Math.PI / 2; var d = pkRoundCyl(0.2, 0.05, M.iron, 4.62, 1.1, z, g, 12); d.rotation.z = Math.PI / 2; });
-    [-1, 1].forEach(function (s) { pkBevelBox(5.0, 0.07, 0.42, M.black, 1.7, 1.55, s * 0.98, g, 0.02); box(4.9, 0.03, 0.04, M.brass, 1.7, 1.6, s * 1.18, g); });
-    // the boiler, with brass bands, and the smokebox
-    var boiler = new THREE.Mesh(new THREE.CylinderGeometry(0.74, 0.74, 3.5, 24), M.green); boiler.rotation.z = Math.PI / 2; boiler.position.set(1.15, 2.0, 0); boiler.castShadow = true; g.add(boiler);
-    var sbx = new THREE.Mesh(new THREE.CylinderGeometry(0.77, 0.77, 1.1, 24), M.black); sbx.rotation.z = Math.PI / 2; sbx.position.set(3.45, 2.0, 0); sbx.castShadow = true; g.add(sbx);
-    var door = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.06, 20), M.black); door.rotation.z = Math.PI / 2; door.position.set(4.02, 2.0, 0); g.add(door);
-    var dring = new THREE.Mesh(new THREE.TorusGeometry(0.64, 0.03, 6, 22), M.brass); dring.rotation.y = Math.PI / 2; dring.position.set(4.04, 2.0, 0); g.add(dring);
-    sphere(0.07, M.brass, 4.08, 2.0, 0, g);
-    [-0.4, 1.0, 2.2].forEach(function (bx) { var t = new THREE.Mesh(new THREE.TorusGeometry(0.745, 0.035, 8, 28), M.brass); t.rotation.y = Math.PI / 2; t.position.set(bx, 2.0, 0); g.add(t); });
-    // chimney, domes, whistle, safety valves, headlamp
-    var ch = pkLathe([[0.01, 0], [0.19, 0], [0.2, 0.45], [0.33, 0.85], [0.42, 1.0], [0.3, 1.02], [0.02, 1.0]], M.black, 3.55, 2.72, 0, g, 16); u.chimney = new THREE.Vector3(3.55, 3.8, 0);
-    var ring = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.03, 6, 20), M.brass); ring.rotation.x = Math.PI / 2; ring.position.set(3.55, 3.72, 0); g.add(ring);
-    pkLathe([[0.01, 0], [0.5, 0], [0.5, 0.2], [0.32, 0.55], [0.2, 0.62], [0.01, 0.64]], M.green, 1.4, 2.72, 0, g, 18); pkRoundCyl(0.16, 0.2, M.brass, 1.4, 3.4, 0, g, 12); sphere(0.17, M.brass, 1.4, 3.5, 0, g);
-    pkLathe([[0.01, 0], [0.34, 0], [0.34, 0.18], [0.2, 0.42], [0.01, 0.46]], M.green, 0.5, 2.72, 0, g, 14); pkRoundCyl(0.1, 0.18, M.brass, 0.5, 3.2, 0, g, 10);
-    [-0.12, 0.12].forEach(function (z) { pkRoundCyl(0.04, 0.34, M.brass, -0.45, 2.88, z, g, 8); });
-    var wh = pkLathe([[0.01, 0], [0.08, 0], [0.09, 0.22], [0.14, 0.34], [0.09, 0.36], [0.01, 0.36]], M.brass, -0.8, 2.72, 0, g, 10); u.whistle = new THREE.Vector3(-0.8, 3.1, 0);
-    var hl = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.3, 14), M.black); hl.rotation.z = Math.PI / 2; hl.position.set(3.9, 3.04, 0); g.add(hl);
-    u.lamp = new THREE.Mesh(new THREE.CircleGeometry(0.17, 14), new THREE.MeshBasicMaterial({ color: 0x55503a })); u.lamp.rotation.y = Math.PI / 2; u.lamp.position.set(4.06, 3.04, 0); u.lamp.userData.noBake = true; g.add(u.lamp);
-    // the pilot: a slatted cow-catcher
-    for (var i = -3; i <= 3; i++) { var sl = box(0.9, 0.04, 0.07, M.iron, 4.55, 0.55 + 0.0, i * 0.28, g); sl.rotation.z = 0.6; sl.position.y = 0.55 + 0.02; }
-    // cylinders, cross-heads and the valve gear's silhouette
+    var rim = M.black, red = pkPaint(0xb3262b, 0.45, 0.3), steel = std({ color: 0xaab2b8, roughness: 0.3, metalness: 0.55 }), gold = M.gold, brass = M.brass;
+    function rAt(x) { return 0.76 - (x + 0.9) / 3.9 * 0.04; }   // the boiler tapers a touch toward the smokebox
+    // frame, buffer beams (gilded, with the engine's number), buffers and a centre coupler
+    pkBevelBox(8.4, 0.28, 1.7, M.black, 0, 1.06, 0, g, 0.03);
+    [4.2, -4.2].forEach(function (bx) { var f = bx > 0 ? 1 : -1; pkBevelBox(0.3, 0.5, 2.2, M.red, bx, 1.1, 0, g, 0.03); box(0.02, 0.035, 2.0, gold, bx + f * 0.155, 1.3, 0, g); box(0.02, 0.035, 2.0, gold, bx + f * 0.155, 0.92, 0, g); });
+    sign(['1'], 0.42, 0.42, 4.37, 1.12, 0, Math.PI / 2, { w: 128, h: 128, bg: '#102a1c', fg: '#f3d36a' }, g);
+    [-0.7, 0.7].forEach(function (z) {
+      var b = pkRoundCyl(0.12, 0.3, M.iron, 4.45, 1.1, z, g, 10); b.rotation.z = Math.PI / 2; var d = pkRoundCyl(0.2, 0.05, steel, 4.62, 1.1, z, g, 14); d.rotation.z = Math.PI / 2;
+      var c = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.025, 6, 14), brass); c.rotation.y = Math.PI / 2; c.position.set(4.4, 1.1, z); g.add(c);
+    });
+    box(0.5, 0.1, 0.1, M.iron, 4.6, 1.0, 0, g); sphere(0.06, brass, 4.82, 1.0, 0, g);
+    // running boards with a brass edge, handrails along the boiler
+    [-1, 1].forEach(function (s) { pkBevelBox(5.0, 0.07, 0.42, M.black, 1.7, 1.55, s * 0.98, g, 0.02); box(4.9, 0.03, 0.04, brass, 1.7, 1.6, s * 1.18, g); box(4.9, 0.02, 0.012, gold, 1.7, 1.575, s * 1.2, g); });
+    // the boiler (tapered), the smokebox and its dished, riveted door
+    var boiler = new THREE.Mesh(new THREE.CylinderGeometry(0.76, 0.72, 3.9, 28), M.green); boiler.rotation.z = Math.PI / 2; boiler.position.set(1.05, 2.0, 0); boiler.castShadow = true; g.add(boiler);
+    var sbx = new THREE.Mesh(new THREE.CylinderGeometry(0.74, 0.74, 1.1, 28), M.black); sbx.rotation.z = Math.PI / 2; sbx.position.set(3.5, 2.0, 0); sbx.castShadow = true; g.add(sbx);
+    var door = pkLathe([[0.01, 0.1], [0.3, 0.085], [0.52, 0.04], [0.66, 0.0]], M.black, 4.04, 2.0, 0, g, 28); door.rotation.z = -Math.PI / 2;
+    var dring = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.04, 6, 30), brass); dring.rotation.y = Math.PI / 2; dring.position.set(4.05, 2.0, 0); g.add(dring);
+    for (var rv = 0; rv < 16; rv++) { var ra = rv / 16 * Math.PI * 2; sphere(0.022, brass, 4.065, 2.0 + Math.cos(ra) * 0.58, Math.sin(ra) * 0.58, g); }
+    box(0.03, 0.06, 1.1, M.iron, 4.14, 2.22, 0, g); box(0.03, 0.06, 1.1, M.iron, 4.14, 1.78, 0, g);
+    sphere(0.08, brass, 4.17, 2.0, 0, g); var hw = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.02, 6, 16), brass); hw.rotation.y = Math.PI / 2; hw.position.set(4.19, 2.0, 0); g.add(hw);
+    // brass bands with gold pinstripes
+    [-0.5, 1.95, 2.9].forEach(function (bx) {
+      var r = rAt(bx), t = new THREE.Mesh(new THREE.TorusGeometry(r + 0.01, 0.035, 8, 32), brass); t.rotation.y = Math.PI / 2; t.position.set(bx, 2.0, 0); g.add(t);
+      [-0.08, 0.08].forEach(function (dx) { var t2 = new THREE.Mesh(new THREE.TorusGeometry(r + 0.005, 0.012, 6, 32), gold); t2.rotation.y = Math.PI / 2; t2.position.set(bx + dx, 2.0, 0); g.add(t2); });
+    });
+    // boiler handrails on stanchions, with a brass knob at each end
     [-1, 1].forEach(function (s) {
-      var cy = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 1.0, 14), M.black); cy.rotation.z = Math.PI / 2; cy.position.set(2.7, 1.0, s * 1.05); g.add(cy);
-      var cap = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.06, 12), M.brass); cap.rotation.z = Math.PI / 2; cap.position.set(3.23, 1.0, s * 1.05); g.add(cap);
-      var rod = box(1, 0.1, 0.07, M.iron, 0, 0, s * 1.2, g), cross = box(0.22, 0.2, 0.1, M.iron, 0, 1.0, s * 1.12, g);
-      var coup = box(1, 0.1, 0.06, M.iron, 0, 0, s * 1.24, g), pr = box(0.9, 0.05, 0.05, M.iron, 0, 1.0, s * 1.05, g);
+      pkRod(-0.8, 2.4, s * 0.72, 3.3, 2.4, s * 0.72, 0.018, brass, g, 6); sphere(0.03, brass, -0.8, 2.4, s * 0.72, g); sphere(0.03, brass, 3.3, 2.4, s * 0.72, g);
+      [-0.3, 0.9, 2.1, 3.0].forEach(function (hx) { pkRod(hx, 2.4, s * 0.62, hx, 2.4, s * 0.72, 0.016, brass, g, 6); });
+    });
+    // diamond stack with brass collars, then the sand dome, steam dome, bell, safety valves and whistle
+    pkLathe([[0.01, 0], [0.34, 0], [0.29, 0.07], [0.16, 0.26], [0.15, 0.42], [0.36, 0.68], [0.47, 0.82], [0.4, 0.95], [0.27, 1.03], [0.01, 1.03]], M.black, 3.4, 2.68, 0, g, 20); u.chimney = new THREE.Vector3(3.4, 3.8, 0);
+    [[0.34, 0.16], [0.82, 0.47]].forEach(function (c) { var ring = new THREE.Mesh(new THREE.TorusGeometry(c[1], 0.028, 6, 24), brass); ring.rotation.x = Math.PI / 2; ring.position.set(3.4, 2.68 + c[0] + 0.0, 0); g.add(ring); });
+    pkLathe([[0.01, 0], [0.4, 0], [0.4, 0.1], [0.3, 0.42], [0.2, 0.52], [0.01, 0.56]], M.green, 2.35, 2.7, 0, g, 18); pkRoundCyl(0.12, 0.14, brass, 2.35, 3.3, 0, g, 12); sphere(0.07, brass, 2.35, 3.4, 0, g);
+    pkLathe([[0.01, 0], [0.5, 0], [0.5, 0.1], [0.42, 0.3], [0.4, 0.34], [0.01, 0.34]], M.green, 1.0, 2.68, 0, g, 20);
+    pkLathe([[0.01, 0], [0.4, 0], [0.4, 0.04], [0.32, 0.34], [0.14, 0.46], [0.01, 0.5]], brass, 1.0, 3.0, 0, g, 20); sphere(0.06, brass, 1.0, 3.53, 0, g);
+    pkLathe([[0.2, 0], [0.18, 0.08], [0.12, 0.25], [0.06, 0.32], [0.01, 0.34]], brass, 1.7, 2.83, 0, g, 14);
+    [-1, 1].forEach(function (s) { box(0.06, 0.44, 0.06, M.iron, 1.7 + s * 0.24, 2.98, 0, g); }); box(0.54, 0.05, 0.05, M.iron, 1.7, 3.2, 0, g);
+    [-0.14, 0.14].forEach(function (z) { pkLathe([[0.01, 0], [0.07, 0], [0.05, 0.1], [0.07, 0.2], [0.03, 0.3], [0.01, 0.32]], brass, -0.4, 2.74, z, g, 8); });
+    pkLathe([[0.01, 0], [0.08, 0], [0.09, 0.22], [0.14, 0.34], [0.09, 0.36], [0.01, 0.36]], brass, -0.8, 2.72, 0, g, 10); u.whistle = new THREE.Vector3(-0.8, 3.1, 0);
+    // the headlamp: a black drum with a brass bezel on a saddle, a little vent on top
+    pkBevelBox(0.36, 0.1, 0.3, M.black, 3.96, 2.78, 0, g, 0.02);
+    var hl = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.42, 16), M.black); hl.rotation.z = Math.PI / 2; hl.position.set(3.96, 3.04, 0); hl.castShadow = true; g.add(hl);
+    var hb = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.03, 6, 20), brass); hb.rotation.y = Math.PI / 2; hb.position.set(4.17, 3.04, 0); g.add(hb);
+    pkRoundCyl(0.06, 0.1, brass, 3.9, 3.3, 0, g, 8); sphere(0.06, brass, 3.9, 3.37, 0, g);
+    u.lamp = new THREE.Mesh(new THREE.CircleGeometry(0.19, 16), new THREE.MeshBasicMaterial({ color: 0x55503a })); u.lamp.rotation.y = Math.PI / 2; u.lamp.position.set(4.175, 3.04, 0); u.lamp.userData.noBake = true; g.add(u.lamp);
+    // the pilot: a V of iron slats, leaning forward
+    var PL = Math.sqrt(0.85 * 0.85 + 1.0 * 1.0), pang = Math.atan2(1.0, 0.85);
+    [-1, 1].forEach(function (s) {
+      var wing = new THREE.Group(); wing.position.set(4.4, 1.05, s * 1.0); wing.rotation.y = s * pang; g.add(wing);
+      var sl = new THREE.Group(); sl.rotation.z = -0.22; wing.add(sl);
+      box(PL, 0.1, 0.1, M.iron, PL / 2, 0, 0, sl); box(PL, 0.08, 0.08, M.iron, PL / 2, -0.3, 0, sl);
+      for (var i = 1; i < 14; i++) box(0.06, 0.3, 0.06, M.iron, i * PL / 14, -0.15, 0, sl);
+      box(0.1, 0.4, 0.14, M.iron, 0.04, -0.15, 0, sl);
+    });
+    sphere(0.09, M.iron, 5.27, 0.6, 0, g); pkRod(4.4, 0.95, 0, 5.2, 0.62, 0, 0.045, M.iron, g, 6);
+    // cylinders (brass-banded, with steam chests and steam pipes), guide bars, and the valve gear's moving parts
+    [-1, 1].forEach(function (s) {
+      var cy = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.8, 16), M.black); cy.rotation.z = Math.PI / 2; cy.position.set(3.6, 1.0, s * 1.05); cy.castShadow = true; g.add(cy);
+      [3.24, 3.96].forEach(function (bx) { var cb = new THREE.Mesh(new THREE.TorusGeometry(0.255, 0.03, 6, 20), brass); cb.rotation.y = Math.PI / 2; cb.position.set(bx, 1.0, s * 1.05); g.add(cb); });
+      var cap = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.06, 14), brass); cap.rotation.z = Math.PI / 2; cap.position.set(4.02, 1.0, s * 1.05); g.add(cap); sphere(0.05, brass, 4.07, 1.0, s * 1.05, g);
+      pkBevelBox(0.9, 0.28, 0.34, M.black, 3.6, 1.34, s * 1.0, g, 0.03); box(0.04, 0.3, 0.36, brass, 3.18, 1.34, s * 1.0, g); box(0.04, 0.3, 0.36, brass, 4.02, 1.34, s * 1.0, g);
+      pkRod(3.4, 1.45, s * 0.95, 3.4, 1.8, s * 0.62, 0.05, M.black, g, 8);
+      box(1.05, 0.04, 0.08, steel, 2.68, 1.13, s * 1.12, g); box(1.05, 0.04, 0.08, steel, 2.68, 0.87, s * 1.12, g); box(0.1, 0.4, 0.1, M.iron, 2.15, 1.0, s * 1.12, g);
+      var rod = box(1, 0.1, 0.07, steel, 0, 0, s * 1.2, g), cross = box(0.22, 0.2, 0.1, steel, 0, 1.0, s * 1.12, g);
+      var coup = box(1, 0.1, 0.06, steel, 0, 0, s * 1.24, g), pr = box(0.9, 0.05, 0.05, steel, 0, 1.0, s * 1.05, g);
       u.rods.push({ s: s, rod: rod, cross: cross, coup: coup, pr: pr });
     });
-    // wheels: two big drivers each side, a leading truck of four small ones
+    // wheels: two big red drivers each side (counterweighted, crank-pinned), a leading truck of four small ones
     [-1, 1].forEach(function (s) {
-      [-0.2, 1.4].forEach(function (x) { var w = trWheel(0.62, red, rim, g, x, 0.88, s * 0.82, 8); u.drivers.push({ w: w, x: x, s: s }); u.wheels.push({ w: w, r: 0.62 }); });
-      [2.9, 3.7].forEach(function (x) { var w = trWheel(0.3, M.black, rim, g, x, 0.56, s * 0.8, 6); u.wheels.push({ w: w, r: 0.3 }); });
+      var pin = s > 0 ? 0 : Math.PI / 2;
+      [-0.2, 1.4].forEach(function (x) { var w = trLocoWheel(0.62, red, rim, g, x, 0.88, s * 0.82, 5, { s: s, pin: pin, cwMat: M.black }); u.drivers.push({ w: w, x: x, s: s }); u.wheels.push({ w: w, r: 0.62 }); });
+      [2.9, 3.7].forEach(function (x) { var w = trLocoWheel(0.3, M.black, rim, g, x, 0.56, s * 0.8, 6, { s: s }); u.wheels.push({ w: w, r: 0.3 }); });
     });
-    pkBevelBox(1.6, 0.14, 1.8, M.black, 3.3, 0.9, 0, g, 0.02);
+    pkBevelBox(1.6, 0.14, 1.5, M.black, 3.3, 0.9, 0, g, 0.02);
     
     // the cab: green panels, brass trim, a cream roof, spectacle windows in front
     pkBevelBox(3.1, 0.14, 2.3, M.woodD, -2.65, 1.28, 0, g, 0.02);   // the footplate
@@ -85,12 +160,29 @@
     pkBevelBox(0.08, 0.94, 0.12, M.green, -1.12, 2.85, 0, g, 0.02); // slim centre mullion
     pkBevelBox(0.08, 0.94, 0.16, M.green, -1.12, 2.85, -1.07, g, 0.02); // outer edges
     pkBevelBox(0.08, 0.94, 0.16, M.green, -1.12, 2.85, 1.07, g, 0.02);
+    // The boiler ends at x=-0.9, leaving a visible void before the cab wall at x=-1.12.
+    // A short, slightly wider firebox jacket bridges that gap and visually seats the boiler into the cab.
+    pkBevelBox(0.48, 1.18, 1.48, M.greenD, -0.95, 2.0, 0, g, 0.12);
+    pkBevelBox(0.12, 1.08, 1.34, M.green, -1.17, 2.0, 0, g, 0.08);
+    [-0.62, 0.62].forEach(function (z) {
+      var fbBand = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.025, 6, 24), brass);
+      fbBand.rotation.y = Math.PI / 2; fbBand.position.set(-0.78, 2.0, z * 0.12); g.add(fbBand);
+    });
     
     // Roof spans exactly between the rear posts and front wall; it should read as a seated cab ceiling, not an overhang.
-    pkBevelBox(3.1, 0.16, 2.6, M.cream, -2.65, 3.58, 0, g, 0.04); pkBevelBox(2.75, 0.1, 2.2, P.cream, -2.65, 3.7, 0, g, 0.03); box(3.12, 0.04, 0.05, M.brass, -2.65, 3.52, 1.3, g); box(3.12, 0.04, 0.05, M.brass, -2.65, 3.52, -1.3, g);
+    pkBevelBox(3.1, 0.16, 2.6, M.greenD, -2.65, 3.58, 0, g, 0.04); pkBevelBox(2.75, 0.1, 2.2, M.green, -2.65, 3.7, 0, g, 0.03); box(3.12, 0.04, 0.05, M.brass, -2.65, 3.52, 1.3, g); box(3.12, 0.04, 0.05, M.brass, -2.65, 3.52, -1.3, g);
     var cl = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), M.lampOn); cl.position.set(-2.6, 3.35, 0); g.add(cl);
     sign(['No. 1', 'LINDENBURG'], 1.2, 0.34, -2.65, 1.85, 1.15, 0, { w: 256, h: 96, bg: '#102a1c', fg: '#f3d36a' }, g); sign(['No. 1', 'LINDENBURG'], 1.2, 0.34, -2.65, 1.85, -1.15, Math.PI, { w: 256, h: 96, bg: '#102a1c', fg: '#f3d36a' }, g);
     sign(['LINDENBURG'], 1.5, 0.3, 1.0, 2.05, 0.77, 0, { w: 384, h: 80, bg: '#1d5b3b', fg: '#f3d36a', plate: false }, g); sign(['LINDENBURG'], 1.5, 0.3, 1.0, 2.05, -0.77, Math.PI, { w: 384, h: 80, bg: '#1d5b3b', fg: '#f3d36a', plate: false }, g);
+    
+    // gilded cab sides, grab rails by the doorway, a clerestory ventilator on the roof with corner finials
+    [-1, 1].forEach(function (s) {
+      box(2.9, 0.025, 0.012, gold, -2.65, 1.5, s * 1.145, g); box(2.9, 0.025, 0.012, gold, -2.65, 2.5, s * 1.145, g);
+      [-1.3, -4.0].forEach(function (gx2) { pkRod(gx2, 1.45, s * 1.2, gx2, 2.55, s * 1.2, 0.022, brass, g, 6); });
+      [-0.55, 0, 0.55].forEach(function (wx) { box(0.34, 0.07, 0.012, M.glass, -2.65 + wx, 3.86, s * 0.505, g); });
+    });
+    pkBevelBox(2.0, 0.16, 1.0, M.greenD, -2.65, 3.86, 0, g, 0.05); box(2.1, 0.03, 1.1, brass, -2.65, 3.77, 0, g); box(2.06, 0.03, 1.06, brass, -2.65, 3.95, 0, g);
+    [[-4.2, -1.3], [-4.2, 1.3], [-1.1, -1.3], [-1.1, 1.3]].forEach(function (c) { sphere(0.07, gold, c[0], 3.7, c[1], g); });
     
     // the backhead: dials, levers, switches
     trBuildCabControls(g, u);
@@ -104,132 +196,222 @@
 
   // ── The cab interior: a proper little room inside the green shell ──
   function trBuildCabControls(g, u) {
-    var M = trMats(), P = pkMats(), X = -1.2;
-    var wood = M.woodD, brass = M.brass, iron = M.iron;
-    
-    // --- the cab floor and a little rug ---
-    pkBevelBox(3.0, 0.08, 2.15, std({ color: 0x6b4a2e, roughness: 0.9 }), -2.65, 1.32, 0, g, 0.02);
-    for (var fp = -4.1; fp <= -1.2; fp += 0.32) box(0.05, 0.012, 2.1, pkPaint(0x4a3420, 0.9, 0), fp, 1.37, 0, g);
-    var rug = box(1.0, 0.012, 1.2, pkPaint(0x7a1f2a, 0.9, 0.05), -3.2, 1.38, 0, g);
-    
-    // --- the backhead: a dark riveted plate against the front wall ---
-    pkBevelBox(0.12, 1.26, 1.78, pkPaint(0x1d2a24, 0.55, 0.45), X - 0.02, 2.1, 0, g, 0.02);
-    for (var rv = 0; rv < 12; rv++) { sphere(0.018, brass, X - 0.09, 1.55 + (rv % 6) * 0.19, -0.8 + Math.floor(rv / 6) * 1.6, g); }
-    
-    // --- the firebox door: moved to the far left corner so it doesn't block the view ---
-    var fbGlow = new THREE.Mesh(new THREE.CircleGeometry(0.12, 18), new THREE.MeshBasicMaterial({ color: 0xff8a2a })); fbGlow.rotation.y = -Math.PI / 2; fbGlow.position.set(X - 0.11, 1.72, -0.65); fbGlow.userData.noBake = true; g.add(fbGlow);
-    var fbRing = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.03, 6, 18), brass); fbRing.rotation.y = Math.PI / 2; fbRing.position.set(X - 0.1, 1.72, -0.65); g.add(fbRing);
-    var fbDoor = new THREE.Group(); fbDoor.position.set(X - 0.12, 1.72, -0.82); g.add(fbDoor);
-    var fbPlate = new THREE.Mesh(new THREE.CircleGeometry(0.12, 18), pkPaint(0x2a1a12, 0.7, 0.3)); fbPlate.rotation.y = -Math.PI / 2; fbDoor.add(fbPlate);
-    box(0.03, 0.18, 0.03, brass, X - 0.14, 1.72, -0.7, g);
-    var fbLever = new THREE.Group(); fbLever.position.set(X - 0.13, 1.9, -0.5); g.add(fbLever); pkRod(0, 0, 0, 0, -0.2, 0, 0.018, iron, fbLever, 5); sphere(0.035, brass, 0, -0.21, 0, fbLever);
-    hitBox(0.3, 0.4, 0.35, X - 0.3, 1.8, -0.45, { prompt: function () { return TR.t && TR.t.driving ? 'Open the firebox door' : ''; }, use: function () { sfx('click'); TR.fireOpen = !TR.fireOpen; } }, g);
-    u.fbLever = fbLever; u.fbDoor = fbDoor; u.fbGlow = fbGlow;
-    
-    // --- the gauge panel: moved to the center-right ---
-    var panel = new THREE.Group(); panel.position.set(X - 0.08, 2.48, 0); g.add(panel);
-    trGauge(panel, 0, 0, -0.52, -Math.PI / 2, 'STEAM', 'press');
-    trGauge(panel, 0, 0, 0.0, -Math.PI / 2, 'km/h', 'speed');
-    trGauge(panel, 0, 0, 0.52, -Math.PI / 2, 'COAL', 'fuel');
-    
-    // the water gauge glass
-    var gl = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 8), M.glass); gl.position.set(X - 0.12, 2.0, 0.8); g.add(gl);
-    var wl = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.5, 0.02), new THREE.MeshBasicMaterial({ color: 0x4aa8ff })); wl.position.set(X - 0.12, 1.75, 0.8); wl.geometry.translate(0, 0.25, 0); wl.position.y = 1.75; g.add(wl); TR.waterGlass = wl;
-    box(0.04, 0.1, 0.1, brass, X - 0.12, 2.26, 0.8, g); box(0.04, 0.1, 0.1, brass, X - 0.12, 1.74, 0.8, g);
-    
-    // --- levers and switches ---
-    // Set the controls slightly back from the front wall so they sit within easy reach in the cab.
-    var leverX = X - 0.45;
-    function lever(key, z, y, col, label, prompt, use) {
-      var pv = new THREE.Group(); pv.position.set(leverX, y, z); g.add(pv);
-      pkBevelBox(0.14, 0.06, 0.3, brass, 0, 0, 0, pv, 0.01);
-      var st = new THREE.Group(); pv.add(st); pkRod(0, 0, 0, 0, 0.62, 0, 0.022, iron, st, 6); sphere(0.055, col, 0, 0.66, 0, st);
-      sign([label], 0.38, 0.09, leverX + 0.01, y - 0.16, z, -Math.PI / 2, { w: 192, h: 48, bg: '#1b232c', fg: '#f5f2e8' }, g);
-      // Thin target hugging its own lever: roomy on the panel, without masking adjacent controls along the sight line.
-      hitBox(0.20, 0.85, 0.32, leverX, y + 0.34, z, { prompt: function () { return TR.t && TR.t.driving ? prompt() : ''; }, use: use }, g);
-      u[key] = st; return st;
-    }
-    lever('gasLever', -0.55, 1.55, M.red, 'GAS', function () { return 'Gas: ' + Math.round(TR.t.throttle * 100) + '% (W / S)'; }, function () { TR.t.throttle = TR.t.throttle >= 0.99 ? 0 : Math.min(1, TR.t.throttle + 0.25); });
-    lever('brakeLever', -0.05, 1.55, pkPaint(0x2a5fd0, 0.4, 0.3), 'BRAKE', function () { return 'Brake: ' + Math.round(TR.t.brake * 100) + '% (Space)'; }, function () { TR.t.brake = TR.t.brake >= 0.99 ? 0 : Math.min(1, TR.t.brake + 0.5); });
-    lever('revLever', 0.45, 1.55, brass, 'REVERSER', function () { return 'Reverser: ' + (TR.t.dir > 0 ? 'FORWARD' : 'REVERSE') + ' (R)'; }, function () { trToggleDir(); });
-    
-    function sw(key, z, y, label, prompt, use) {
-      var pv = new THREE.Group(); pv.position.set(X - 0.11, y, z); g.add(pv);
-      pkRoundCyl(0.06, 0.04, brass, 0, 0, 0, pv, 12).rotation.z = Math.PI / 2;
-      var lv = new THREE.Group(); pv.add(lv); pkRod(0, 0, 0, -0.0, 0.16, 0, 0.016, iron, lv, 6); sphere(0.03, M.red, 0, 0.17, 0, lv); u[key] = lv;
-      sign([label], 0.34, 0.08, X - 0.09, y + 0.22, z, -Math.PI / 2, { w: 160, h: 48, bg: '#1b232c', fg: '#f5f2e8' }, g);
-      var led = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 6), M.ledOff); led.position.set(-0.03, -0.13, 0); pv.add(led); led.userData.noBake = true; u[key + 'Led'] = led;
-      hitBox(0.12, 0.50, 0.30, X - 0.17, y + 0.05, z, { prompt: function () { return TR.t && TR.t.driving ? prompt() : ''; }, use: use }, g);
-    }
-    sw('engSw', 0.45, 1.9, 'ENGINE', function () { return 'Engine ' + (TR.t.engine ? 'ON' : 'off') + ' (I)'; }, function () { trToggleEngine(); });
-    sw('doorSw', 0.84, 1.9, 'DOORS', function () { return 'Wagon doors ' + (TR.t.doorsOpen ? 'open' : 'shut') + ' (U)'; }, function () { trToggleDoors(); });
-    
-    // horn and whistle
-    var hb = pkRoundCyl(0.09, 0.06, M.red, X - 0.14, 1.62, 0.5, g, 14); hb.rotation.z = Math.PI / 2; u.hornBtn = hb; hb.userData.rest = hb.position.x;
-    sign(['HORN'], 0.22, 0.07, X - 0.09, 1.8, 0.5, -Math.PI / 2, { w: 128, h: 48, bg: '#1b232c', fg: '#f5f2e8' }, g);
-    hitBox(0.14, 0.34, 0.26, X - 0.20, 1.62, 0.5, { prompt: function () { return TR.t && TR.t.driving ? 'Horn (H - hold)' : ''; }, use: function () { trBlast('horn', 0.9); } }, g);
-    
-    var cord = new THREE.Group(); cord.position.set(-1.6, 3.55, 0.6); g.add(cord); u.cord = cord; pkRod(0, 0, 0, 0, -0.9, 0, 0.012, M.black, cord, 4); sphere(0.06, brass, 0, -0.95, 0, cord);
-    hitBox(0.3, 0.5, 0.3, -1.6, 2.7, 0.6, { prompt: function () { return TR.t && TR.t.driving ? 'Steam whistle (F - hold)' : ''; }, use: function () { trBlast('whistle', 1.4); } }, g);
-    
-    // --- the roof lining and its lamps ---
-    pkBevelBox(3.0, 0.05, 2.1, pkPaint(0x3a2a20, 0.8, 0.1), -2.65, 3.48, 0, g, 0.02);
-    [-3.6, -1.8].forEach(function (lx) { var cl = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), M.lampOn); cl.position.set(lx, 3.4, 0); cl.userData.noBake = true; g.add(cl); });
-    
-    // --- side shelves ---
-    [-1, 1].forEach(function (side) {
-      box(1.1, 0.05, 0.22, wood, -3.2, 2.45, side * 0.99, g);
-      [-3.7, -2.7].forEach(function (bxx) { box(0.05, 0.2, 0.2, iron, bxx, 2.34, side * 0.99, g); });
+    var M = trMats(), X = -1.2;
+    var brass = M.brass, iron = M.iron;
+    var cream = M.cream;
+    var wain = pkPaint(0x6b4a2e, 0.85, 0.05);          // warm wood wainscot
+    var seatMat = pkPaint(0x7a3b2e, 0.82, 0.05);       // oxblood seats
+    var seatEdge = pkPaint(0x4a241c, 0.86, 0.05);
+    var ironPanel = pkPaint(0x17221d, 0.5, 0.45);      // dark firebox backhead
+
+    // --- finished floor: warm planks with a brass threshold ---
+    pkBevelBox(3.0, 0.06, 2.15, pkPaint(0x6b4a2e, 0.9, 0.02), -2.65, 1.33, 0, g, 0.02);
+    for (var fp = -3.95; fp <= -1.35; fp += 0.32) box(0.045, 0.012, 1.86, pkPaint(0x7c5636, 0.85, 0), fp, 1.37, 0, g);
+    box(2.9, 0.02, 0.035, brass, -2.65, 1.375, 1.05, g); box(2.9, 0.02, 0.035, brass, -2.65, 1.375, -1.05, g);
+    pkBevelBox(0.9, 0.02, 0.7, pkPaint(0x7a1f2a, 0.9, 0.05), -3.25, 1.375, 0, g, 0.04);
+
+    // --- interior walls: warm ivory above a wood wainscot, so it reads bright and finished ---
+    [-1, 1].forEach(function (s) {
+      var wz = s * 1.03;
+      // ivory upper wall with two open side windows (x -3.93..-2.95 and -2.95..-1.85), so the driver can see out and along the train
+      pkBevelBox(2.95, 0.14, 0.05, cream, -2.65, 2.49, wz, g, 0.02);       // sill
+      pkBevelBox(2.95, 0.18, 0.05, cream, -2.65, 3.385, wz, g, 0.02);      // header
+      pkBevelBox(0.2, 1.055, 0.05, cream, -4.025, 2.95, wz, g, 0.02);      // rear post
+      pkBevelBox(0.1, 1.055, 0.05, cream, -2.95, 2.95, wz, g, 0.02);       // mullion
+      pkBevelBox(0.675, 1.055, 0.05, cream, -1.5125, 2.95, wz, g, 0.02);   // front pillar (carries the clock on the left side)
+      box(2.7, 0.025, 0.07, brass, -2.65, 2.565, wz, g);                    // brass sill capping
+      pkBevelBox(2.95, 0.7, 0.06, wain, -2.65, 2.02, wz, g, 0.02);
+      box(2.95, 0.028, 0.07, brass, -2.65, 2.37, wz, g);
     });
 
-    // --- operator alignment monitor and passenger information screen ---
+    // --- the backhead: a proud iron firebox end with the name plate up top ---
+    pkBevelBox(0.18, 1.04, 1.7, ironPanel, X - 0.03, 1.9, 0, g, 0.05);
+    box(0.02, 0.94, 0.035, brass, X - 0.11, 1.9, -0.82, g); box(0.02, 0.94, 0.035, brass, X - 0.11, 1.9, 0.82, g);
+    box(0.02, 0.03, 1.62, brass, X - 0.11, 2.4, 0, g); box(0.02, 0.03, 1.62, brass, X - 0.11, 1.4, 0, g);
+    sign(['LINDENBURG', 'No. 1'], 0.46, 0.15, X - 0.13, 2.31, 0, -Math.PI / 2, { w: 224, h: 72, bg: '#102a1c', fg: '#f3d36a' }, g);
+
+    // --- four dials in one row across the top of the backhead, evenly spaced ---
+    var gp = new THREE.Group(); gp.position.set(X - 0.16, 2.06, 0); g.add(gp);
+    trGauge(gp, 0, 0, -0.52, -Math.PI / 2, 'STEAM', 'press', 0.13);
+    trGauge(gp, 0, 0, -0.173, -Math.PI / 2, 'km/h', 'speed', 0.13);
+    trGauge(gp, 0, 0, 0.173, -Math.PI / 2, 'COAL', 'fuel', 0.13);
+    trGauge(gp, 0, 0, 0.52, -Math.PI / 2, 'BRAKE', 'brake', 0.13);
+
+    // --- the firebox door: big, centred, the heart of the cab ---
+    var fbGlow = new THREE.Mesh(new THREE.CircleGeometry(0.15, 24), new THREE.MeshBasicMaterial({ color: 0xff7a24 })); fbGlow.rotation.y = -Math.PI / 2; fbGlow.position.set(X - 0.14, 1.62, 0); fbGlow.userData.noBake = true; g.add(fbGlow);
+    var fbRing = new THREE.Mesh(new THREE.TorusGeometry(0.155, 0.03, 6, 24), brass); fbRing.rotation.y = -Math.PI / 2; fbRing.position.set(X - 0.13, 1.62, 0); g.add(fbRing);
+    var fbDoor = new THREE.Group(); fbDoor.position.set(X - 0.18, 1.62, -0.14); g.add(fbDoor);
+    var fbPlate = new THREE.Mesh(new THREE.CircleGeometry(0.14, 24), pkPaint(0x2a1a12, 0.7, 0.3)); fbPlate.rotation.y = -Math.PI / 2; fbPlate.position.z = 0.14; fbDoor.add(fbPlate);
+    var fbEdge = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.02, 5, 18), brass); fbEdge.rotation.y = -Math.PI / 2; fbEdge.position.z = 0.14; fbDoor.add(fbEdge);
+    box(0.03, 0.12, 0.03, brass, 0, 0.1, 0.27, fbDoor);
+    var fbLever = new THREE.Group(); fbLever.position.set(-1.4, 2.28, 0.985); g.add(fbLever);   // damper: on the right wall between the backhead and the displays
+    pkBevelBox(0.12, 0.14, 0.02, brass, -1.4, 2.25, 0.995, g, 0.01);
+    pkRoundCyl(0.04, 0.03, brass, 0, 0, 0.015, fbLever, 10).rotation.x = Math.PI / 2;
+    pkRod(0, 0, -0.02, 0, -0.22, -0.02, 0.02, iron, fbLever, 5); sphere(0.04, brass, 0, -0.23, -0.02, fbLever);
+    sign(['DAMPER'], 0.2, 0.055, -1.4, 1.98, 0.995, Math.PI, { w: 168, h: 44, bg: '#151a1e', fg: '#f5f2e8' }, g);
+    hitBox(0.22, 0.42, 0.24, -1.4, 2.1, 0.9, { prompt: function () { return TR.t && TR.t.driving ? (TR.fireOpen ? 'Damper: shut the firebox door (V)' : 'Damper: open the firebox door (V)') : ''; }, use: function () { sfx('click'); TR.fireOpen = !TR.fireOpen; } }, g);
+    var fireLight = new THREE.PointLight(0xff7a2a, 0, 3, 2); fireLight.position.set(X - 0.45, 1.7, 0); g.add(fireLight);
+    hitBox(0.3, 0.45, 0.36, X - 0.2, 1.65, 0, { prompt: function () { return TR.t && TR.t.driving ? (TR.fireOpen ? 'Shut the firebox door' : 'Open the firebox door') : ''; }, use: function () { sfx('click'); TR.fireOpen = !TR.fireOpen; } }, g);
+    u.fbLever = fbLever; u.fbDoor = fbDoor; u.fbGlow = fbGlow; u.fireLight = fireLight;
+    
+    // --- water gauge: on the backhead, left of the firebox door, where the driver can see it ---
+    var wgX = X - 0.135, wgZ = -0.62;   // the backhead's face is at X - 0.12: plates sit just proud of it
+    pkBevelBox(0.03, 0.44, 0.26, pkPaint(0xd8d2bc, 0.65, 0.05), wgX, 1.63, wgZ, g, 0.015);
+    box(0.012, 0.3, 0.14, pkPaint(0x2a3a30, 0.7, 0.15), wgX - 0.02, 1.59, wgZ, g);
+    var gl = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.28, 8), M.glass); gl.position.set(wgX - 0.035, 1.59, wgZ); g.add(gl);
+    var wl = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.28, 0.03), new THREE.MeshBasicMaterial({ color: 0x54b4ff })); wl.geometry.translate(0, 0.14, 0); wl.position.set(wgX - 0.035, 1.45, wgZ); g.add(wl); TR.waterGlass = wl;
+    box(0.08, 0.04, 0.08, brass, wgX - 0.035, 1.74, wgZ, g); box(0.08, 0.04, 0.08, brass, wgX - 0.035, 1.44, wgZ, g);
+    sign(['WATER'], 0.22, 0.055, wgX - 0.02, 1.795, wgZ, -Math.PI / 2, { w: 168, h: 44, bg: '#151a1e', fg: '#f5f2e8' }, g);
+
+    // --- the control desk: one low console in front of the backhead. Levers on the left, horn + passenger-info controls to the right.
+    // Everything on it is labelled on the front face, in one row, at one height. It stays 0.04 clear of the firebox door's swing.
+    var deskX = -1.77, deskTop = 1.58, labelX = -1.88, labelY = 1.41;
+    pkBevelBox(0.2, 0.24, 1.9, pkPaint(0x20262b, 0.55, 0.4), deskX, 1.46, 0, g, 0.03);
+    box(0.02, 0.025, 1.9, brass, deskX - 0.095, deskTop + 0.005, 0, g);
+    function label(txt, z, w) { sign([txt], w || 0.22, 0.06, labelX, labelY, z, -Math.PI / 2, { w: 168, h: 44, bg: '#151a1e', fg: '#f5f2e8' }, g); }
+    function lever(key, z, col, txt, prompt, use) {
+      var pv = new THREE.Group(); pv.position.set(deskX, deskTop + 0.02, z); g.add(pv);
+      pkBevelBox(0.12, 0.04, 0.2, brass, 0, 0, 0, pv, 0.01);
+      pkRoundCyl(0.04, 0.07, iron, 0, 0.05, 0, pv, 8);
+      var st = new THREE.Group(); pv.add(st); pkRod(0, 0.03, 0, 0, 0.4, 0, 0.02, iron, st, 6); sphere(0.045, col, 0, 0.44, 0, st);
+      label(txt, z);
+      hitBox(0.22, 0.5, 0.14, deskX, deskTop + 0.24, z, { prompt: function () { return TR.t && TR.t.driving ? prompt() : ''; }, use: use }, g);
+      u[key] = st; return st;
+    }
+    lever('gasLever', -0.8, M.red, 'GAS', function () { return 'Gas: ' + Math.round(TR.t.throttle * 100) + '% (W / S)'; }, function () { TR.t.throttle = TR.t.throttle >= 0.99 ? 0 : Math.min(1, TR.t.throttle + 0.25); });
+    lever('brakeLever', -0.56, pkPaint(0x2a5fd0, 0.4, 0.3), 'BRAKE', function () { return 'Brake: ' + Math.round(TR.t.brake * 100) + '% (Space)'; }, function () { TR.t.brake = TR.t.brake >= 0.99 ? 0 : Math.min(1, TR.t.brake + 0.5); });
+    lever('revLever', -0.32, brass, 'REVERSE', function () { return 'Reverser: ' + (TR.t.dir > 0 ? 'FORWARD' : 'REVERSE') + ' (R)'; }, function () { trToggleDir(); });
+
+    // push buttons sit in the desk's front face (the update sinks the horn button 0.03 when it is pressed)
+    function pushBtn(z, r, mat, txt, hit) {
+      var b = pkRoundCyl(r, 0.06, mat, labelX + 0.0, 1.5, z, g, 14); b.rotation.z = Math.PI / 2; b.position.x = deskX - 0.1 - 0.03;
+      var ring = new THREE.Mesh(new THREE.TorusGeometry(r + 0.015, 0.012, 6, 20), brass); ring.rotation.y = Math.PI / 2; ring.position.set(deskX - 0.1 - 0.005, 1.5, z); g.add(ring);
+      label(txt, z); hitBox(0.2, 0.2, 0.2, deskX - 0.11, 1.5, z, hit, g); return b;
+    }
+    var hb = pushBtn(0.12, 0.055, M.red, 'HORN', { prompt: function () { return TR.t && TR.t.driving ? 'Horn (H - hold)' : ''; }, use: function () { trBlast('horn', 0.9); } });
+    u.hornBtn = hb; hb.userData.rest = hb.position.x;
+    pushBtn(0.72, 0.045, pkPaint(0xe8e0c8, 0.5, 0.1), 'REPEAT', { prompt: function () { return TR.t && TR.t.driving ? 'Repeat passenger announcement' : ''; }, use: function () { trRepeatPassengerInfo(); } });
+    // page lever for the passenger display: a small lever on the desk (the display tick swings it about z)
+    var pageLever = new THREE.Group(); pageLever.position.set(deskX, deskTop + 0.015, 0.42); g.add(pageLever);
+    pkRoundCyl(0.035, 0.04, brass, 0, 0.01, 0, pageLever, 10);
+    pkRod(0, 0, 0, 0, 0.17, 0, 0.014, iron, pageLever, 5); sphere(0.032, M.brass, 0, 0.18, 0, pageLever);
+    label('PAGE', 0.42);
+    hitBox(0.22, 0.3, 0.22, deskX, deskTop + 0.17, 0.42, { prompt: function () { return TR.t && TR.t.driving ? 'Passenger display: change page' : ''; }, use: function () { trTogglePassengerPage(); } }, g);
+    u.pageLeverRef = pageLever;
+
+    // --- the switch panel: a plate bolted ON the right half of the backhead (it used to be buried inside it) ---
+    var swX = X - 0.135;
+    pkBevelBox(0.03, 0.46, 0.48, pkPaint(0x1c2a24, 0.5, 0.42), swX, 1.63, 0.55, g, 0.02);
+    box(0.012, 0.012, 0.48, brass, swX - 0.018, 1.865, 0.55, g); box(0.012, 0.012, 0.48, brass, swX - 0.018, 1.395, 0.55, g);
+    box(0.012, 0.46, 0.012, brass, swX - 0.018, 1.63, 0.31, g); box(0.012, 0.46, 0.012, brass, swX - 0.018, 1.63, 0.79, g);
+    function sw(key, z, txt, prompt, use) {
+      var pv = new THREE.Group(); pv.position.set(swX - 0.04, 1.65, z); g.add(pv);
+      pkRoundCyl(0.05, 0.04, brass, 0, 0, 0, pv, 12).rotation.z = Math.PI / 2;
+      var lv = new THREE.Group(); pv.add(lv); pkRod(0, 0, 0, 0, 0.13, 0, 0.016, iron, lv, 6); sphere(0.03, M.red, 0, 0.14, 0, lv); u[key] = lv;
+      var led = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), M.ledOff); led.position.set(-0.01, -0.1, 0); pv.add(led); led.userData.noBake = true; u[key + 'Led'] = led;
+      sign([txt], 0.2, 0.055, swX - 0.02, 1.455, z, -Math.PI / 2, { w: 168, h: 44, bg: '#151a1e', fg: '#f5f2e8' }, g);
+      hitBox(0.14, 0.48, 0.22, swX - 0.06, 1.65, z, { prompt: function () { return TR.t && TR.t.driving ? prompt() : ''; }, use: use }, g);
+    }
+    sw('engSw', 0.43, 'ENGINE', function () { return 'Engine ' + (TR.t.engine ? 'ON' : 'off') + ' (I)'; }, function () { trToggleEngine(); });
+    sw('doorSw', 0.67, 'DOORS', function () { return 'Wagon doors ' + (TR.t.doorsOpen ? 'open' : 'shut') + ' (U)'; }, function () { trToggleDoors(); });
+
+    // --- steam vent: a brass handwheel next to the STEAM dial. Each click opens it another quarter turn; it opens the roof vent pipe ---
+    var vx = X - 0.14, vz = -0.74, vy = 2.06;
+    pkRoundCyl(0.025, 0.05, M.iron, X - 0.125, vy, vz, g, 8).rotation.z = Math.PI / 2;               // stub on the panel
+    var ventWheel = new THREE.Group(); ventWheel.position.set(vx, vy, vz); g.add(ventWheel);
+    var vrim = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.011, 6, 20), brass); vrim.rotation.y = Math.PI / 2; ventWheel.add(vrim);
+    for (var vs = 0; vs < 4; vs++) { var sp2 = box(0.01, 0.11, 0.01, brass, 0, 0, 0, ventWheel); sp2.rotation.x = vs * Math.PI / 4; }
+    sphere(0.02, M.gold, -0.005, 0, 0, ventWheel);
+    sign(['VENT'], 0.15, 0.045, X - 0.15, vy - 0.115, vz, -Math.PI / 2, { w: 120, h: 40, bg: '#151a1e', fg: '#f5f2e8' }, g);
+    hitBox(0.2, 0.2, 0.2, X - 0.2, vy, vz, { prompt: function () { return TR.t && TR.t.driving ? 'Steam vent: ' + Math.round((TR.vent || 0) * 100) + '% (click to turn)' : ''; }, use: function () { sfx('click'); TR.vent = (TR.vent || 0) >= 0.99 ? 0 : Math.min(1, (TR.vent || 0) + 0.25); } }, g);
+    u.ventWheel = ventWheel;
+    // the vent pipe on the cab roof, front right
+    pkRoundCyl(0.06, 0.05, brass, -1.55, 3.78, 0.8, g, 10); pkRoundCyl(0.035, 0.34, iron, -1.55, 3.93, 0.8, g, 8);
+    var vnoz = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.015, 6, 12), brass); vnoz.rotation.x = Math.PI / 2; vnoz.position.set(-1.55, 4.1, 0.8); g.add(vnoz);
+    u.ventPos = new THREE.Vector3(-1.55, 4.15, 0.8);
+
+    // --- whistle cord: hangs from the front-right of the roof, out of the line of sight and clear of every lever ---
+    var cord = new THREE.Group(); cord.position.set(-1.8, 3.55, 0.8); g.add(cord); u.cord = cord; pkRod(0, 0, 0, 0, -1.2, 0, 0.012, M.black, cord, 4); sphere(0.055, brass, 0, -1.25, 0, cord);
+    pkRoundCyl(0.05, 0.04, brass, -1.8, 3.43, 0.8, g, 8);
+    hitBox(0.2, 0.25, 0.2, -1.8, 2.3, 0.8, { prompt: function () { return TR.t && TR.t.driving ? 'Steam whistle (F - hold)' : ''; }, use: function () { trBlast('whistle', 1.4); } }, g);
+
+    // --- ceiling: three light ribs and a warm brass pendant lamp ---
+    pkBevelBox(3.0, 0.05, 2.1, pkPaint(0x2f2317, 0.85, 0.1), -2.65, 3.45, 0, g, 0.02);
+    [-3.6, -2.6, -1.6].forEach(function (rx) { pkBevelBox(0.07, 0.07, 2.0, iron, rx, 3.4, 0, g, 0.015); });
+    var lampG = new THREE.Group(); lampG.position.set(-2.15, 3.45, 0); g.add(lampG);
+    pkRoundCyl(0.04, 0.12, brass, 0, -0.06, 0, lampG, 8);
+    var shade = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.18, 16, 1, true), brass); shade.position.y = -0.2; shade.castShadow = true; lampG.add(shade);
+    var cabBulbOn = new THREE.MeshBasicMaterial({ color: 0xf0a050 }), cabBulbOff = new THREE.MeshBasicMaterial({ color: 0x5a5148 });
+    cabBulbOn.userData.noBake = true; cabBulbOff.userData.noBake = true;
+    var lampLens = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 10), cabBulbOn); lampLens.scale.y = 0.95; lampLens.position.y = -0.29; lampLens.userData.noBake = true; lampG.add(lampLens);
+    var cabLight = new THREE.PointLight(0xffd9a0, 2.1, 5.6, 2); cabLight.position.set(0, -0.34, 0); lampG.add(cabLight);
+    u.cabLamp = lampG; u.cabBulb = lampLens; u.cabLight = cabLight; u.cabBulbOn = cabBulbOn; u.cabBulbOff = cabBulbOff;
+    
+    // --- a brass bulkhead clock on the right wall, on the front pillar above the displays ---
+    var clockG = new THREE.Group(); clockG.position.set(-1.5, 2.95, 1.02); clockG.rotation.y = Math.PI; g.add(clockG);
+    var cface = document.createElement('canvas'); cface.width = cface.height = 128; var cc = cface.getContext('2d');
+    if (cc) {
+      cc.fillStyle = '#f6f0df'; cc.beginPath(); cc.arc(64, 64, 60, 0, 7); cc.fill();
+      cc.strokeStyle = '#22231f'; cc.lineWidth = 3; cc.beginPath(); cc.arc(64, 64, 57, 0, 7); cc.stroke();
+      for (var ci = 0; ci < 12; ci++) {
+        var ca = ci / 12 * Math.PI * 2, bigc = ci % 3 === 0;
+        cc.lineWidth = bigc ? 4 : 2; cc.beginPath();
+        cc.moveTo(64 + Math.cos(ca) * (bigc ? 43 : 48), 64 + Math.sin(ca) * (bigc ? 43 : 48));
+        cc.lineTo(64 + Math.cos(ca) * 53, 64 + Math.sin(ca) * 53); cc.stroke();
+        if (bigc) { cc.fillStyle = '#22231f'; cc.font = 'bold 15px Arial'; cc.textAlign = 'center'; cc.textBaseline = 'middle'; cc.fillText(String(ci === 0 ? 12 : ci), 64 + Math.cos(ca) * 33, 64 + Math.sin(ca) * 33); }
+      }
+    }
+    var cback = pkRoundCyl(0.13, 0.05, brass, 0, 0, 0, clockG, 20); cback.rotation.x = Math.PI / 2;
+    var cplate = new THREE.Mesh(new THREE.CircleGeometry(0.115, 24), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cface) })); cplate.position.z = 0.028; clockG.add(cplate);
+    var crim = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.018, 6, 24), brass); crim.position.z = 0.03; clockG.add(crim);
+    var clockH = new THREE.Group(); clockH.position.z = 0.04; clockG.add(clockH); box(0.012, 0.07, 0.006, M.black, 0, 0.035, 0, clockH);
+    var clockM = new THREE.Group(); clockM.position.z = 0.045; clockG.add(clockM); box(0.01, 0.1, 0.006, M.black, 0, 0.05, 0, clockM);
+    sphere(0.012, brass, 0, 0, 0.048, clockG);
+    u.clockH = clockH; u.clockM = clockM;
+    sign(['TIME'], 0.22, 0.055, -1.5, 2.76, 1.01, Math.PI, { w: 152, h: 42, bg: '#151a1e', fg: '#f5f2e8' }, g);
+
+    // --- operator displays: right-hand wall, ahead of the crew seat (the PAGE / REPEAT controls sit on the desk right below) ---
     function cabDisplay(x, y, z, w, h, ry) {
       var frame = new THREE.Group(); frame.position.set(x, y, z); frame.rotation.y = ry; g.add(frame);
-      // A wide backplate and bolts make this read as a wall-mounted display rather than a floating screen.
-      pkBevelBox(w + 0.16, h + 0.16, 0.018, M.black, 0, 0, -0.055, frame, 0.012);
-      pkBevelBox(w + 0.1, h + 0.1, 0.1, M.black, 0, 0, 0, frame, 0.025);
-      pkBevelBox(w + 0.02, h + 0.02, 0.02, brass, 0, 0, 0.052, frame, 0.01);
-      [-1, 1].forEach(function (bx) { [-1, 1].forEach(function (by) { sphere(0.012, brass, bx * (w / 2 + 0.055), by * (h / 2 + 0.055), 0.012, frame); }); });
+      pkBevelBox(w + 0.14, h + 0.14, 0.04, brass, 0, 0, 0.015, frame, 0.012);        // brass border, seated on the wall
+      pkBevelBox(w + 0.08, h + 0.08, 0.02, M.black, 0, 0, 0.04, frame, 0.01);         // black bezel
       var cv = document.createElement('canvas'); cv.width = 512; cv.height = 300;
       var tex = new THREE.CanvasTexture(cv);
       var screen = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
-      screen.position.z = 0.066; screen.userData.noBake = true; frame.add(screen);
+      screen.position.z = 0.052; screen.userData.noBake = true; frame.add(screen);
       return { canvas: cv, tex: tex };
     }
     TR.cabDisplays = {
-      alignment: cabDisplay(-3.72, 1.95, -1.01, 0.54, 0.32, 0),
-      passenger: cabDisplay(-2.58, 1.95, -1.01, 0.54, 0.32, 0)
+      alignment: cabDisplay(-1.9, 2.22, 1.0, 0.56, 0.33, Math.PI),
+      passenger: cabDisplay(-2.6, 2.22, 1.0, 0.56, 0.33, Math.PI)
     };
-    pkBevelBox(0.16, 0.13, 0.06, M.black, -2.88, 1.62, -1.04, g, 0.015);
-    sign(['PAGE'], 0.26, 0.09, -2.88, 1.43, -0.96, 0, { w: 128, h: 48, bg: '#1b232c', fg: '#f5f2e8' }, g);
-    var pageLever = new THREE.Group(); pageLever.position.set(-2.88, 1.62, -0.98); g.add(pageLever);
-    pkRod(0, 0, 0, 0, 0.09, 0, 0.014, iron, pageLever, 5); sphere(0.028, M.brass, 0, 0.1, 0, pageLever);
-    TR.cabDisplays.pageLever = pageLever;
-    hitBox(0.26, 0.32, 0.26, -2.88, 1.62, -0.82, {
-      prompt: function () { return TR.t && TR.t.driving ? 'Passenger display: change page' : ''; },
-      use: function () { trTogglePassengerPage(); }
-    }, g);
-    pkBevelBox(0.16, 0.13, 0.06, M.black, -2.22, 1.62, -1.04, g, 0.015);
-    var paBtn = new THREE.Mesh(new THREE.SphereGeometry(0.04, 14, 10), M.red); paBtn.position.set(-2.22, 1.62, -0.96); g.add(paBtn); paBtn.userData.noBake = true;
-    sign(['REPEAT'], 0.3, 0.09, -2.22, 1.43, -0.96, 0, { w: 144, h: 48, bg: '#1b232c', fg: '#f5f2e8' }, g);
-    hitBox(0.26, 0.3, 0.26, -2.22, 1.62, -0.82, {
-      prompt: function () { return TR.t && TR.t.driving ? 'Repeat passenger announcement' : ''; },
-      use: function () { trRepeatPassengerInfo(); }
-    }, g);
-    
-    // props on the shelves
-    var mug = pkRoundCyl(0.06, 0.12, pkPaint(0xe9f7f5, 0.5, 0.1), -3.5, 2.54, -0.99, g, 10); 
-    var handle = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.014, 5, 10, Math.PI), pkPaint(0xe9f7f5, 0.5, 0.1)); 
-    handle.position.set(-3.44, 2.54, -0.99); handle.rotation.y = Math.PI / 2; g.add(handle);
-    
-    pkBevelBox(0.4, 0.2, 0.24, pkPaint(0x8a1f1f, 0.6, 0.3), -2.95, 2.6, -0.99, g, 0.02); 
-    box(0.4, 0.03, 0.05, brass, -2.95, 2.63, -0.99, g);
-    pkBevelBox(0.5, 0.16, 0.3, pkPaint(0x2a3f6a, 0.9, 0.05), -3.1, 2.56, 0.99, g, 0.04);
-    
-    // a small coal scuttle by the fireman's side
-    var sc = new THREE.Group(); sc.position.set(-3.9, 1.42, 0.9); g.add(sc);
-    pkLathe([[0.01, 0], [0.16, 0], [0.18, 0.28], [0.2, 0.32], [0.01, 0.32]], iron, 0, 0, 0, sc, 12); 
-    sphere(0.05, M.coal, 0, 0.3, 0, sc); sphere(0.05, M.coal, 0.06, 0.28, 0.04, sc);
+    TR.cabDisplays.pageLever = u.pageLeverRef;   // the display tick swings this lever
+    sign(['STOP'], 0.2, 0.05, -1.9, 2.0, 0.96, Math.PI, { w: 128, h: 36, bg: '#151a1e', fg: '#f5f2e8' }, g);   // little captions under each screen
+    sign(['PASSENGERS'], 0.3, 0.05, -2.6, 2.0, 0.96, Math.PI, { w: 192, h: 36, bg: '#151a1e', fg: '#f5f2e8' }, g);
+
+    // --- rear bulkhead, open in the middle ---
+    pkBevelBox(0.1, 0.1, 2.2, M.greenD, -4.08, 3.24, 0, g, 0.02);
+    [-1, 1].forEach(function (s) {
+      pkBevelBox(0.08, 1.8, 0.5, cream, -4.08, 2.3, s * 0.87, g, 0.02);
+      box(0.02, 1.7, 0.03, brass, -4.02, 2.3, s * 0.62, g);
+    });
+
+    // --- the two crew seats: big, tall driver's armchairs on a pedestal (seat top 1.96, so a seated eye is ~2.71) ---
+    [-1, 1].forEach(function (s) {
+      var sg = new THREE.Group(); sg.position.set(-2.55, 1.79, s * 0.68); g.add(sg);
+      pkRoundCyl(0.07, 0.42, iron, 0, -0.21, 0, sg, 10); pkRoundCyl(0.2, 0.03, iron, 0, -0.405, 0, sg, 16);   // pedestal and floor flange
+      pkRoundCyl(0.09, 0.06, brass, 0, -0.01, 0, sg, 10);
+      pkBevelBox(0.5, 0.05, 0.46, iron, 0, 0.0, 0, sg, 0.02);
+      pkBevelBox(0.54, 0.14, 0.5, seatMat, 0, 0.1, 0, sg, 0.04);                                   // cushion
+      var bk = new THREE.Group(); bk.position.set(-0.24, 0.15, 0); bk.rotation.z = 0.14; sg.add(bk);
+      pkBevelBox(0.11, 0.72, 0.5, seatMat, 0, 0.38, 0, bk, 0.04);                                  // tall backrest
+      pkBevelBox(0.05, 0.66, 0.42, seatEdge, -0.07, 0.38, 0, bk, 0.02);
+      [-1, 1].forEach(function (k) {                                                                // brass armrests on posts
+        pkRod(0.2, 0.3, k * 0.27, -0.2, 0.3, k * 0.27, 0.02, brass, sg, 6);
+        pkRod(0.17, 0.17, k * 0.27, 0.17, 0.3, k * 0.27, 0.016, brass, sg, 5);
+        sphere(0.03, brass, 0.2, 0.3, k * 0.27, sg);
+      });
+    });
   }
 
   function trCabDisplaysTick(dt) {
@@ -280,14 +462,36 @@
   // ── The tender ────────────────────────────────────────────────────
   function trBuildTender() {
     var M = trMats(), g = trDyn(), u = { kind: 'tender', g: g, len: 4.0, d: 10.9, bf: 1.2, br: 1.2, wheels: [], rods: [], drivers: [] };
+    var gold = M.gold, brass = M.brass, steel = std({ color: 0xaab2b8, roughness: 0.3, metalness: 0.55 });
+    // frame and the water tank: green, beaded in brass, lined in gold, with the line's name plate
     pkBevelBox(4.0, 0.26, 1.8, M.black, 0, 1.0, 0, g, 0.03);
-    pkBevelBox(3.8, 1.1, 1.9, M.green, 0, 1.7, 0, g, 0.03); box(3.8, 0.05, 1.95, M.brass, 0, 2.2, 0, g); box(3.9, 0.05, 1.95, M.brass, 0, 1.2, 0, g);
-    pkBevelBox(2.4, 0.4, 1.5, M.black, -0.5, 2.4, 0, g, 0.03);
-    for (var i = 0; i < 12; i++) sphere(0.28 + (i % 3) * 0.05, M.coal, -1.3 + (i % 5) * 0.55, 2.7 + (i % 2) * 0.12, ((i * 7) % 5 - 2) * 0.28, g);
-    pkBevelBox(0.9, 0.5, 1.9, M.green, 1.4, 2.5, 0, g, 0.03);   // the water filler hatch
+    pkBevelBox(3.8, 1.1, 1.9, M.green, 0, 1.7, 0, g, 0.07); box(3.8, 0.05, 1.95, brass, 0, 2.2, 0, g); box(3.9, 0.05, 1.95, brass, 0, 1.2, 0, g);
+    pkBevelBox(3.7, 0.06, 1.8, M.greenD, 0, 2.26, 0, g, 0.02);
+    [-1, 1].forEach(function (s) { box(3.5, 0.02, 0.01, gold, 0, 2.08, s * 0.955, g); box(3.5, 0.02, 0.01, gold, 0, 1.32, s * 0.955, g); });
     sign(['LINDENBURG', 'RAILWAY'], 1.8, 0.5, 0, 1.7, 0.97, 0, { w: 384, h: 128, bg: '#102a1c', fg: '#f3d36a' }, g); sign(['LINDENBURG', 'RAILWAY'], 1.8, 0.5, 0, 1.7, -0.97, Math.PI, { w: 384, h: 128, bg: '#102a1c', fg: '#f3d36a' }, g);
-    [-1, 1].forEach(function (s) { [-1.2, 1.2].forEach(function (x) { var w = trWheel(0.34, M.black, M.black, g, x, 0.6, s * 0.85, 6); u.wheels.push({ w: w, r: 0.34 }); }); });
-    [-0.7, 0.7].forEach(function (z) { var b = pkRoundCyl(0.1, 0.3, M.iron, 2.2, 1.1, z, g, 10); b.rotation.z = Math.PI / 2; });
+    // the coal bunker: iron boards, a bulkhead toward the engine, a mounded load
+    [-1, 1].forEach(function (s) { pkBevelBox(2.6, 0.42, 0.06, M.black, -0.45, 2.5, s * 0.8, g, 0.015); });
+    pkBevelBox(0.06, 0.42, 1.66, M.black, -1.75, 2.5, 0, g, 0.015); pkBevelBox(0.08, 0.6, 1.66, M.black, 0.85, 2.58, 0, g, 0.02);
+    box(2.5, 0.2, 1.5, M.coal, -0.45, 2.4, 0, g);
+    for (var i = 0; i < 22; i++) {
+      var cx = -1.55 + (i % 7) * 0.33, cz = (((i * 5) % 7) - 3) * 0.2, cr = 0.2 + ((i * 3) % 4) * 0.045;
+      var cyy = 2.42 + 0.28 * (1 - Math.abs(cz) / 0.8) * (1 - Math.abs(cx + 0.45) / 1.4) + (i % 3) * 0.03;
+      var lump = new THREE.Mesh(new THREE.IcosahedronGeometry(cr, 0), M.coal); lump.position.set(cx, cyy, cz); lump.rotation.set(i, i * 2, i * 3); lump.castShadow = true; g.add(lump);
+    }
+    // water filler hatch with a brass rim, and a pair of tool boxes
+    pkLathe([[0.01, 0], [0.4, 0], [0.4, 0.1], [0.32, 0.2], [0.01, 0.24]], M.green, 1.45, 2.28, 0, g, 20);
+    var hr = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.03, 6, 22), brass); hr.rotation.x = Math.PI / 2; hr.position.set(1.45, 2.32, 0); g.add(hr); sphere(0.06, brass, 1.45, 2.54, 0, g);
+    [-1, 1].forEach(function (s) { pkBevelBox(0.9, 0.22, 0.24, M.black, 1.4, 2.38, s * 0.78, g, 0.025); box(0.9, 0.02, 0.26, gold, 1.4, 2.5, s * 0.78, g); });
+    // the rear: a ladder and two red marker lamps
+    [-1, 1].forEach(function (s) { pkRod(-1.95, 1.3, s * 0.55, -1.95, 2.35, s * 0.55, 0.025, M.iron, g, 6); });
+    for (var r = 0; r < 5; r++) pkRod(-1.95, 1.4 + r * 0.2, -0.55, -1.95, 1.4 + r * 0.2, 0.55, 0.02, M.iron, g, 6);
+    [-1, 1].forEach(function (s) { pkBevelBox(0.16, 0.2, 0.16, M.black, -1.98, 2.0, s * 0.8, g, 0.02); sphere(0.06, M.ledOn, -2.07, 2.0, s * 0.8, g); });
+    [-1, 1].forEach(function (s) { [-1.2, 1.2].forEach(function (x) { var w = trLocoWheel(0.34, M.black, M.black, g, x, 0.6, s * 0.85, 6, { s: s }); u.wheels.push({ w: w, r: 0.34 }); }); });
+    // buffers (front ones just touch the engine's rear beam, rear ones the first wagon) and the drawbar
+    [-0.7, 0.7].forEach(function (z) {
+      var b = pkRoundCyl(0.1, 0.3, M.iron, 2.15, 1.1, z, g, 10); b.rotation.z = Math.PI / 2; var d = pkRoundCyl(0.16, 0.05, steel, 2.325, 1.1, z, g, 12); d.rotation.z = Math.PI / 2;
+      var b2 = pkRoundCyl(0.1, 0.2, M.iron, -2.1, 1.1, z, g, 10); b2.rotation.z = Math.PI / 2; var d2 = pkRoundCyl(0.15, 0.05, steel, -2.225, 1.1, z, g, 12); d2.rotation.z = Math.PI / 2;
+    });
     box(0.7, 0.1, 0.1, M.iron, -2.25, 1.1, 0, g);
     TR.units.push(u); return u;
   }
