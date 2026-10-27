@@ -188,6 +188,7 @@
     var t = TR.t;
     if (TR.built && t && (t.driving || t.seat) && !e.repeat) {
       if (e.code === 'KeyE') { if (t.driving && focusText) return false; return trLeave(); }
+      if (e.code === 'KeyC') { t.thirdPerson = !t.thirdPerson; if (!t.camDist) t.camDist = 5.5; sfx('click'); toast(t.thirdPerson ? '3rd person view. Scroll to zoom.' : '1st person view.', ''); return true; }
       if (t.driving) {
         if (e.code === 'KeyI') { trToggleEngine(); return true; }
         if (e.code === 'KeyU') { trToggleDoors(); return true; }

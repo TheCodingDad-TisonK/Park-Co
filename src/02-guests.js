@@ -26,17 +26,20 @@
       id: PK.nextId++, g: g,
       rec: { x: x, z: z, yaw: Math.PI, path: [], speed: randf(1.3, 1.9) },
       state: 'toBooth', ticket: false, booth: -1, turn: undefined, seat: null, attr: null, slot: -1, qslot: -1, rides: 0, pose: 'sit',
-      hunger: randf(30, 90), ate: false, mood: 'neutral', t: 0, trash: false
+      hunger: randf(30, 90), ate: false, mood: 'neutral', t: 0, trash: false,
+    gaveUp: {}, patience: 0, mWait: 0, lockWait: 0, lifeT: 0, lifeKind: null, lifeLook: null, binTarget: null, benchSeat: null, benchYaw: 0, turnSpun: false, goHome: false, carryItem: null
     };
     PK.guests.push(gu);
     return gu;
   }
   function pkGuestAt(x, z) {
+    if (!PK.guests || !PK.guests.length) return null;
     var best = null, bd = 9;
     PK.guests.forEach(function (gu) { var d = dist2(gu.rec.x, gu.rec.z, x, z); if (d < bd) { bd = d; best = gu; } });
     return best;
   }
   function pkPickBooth() {
+    if (!PK.booths || !PK.booths.length) return 0;
     // the shorter line, and a coin toss when both are empty: tie-breaking to the west window sent every guest through one
     // turnstile and left the east booth looking closed
     var best = [], bl = 1e9;
@@ -52,8 +55,11 @@
   }
   // the two gates beside this booth, picking the one that has seen fewer guests so both arms in the bank keep working
   function pkPickTurnstile(bi) {
+    if (!PK.booths || !PK.booths.length) return 0;
     var b = PK.booths[bi] || PK.booths[0];
+    if (!b) return 0;
     var xs = (b && b.turnstiles) || [b ? b.turnstile : 0];
+    if (!xs || !xs.length) return b.turnstile || 0;
     var best = xs[0], bestPass = Infinity;
     for (var i = 0; i < xs.length; i++) {
       var t = pkTurnstileAt(xs[i]), p = t ? t.pass : Infinity;
@@ -71,8 +77,8 @@
   function pkQueueJoin(gu) {
     if (gu.gaveUp && gu.gaveUp.coaster) return false;
     if (gu.state === 'walkQueue' || gu.state === 'queue' || gu.state === 'board' || gu.state === 'seated') return false;
-    if (PK.queue.indexOf(gu) >= 0) return false;
-    if (PK.queue.length >= PK_QUEUE_SLOTS.length) return false;
+    if (!PK.queue || PK.queue.indexOf(gu) >= 0) return false;
+    if (!PK_QUEUE_SLOTS || PK.queue.length >= PK_QUEUE_SLOTS.length) return false;
     gu.qslot = PK.queue.length;
     PK.queue.push(gu);
     gu.lockWait = 0;
@@ -84,8 +90,8 @@
   // Reserve an attraction slot when the guest commits to walking there. This
   // prevents arrivals from racing for the same queue position while in flight.
   function pkAttrQueueJoin(gu, a) {
-    if (!a || !a.open || a.queue.indexOf(gu) >= 0) return false;
-    if (a.queue.length >= a.seats.length * 2) return false;
+    if (!a || !a.open || !a.queue || a.queue.indexOf(gu) >= 0) return false;
+    if (!a.seats || a.queue.length >= a.seats.length * 2) return false;
     gu.attr = a.id;
     gu.lockWait = 0;
     gu.slot = a.queue.length;
@@ -95,11 +101,13 @@
     return true;
   }
   function pkAttrQueueLeave(gu, a) {
-    var i = a ? a.queue.indexOf(gu) : -1;
+    if (!a || !a.queue) { gu.attr = null; gu.slot = -1; return; }
+    var i = a.queue.indexOf(gu);
     if (i >= 0) { a.queue.splice(i, 1); if (typeof pkAttrQueueReslot === 'function') pkAttrQueueReslot(a); screenDirtyAll(); }
     gu.attr = null; gu.slot = -1;
   }
   function pkAttrQueueReslot(a) {
+    if (!a || !a.queue) return;
     for (var i = 0; i < a.queue.length; i++) {
       var gu = a.queue[i];
       if (gu.slot === i) continue;
@@ -112,6 +120,7 @@
     }
   }
   function pkQueueReslot() {
+    if (!PK.queue) return;
     for (var i = 0; i < PK.queue.length; i++) {
       var gu = PK.queue[i];
       if (gu.qslot === i) continue;
@@ -131,7 +140,7 @@
   // Waiting in a line for a ride that is locked (its operator key OFF) wears out: past the guest's patience they leave the
   // line, say so, and go and find something else. A ride that is open keeps its line; it is the lock nobody waits out.
   function pkGuestBored(gu, dt) {
-    var coaster = gu.state === 'queue' || gu.state === 'walkQueue', at = coaster ? null : PK.attrById[gu.attr];
+    var coaster = gu.state === 'queue' || gu.state === 'walkQueue', at = coaster ? null : (PK.attrById ? PK.attrById[gu.attr] : null);
     var locked = coaster ? !S.coasterKey : !!(at && at.ctl && !at.ctl.key);
     if (!locked) return;
     gu.lockWait = (gu.lockWait || 0) + dt;
@@ -146,6 +155,7 @@
       pkAttrQueueLeave(gu, at);
     }
     say(gu.g, pick(['Still shut...', 'Not opening today', 'Something else, then']));
+    gu.mood = 'sad';
     gu.lockWait = 0;
     pkGo(gu, randf(-6, 6), randf(8, 22), 'off');
   }
@@ -155,13 +165,12 @@
   var PK_MACHINE_WAIT = 6;
   function pkGuestMachine(gu, dt) {
     var b = PK.booths[gu.booth];
-    if (S.clerk || PK.closed || !b || b.queue[0] !== gu) { gu.mWait = 0; return; }
+    if (S.clerk || PK.closed || !b || !b.queue || b.queue[0] !== gu) { gu.mWait = 0; return; }
     if (player && Math.hypot(player.x - b.x, player.z - (b.z + 2.0)) < 3.2) { gu.mWait = 0; return; }   // you are at the window
     gu.mWait = (gu.mWait || 0) + dt;
     if (gu.mWait < PK_MACHINE_WAIT) return;
     gu.mWait = 0;
-    pkServe(gu.booth, true);
-    if (b.machine) b.machine.blink = 1.2;
+    if (pkServe(gu.booth, true) && b.machine) b.machine.blink = 1.2;
   }
   function pkGuestStep(gu, dt) {
     var rec = gu.rec, g = gu.g;
@@ -171,7 +180,7 @@
     // ticket just before the shut, and not a party whose car pulled in a moment later. pkCloseGuests handles the moment the
     // gate shuts; this also catches a loaded save and a car that unloads after it.
     if (PK.closed && (gu.state === 'toBooth' || gu.state === 'walkBooth' || gu.state === 'boothQueue' || gu.state === 'toTurn' || gu.state === 'walkTurn')) {
-      if (gu.booth >= 0 && PK.booths[gu.booth]) {
+      if (PK.booths && gu.booth >= 0 && PK.booths[gu.booth]) {
         var gq = PK.booths[gu.booth].queue, gi = gq.indexOf(gu);
         if (gi >= 0) { gq.splice(gi, 1); screenDirtyAll(); }
       }
@@ -181,16 +190,19 @@
     }
     if (gu.state === 'toBooth') {
       var b = pkPickBooth();
+      if (!PK.booths || !PK.booths[b]) { gu.state = 'off'; return; }
       gu.booth = b;
       var s = pkBoothSlot(b, PK.booths[b].queue.length);
       pkGo(gu, s.x, s.z, 'walkBooth');
     } else if (gu.state === 'walkBooth') {
-      if (arrived) { PK.booths[gu.booth].queue.push(gu); gu.state = 'boothQueue'; }
+      if (arrived && PK.booths && PK.booths[gu.booth]) { PK.booths[gu.booth].queue.push(gu); gu.state = 'boothQueue'; }
+      else if (arrived) gu.state = 'off';
     } else if (gu.state === 'boothQueue') {
       // the window serves the front of the line; when nobody staffs it, the front of the line pays at the machine
       pkGuestMachine(gu, dt);
     } else if (gu.state === 'toTurn') {
       if (gu.turn === undefined) { gu.turn = pkPickTurnstile(gu.booth); gu.turnSpun = false; }
+      if (gu.turn == null) { gu.state = 'off'; return; }
       if (!rec.path.length) pkGo(gu, gu.turn, PK_GATE_Z - 0.35, 'walkTurn');
     } else if (gu.state === 'walkTurn') {
       // the arms turn when the guest reaches the bars, not when they are still two metres short: push the arm as the
@@ -209,7 +221,7 @@
       pkGuestBored(gu, dt);
     } else if (gu.state === 'walkAttr') {
       if (arrived) {
-        var at = PK.attrById[gu.attr];
+        var at = PK.attrById ? PK.attrById[gu.attr] : null;
         if (!at || !at.open) {
           pkAttrQueueLeave(gu, at); pkGuestPickRide(gu);
         } else {
@@ -231,17 +243,34 @@
         else gu.state = 'off';
       }
     } else if (gu.state === 'board') {
-      if (arrived) pkSeatGuest(gu, gu.seat);   // they reached their car: step in and sit
+      if (arrived) { gu.mood = 'happy'; pkSeatGuest(gu, gu.seat); }   // they reached their car: step in and sit
     } else if (gu.state === 'seated') {
       // nothing to do but enjoy it
     } else if (gu.state === 'toSnack') {
       if (arrived) {
         if (!PK.closed && PK.snackOpen && S.bank >= S.snackPrice) {
           pay(S.snackPrice, 'Snack'); PK.today.snacks++; PK.today.earned += S.snackPrice; pkXp(1);
-          gu.ate = true; gu.trash = true; sfx('cash'); say(g, 'Thanks!'); screenDirtyAll(); hudDirty = true;
+          gu.ate = true; gu.trash = true; gu.mood = 'happy'; gu.carryItem = 'fries'; pkGuestItemEnsure(gu, 'fries'); sfx('cash'); say(g, 'Thanks!'); screenDirtyAll(); hudDirty = true;
         }
         if (PK.closed || S.bank < S.snackPrice) pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
         else gu.state = 'off';
+      }
+    } else if (gu.state === 'toIce') {
+      if (arrived) {
+        if (!PK.closed && PK.iceOpen && S.bank >= S.icePrice) {
+          pay(S.icePrice, 'Ice cream'); PK.today.ice = (PK.today.ice || 0) + 1; PK.today.earned += S.icePrice; pkXp(1);
+          gu.ate = true; gu.trash = true; gu.mood = 'happy'; gu.carryItem = 'ice'; pkGuestItemEnsure(gu, 'ice'); sfx('cash'); say(g, 'Thanks!'); screenDirtyAll(); hudDirty = true;
+        }
+        if (PK.closed || S.bank < S.icePrice) pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
+        else gu.state = 'off';
+      }
+    } else if (gu.state === 'toToy') {
+      if (arrived) {
+        if (!PK.closed && PK.toyOpen && S.bank >= S.toyPrice) {
+          pay(S.toyPrice, 'Toy'); PK.today.toys = (PK.today.toys || 0) + 1; PK.today.earned += S.toyPrice; pkXp(1);
+          gu.mood = 'happy'; gu.carryItem = 'toy'; pkGuestItemEnsure(gu, 'toy'); sfx('cash'); say(g, 'Thanks!'); screenDirtyAll(); hudDirty = true;
+        }
+        gu.state = 'off';
       }
     } else if (gu.state === 'off') {
       if (!gu.trash && !PK.closed && Math.random() < dt * 0.02) gu.trash = true;   // picked up a drink or a wrapper somewhere off-screen
@@ -251,6 +280,8 @@
         if (PK.closed || gu.goHome) { gu.goHome = false; pkGo(gu, randf(-14, 14), randf(40, 56), 'leave'); }
         else if (gu.trash && pkGuestBinGo(gu)) { /* off to the nearest bin */ }
         else if (PK.snackOpen && !gu.ate && gu.hunger > 60 && S.bank >= S.snackPrice) pkGo(gu, -13, 10.4, 'toSnack');
+        else if (PK.iceOpen && !gu.ate && gu.hunger > 50 && S.bank >= S.icePrice) pkGo(gu, -8, 10.4, 'toIce');
+        else if (PK.toyOpen && Math.random() < 0.15) pkGo(gu, -18, 10.4, 'toToy');
         else if (!gu.trash && randf(0, 1) < 0.22 && pkGuestLifeStart(gu)) { /* a bench, a phone call, a smoke, a chat */ }
         else if ((gu.rides || 0) < 4 && randf(0, 1) < 0.8 && (pkQueueJoin(gu) || pkAttrPick(gu))) { /* off to another ride */ }
         else pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
@@ -266,7 +297,7 @@
       pkGuestLifeTick(gu, dt);
       if (gu.lifeT <= 0 || PK.closed) { pkLifeEnd(gu); gu.state = 'off'; }
     } else if (gu.state === 'leave') {
-      if (arrived && !pkLotHome(gu)) gu.state = 'gone';             // out through the gate, then back to the car they came in
+      if (arrived && !(typeof pkLotHome === 'function' && pkLotHome(gu))) gu.state = 'gone';             // out through the gate, then back to the car they came in
     } else if (gu.state === 'toCar') {
       if (arrived) pkLotBoard(gu);
     }
@@ -290,16 +321,21 @@
       animateHuman(g, dt, mode, rec.speed, look, carry);
       if (g.userData.pkCig) g.userData.pkCig.visible = (!moving && gu.state === 'life' && gu.lifeKind === 'smoke');
       if (g.userData.pkPhone) g.userData.pkPhone.visible = (!moving && gu.state === 'life' && gu.lifeKind === 'phone');
+      if (g.userData.pkItem) g.userData.pkItem.visible = !!gu.carryItem && gu.state !== 'seated' && gu.state !== 'bench' && gu.state !== 'board';
     }
   }
   var PK_THINK_T0 = 0, PK_THINK_MS = 4;   // the guests' share of a frame for working out where to go next
   function pkGuestTick(dt) {
+    if (!PK.guests) return;
     PK_THINK_T0 = performance.now();
     for (var i = PK.guests.length - 1; i >= 0; i--) {
       var gu = PK.guests[i];
+      if (!gu) continue;
       pkGuestStep(gu, dt);
       if (gu.state === 'gone') {
         if (gu.benchSeat) pkBenchRelease(gu);
+        if (gu.g.userData.pkItem) { var _it = gu.g.userData.pkItem; if (_it.parent) _it.parent.remove(_it); gu.g.userData.pkItem = null; gu.g.userData.pkItemType = null; }
+        gu.carryItem = null;
         pkParkHuman(gu.g);
         var qi = PK.queue.indexOf(gu); if (qi >= 0) { PK.queue.splice(qi, 1); pkQueueReslot(); }
         if (gu.attr) { var aq = PK.attrById[gu.attr]; if (aq) { var ai = aq.queue.indexOf(gu); if (ai >= 0) { aq.queue.splice(ai, 1); pkAttrQueueReslot(aq); } } }
@@ -308,7 +344,9 @@
     }
   }
   function pkCloseGuests() {
+    if (!PK.guests) return;
     PK.guests.forEach(function (gu) {
+      if (!gu) return;
       if (gu.state === 'seated' || gu.state === 'board') return;
       if (gu.booth >= 0 && PK.booths[gu.booth]) {
         var b = PK.booths[gu.booth], bi = b.queue.indexOf(gu);
@@ -324,7 +362,7 @@
       var qi = PK.queue.indexOf(gu); if (qi >= 0) PK.queue.splice(qi, 1);
       gu.state = 'off'; gu.goHome = true; gu.rec.path = [];
     });
-    PK.attractions.forEach(function (a) { pkAttrQueueReslot(a); });
+    if (PK.attractions) PK.attractions.forEach(function (a) { pkAttrQueueReslot(a); });
     pkQueueReslot(); screenDirtyAll();
   }
   // ── The ticket window ─────────────────────────────────────────────
@@ -337,8 +375,8 @@
     pay(S.ticketPrice, 'Ticket');
     PK.today.tickets++; PK.today.earned += S.ticketPrice;
     pkXp(1);
-    gu.ticket = true; gu.state = 'toTurn'; gu.booth = bi; gu.turn = undefined;
-    b.queue.splice(b.queue.indexOf(gu), 1);
+    gu.ticket = true; gu.state = 'toTurn'; gu.booth = bi; gu.turn = undefined; gu.mood = 'happy';
+    var qi = b.queue.indexOf(gu); if (qi >= 0) b.queue.splice(qi, 1);
     if (machine) { say(gu.g, pick(['The machine, then', 'Card, beep, done', 'Got it!'])); PK.today.machine = (PK.today.machine || 0) + 1; }
     else { sfx('cash'); say(gu.g, 'One, please!'); toast('Ticket sold - ' + money(S.ticketPrice), 'good'); }
     screenDirtyAll(); hudDirty = true;
@@ -348,7 +386,7 @@
   function pkNewDay() {
     var wages = pkWages();
     if (wages) pay(-wages, 'Wages');
-    PK.today = S.today = { tickets: 0, snacks: 0, rides: 0, earned: 0 };
+    PK.today = S.today = { tickets: 0, snacks: 0, rides: 0, earned: 0, ice: 0, toys: 0 };
     S.gateOpen = false; PK.gateWarn = {};   // shut till you open it yourself; the reminders get their day back too
     logEvent('Day ' + S.day + ' begins' + (wages ? ' - wages ' + money(wages) : '') + ' - the gate is shut', '');
     screenDirtyAll(); hudDirty = true;

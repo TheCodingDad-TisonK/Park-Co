@@ -18,7 +18,7 @@ or `node_modules/co-engine` by hand.
 - The Lindenburg Arena (Raveleijn-style show, control room, cast, cue lights)
 - Guests: arrivals by car, ticketing, turnstiles, queue lanes, ride AI, litter/bins/sweepers, idle life
 - Operations: operator booths, gate/power/lighting control, economy, workforce (10), HQ office, tablet
-- Tools: third-person camera (C), fly mode (F3), dev menu (F4), build mode
+- Tools: third-person camera (C), fly mode (F3), dev menu (F4)
 - CI (tests + release on tag), smoke suite (203 checks)
 
 ## Loose ends

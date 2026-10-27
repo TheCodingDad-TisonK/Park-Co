@@ -23,7 +23,7 @@
   #h-toasts .bad { border-color: rgba(255,107,94,0.5); } #h-toasts .good { border-color: rgba(95,211,141,0.5); }
   #h-feed { position: absolute; left: 12px; bottom: 14px; color: var(--muted); } #h-feed .t { color: var(--amber); margin-right: 6px; }
   #h-fps, #h-devlink, #h-edit { position: absolute; right: 14px; top: 10px; background: rgba(5,8,12,0.6); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; font-size: 12px; }
-  #h-devlink { top: 40px; color: var(--green); } #h-edit { top: 70px; color: var(--amber); }
+  #h-devlink { top: 40px; color: var(--green); }
   #h-card { position: absolute; left: 50%; top: 20%; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; min-width: 260px; }
   #dc-panel { position: fixed; left: var(--panel-left, 50%); top: var(--panel-top, 50%); transform: translate(-50%, -50%); width: min(720px, 92vw); max-height: 86vh; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; }
   #dc-panel header { display: flex; align-items: center; gap: 10px; cursor: move; user-select: none; touch-action: none; } #dc-panel header h2 { flex: 1; margin: 0; font-size: 18px; }
@@ -80,7 +80,7 @@
 <div id="dc-hud" hidden>
   <div class="top"><span id="h-day">Day 1</span><span id="h-clock">09:00</span><span id="h-cash">$0</span><span id="h-guests">0 in the park</span><span id="h-ride">Coaster: waiting</span></div>
   <div id="h-prompt" hidden></div><div id="h-toasts"></div><div id="h-feed"></div>
-  <div id="h-fps" hidden></div><div id="h-devlink" hidden></div><div id="h-edit" hidden>BUILD MODE</div>
+  <div id="h-fps" hidden></div><div id="h-devlink" hidden></div>
   <div id="h-card" hidden></div>
 </div>
 <div id="dc-panel" hidden><header><h2 id="dc-panel-title"></h2><div id="dc-panel-tabs"></div><button id="dc-panel-close" class="dc-btn">✕</button></header><div id="dc-panel-body"></div></div>

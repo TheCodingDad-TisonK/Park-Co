@@ -472,7 +472,7 @@ module.exports = `
         if (Math.abs(t.y) < 0.85) worst = Math.max(worst, Math.acos(Math.min(1, F.up[i].y / Math.sqrt(1 - t.y * t.y))) * 57.3); } });
     ok(worst < 30, 'every lift is ridden upright (worst roll on a lift ' + worst.toFixed(0) + ' deg)'); }
   // the level ladder and the prices
-  ok(T.PK_LEVELS.length === 5 && T.PK_LEVELS[0].name === 'The gate' && T.PK_LEVELS[4].unlock === 'lights', 'the level ladder runs from the gate to the park lights');
+  ok(T.PK_LEVELS.length === 7 && T.PK_LEVELS[0].name === 'The gate' && T.PK_LEVELS[6].unlock === 'lights', 'the level ladder runs from the gate to the park lights');
   ok(T.pkPrice(5) === 30 && T.pkPrice(-100) === 5 && T.pkPrice(1000) === 200, 'the ticket price clamps 5 to 200');
   ok(T.pkOpenCount() === 20, 'every ride is open from the first day (' + T.pkOpenCount() + ')');
   { const x0 = T.PK.xp; T.pkXp(60); ok(T.PK.xp === x0 + 60 && T.PK.level >= 2 && T.PK.snackOpen === true && S.snackOpen === true, 'xp opens the snack stand at level 2'); }

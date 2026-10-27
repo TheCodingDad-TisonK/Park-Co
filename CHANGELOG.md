@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.2.0 (2026-10-27): World/NPC Update
+
+- Removed "Build Mode" from the game
+- Removed several flower beds for "the coaster"
+- Removed the small "TICKETS" square hut at the ferris wheel
+- Remodeled the interior of the fries stand
+- Added 3 new stands where guests can either order something or buy a balloon and hold it
+- Replaced old park benches with new ones
+- Rotated train station benches to face the tracks
+- Fixed platform walk up for "the coaster"
+- Robustness & crash guards fixes for the guests
+- Fixed a issue when a guest isn't found in the queue
+- Guests now track a "mood" that reflects their experience
+- Guests now hold bought items
+- Items show while walking/idle and hide when seated/bench
+- Items are cleaned up when the guest leaves
+- Added an alignment bar to the train cab
+- When inside the train cab you can now press C to view from the outside
+
 ## 1.1.1 (2026-10-27): Train Update
 
 - interior upgrades to the train cab

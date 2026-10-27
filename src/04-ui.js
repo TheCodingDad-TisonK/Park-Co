@@ -59,6 +59,9 @@
     PK.xp = S.xp || 0; PK.level = pkLevel();
     PK.clerk = !!S.clerk; PK.operator = !!S.operator;
     PK.snackOpen = !!S.snackOpen; PK.train2 = !!S.train2; PK.lights = !!S.lights; PK.rideLights = !!S.rideLights;
+    if (S.icePrice === undefined) S.icePrice = 4; if (S.toyPrice === undefined) S.toyPrice = 5;
+    if (S.iceOpen === undefined) S.iceOpen = false; if (S.toyOpen === undefined) S.toyOpen = false;
+    PK.iceOpen = !!S.iceOpen; PK.toyOpen = !!S.toyOpen;
     PK.today = S.today || (S.today = { tickets: 0, snacks: 0, rides: 0, earned: 0 });
     PK.lastDay = S.day;
     PK.stnShut = !!S.stnShut;   // the coaster's station gates remember where they were left
