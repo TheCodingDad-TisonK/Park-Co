@@ -26,7 +26,7 @@
   GAME.T = function () { var t = _trPrevT ? _trPrevT() : {}; t.TR = TR; t.trTick = trTick; t.trState = trState; return t; };
   var _trPrevGuide = pkGuide;
   pkGuide = function () {
-    return _trPrevGuide() + '<p><b>The Lindenburg Railway.</b> A steam train rings the park outside its fence: Central Station by the car park, Elfin Woods, Windmill Halt, Dragon Gate and Lakeside Halt, and the depot behind the park. At every station a locked cabinet holds the controls: AUTO (the same everywhere; it needs a hired operator), the platform gates, the lights, ANNOUNCE and the BELL. ' +
+    return _trPrevGuide() + '<p><b>The Lindenburg Railway.</b> A steam train rings the park outside its fence: Central Station by the car park, Windmill Halt, Dragon Gate and Lakeside Halt, and the depot behind the park. At every station a locked cabinet holds the controls: AUTO (the same everywhere; it needs a hired operator), the platform gates, the lights, ANNOUNCE and the BELL. ' +
       'Climb into the cab from the platform. <b>W/S</b> gas, <b>Space</b> brake, <b>H</b> horn, <b>F</b> whistle, <b>I</b> engine, <b>U</b> wagon doors, <b>R</b> reverser, <b>E</b> out. The train waits two minutes at every station and will not leave with the doors open. ' +
       'Throw the points near the north run to send it through the depot shed, where you can fuel, service and wash it.</p>';
   };
@@ -53,6 +53,37 @@
   function trVoiceTick(dt) {
     var p = trHeadPos(), vol = TR.t.driving ? 1 : trVol(p.x, p.z);
     ['horn', 'whistle'].forEach(function (k) { var V = TR_VOICE[k]; if (!V) return; var tgt = V.on ? (k === 'horn' ? 0.16 : 0.12) * vol : 0; V.gn.gain.value += (tgt - V.gn.gain.value) * Math.min(1, dt * (V.on ? 14 : 7)); });
+  }
+  // ── Driving sound: an engine rumble and a rail roar that follow the speed, plus the clickety-clack of the rail joints ──
+  // Full volume in the cab (or a seat), fading with distance for anyone watching from outside.
+  var TR_DRV = null;
+  function trDriveTick(dt) {
+    var t = TR.t; if (!t || !trOk()) return;
+    if (!TR_DRV) {
+      var n = Math.floor(AC.sampleRate * 2), br = AC.createBuffer(1, n, AC.sampleRate), wh = AC.createBuffer(1, n, AC.sampleRate), db = br.getChannelData(0), dw = wh.getChannelData(0), last = 0, i;
+      for (i = 0; i < n; i++) { var w = Math.random() * 2 - 1; last = (last + 0.02 * w) / 1.02; db[i] = last * 3.5; dw[i] = w; }   // brown noise (rumble) and white noise (rail roar)
+      for (i = 0; i < 400; i++) { db[n - 1 - i] *= i / 400; dw[n - 1 - i] *= i / 400; db[i] *= i / 400; dw[i] *= i / 400; }       // soften the loop seam
+      var sb = AC.createBufferSource(); sb.buffer = br; sb.loop = true; var sw = AC.createBufferSource(); sw.buffer = wh; sw.loop = true;
+      var lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 200; var gr = AC.createGain(); gr.gain.value = 0;
+      var bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 0.7; var gh = AC.createGain(); gh.gain.value = 0;
+      sb.connect(lp); lp.connect(gr); gr.connect(sfxBus); sw.connect(bp); bp.connect(gh); gh.connect(sfxBus); sb.start(); sw.start();
+      TR_DRV = { gr: gr, gh: gh, lp: lp, bp: bp, clack: 0 };
+    }
+    var D = TR_DRV, inside = t.driving || t.seat, p = trHeadPos(), vol = inside ? 1 : trVol(p.x, p.z);
+    var v = Math.abs(t.v), sp = Math.min(1, v * 3.6 / 40), eng = t.engine && t.press > 0.3 ? 1 : 0;
+    var rum = vol * (eng * (0.035 + 0.05 * t.throttle) + 0.09 * sp), roar = vol * 0.07 * Math.pow(sp, 1.3) * (inside ? 0.7 : 1);
+    var k = Math.min(1, dt * 5);
+    D.gr.gain.value += (rum - D.gr.gain.value) * k; D.gh.gain.value += (roar - D.gh.gain.value) * k;
+    D.lp.frequency.value = 140 + 520 * sp; D.bp.frequency.value = 600 + 1500 * sp;
+    // rail joints: one clack for each bogie every 4.5 m of track
+    D.clack += v * dt;
+    if (D.clack > 4.5) {
+      D.clack = D.clack % 4.5;
+      if (sp > 0.03 && vol > 0.01) {
+        var t0 = AC.currentTime, g = vol * (0.07 + 0.09 * sp), f = (inside ? 1100 : 1900) + Math.random() * 500;
+        [0, 0.1 / Math.max(0.3, sp * 2)].forEach(function (off) { sNoise(t0 + off, 0.05, g, { type: 'bandpass', freq: f, fade: true }); sTone('sine', 85, t0 + off, 0.07, g * 0.8, {}); });
+      }
+    }
   }
   function trBlast(kind, secs) {   // a short press from a click; the keys hold it
     var t = TR.t; trVoice(kind, true); t[kind === 'horn' ? 'hornOn' : 'whistleOn'] = true; t[kind + 'Auto'] = secs;
@@ -116,6 +147,9 @@
   function trFillCost() { var R = trState(); return ' ($' + Math.round((100 - R.fuel) * 1.5 + (100 - R.water) * 0.2) + ')'; }
   function trServiceCost() { var R = trState(); return '$' + Math.round(40 + R.wear * 2.5); }
   function trPaid(n, why) { if (S.bank < n) { sfx('bad'); toast('Not enough money', 'bad'); return false; } if (n > 0) pay(-n, why); return true; }
+  // quick command: fill the coal and water from anywhere, for free (T in the cab, or trRefill() in the console)
+  function trQuickFill() { var R = trState(); R.fuel = 100; R.water = 100; sfx('ok'); toast('Coal and water topped up', 'good'); }
+  window.trRefill = trQuickFill;
   function trDoFill() { var R = trState(); if (!trInDepot()) return; var c = Math.round((100 - R.fuel) * 1.5 + (100 - R.water) * 0.2); if (c < 1) { toast('The tender is already full', ''); return; } if (!trPaid(c, 'Railway fuel')) return; R.fuel = 100; R.water = 100; sfx('ok'); toast('Coal and water filled', 'good'); logEvent('The train is fuelled', 'good'); }
   function trDoService() { var R = trState(); if (!trInDepot()) return; var c = Math.round(40 + R.wear * 2.5); if (!trPaid(c, 'Railway service')) return; R.wear = 0; sfx('ok'); toast('The train is serviced', 'good'); logEvent('The train is serviced', 'good'); }
   function trDoWash() { var R = trState(), t = TR.t; if (!trInDepot() || t.washT > 0) return; if (!trPaid(30, 'Railway wash')) return; t.washT = 10; toast('Washing the train', ''); }
@@ -128,8 +162,8 @@
   
   function trEnterCab() { 
     var t = TR.t; if (!trCanBoard()) return; 
-    t.driving = true; t.look.yaw = 0; t.look.pitch = -0.05; 
-    toast('In the cab: W/S gas, Space brake, H horn, F whistle, I engine, U doors, R reverser, E to get out. C for 3rd person, scroll to zoom.', ''); sfx('click'); 
+    t.driving = true; t.look.yaw = 0; t.look.pitch = -0.18; 
+    toast('In the cab: W/S gas, Space brake, H horn, F whistle, I engine, U doors, R reverser, T refill, E to get out. C for 3rd person, scroll to zoom.', ''); sfx('click'); 
   }
   
   function trSit(u, seat) { 
@@ -157,6 +191,8 @@
       if (t.driving) {
         if (e.code === 'KeyI') { trToggleEngine(); return true; }
         if (e.code === 'KeyU') { trToggleDoors(); return true; }
+        if (e.code === 'KeyT') { trQuickFill(); return true; }
+        if (e.code === 'KeyV') { sfx('click'); TR.fireOpen = !TR.fireOpen; return true; }   // the damper: opens and shuts the firebox door
         if (e.code === 'KeyR') { trToggleDir(); return true; }
       }
     }
@@ -190,9 +226,9 @@
     var t = TR.t;
     if (TR.built && t && (t.driving || t.seat)) {
       var u = t.driving ? TR.units[0] : t.seat.u, g = u.g, c = Math.cos(g.rotation.y), s = Math.sin(g.rotation.y);
-      var lx = t.driving ? -2.55 : t.seat.seat.x, ly = t.driving ? 3.02 : t.seat.seat.y + 0.75, lz = t.driving ? 0 : t.seat.seat.z, face = t.driving ? 0 : t.seat.seat.face;
+      var lx = t.driving ? -2.55 : t.seat.seat.x, ly = t.driving ? 2.71 : t.seat.seat.y + 0.75, lz = t.driving ? -0.68 : t.seat.seat.z, face = t.driving ? 0 : t.seat.seat.face;
       var wx = g.position.x + lx * c + lz * s, wz = g.position.z - lx * s + lz * c;
-      player.x = wx; player.z = wz; player.y = ly - 1.62 + (t.driving ? 0 : 0); player.vy = 0;
+      player.x = wx; player.z = wz; player.y = ly - 1.62; player.vy = 0;
       
       if (t.thirdPerson) {
         // Position the player body at the cab/seating spot, facing the right way
@@ -205,7 +241,7 @@
         t.playerBody.visible = true;
         t.playerBody.position.set(wx, player.y, wz);
         t.playerBody.rotation.y = g.rotation.y - Math.PI / 2 + face + t.look.yaw;
-        animateHuman(t.playerBody, dt, t.driving ? 'idle' : 'sit', 0, null, false);
+        animateHuman(t.playerBody, dt, 'sit', 0, null, false);
         
         // Place the camera behind the player, looking at them
         var cx = wx + Math.sin(g.rotation.y - Math.PI / 2 + face + t.look.yaw) * t.camDist;
@@ -283,6 +319,7 @@
     trCrossingsTick(dt);
     trStationsTick(dt);
     trVoiceTick(dt);
+    trDriveTick(dt);
     trHud(dt);
     trCabDisplaysTick(dt);
   }
@@ -376,7 +413,40 @@
     lo.engSw.rotation.x = t.engine ? 0.6 : -0.6; lo.doorSw.rotation.x = t.doorsOpen ? 0.6 : -0.6;
     lo.engSwLed.material = t.engine ? trMats().ledGreen : trMats().ledOff; lo.doorSwLed.material = t.doorsOpen ? trMats().ledAmber : trMats().ledOff;
     lo.hornBtn.position.x = lo.hornBtn.userData.rest + ((t.hornKey || t.hornAuto > 0) ? 0.03 : 0); lo.cord.position.y = 3.55 - ((t.whistleKey || t.whistleAuto > 0) ? 0.12 : 0);
-    var G = TR.gauges; if (G) { G.press.rotation.z = 1.1 - t.press * 2.2; G.speed.rotation.z = 1.1 - Math.min(1, t.v * 3.6 / 40) * 2.2; G.fuel.rotation.z = 1.1 - R.fuel / 100 * 2.2; }
+    // the firebox: the door swings, the fire flickers and the glow follows the state of the boiler
+    var fireOn = !!(t.engine && R.fuel > 0);
+    if (lo.fbDoor) lo.fbDoor.rotation.y += ((TR.fireOpen ? -1.0 : 0) - lo.fbDoor.rotation.y) * Math.min(1, dt * 8);
+    if (lo.fbLever) lo.fbLever.rotation.x = TR.fireOpen ? 0.55 : 0;   // on the right wall: pulls toward the cab
+    // the steam vent: the handwheel turns, and the roof pipe blows more and more steam the further it is open
+    var vent = TR.vent || 0;
+    if (lo.ventWheel) lo.ventWheel.rotation.x += (vent * Math.PI * 3 - lo.ventWheel.rotation.x) * Math.min(1, dt * 6);
+    TR.ventT = (TR.ventT || 0) - dt;
+    if (vent > 0.01 && t.engine && t.press > 0.1 && lo.ventPos && TR.ventT <= 0) {
+      TR.ventT = 0.2 - 0.14 * vent;
+      var vp = trWorldOf(lo, lo.ventPos);
+      burst(vp.x, 4.15, vp.z, 0xffffff, 1 + Math.round(vent * 5), 'smoke');
+      if (trOk()) sNoise(AC.currentTime, 0.22, trVol(vp.x, vp.z) * 0.06 * (0.4 + vent), { type: 'bandpass', freq: 3200, fade: true });
+    }
+    if (lo.fireLight) {
+      var fl = 0.9 + Math.sin(performance.now() / 95) * 0.16 + Math.sin(performance.now() / 41) * 0.07;
+      lo.fireLight.intensity = fireOn ? fl * (TR.fireOpen ? 1.5 : 0.55) : 0;
+    }
+    if (lo.fbGlow) {
+      lo.fbGlow.visible = fireOn;
+      lo.fbGlow.material.color.setHex(Math.sin(performance.now() / 83) > 0 ? 0xff8a30 : 0xff5a14);
+      lo.fbGlow.scale.setScalar(TR.fireOpen ? 1.12 : 0.92);
+    }
+    // the cab lamp lights itself at night; the clock runs off the park's time
+    var cabNight = S.time < 7 || S.time > 18.5;
+    if (lo.cabLight) lo.cabLight.intensity = cabNight ? 2.1 : 0;
+    if (lo.cabBulb && lo.cabBulbOn) lo.cabBulb.material = cabNight ? lo.cabBulbOn : lo.cabBulbOff;
+    if (lo.clockH) { var hr12 = S.time % 12; lo.clockH.rotation.z = -hr12 / 12 * Math.PI * 2; lo.clockM.rotation.z = -(S.time % 1) * Math.PI * 2; }
+    var G = TR.gauges; if (G) {
+      if (G.press) G.press.rotation.z = 1.1 - t.press * 2.2;
+      if (G.speed) G.speed.rotation.z = 1.1 - Math.min(1, t.v * 3.6 / 40) * 2.2;
+      if (G.fuel) G.fuel.rotation.z = 1.1 - R.fuel / 100 * 2.2;
+      if (G.brake) G.brake.rotation.z = 1.1 - (t.brakeKey ? 1 : t.brake) * 2.2;
+    }
     if (TR.waterGlass) TR.waterGlass.scale.y = Math.max(0.02, R.water / 100);
   }
   // ── The crossings ─────────────────────────────────────────────────

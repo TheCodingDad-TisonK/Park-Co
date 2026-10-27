@@ -1,5 +1,5 @@
 //@ Park Co, part 40: the Lindenburg Railway - the route, the track and the level crossings.
-  // A narrow-gauge steam railway rings the park outside its fence: five stations, a depot siding north of the park and three level
+  // A narrow-gauge steam railway rings the park outside its fence: four stations, a depot siding north of the park and three level
   // crossings. The route is a rounded rectangle (clockwise on the map, north is -z). Everything on it is built from the headless
   // map of the world: W = -128 keeps the west run clear of the tree belt, E = 170 and S = 112 clear the Mountain King and the town.
   // Local frame of anything standing on the line: +x is the way the train runs, +z is its right hand (the platform side, toward the park).
@@ -9,8 +9,7 @@
     st: [], xing: [], units: [], len: 56, built: false, t: null, depot: null
   };
   var TR_GAPS = [   // the gates the stations have in the park's palisade: { axis: the run's own axis, x, z, w }
-    { axis: 'z', x: -32.5, z: 62, w: 5 }, { axis: 'z', x: -72, z: -72, w: 5 },
-    { axis: 'z', x: 123, z: -2, w: 5 },   { axis: 'x', x: 95, z: 71, w: 5 }
+    { axis: 'z', x: -32.5, z: 62, w: 5 }, { axis: 'z', x: 123, z: -2, w: 5 },   { axis: 'x', x: 95, z: 71, w: 5 }
   ];
   // the palisade steps around each gate: the run is cut in two and each half is built (and made solid) on its own
   var _trPalisade = pkPalisade;

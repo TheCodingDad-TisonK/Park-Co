@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.1 (2026-10-27): Train Update
+
+- interior upgrades to the train cab
+
 ## 1.1.0 (2026-10-26): Big Update
 
 ## Fixes

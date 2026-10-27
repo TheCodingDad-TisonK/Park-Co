@@ -7,7 +7,6 @@
   }
   var TR_STATIONS = [
     { id: 'central', name: 'CENTRAL STATION', x: -128, z: 34, walk: [[-117.4, 34], [-117.4, 62], [-30, 62]], roof: 'slateRed' },
-    { id: 'woods', name: 'ELFIN WOODS', x: -128, z: -72, walk: [[-117.4, -72], [-68, -72]], roof: 'slateGreen' },
     { id: 'windmill', name: 'WINDMILL HALT', x: -62, z: -134, walk: [[-62, -123.4], [-17, -123.4], [-17, -160]], roof: 'slateRed' },
     { id: 'dragon', name: 'DRAGON GATE', x: 170, z: -2, walk: [[159.4, -2], [121, -2]], roof: 'slateGreen' },
     { id: 'lake', name: 'LAKESIDE HALT', x: 95, z: 112, walk: [[95, 101.4], [95, 66]], roof: 'slateRed' }
@@ -113,7 +112,7 @@
     // a low back wall behind the platform, capped with stone, so the platform reads as raised ground
     pkBevelBox(64, 0.55, 0.35, M.stone, 0, 0.72, 7.28, g, 0.03); pkBevelBox(64.2, 0.08, 0.45, M.stoneDark, 0, 1.02, 7.28, g, 0.02);
     
-    // Keep the station house on its original setback so the Elfin Woods building clears the theater.
+    // Keep the station house on its original setback so the building clears the theater.
     pkBevelBox(12, 3.3, 4.4, P.cream, -22, 2.6, 9.8, g, 0.05);
     box(12.2, 0.14, 4.6, M.woodD, -22, 0.97 + 0.05, 9.8, g);
     for (var bx = -27.5; bx <= -16.5; bx += 2.2) box(0.14, 3.3, 0.1, M.woodD, bx, 2.6, 7.56, g);
