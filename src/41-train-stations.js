@@ -151,10 +151,10 @@
     for (var vx = -29.5; vx <= -2.5; vx += 0.9) { var sc = trCone(0.28, 0.45, [M.red, M.cream, M.green][Math.round((vx + 30) / 0.9) % 3], vx, 4.0, 2.9, g, 4); sc.rotation.x = Math.PI; }
     
     // FIXED: Benches now face the track properly
-    trBench(g, -8, 6.4, 0, 0.95); 
-    trBench(g, 6, 6.4, 0, 0.95); 
-    trBench(g, 16, 6.4, 0, 0.95); 
-    trBench(g, -15, 3.1, Math.PI, 0.95);
+    trBench(g, -8, 6.4, Math.PI, 0.95); 
+    trBench(g, 6, 6.4, Math.PI, 0.95); 
+    trBench(g, 16, 6.4, Math.PI, 0.95); 
+    trBench(g, -15, 3.1, 0, 0.95);
     
     trBin(g, -4.5, 6.6, 0.95); trBin(g, 20.5, 6.6, 0.95);
     [-10, 2, 14, 24].forEach(function (lx) { trLamp(st, lx, 6.7, 0.95); });

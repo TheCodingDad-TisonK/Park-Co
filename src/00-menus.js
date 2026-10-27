@@ -44,10 +44,6 @@
           "action": "guide"
         },
         {
-          "label": "Build mode",
-          "action": "edit"
-        },
-        {
           "label": "Save file",
           "action": "saves"
         },

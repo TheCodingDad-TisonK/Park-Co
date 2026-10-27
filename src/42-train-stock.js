@@ -347,8 +347,8 @@
     var cabLight = new THREE.PointLight(0xffd9a0, 2.1, 5.6, 2); cabLight.position.set(0, -0.34, 0); lampG.add(cabLight);
     u.cabLamp = lampG; u.cabBulb = lampLens; u.cabLight = cabLight; u.cabBulbOn = cabBulbOn; u.cabBulbOff = cabBulbOff;
     
-    // --- a brass bulkhead clock on the right wall, on the front pillar above the displays ---
-    var clockG = new THREE.Group(); clockG.position.set(-1.5, 2.95, 1.02); clockG.rotation.y = Math.PI; g.add(clockG);
+    // --- a brass bulkhead clock on the front wall, screwed to the green centre mullion above the backhead ---
+    var clockG = new THREE.Group(); clockG.position.set(-1.185, 3.0, 0); clockG.rotation.y = -Math.PI / 2; clockG.scale.setScalar(0.85); g.add(clockG);
     var cface = document.createElement('canvas'); cface.width = cface.height = 128; var cc = cface.getContext('2d');
     if (cc) {
       cc.fillStyle = '#f6f0df'; cc.beginPath(); cc.arc(64, 64, 60, 0, 7); cc.fill();
@@ -368,7 +368,7 @@
     var clockM = new THREE.Group(); clockM.position.z = 0.045; clockG.add(clockM); box(0.01, 0.1, 0.006, M.black, 0, 0.05, 0, clockM);
     sphere(0.012, brass, 0, 0, 0.048, clockG);
     u.clockH = clockH; u.clockM = clockM;
-    sign(['TIME'], 0.22, 0.055, -1.5, 2.76, 1.01, Math.PI, { w: 152, h: 42, bg: '#151a1e', fg: '#f5f2e8' }, g);
+    sign(['TIME'], 0.18, 0.045, -1.175, 2.78, 0, -Math.PI / 2, { w: 152, h: 42, bg: '#151a1e', fg: '#f5f2e8' }, g);
 
     // --- operator displays: right-hand wall, ahead of the crew seat (the PAGE / REPEAT controls sit on the desk right below) ---
     function cabDisplay(x, y, z, w, h, ry) {
@@ -382,12 +382,17 @@
       return { canvas: cv, tex: tex };
     }
     TR.cabDisplays = {
-      alignment: cabDisplay(-1.9, 2.22, 1.0, 0.56, 0.33, Math.PI),
-      passenger: cabDisplay(-2.6, 2.22, 1.0, 0.56, 0.33, Math.PI)
+      alignment: cabDisplay(-1.5, 3.05, 0.72, 0.56, 0.33, -3 * Math.PI / 4),   // hangs in the front-right corner, angled toward the driver
+      passenger: cabDisplay(-2.0, 2.22, 1.0, 0.56, 0.33, Math.PI)
     };
+    // two brass rods hang the alignment screen from the roof, with little ceiling flanges
+    [[-1.656, 0.876], [-1.344, 0.564]].forEach(function (r) {
+      pkRod(r[0], 3.285, r[1], r[0], 3.52, r[1], 0.014, brass, g, 6);
+      pkRoundCyl(0.04, 0.02, brass, r[0], 3.49, r[1], g, 10);
+    });
     TR.cabDisplays.pageLever = u.pageLeverRef;   // the display tick swings this lever
-    sign(['STOP'], 0.2, 0.05, -1.9, 2.0, 0.96, Math.PI, { w: 128, h: 36, bg: '#151a1e', fg: '#f5f2e8' }, g);   // little captions under each screen
-    sign(['PASSENGERS'], 0.3, 0.05, -2.6, 2.0, 0.96, Math.PI, { w: 192, h: 36, bg: '#151a1e', fg: '#f5f2e8' }, g);
+    sign(['STOP'], 0.2, 0.05, -1.528, 2.77, 0.692, -3 * Math.PI / 4, { w: 128, h: 36, bg: '#151a1e', fg: '#f5f2e8' }, g);   // little captions under each screen
+    sign(['PASSENGERS'], 0.3, 0.05, -2.0, 2.0, 0.96, Math.PI, { w: 192, h: 36, bg: '#151a1e', fg: '#f5f2e8' }, g);
 
     // --- rear bulkhead, open in the middle ---
     pkBevelBox(0.1, 0.1, 2.2, M.greenD, -4.08, 3.24, 0, g, 0.02);
@@ -435,6 +440,17 @@
       c.fillText('SPEED: ' + Math.round(t.v * 3.6) + ' km/h', 24, 192);
       c.fillText('PLATFORM GATES: ' + (st && st.gatesAmt > 0.5 ? 'OPEN' : 'CLOSED'), 24, 230);
       c.fillText('WAGON DOORS: ' + (t.doorsOpen ? 'OPEN' : 'SHUT'), 24, 268);
+      // alignment bar: wagon door vs platform gate
+      var barX = 24, barY = 150, barW = 460, barH = 16;
+      c.fillStyle = '#0a1410'; c.fillRect(barX, barY, barW, barH);
+      c.strokeStyle = '#c9a45e'; c.lineWidth = 1; c.strokeRect(barX, barY, barW, barH);
+      // platform gate marker (centre)
+      c.fillStyle = '#5fd38d'; c.fillRect(barX + barW / 2 - 2, barY - 4, 4, barH + 8);
+      // wagon door marker, offset by remaining distance (clamped)
+      var off = clamp(distance, -50, 50) / 50 * (barW / 2);
+      c.fillStyle = '#f2c75c'; c.fillRect(barX + barW / 2 + off - 3, barY - 6, 6, barH + 12);
+      c.fillStyle = '#dbe8d7'; c.font = '14px Consolas, monospace'; c.fillText('gate', barX + barW / 2 - 12, barY - 8);
+      c.fillText('door', barX + barW / 2 + off - 12, barY + barH + 14);
       a.tex.needsUpdate = true;
     }
 

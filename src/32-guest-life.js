@@ -81,6 +81,23 @@
       osh.rotation.x = -0.1; osh.rotation.z = side * -0.05; oel.rotation.x = -0.15;
     };
   }
+  function pkGuestItemEnsure(gu, type) {
+    if (gu.g.userData.pkItem && gu.g.userData.pkItemType === type) { gu.g.userData.pkItem.visible = true; return; }
+    if (gu.g.userData.pkItem) { var old = gu.g.userData.pkItem; if (old.parent) old.parent.remove(old); }
+    var hand = pkGuestHand(gu.g, 1); if (!hand) return;
+    var grp = new THREE.Group(); grp.position.set(0, 0.02, 0.03); hand.add(grp);
+    if (type === 'fries') {
+      box(0.09, 0.12, 0.06, std({ color: 0xd94f3a, roughness: 0.8 }), 0, 0.06, 0, grp);
+      box(0.1, 0.02, 0.07, std({ color: 0xf3efe4, roughness: 0.9 }), 0, 0.13, 0, grp);
+    } else if (type === 'ice') {
+      var cone = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.09, 8), std({ color: 0xd9a066, roughness: 0.9 })); cone.rotation.x = Math.PI; cone.position.y = 0.04; grp.add(cone);
+      sphere(0.05, std({ color: 0x9fd0ff, roughness: 0.4 }), 0, 0.11, 0, grp);
+    } else if (type === 'toy' || type === 'balloon') {
+      pkRod(0, 0, 0, 0, 0.18, 0, 0.006, std({ color: 0x888888, roughness: 0.4 }), grp, 4);
+      sphere(0.07, std({ color: 0xd94f6a, roughness: 0.5 }), 0, 0.22, 0, grp);
+    }
+    gu.g.userData.pkItem = grp; gu.g.userData.pkItemType = type; grp.visible = true;
+  }
   // ── What a guest says while living a little ────────────────────────────────────────────────────────────────────
   var PK_LIFE_LINES = {
     phone: ['No way, really?', "Can you hear me?", "I'll call you back.", 'One sec, bad signal.', "We're at the park!"],

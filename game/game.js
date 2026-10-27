@@ -3588,6 +3588,24 @@
       { id: "cp-mvnu3d0n-z", type: "pkBench", x: -16.2, z: 46.05, rot: 1, h: 0 },
       { id: "cp-mvnu45s8-11", type: "pkBench", x: -16.4, z: 39.1, rot: 1, h: 0 },
       { id: "cp-mvnu7v0z-14", type: "pkSign", x: 0.1, z: 57, rot: 0, h: 0 },
+      { id: "cp-mvr1fag9-1", type: "pkBench", x: -8.45, z: 9.3, rot: 3, h: 0 },
+      { id: "cp-mvr1fgjk-2", type: "pkBench", x: -8.5, z: 11.4, rot: 3, h: 0 },
+      { id: "cp-mvr1fqr6-3", type: "pkBench", x: -9.7, z: 15.55, rot: 2, h: 0 },
+      { id: "cp-mvr1gckx-4", type: "pkBench", x: -12, z: 15.45, rot: 2, h: 0 },
+      { id: "cp-mvr1h39i-5", type: "pkBench", x: -8.5, z: 13.75, rot: 3, h: 0 },
+      { id: "cp-mvr1jqs9-8", type: "pkBench", x: 36.9, z: -32.05, rot: 3, h: 0 },
+      { id: "cp-mvr1kb64-9", type: "pkBench", x: -20.1, z: -46.55, rot: 0, h: 0 },
+      { id: "cp-mvr1laqg-a", type: "pkBench", x: -42.1, z: -37.85, rot: 2, h: 0 },
+      { id: "cp-mvr1m32h-b", type: "pkBench", x: -105.55, z: -45.45, rot: 0, h: 0 },
+      { id: "cp-mvr1mcrk-c", type: "pkBench", x: -108.05, z: -45.5, rot: 0, h: 0 },
+      { id: "cp-mvr1n1q4-d", type: "pkBench", x: -110.4, z: -45.45, rot: 0, h: 0 },
+      { id: "cp-mvr1p8ow-e", type: "pkBench", x: 79.9, z: -48.85, rot: 0, h: 0 },
+      { id: "cp-mvr1qga5-f", type: "pkBench", x: 82.05, z: -48.85, rot: 0, h: 0 },
+      { id: "cp-mvr1rhto-h", type: "pkBench", x: 79.65, z: -103.85, rot: 0, h: 0 },
+      { id: "cp-mvr1s1ff-i", type: "pkBench", x: 81.95, z: -103.85, rot: 0, h: 0 },
+      { id: "cp-mvr2ndyg-1", type: "pkBench", x: -103.05, z: -45.4, rot: 0, h: 0 },
+      { id: "cp-mvr2ndyg-2", type: "pkBench", x: -100.7, z: -45.35, rot: 0, h: 0 },
+      { id: "cp-mvr2ndyh-3", type: "pkBench", x: -98.2, z: -45.35, rot: 0, h: 0 },
     ]
   });
   CO.material("pk-stone", {"size":512,"repeat":[3,3],"layers":[{"type":"fill","color":"#b8b6b0"},{"type":"grain","alpha":0.1},{"type":"cracks","color":"#505048","n":25,"sz":120}],"roughness":0.9,"metalness":0.1,"bump":{"amp":24,"strength":0.9}});
@@ -3639,10 +3657,6 @@
         {
           "label": "How to play",
           "action": "guide"
-        },
-        {
-          "label": "Build mode",
-          "action": "edit"
         },
         {
           "label": "Save file",
@@ -4513,7 +4527,9 @@
     "group@-10,-72": { hidden: true },
     "group@-103.41,63.87": { hidden: true },
     "group@-105.9,83.23": { x: -101.85, z: 85.35 },
+    "group@-11.05,-11.14": { hidden: true },
     "group@-11.44,-17.88": { x: -11.45, z: -17.9, hidden: true },
+    "group@-11.77,-25.01": { hidden: true },
     "group@-112.28,84.24": { x: -109.25, z: 85.2 },
     "group@-119.26,-126.55": { x: -119.25, z: -126.55, hidden: true },
     "group@-121.72,-125.55": { x: -121.75, z: -125.55, hidden: true },
@@ -4535,12 +4551,15 @@
     "group@-15,33.5": { x: -15.05, z: 33.45, hidden: true },
     "group@-15.68,-146.63": { hidden: true },
     "group@-16.45,-127.55": { hidden: true },
+    "group@-18,8": { x: 10.05, z: 24.75, ry: -180 },
     "group@-18.1,40": { x: -17.55, z: 39, ry: -90 },
     "group@-18.1,45": { hidden: true },
     "group@-18.84,84.9": { x: -18.95, z: 85.05, hidden: true },
     "group@-19.2,17.4": { hidden: true },
     "group@-19.2,22.6": { hidden: true },
     "group@-2.15,82.93": { x: 0.8, z: 86.65 },
+    "group@-2.67,-10.95": { hidden: true },
+    "group@-20,-47.5": { hidden: true },
     "group@-21.85,-134.91": { hidden: true },
     "group@-22.51,-125.08": { hidden: true },
     "group@-22.9,19.95": { x: -25.05, z: 26.75 },
@@ -4590,6 +4609,7 @@
     "group@-41.2,0.4": { hidden: true },
     "group@-41.2,5.6": { hidden: true },
     "group@-41.74,81.92": { x: -43.85, z: 86.3 },
+    "group@-42,-36.6": { hidden: true },
     "group@-43.4,17.3": { hidden: true },
     "group@-43.4,25.2": { hidden: true },
     "group@-44.82,-128.22": { x: -44.8, z: -128.25, hidden: true },
@@ -4606,6 +4626,7 @@
     "group@-51.01,81.8": { hidden: true },
     "group@-51.21,-133.9": { x: -51.1, z: -133.9, hidden: true },
     "group@-52.28,84.24": { hidden: true },
+    "group@-53.5,-37": { x: -52.15, z: -36.75, ry: 90 },
     "group@-58.4,83.41": { x: -57.15, z: 86.5 },
     "group@-6,26": { x: -6.5, z: 24.25, ry: 90 },
     "group@-6,38": { x: -7, z: 36 },
@@ -4619,14 +4640,19 @@
     "group@-64.51,83.74": { x: -62.35, z: 88.2 },
     "group@-65.65,-127.43": { x: -65.65, z: -127.4, hidden: true },
     "group@-69.91,81.55": { x: -70.9, z: 85.95 },
+    "group@-7,0": { x: -6.9, z: -0.05, hidden: true },
     "group@-7,12": { x: -6.75, z: 15.05 },
     "group@-7,24": { x: -6.75, z: 23.5 },
+    "group@-7.13,-15.33": { x: -7.1, z: -15.35, hidden: true },
+    "group@-7.37,-10.41": { hidden: true },
+    "group@-7.46,-24.97": { hidden: true },
     "group@-71.23,-126.86": { hidden: true },
     "group@-73.66,82.8": { x: -75.25, z: 83.05, hidden: true },
     "group@-78.84,84.9": { x: -77.55, z: 86.2 },
     "group@-8,10": { x: -6.75, z: 10.6, hidden: true },
     "group@-8,2": { x: -6.65, z: 13.6, hidden: true },
     "group@-8,20": { x: -9.25, z: 22.35, ry: -180, hidden: true },
+    "group@-8,8": { x: -121.95, z: -40.15, ry: 450 },
     "group@-80,81.81": { hidden: true },
     "group@-83.96,82.17": { x: -82.5, z: 87.1 },
     "group@-86.71,-127.05": { hidden: true },
@@ -4642,10 +4668,12 @@
     "group@0,0#3": { x: 0.2, z: 0.05 },
     "group@1.6,83.41": { x: 1.35, z: 83.25, hidden: true },
     "group@10.23,-70.99": { x: 10.1, z: -71.15, hidden: true },
+    "group@10.75,-24.38": { hidden: true },
     "group@104.11,-136.52": { x: 104.1, z: -136.55, hidden: true },
     "group@104.49,-144.35": { x: 104.45, z: -144.4, hidden: true },
     "group@106.84,104.07": { x: 106.8, z: 104.65, hidden: true },
     "group@11.24,-20.98": { x: 11.2, z: -21, hidden: true },
+    "group@11.76,-10.57": { hidden: true },
     "group@11.9,-28.12": { hidden: true },
     "group@11.93,-53.12": { hidden: true },
     "group@113.97,83.11": { x: 114, z: 83.1, hidden: true },
@@ -4679,10 +4707,15 @@
     "group@19.2,22.6": { hidden: true },
     "group@19.25,-53.25": { hidden: true },
     "group@19.87,-0.6,1.95": { x: 12.95, z: -3.85, ry: 0 },
+    "group@2.57,-11.19": { hidden: true },
+    "group@20.33,-11.27": { x: 20.35, z: -11.25, hidden: true },
+    "group@20.9,-7.01": { hidden: true },
     "group@21.32,9.45": { x: 21.3, z: 9.45, hidden: true },
     "group@21.62,-54.31": { hidden: true },
     "group@21.78,-49.1": { hidden: true },
     "group@21.9,20": { x: 24.05, z: 24.85 },
+    "group@25.19,-33.97": { hidden: true },
+    "group@25.6,-11.02": { hidden: true },
     "group@25.6,81.53": { x: 25.6, z: 81.5, hidden: true },
     "group@26.1,83.95": { x: 24.95, z: 87.9 },
     "group@27.01,-53.37": { x: 27, z: -53.35, hidden: true },
@@ -4695,8 +4728,10 @@
     "group@29.24,-8.98": { hidden: true },
     "group@29.29,-32.52": { hidden: true },
     "group@29.61,-10.94": { hidden: true },
+    "group@31.9,-8": { hidden: true },
     "group@32.61,81.09": { x: 38.3, z: 86.8 },
     "group@36.56,81.27": { x: 36.55, z: 81.3, hidden: true },
+    "group@38.1,-32": { hidden: true },
     "group@38.3,-13": { hidden: true },
     "group@39.77,83.84": { x: 31, z: 87.75 },
     "group@4.2,40.4": { x: 6.2, z: 37.45, ry: -90, hidden: true },
@@ -4713,12 +4748,14 @@
     "group@47.72,-131.33": { hidden: true },
     "group@49.65,-12.73": { hidden: true },
     "group@5.9,12.8": { x: 5.5, z: 8.8, ry: -90 },
+    "group@5.93,-24.13": { hidden: true },
     "group@53.04,-134.38": { hidden: true },
     "group@53.97,83.11": { x: 44.85, z: 87.1 },
     "group@54.57,107.8": { x: 54.55, z: 107.8, hidden: true },
     "group@57.85,82.93": { hidden: true },
     "group@6,26": { x: 6.5, z: 24.1, ry: -90 },
     "group@6,38": { x: 6.7, z: 35.95 },
+    "group@6.22,-11.58": { hidden: true },
     "group@60,-17.05": { x: 60, z: -17, hidden: true },
     "group@61.45,81.46": { x: 53.85, z: 87.45 },
     "group@63.64,-134.35": { x: 63.5, z: -134.45, hidden: true },
@@ -4726,11 +4763,17 @@
     "group@69.92,-18.13": { hidden: true },
     "group@7,0": { hidden: true },
     "group@7,24": { x: 6.6, z: 23.35, ry: -180 },
-    "group@7.1,17.6": { x: 17.55, z: 10.25 },
+    "group@7.1,17.6": { x: 22.15, z: 10.85, ry: 287 },
     "group@7.92,-67.26": { hidden: true },
+    "group@72.4,-34": { hidden: true },
+    "group@72.6,-27": { hidden: true },
+    "group@72.6,-75": { hidden: true },
     "group@75,83.94": { x: 49.35, z: 87.55 },
+    "group@75.4,5": { x: 76.15, z: 5.05, hidden: true },
     "group@77.17,105.18": { x: 77.2, z: 105.2, hidden: true },
     "group@77.45,-136.23": { hidden: true },
+    "group@79.4,-47.5": { hidden: true },
+    "group@79.6,-64": { hidden: true },
     "group@8,10": { x: 6.3, z: 9.5, hidden: true },
     "group@8,2": { x: 8.4, z: 15.9, hidden: true },
     "group@8,20": { x: 13.95, z: 22.5, ry: -180, hidden: true },
@@ -4856,12 +4899,18 @@
     "mesh box 0.8x0.85x1.9@9.5,10.4,0.43": { x: 21.55, z: 12.35, hidden: true },
     "mesh box 0.8x0.85x1.9@9.5,12.6,0.43": { x: 21.55, z: 14.55, hidden: true },
     "mesh box 0.8x0.85x1.9@9.5,14.8,0.43": { x: 8.45, z: 16.45, ry: -90, hidden: true },
-    "mesh box 0.8x0.85x1.9@9.5,23.6,0.43": { x: 8, z: 23.5, ry: -90 },
-    "mesh box 0.8x0.85x1.9@9.5,25.8,0.43": { x: 10.6, z: 23.5, ry: -90 },
+    "mesh box 0.8x0.85x1.9@9.5,23.6,0.43": { x: 8, z: 23.5, ry: -90, hidden: true },
+    "mesh box 0.8x0.85x1.9@9.5,25.8,0.43": { x: 10.6, z: 23.5, ry: -90, hidden: true },
     "mesh box 0.8x0.85x1.9@9.5,6,0.43": { x: 10.8, z: 16.45, ry: -90, hidden: true },
     "mesh box 0.8x0.85x1.9@9.5,8.2,0.43": { x: 21.55, z: 10.15, hidden: true },
     "mesh box 0.8x0.95x3@12.4,-2.2,0.48": { x: 11.6, z: -2.15 },
     "mesh box 0.9x0.06x3.1@12.4,-2.2,0.98": { x: 11.6, z: -2.15 },
+    "mesh box 0.9x0.72x0.9@-16.13,-10.3,0.36": { x: -16.15, z: -10.3, hidden: true },
+    "mesh box 0.9x0.77x0.9@19.86,-24.73,0.39": { x: 19.85, z: -24.75, hidden: true },
+    "mesh box 0.9x0.7x0.9@-21.76,-6.88,0.35": { hidden: true },
+    "mesh box 0.9x0.83x0.9@11.54,-14.84,0.42": { x: 11.55, z: -14.85, hidden: true },
+    "mesh box 0.9x0.97x0.9@20.93,-34.49,0.49": { hidden: true },
+    "mesh box 0.9x0.97x0.9@25.24,-6.42,0.49": { x: 25.25, z: -6.4, hidden: true },
     "mesh box 1.02x0.07x0.09@12.05,1.86,1": { hidden: true },
     "mesh box 1.2x0.08x0.6@-24.6,44.8,0.42": { x: -23.2, z: 45.1 },
     "mesh box 1.62x0.07x0.09@15.5,1.86,1": { z: 1.85, hidden: true },
@@ -4877,8 +4926,8 @@
     "mesh box 1x0.22x2.1@9.5,10.4,0.11": { x: 21.55, z: 12.35, hidden: true },
     "mesh box 1x0.22x2.1@9.5,12.6,0.11": { x: 21.55, z: 14.55, hidden: true },
     "mesh box 1x0.22x2.1@9.5,14.8,0.11": { x: 8.45, z: 16.45, ry: -90, hidden: true },
-    "mesh box 1x0.22x2.1@9.5,23.6,0.11": { x: 8, z: 23.5, ry: -90 },
-    "mesh box 1x0.22x2.1@9.5,25.8,0.11": { x: 10.6, z: 23.5, ry: -90 },
+    "mesh box 1x0.22x2.1@9.5,23.6,0.11": { x: 8, z: 23.5, ry: -90, hidden: true },
+    "mesh box 1x0.22x2.1@9.5,25.8,0.11": { x: 10.6, z: 23.5, ry: -90, hidden: true },
     "mesh box 1x0.22x2.1@9.5,6,0.11": { x: 10.8, z: 16.45, ry: -90, hidden: true },
     "mesh box 1x0.22x2.1@9.5,8.2,0.11": { x: 21.55, z: 10.15, hidden: true },
     "mesh box 1x0.98x0.05@12.05,1.87,0.49": { x: 12, z: 1.85, hidden: true },
@@ -4914,6 +4963,7 @@
     "mesh cone 0.45x0.18@-20.67,3,2.6": { hidden: true },
     "mesh cone 0.45x0.18@-22,20,2.6": { hidden: true },
     "mesh cone 0.45x0.18@-22,3,2.6": { hidden: true },
+    "mesh cone 0.5x0.35@-7,0,3.6": { hidden: true },
     "mesh cone 0.5x0.35@-7,12,3.6": { hidden: true },
     "mesh cone 0.5x0.35@-7,24,3.6": { hidden: true },
     "mesh cone 0.5x0.35@7,0,3.6": { hidden: true },
@@ -4927,6 +4977,7 @@
     "mesh cylinder 0.42x0.24@-20,37.8,0.21": { x: -19.7, z: 40.9 },
     "mesh cylinder 0.42x0.24@-20,46.2,0.21": { x: -19.6, z: 44.15 },
     "mesh cylinder 0.42x0.24@-27.9,46.2,0.21": { hidden: true },
+    "mesh cylinder 0.5x0.02@-7,0,4.35": { hidden: true },
     "mesh cylinder 0.5x0.02@-7,12,4.35": { hidden: true },
     "mesh cylinder 0.5x0.02@7,12,4.35": { hidden: true },
     "mesh cylinder 0.5x0.02@7,24,4.35": { hidden: true },
@@ -4970,16 +5021,22 @@
     "mesh sphere 0.08@-37,30,2.02": { hidden: true },
     "mesh sphere 0.08@-62,-118,2.02": { hidden: true },
     "mesh sphere 0.08@-72,27.5,2.02": { z: 27.45 },
+    "mesh sphere 0.09@-6.72,0,3.5": { hidden: true },
     "mesh sphere 0.09@-6.72,12,3.5": { hidden: true },
     "mesh sphere 0.09@-6.72,24,3.5": { hidden: true },
+    "mesh sphere 0.09@-6.86,-0.24,3.5": { hidden: true },
+    "mesh sphere 0.09@-6.86,0.24,3.5": { hidden: true },
     "mesh sphere 0.09@-6.86,11.76,3.5": { hidden: true },
     "mesh sphere 0.09@-6.86,12.24,3.5": { x: -6.85, z: 12.25, hidden: true },
     "mesh sphere 0.09@-6.86,23.76,3.5": { hidden: true },
     "mesh sphere 0.09@-6.86,24.24,3.5": { hidden: true },
+    "mesh sphere 0.09@-7.14,-0.24,3.5": { x: -7.15, z: -0.25, hidden: true },
+    "mesh sphere 0.09@-7.14,0.24,3.5": { hidden: true },
     "mesh sphere 0.09@-7.14,11.76,3.5": { hidden: true },
     "mesh sphere 0.09@-7.14,12.24,3.5": { hidden: true },
     "mesh sphere 0.09@-7.14,23.76,3.5": { hidden: true },
     "mesh sphere 0.09@-7.14,24.24,3.5": { hidden: true },
+    "mesh sphere 0.09@-7.28,0,3.5": { hidden: true },
     "mesh sphere 0.09@-7.28,12,3.5": { x: -7.3, hidden: true },
     "mesh sphere 0.09@-7.28,24,3.5": { hidden: true },
     "mesh sphere 0.09@6.72,0,3.5": { hidden: true },
@@ -5009,6 +5066,7 @@
     "mesh sphere 0.36@-20,37.8,1.23": { x: -19.7, z: 40.9 },
     "mesh sphere 0.36@-20,46.2,1.23": { x: -19.6, z: 44.15 },
     "mesh sphere 0.36@-27.9,46.2,1.23": { hidden: true },
+    "ride decoration@-36.32,18.79": { x: -36.35, z: 18.8 },
   });
   CO.worldCopies([
     { id: "wc-mvco28o4-2", of: "mesh box 1x0.22x2.1@9.5,25.8,0.11", x: 15.8, y: 0.11, z: 23.5, ry: -90, sx: 1, sy: 1, sz: 1 },
@@ -5042,11 +5100,7 @@
     { id: "wc-mvcosgpg-2k", of: "mesh box 0.8x0.85x1.9@-9.5,12.6,0.43", x: -13.25, y: 0.43, z: 23.25, ry: -90, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvcospus-2l", of: "mesh box 1x0.22x2.1@-9.5,23.6,0.11", x: -10.65, y: 0.11, z: 23.3, ry: -90, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvcosput-2m", of: "mesh box 0.8x0.85x1.9@-9.5,23.6,0.43", x: -10.65, y: 0.43, z: 23.25, ry: -90, sx: 1, sy: 1, sz: 1 },
-    { id: "wc-mvdhtvqo-7", of: "group@-8,20", x: -8.65, y: 0, z: 9.7, ry: -450, sx: 1, sy: 1, sz: 1 },
-    { id: "wc-mvdhxa5q-a", of: "group@-8,20", x: -12.25, y: 0, z: 15.3, ry: -720, sx: 1, sy: 1, sz: 1 },
-    { id: "wc-mvdhxlgm-b", of: "group@-8,20", x: -9.85, y: 0, z: 15.35, ry: -720, sx: 1, sy: 1, sz: 1 },
-    { id: "wc-mvdhxvhh-d", of: "group@-8,20", x: -8.65, y: 0, z: 12.1, ry: -450, sx: 1, sy: 1, sz: 1 },
-    { id: "wc-mvdhy2sl-e", of: "group@-6,6", x: -8.45, y: 0, z: 14.25, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvdhy2sl-e", of: "group@-6,6", x: -13.3, y: 0, z: 12, ry: 90, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvgupfz8-2", of: "fence@7.8,4.1", x: -20.7, y: 0, z: 0.35, ry: -270, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvgupuup-3", of: "fence@7.8,4.1", x: -21.95, y: 0, z: 5.45, ry: -270, sx: 0.97, sy: 0.97, sz: 0.84 },
     { id: "wc-mvgurziu-6", of: "group@-25.43,-17.3", x: -27.95, y: 0, z: -15.75, ry: 23307.9, sx: 1, sy: 1, sz: 1 },
@@ -5247,6 +5301,16 @@
     { id: "wc-mvnu3qzk-10", of: "group@-18.1,40", x: -17.45, y: 0, z: 46, ry: -90, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvnu6ov9-12", of: "group@-6,26", x: -15.15, y: 0, z: 35.7, ry: 0, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvnu79jy-13", of: "group@-6,26", x: 16.2, y: 0, z: 38.45, ry: -90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvr2q20c-4", of: "group@-6,26", x: -112.55, y: 0, z: -45.65, ry: 360, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvr2r10n-5", of: "group@-53.5,-37", x: -88.61, y: 0, z: -38.4, ry: 90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvr2r5xf-6", of: "group@-53.5,-37", x: -95.9, y: 0, z: -38.4, ry: 90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvr2rkzm-7", of: "group@-53.5,-37", x: -103.2, y: 0, z: -38.2, ry: 90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvr2rwsn-8", of: "group@-53.5,-37", x: -110.4, y: 0, z: -38.25, ry: 90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvr2sf7f-9", of: "group@-53.5,-37", x: -117.7, y: 0, z: -38.4, ry: 90, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvr2vjix-a", of: "mesh box 1x0.22x2.1@9.5,23.6,0.11", x: 7.56, y: 0.11, z: 24.07, ry: -180, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvr2vt6j-b", of: "mesh box 0.8x0.85x1.9@9.5,23.6,0.43", x: 7.6, y: 0.43, z: 24.1, ry: -180, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvr2xb9j-f", of: "mesh box 1x0.22x2.1@9.5,23.6,0.11", x: 7.55, y: 0.11, z: 26.25, ry: -180, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mvr2xb9k-g", of: "mesh box 0.8x0.85x1.9@9.5,23.6,0.43", x: 7.6, y: 0.43, z: 26.25, ry: -180, sx: 1, sy: 1, sz: 1 },
   ]);
   // ── Park Co ───────────────────────────────────────────────────────
   // A small park: a gate at the south, two ticket windows outside it, a midway running north to the coaster station, and the
@@ -5276,7 +5340,9 @@
   var PK_LEVELS = [
     { xp: 0,   name: 'The gate',      note: 'Sell tickets at the window and work the coaster.' },
     { xp: 40,  name: 'Snack stand',   note: 'A snack stand opens on the midway.', unlock: 'snack' },
+    { xp: 80,  name: 'Ice cream',     note: 'An ice cream stand opens beside the snack stand.', unlock: 'ice' },
     { xp: 120, name: 'Ticket clerk',  note: 'Hire a clerk and the window serves itself.', unlock: 'clerk' },
+    { xp: 160, name: 'Toys stand',    note: 'A toys stand opens on the midway.', unlock: 'toy' },
     { xp: 280, name: 'Ride operator', note: 'Hire an operator and the coaster runs itself.', unlock: 'operator' },
     { xp: 520, name: 'Park lights',   note: 'The park stays open into the evening.', unlock: 'lights' }
   ];
@@ -5285,11 +5351,11 @@
     guests: [], booths: [], turnstiles: [], gates: [], seats: [], cars: [], train: null,
     curve: null, len: 1, cpU: [], stationU: 0.02, stationX0: 0, liftU: [0, 0], carGap: 2.9,
     ride: { state: 'idle', t: 0, u: 0.02, v: 0, riders: 0, bars: 0, barsWant: 0, gates: 0, beat: 0, autoT: 0, loadT: 0, wait: 0, fault: '', last: '' },
-    queue: [], spawnT: 0, nextId: 1, today: { tickets: 0, snacks: 0, rides: 0, earned: 0 },
+    queue: [], spawnT: 0, nextId: 1, today: { tickets: 0, snacks: 0, rides: 0, earned: 0, ice: 0, toys: 0 },
     attractions: [], attrById: {}, plots: {}, rides: {}, lanes: [],
     playerRide: null, playerWait: null,
-    lastMin: -1, lastDay: 1, level: 1, xp: 0, clerk: false, operator: false, snackOpen: false, train2: false, lights: false, rideLights: false, duty: null,
-    served: 0, refused: 0, screen: null, snack: null, closed: false
+    lastMin: -1, lastDay: 1, level: 1, xp: 0, clerk: false, operator: false, snackOpen: false, iceOpen: false, toyOpen: false, train2: false, lights: false, rideLights: false, duty: null,
+    served: 0, refused: 0, screen: null, snack: null, ice: null, toy: null, closed: false
   };
   // ── The tables the park reads ─────────────────────────────────────
   function pkLevel() { var lv = 1; for (var i = 0; i < PK_LEVELS.length; i++) if (PK.xp >= PK_LEVELS[i].xp) lv = i + 1; return lv; }
@@ -5308,6 +5374,8 @@
     showCard('h-card', '<b>Level ' + lv + '</b><br>' + esc(L.name) + '<br><span class="dc-sub">' + esc(L.note) + '</span>', 6);
     toast('Level ' + lv + ' - ' + L.name, 'good');
     if (L.unlock === 'snack') { PK.snackOpen = true; S.snackOpen = true; }
+    if (L.unlock === 'ice') { PK.iceOpen = true; S.iceOpen = true; }
+    if (L.unlock === 'toy') { PK.toyOpen = true; S.toyOpen = true; }
     if (L.unlock === 'lights') { PK.lights = true; S.lights = true; PK.rideLights = true; S.rideLights = true; }
     if (L.unlock && L.unlock !== 'snack' && L.unlock !== 'lights' && L.unlock !== 'clerk' && L.unlock !== 'operator') pkOpenRide(L.unlock);
     hudDirty = true;
@@ -5712,7 +5780,7 @@
   }
   // ── The game ──────────────────────────────────────────────────────
   var GAME = {
-    handle: 'PARK_CO', version: '0.2.1',
+    handle: 'PARK_CO', version: '0.2.1', editMode: false,
     floorY: function (x, z) { return pkFloor(x, z); },
     insideWalk: function (x, z) { return pkInsidePark(x, z); },
     // the coaster's control room (part 03, PK_OP): indoors, under its roof, inside its four walls
@@ -5736,14 +5804,14 @@
     ridePowered: function () { return !!PK.rideLights && (S.time >= 18 || S.time < 7); },
     freshState: function () {
       return { day: 1, time: 9, bank: 500, level: 1, log: [], ledger: [], stats: { earned: 0, spent: 0 }, layout: {}, custom: [], hdoors: {},
-        ticketPrice: 25, snackPrice: 6, auto: false, ctlAuto: {}, ctlKey: {}, coasterKey: false, cycles: 0, xp: 0, clerk: true, operator: false, snackOpen: false, train2: false, lights: false, rideLights: false,   // the starter clerk works day one for free
-        wear: 0, rides: {}, today: { tickets: 0, snacks: 0, rides: 0, earned: 0 }, gateOpen: true };
+        ticketPrice: 25, snackPrice: 6, icePrice: 4, toyPrice: 5, auto: false, ctlAuto: {}, ctlKey: {}, coasterKey: false, cycles: 0, xp: 0, clerk: true, operator: false, snackOpen: false, iceOpen: false, toyOpen: false, train2: false, lights: false, rideLights: false,   // the starter clerk works day one for free
+        wear: 0, rides: {}, today: { tickets: 0, snacks: 0, rides: 0, earned: 0, ice: 0, toys: 0 }, gateOpen: true };
     },
     // a day one save from before the starter clerk gets one too; later days keep the park they earned
     // a save from before the gate was a switch of its own: open if the old automatic hours say it would have been
     migrate: function (s) { if (s.day === 1 && !s.clerk) s.clerk = true; if (s.gateOpen === undefined) s.gateOpen = s.time >= 9 && s.time < 22; if (s.rideLights === undefined) s.rideLights = !!s.lights; return s; },
     buildWorld: function (loaded) {
-      pkGround(); pkGate(); pkBooths(); pkOffice(); pkMidway(); pkBuildCoaster(); pkBuildOperatorRoom(); pkBuildSnack();
+      pkGround(); pkGate(); pkBooths(); pkOffice(); pkMidway(); pkBuildCoaster(); pkBuildOperatorRoom(); pkBuildSnack(); pkBuildIceCream(); pkBuildToys();
       pkBuildAttractions();
       pkBuildCart(); pkBuildCartGate(); pkBuildTablet();
       pkDressAll();
@@ -5801,7 +5869,7 @@
         pkGateReminders: pkGateReminders, pkGateToggle: pkGateToggle,
         pkCoasterAuto: pkCoasterAuto,
         pkSeats: function () { return PK.seats; }, pkCounts: function () { return { guests: PK.guests.length, queue: PK.queue.length, seats: PK.seats.length, cars: PK.cars.length, track: PK.len }; },
-        pkBuildCoaster: pkBuildCoaster, pkBuildOperatorRoom: pkBuildOperatorRoom, pkBuildSnack: pkBuildSnack,
+        pkBuildCoaster: pkBuildCoaster, pkBuildOperatorRoom: pkBuildOperatorRoom, pkBuildSnack: pkBuildSnack, pkBuildIceCream: pkBuildIceCream, pkBuildToys: pkBuildToys,
         pkBuildAttractions: pkBuildAttractions, pkOpenRide: pkOpenRide, pkOpenCount: pkOpenCount, pkRideList: pkRideList,
         pkSetRideOpen: pkSetRideOpen, pkCoasterOpen: pkCoasterOpen,
         pkOffice: pkOffice, pkService: pkService, pkFire: pkFire, pkAdminPanel: pkAdminPanel,
@@ -5888,17 +5956,20 @@
       id: PK.nextId++, g: g,
       rec: { x: x, z: z, yaw: Math.PI, path: [], speed: randf(1.3, 1.9) },
       state: 'toBooth', ticket: false, booth: -1, turn: undefined, seat: null, attr: null, slot: -1, qslot: -1, rides: 0, pose: 'sit',
-      hunger: randf(30, 90), ate: false, mood: 'neutral', t: 0, trash: false
+      hunger: randf(30, 90), ate: false, mood: 'neutral', t: 0, trash: false,
+    gaveUp: {}, patience: 0, mWait: 0, lockWait: 0, lifeT: 0, lifeKind: null, lifeLook: null, binTarget: null, benchSeat: null, benchYaw: 0, turnSpun: false, goHome: false, carryItem: null
     };
     PK.guests.push(gu);
     return gu;
   }
   function pkGuestAt(x, z) {
+    if (!PK.guests || !PK.guests.length) return null;
     var best = null, bd = 9;
     PK.guests.forEach(function (gu) { var d = dist2(gu.rec.x, gu.rec.z, x, z); if (d < bd) { bd = d; best = gu; } });
     return best;
   }
   function pkPickBooth() {
+    if (!PK.booths || !PK.booths.length) return 0;
     // the shorter line, and a coin toss when both are empty: tie-breaking to the west window sent every guest through one
     // turnstile and left the east booth looking closed
     var best = [], bl = 1e9;
@@ -5914,8 +5985,11 @@
   }
   // the two gates beside this booth, picking the one that has seen fewer guests so both arms in the bank keep working
   function pkPickTurnstile(bi) {
+    if (!PK.booths || !PK.booths.length) return 0;
     var b = PK.booths[bi] || PK.booths[0];
+    if (!b) return 0;
     var xs = (b && b.turnstiles) || [b ? b.turnstile : 0];
+    if (!xs || !xs.length) return b.turnstile || 0;
     var best = xs[0], bestPass = Infinity;
     for (var i = 0; i < xs.length; i++) {
       var t = pkTurnstileAt(xs[i]), p = t ? t.pass : Infinity;
@@ -5933,8 +6007,8 @@
   function pkQueueJoin(gu) {
     if (gu.gaveUp && gu.gaveUp.coaster) return false;
     if (gu.state === 'walkQueue' || gu.state === 'queue' || gu.state === 'board' || gu.state === 'seated') return false;
-    if (PK.queue.indexOf(gu) >= 0) return false;
-    if (PK.queue.length >= PK_QUEUE_SLOTS.length) return false;
+    if (!PK.queue || PK.queue.indexOf(gu) >= 0) return false;
+    if (!PK_QUEUE_SLOTS || PK.queue.length >= PK_QUEUE_SLOTS.length) return false;
     gu.qslot = PK.queue.length;
     PK.queue.push(gu);
     gu.lockWait = 0;
@@ -5946,8 +6020,8 @@
   // Reserve an attraction slot when the guest commits to walking there. This
   // prevents arrivals from racing for the same queue position while in flight.
   function pkAttrQueueJoin(gu, a) {
-    if (!a || !a.open || a.queue.indexOf(gu) >= 0) return false;
-    if (a.queue.length >= a.seats.length * 2) return false;
+    if (!a || !a.open || !a.queue || a.queue.indexOf(gu) >= 0) return false;
+    if (!a.seats || a.queue.length >= a.seats.length * 2) return false;
     gu.attr = a.id;
     gu.lockWait = 0;
     gu.slot = a.queue.length;
@@ -5957,11 +6031,13 @@
     return true;
   }
   function pkAttrQueueLeave(gu, a) {
-    var i = a ? a.queue.indexOf(gu) : -1;
+    if (!a || !a.queue) { gu.attr = null; gu.slot = -1; return; }
+    var i = a.queue.indexOf(gu);
     if (i >= 0) { a.queue.splice(i, 1); if (typeof pkAttrQueueReslot === 'function') pkAttrQueueReslot(a); screenDirtyAll(); }
     gu.attr = null; gu.slot = -1;
   }
   function pkAttrQueueReslot(a) {
+    if (!a || !a.queue) return;
     for (var i = 0; i < a.queue.length; i++) {
       var gu = a.queue[i];
       if (gu.slot === i) continue;
@@ -5974,6 +6050,7 @@
     }
   }
   function pkQueueReslot() {
+    if (!PK.queue) return;
     for (var i = 0; i < PK.queue.length; i++) {
       var gu = PK.queue[i];
       if (gu.qslot === i) continue;
@@ -5993,7 +6070,7 @@
   // Waiting in a line for a ride that is locked (its operator key OFF) wears out: past the guest's patience they leave the
   // line, say so, and go and find something else. A ride that is open keeps its line; it is the lock nobody waits out.
   function pkGuestBored(gu, dt) {
-    var coaster = gu.state === 'queue' || gu.state === 'walkQueue', at = coaster ? null : PK.attrById[gu.attr];
+    var coaster = gu.state === 'queue' || gu.state === 'walkQueue', at = coaster ? null : (PK.attrById ? PK.attrById[gu.attr] : null);
     var locked = coaster ? !S.coasterKey : !!(at && at.ctl && !at.ctl.key);
     if (!locked) return;
     gu.lockWait = (gu.lockWait || 0) + dt;
@@ -6008,6 +6085,7 @@
       pkAttrQueueLeave(gu, at);
     }
     say(gu.g, pick(['Still shut...', 'Not opening today', 'Something else, then']));
+    gu.mood = 'sad';
     gu.lockWait = 0;
     pkGo(gu, randf(-6, 6), randf(8, 22), 'off');
   }
@@ -6017,13 +6095,12 @@
   var PK_MACHINE_WAIT = 6;
   function pkGuestMachine(gu, dt) {
     var b = PK.booths[gu.booth];
-    if (S.clerk || PK.closed || !b || b.queue[0] !== gu) { gu.mWait = 0; return; }
+    if (S.clerk || PK.closed || !b || !b.queue || b.queue[0] !== gu) { gu.mWait = 0; return; }
     if (player && Math.hypot(player.x - b.x, player.z - (b.z + 2.0)) < 3.2) { gu.mWait = 0; return; }   // you are at the window
     gu.mWait = (gu.mWait || 0) + dt;
     if (gu.mWait < PK_MACHINE_WAIT) return;
     gu.mWait = 0;
-    pkServe(gu.booth, true);
-    if (b.machine) b.machine.blink = 1.2;
+    if (pkServe(gu.booth, true) && b.machine) b.machine.blink = 1.2;
   }
   function pkGuestStep(gu, dt) {
     var rec = gu.rec, g = gu.g;
@@ -6033,7 +6110,7 @@
     // ticket just before the shut, and not a party whose car pulled in a moment later. pkCloseGuests handles the moment the
     // gate shuts; this also catches a loaded save and a car that unloads after it.
     if (PK.closed && (gu.state === 'toBooth' || gu.state === 'walkBooth' || gu.state === 'boothQueue' || gu.state === 'toTurn' || gu.state === 'walkTurn')) {
-      if (gu.booth >= 0 && PK.booths[gu.booth]) {
+      if (PK.booths && gu.booth >= 0 && PK.booths[gu.booth]) {
         var gq = PK.booths[gu.booth].queue, gi = gq.indexOf(gu);
         if (gi >= 0) { gq.splice(gi, 1); screenDirtyAll(); }
       }
@@ -6043,16 +6120,19 @@
     }
     if (gu.state === 'toBooth') {
       var b = pkPickBooth();
+      if (!PK.booths || !PK.booths[b]) { gu.state = 'off'; return; }
       gu.booth = b;
       var s = pkBoothSlot(b, PK.booths[b].queue.length);
       pkGo(gu, s.x, s.z, 'walkBooth');
     } else if (gu.state === 'walkBooth') {
-      if (arrived) { PK.booths[gu.booth].queue.push(gu); gu.state = 'boothQueue'; }
+      if (arrived && PK.booths && PK.booths[gu.booth]) { PK.booths[gu.booth].queue.push(gu); gu.state = 'boothQueue'; }
+      else if (arrived) gu.state = 'off';
     } else if (gu.state === 'boothQueue') {
       // the window serves the front of the line; when nobody staffs it, the front of the line pays at the machine
       pkGuestMachine(gu, dt);
     } else if (gu.state === 'toTurn') {
       if (gu.turn === undefined) { gu.turn = pkPickTurnstile(gu.booth); gu.turnSpun = false; }
+      if (gu.turn == null) { gu.state = 'off'; return; }
       if (!rec.path.length) pkGo(gu, gu.turn, PK_GATE_Z - 0.35, 'walkTurn');
     } else if (gu.state === 'walkTurn') {
       // the arms turn when the guest reaches the bars, not when they are still two metres short: push the arm as the
@@ -6071,7 +6151,7 @@
       pkGuestBored(gu, dt);
     } else if (gu.state === 'walkAttr') {
       if (arrived) {
-        var at = PK.attrById[gu.attr];
+        var at = PK.attrById ? PK.attrById[gu.attr] : null;
         if (!at || !at.open) {
           pkAttrQueueLeave(gu, at); pkGuestPickRide(gu);
         } else {
@@ -6093,17 +6173,34 @@
         else gu.state = 'off';
       }
     } else if (gu.state === 'board') {
-      if (arrived) pkSeatGuest(gu, gu.seat);   // they reached their car: step in and sit
+      if (arrived) { gu.mood = 'happy'; pkSeatGuest(gu, gu.seat); }   // they reached their car: step in and sit
     } else if (gu.state === 'seated') {
       // nothing to do but enjoy it
     } else if (gu.state === 'toSnack') {
       if (arrived) {
         if (!PK.closed && PK.snackOpen && S.bank >= S.snackPrice) {
           pay(S.snackPrice, 'Snack'); PK.today.snacks++; PK.today.earned += S.snackPrice; pkXp(1);
-          gu.ate = true; gu.trash = true; sfx('cash'); say(g, 'Thanks!'); screenDirtyAll(); hudDirty = true;
+          gu.ate = true; gu.trash = true; gu.mood = 'happy'; gu.carryItem = 'fries'; pkGuestItemEnsure(gu, 'fries'); sfx('cash'); say(g, 'Thanks!'); screenDirtyAll(); hudDirty = true;
         }
         if (PK.closed || S.bank < S.snackPrice) pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
         else gu.state = 'off';
+      }
+    } else if (gu.state === 'toIce') {
+      if (arrived) {
+        if (!PK.closed && PK.iceOpen && S.bank >= S.icePrice) {
+          pay(S.icePrice, 'Ice cream'); PK.today.ice = (PK.today.ice || 0) + 1; PK.today.earned += S.icePrice; pkXp(1);
+          gu.ate = true; gu.trash = true; gu.mood = 'happy'; gu.carryItem = 'ice'; pkGuestItemEnsure(gu, 'ice'); sfx('cash'); say(g, 'Thanks!'); screenDirtyAll(); hudDirty = true;
+        }
+        if (PK.closed || S.bank < S.icePrice) pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
+        else gu.state = 'off';
+      }
+    } else if (gu.state === 'toToy') {
+      if (arrived) {
+        if (!PK.closed && PK.toyOpen && S.bank >= S.toyPrice) {
+          pay(S.toyPrice, 'Toy'); PK.today.toys = (PK.today.toys || 0) + 1; PK.today.earned += S.toyPrice; pkXp(1);
+          gu.mood = 'happy'; gu.carryItem = 'toy'; pkGuestItemEnsure(gu, 'toy'); sfx('cash'); say(g, 'Thanks!'); screenDirtyAll(); hudDirty = true;
+        }
+        gu.state = 'off';
       }
     } else if (gu.state === 'off') {
       if (!gu.trash && !PK.closed && Math.random() < dt * 0.02) gu.trash = true;   // picked up a drink or a wrapper somewhere off-screen
@@ -6113,6 +6210,8 @@
         if (PK.closed || gu.goHome) { gu.goHome = false; pkGo(gu, randf(-14, 14), randf(40, 56), 'leave'); }
         else if (gu.trash && pkGuestBinGo(gu)) { /* off to the nearest bin */ }
         else if (PK.snackOpen && !gu.ate && gu.hunger > 60 && S.bank >= S.snackPrice) pkGo(gu, -13, 10.4, 'toSnack');
+        else if (PK.iceOpen && !gu.ate && gu.hunger > 50 && S.bank >= S.icePrice) pkGo(gu, -8, 10.4, 'toIce');
+        else if (PK.toyOpen && Math.random() < 0.15) pkGo(gu, -18, 10.4, 'toToy');
         else if (!gu.trash && randf(0, 1) < 0.22 && pkGuestLifeStart(gu)) { /* a bench, a phone call, a smoke, a chat */ }
         else if ((gu.rides || 0) < 4 && randf(0, 1) < 0.8 && (pkQueueJoin(gu) || pkAttrPick(gu))) { /* off to another ride */ }
         else pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
@@ -6128,7 +6227,7 @@
       pkGuestLifeTick(gu, dt);
       if (gu.lifeT <= 0 || PK.closed) { pkLifeEnd(gu); gu.state = 'off'; }
     } else if (gu.state === 'leave') {
-      if (arrived && !pkLotHome(gu)) gu.state = 'gone';             // out through the gate, then back to the car they came in
+      if (arrived && !(typeof pkLotHome === 'function' && pkLotHome(gu))) gu.state = 'gone';             // out through the gate, then back to the car they came in
     } else if (gu.state === 'toCar') {
       if (arrived) pkLotBoard(gu);
     }
@@ -6152,16 +6251,21 @@
       animateHuman(g, dt, mode, rec.speed, look, carry);
       if (g.userData.pkCig) g.userData.pkCig.visible = (!moving && gu.state === 'life' && gu.lifeKind === 'smoke');
       if (g.userData.pkPhone) g.userData.pkPhone.visible = (!moving && gu.state === 'life' && gu.lifeKind === 'phone');
+      if (g.userData.pkItem) g.userData.pkItem.visible = !!gu.carryItem && gu.state !== 'seated' && gu.state !== 'bench' && gu.state !== 'board';
     }
   }
   var PK_THINK_T0 = 0, PK_THINK_MS = 4;   // the guests' share of a frame for working out where to go next
   function pkGuestTick(dt) {
+    if (!PK.guests) return;
     PK_THINK_T0 = performance.now();
     for (var i = PK.guests.length - 1; i >= 0; i--) {
       var gu = PK.guests[i];
+      if (!gu) continue;
       pkGuestStep(gu, dt);
       if (gu.state === 'gone') {
         if (gu.benchSeat) pkBenchRelease(gu);
+        if (gu.g.userData.pkItem) { var _it = gu.g.userData.pkItem; if (_it.parent) _it.parent.remove(_it); gu.g.userData.pkItem = null; gu.g.userData.pkItemType = null; }
+        gu.carryItem = null;
         pkParkHuman(gu.g);
         var qi = PK.queue.indexOf(gu); if (qi >= 0) { PK.queue.splice(qi, 1); pkQueueReslot(); }
         if (gu.attr) { var aq = PK.attrById[gu.attr]; if (aq) { var ai = aq.queue.indexOf(gu); if (ai >= 0) { aq.queue.splice(ai, 1); pkAttrQueueReslot(aq); } } }
@@ -6170,7 +6274,9 @@
     }
   }
   function pkCloseGuests() {
+    if (!PK.guests) return;
     PK.guests.forEach(function (gu) {
+      if (!gu) return;
       if (gu.state === 'seated' || gu.state === 'board') return;
       if (gu.booth >= 0 && PK.booths[gu.booth]) {
         var b = PK.booths[gu.booth], bi = b.queue.indexOf(gu);
@@ -6186,7 +6292,7 @@
       var qi = PK.queue.indexOf(gu); if (qi >= 0) PK.queue.splice(qi, 1);
       gu.state = 'off'; gu.goHome = true; gu.rec.path = [];
     });
-    PK.attractions.forEach(function (a) { pkAttrQueueReslot(a); });
+    if (PK.attractions) PK.attractions.forEach(function (a) { pkAttrQueueReslot(a); });
     pkQueueReslot(); screenDirtyAll();
   }
   // ── The ticket window ─────────────────────────────────────────────
@@ -6199,8 +6305,8 @@
     pay(S.ticketPrice, 'Ticket');
     PK.today.tickets++; PK.today.earned += S.ticketPrice;
     pkXp(1);
-    gu.ticket = true; gu.state = 'toTurn'; gu.booth = bi; gu.turn = undefined;
-    b.queue.splice(b.queue.indexOf(gu), 1);
+    gu.ticket = true; gu.state = 'toTurn'; gu.booth = bi; gu.turn = undefined; gu.mood = 'happy';
+    var qi = b.queue.indexOf(gu); if (qi >= 0) b.queue.splice(qi, 1);
     if (machine) { say(gu.g, pick(['The machine, then', 'Card, beep, done', 'Got it!'])); PK.today.machine = (PK.today.machine || 0) + 1; }
     else { sfx('cash'); say(gu.g, 'One, please!'); toast('Ticket sold - ' + money(S.ticketPrice), 'good'); }
     screenDirtyAll(); hudDirty = true;
@@ -6210,7 +6316,7 @@
   function pkNewDay() {
     var wages = pkWages();
     if (wages) pay(-wages, 'Wages');
-    PK.today = S.today = { tickets: 0, snacks: 0, rides: 0, earned: 0 };
+    PK.today = S.today = { tickets: 0, snacks: 0, rides: 0, earned: 0, ice: 0, toys: 0 };
     S.gateOpen = false; PK.gateWarn = {};   // shut till you open it yourself; the reminders get their day back too
     logEvent('Day ' + S.day + ' begins' + (wages ? ' - wages ' + money(wages) : '') + ' - the gate is shut', '');
     screenDirtyAll(); hudDirty = true;
@@ -6320,7 +6426,7 @@
     // the platform, south of the track, with a ramp down to the apron at its south edge
     box(20, 0.6, 3.0, MAT.floor, 0, 0.3, -2.1);
     var ramp = box(20, 0.1, 1.17, MAT.floor, 0, 0.3, 0.1);
-    ramp.rotation.x = -0.54;
+    ramp.rotation.x = 0.54;
     // the canopy over it
     [[-9.4, -3.4], [9.4, -3.4], [-9.4, -0.8], [9.4, -0.8]].forEach(function (p) { cyl(0.1, 3.2, MAT.steelDark, p[0], 2.2, p[1], null, 8); });
     box(20.4, 0.2, 3.4, MAT.roof, 0, 3.9, -2.1);
@@ -6777,6 +6883,16 @@
     box(0.07, 0.3, 0.07, MAT.trim, 1.55, 2.36, 2.3, g);
     sign(['SNACKS'], 2.6, 0.6, 0, 2.75, 1.72, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
     sign(['FRIES ' + money(S.snackPrice)], 2.2, 0.4, 0, 1.9, 1.72, 0, { bg: '#0d1216', fg: '#eef1f5' }, g);
+    // interior: a fryer counter along the back wall, a shelf of cups and napkins, and a warm pendant lamp
+    box(3.0, 0.85, 0.5, MAT.wood, 0, 0.425, -1.25, g);
+    box(2.9, 0.06, 0.46, MAT.trim, 0, 0.86, -1.25, g);
+    box(0.9, 0.35, 0.4, MAT.steelDark, -0.95, 0.62, -1.25, g);
+    box(0.9, 0.35, 0.4, MAT.steelDark, 0.05, 0.62, -1.25, g);
+    box(0.9, 0.35, 0.4, MAT.steelDark, 1.05, 0.62, -1.25, g);
+    box(2.6, 0.18, 0.28, MAT.wood, 0, 1.55, -1.5, g);
+    for (var sc = 0; sc < 5; sc++) box(0.16, 0.22, 0.12, std({ color: 0xf3efe4, roughness: 0.9 }), -1.0 + sc * 0.52, 1.7, -1.5, g);
+    pkRoundCyl(0.04, 0.5, std({ color: 0xffe2a0, emissive: 0xffc966, emissiveIntensity: 1.2, roughness: 0.3 }), 0, 2.4, 0, g, 8);
+
     hitBox(3.0, 1.4, 0.6, 0, 1.5, 1.5, {
       prompt: function () { return PK.snackOpen ? 'Sell a snack (' + money(S.snackPrice) + ')' : 'The snack stand is shut'; },
       use: function () { pkSnackBuy(); }
@@ -6793,6 +6909,97 @@
       }
     });
   }
+  function pkBuildIceCream() {
+    var g = new THREE.Group(); g.position.set(-8, 0, 8); scene.add(g);
+    box(3.4, 3.0, 0.2, MAT.plaster, 0, 1.5, -1.6, g);
+    box(0.2, 3.0, 3.4, MAT.plaster, -1.6, 1.5, 0, g);
+    box(0.2, 3.0, 3.4, MAT.plaster, 1.6, 1.5, 0, g);
+    box(3.6, 0.16, 3.6, MAT.roof, 0, 3.05, 0, g);
+    box(3.4, 1.05, 0.5, MAT.wood, 0, 0.52, 1.5, g);
+    box(3.5, 0.08, 0.6, MAT.trim, 0, 1.08, 1.5, g);
+    // interior
+    box(3.0, 0.85, 0.5, MAT.wood, 0, 0.425, -1.25, g);
+    box(2.9, 0.06, 0.46, MAT.trim, 0, 0.86, -1.25, g);
+    box(1.2, 0.5, 0.4, std({ color: 0x9fd0ff, roughness: 0.4 }), -0.9, 0.62, -1.25, g);
+    box(1.2, 0.5, 0.4, std({ color: 0x9fd0ff, roughness: 0.4 }), 0.9, 0.62, -1.25, g);
+    box(2.6, 0.18, 0.28, MAT.wood, 0, 1.55, -1.5, g);
+    // worker figure (decorative)
+    var wg = new THREE.Group(); wg.position.set(0.6, 0, -0.6); g.add(wg);
+    box(0.35, 0.9, 0.25, std({ color: 0xffffff, roughness: 0.9 }), 0, 1.3, 0, wg);
+    sphere(0.16, std({ color: 0xf2d4a0, roughness: 0.9 }), 0, 1.95, 0, wg);
+    // signs
+    sign(['ICE CREAM'], 2.6, 0.6, 0, 2.75, 1.72, 0, { bg: '#1b232c', fg: '#9fd0ff' }, g);
+    sign(['SCOOP ' + money(S.icePrice)], 2.2, 0.4, 0, 1.9, 1.72, 0, { bg: '#0d1216', fg: '#eef1f5' }, g);
+    solid(-9.75, -6.25, 6.25, 9.75, 0, 3.0);
+    hitBox(3.0, 1.4, 0.6, 0, 1.5, 1.5, {
+      prompt: function () { return PK.iceOpen ? 'Buy ice cream (' + money(S.icePrice) + ')' : 'The ice cream stand is shut'; },
+      use: function () { pkIceBuy(); }
+    }, g);
+    PK.ice = touchScreen({ w: 300, h: 220, pw: 0.62, ph: 0.45, x: 0, y: 1.35, z: 1.28, parent: g, title: 'Ice cream', draw: function (ctx, s) {
+        scBg(ctx, s.w, s.h); scHead(ctx, s.w, 'ICE CREAM', 'Day ' + S.day);
+        scText(ctx, 16, 66, 'Scoop ' + money(S.icePrice));
+        scText(ctx, 16, 88, PK.iceOpen ? 'Open' : 'Shut', PK.iceOpen ? '#5fd38d' : '#a0acb8');
+        scText(ctx, 16, 110, 'Sold today: ' + (PK.today.ice || 0), '#a0acb8');
+        scButton(s, 16, 130, 130, 40, 'Sell', PK.iceOpen, function () { pkIceBuy(); });
+        scButton(s, 154, 130, 130, 40, 'Price +', true, function () { pkIcePrice(1); });
+      }
+    });
+  }
+  function pkBuildToys() {
+    var g = new THREE.Group(); g.position.set(-18, 0, 8); scene.add(g);
+    box(3.4, 3.0, 0.2, MAT.plaster, 0, 1.5, -1.6, g);
+    box(0.2, 3.0, 3.4, MAT.plaster, -1.6, 1.5, 0, g);
+    box(0.2, 3.0, 3.4, MAT.plaster, 1.6, 1.5, 0, g);
+    box(3.6, 0.16, 3.6, MAT.roof, 0, 3.05, 0, g);
+    box(3.4, 1.05, 0.5, MAT.wood, 0, 0.52, 1.5, g);
+    box(3.5, 0.08, 0.6, MAT.trim, 0, 1.08, 1.5, g);
+    // interior
+    box(3.0, 0.85, 0.5, MAT.wood, 0, 0.425, -1.25, g);
+    box(2.9, 0.06, 0.46, MAT.trim, 0, 0.86, -1.25, g);
+    for (var t = 0; t < 6; t++) box(0.35, 0.45, 0.25, std({ color: [0xd94f6a, 0xf3c84a, 0x5fd38d, 0x2f8fb3, 0x7a3fb3, 0xd94f8a][t], roughness: 0.8 }), -1.2 + t * 0.5, 0.7, -1.25, g);
+    box(2.6, 0.18, 0.28, MAT.wood, 0, 1.55, -1.5, g);
+    // worker figure (decorative)
+    var wg = new THREE.Group(); wg.position.set(0.6, 0, -0.6); g.add(wg);
+    box(0.35, 0.9, 0.25, std({ color: 0xfff0c0, roughness: 0.9 }), 0, 1.3, 0, wg);
+    sphere(0.16, std({ color: 0xf2d4a0, roughness: 0.9 }), 0, 1.95, 0, wg);
+    sign(['TOYS'], 2.6, 0.6, 0, 2.75, 1.72, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
+    sign(['TOY ' + money(S.toyPrice)], 2.2, 0.4, 0, 1.9, 1.72, 0, { bg: '#0d1216', fg: '#eef1f5' }, g);
+    solid(-19.75, -16.25, 6.25, 9.75, 0, 3.0);
+    hitBox(3.0, 1.4, 0.6, 0, 1.5, 1.5, {
+      prompt: function () { return PK.toyOpen ? 'Buy a toy (' + money(S.toyPrice) + ')' : 'The toys stand is shut'; },
+      use: function () { pkToyBuy(); }
+    }, g);
+    PK.toy = touchScreen({ w: 300, h: 220, pw: 0.62, ph: 0.45, x: 0, y: 1.35, z: 1.28, parent: g, title: 'Toys', draw: function (ctx, s) {
+        scBg(ctx, s.w, s.h); scHead(ctx, s.w, 'TOYS', 'Day ' + S.day);
+        scText(ctx, 16, 66, 'Toy ' + money(S.toyPrice));
+        scText(ctx, 16, 88, PK.toyOpen ? 'Open' : 'Shut', PK.toyOpen ? '#5fd38d' : '#a0acb8');
+        scText(ctx, 16, 110, 'Sold today: ' + (PK.today.toys || 0), '#a0acb8');
+        scButton(s, 16, 130, 130, 40, 'Sell', PK.toyOpen, function () { pkToyBuy(); });
+        scButton(s, 154, 130, 130, 40, 'Price +', true, function () { pkToyPrice(1); });
+      }
+    });
+  }
+  function pkIcePrice(n) { S.icePrice = clamp(Math.round((S.icePrice + n) * 100) / 100, 1, 40); screenDirtyAll(); hudDirty = true; toast('Ice cream ' + money(S.icePrice), ''); return S.icePrice; }
+  function pkIceBuy() {
+    if (!PK.iceOpen) { sfx('bad'); toast('The ice cream stand is not open yet', 'bad'); return false; }
+    var gu = pkNearestHuman(-8, 8);
+    if (!gu) { sfx('bad'); toast('Nobody is at the stand', 'bad'); return false; }
+    pay(S.icePrice, 'Ice cream'); PK.today.ice = (PK.today.ice || 0) + 1; PK.today.earned += S.icePrice; pkXp(1); sfx('cash'); say(gu, 'Thanks!'); toast('Ice cream sold', 'good');
+    var _gi = null; PK.guests.forEach(function (x) { if (x.g === gu) _gi = x; });
+    if (_gi) { _gi.carryItem = 'ice'; pkGuestItemEnsure(_gi, 'ice'); }
+    screenDirtyAll(); hudDirty = true; return true;
+  }
+  function pkToyPrice(n) { S.toyPrice = clamp(Math.round((S.toyPrice + n) * 100) / 100, 1, 40); screenDirtyAll(); hudDirty = true; toast('Toy ' + money(S.toyPrice), ''); return S.toyPrice; }
+  function pkToyBuy() {
+    if (!PK.toyOpen) { sfx('bad'); toast('The toys stand is not open yet', 'bad'); return false; }
+    var gu = pkNearestHuman(-18, 8);
+    if (!gu) { sfx('bad'); toast('Nobody is at the stand', 'bad'); return false; }
+    pay(S.toyPrice, 'Toy'); PK.today.toys = (PK.today.toys || 0) + 1; PK.today.earned += S.toyPrice; pkXp(1); sfx('cash'); say(gu, 'Thanks!'); toast('Toy sold', 'good');
+    var _gt = null; PK.guests.forEach(function (x) { if (x.g === gu) _gt = x; });
+    if (_gt) { _gt.carryItem = 'toy'; pkGuestItemEnsure(_gt, 'toy'); }
+    screenDirtyAll(); hudDirty = true; return true;
+  }
+
   function pkSnackPrice(n) {
     S.snackPrice = clamp(Math.round((S.snackPrice + n) * 100) / 100, 1, 40);
     screenDirtyAll(); hudDirty = true;
@@ -6806,6 +7013,8 @@
     pay(S.snackPrice, 'Snack');
     PK.today.snacks++; PK.today.earned += S.snackPrice;
     pkXp(1); sfx('cash'); say(gu, 'Thanks!'); toast('Snack sold', 'good');
+    var _gs = null; PK.guests.forEach(function (x) { if (x.g === gu) _gs = x; });
+    if (_gs) { _gs.carryItem = 'fries'; pkGuestItemEnsure(_gs, 'fries'); }
     screenDirtyAll(); hudDirty = true; return true;
   }
   // ── Placing the train ─────────────────────────────────────────────
@@ -7239,6 +7448,9 @@
     PK.xp = S.xp || 0; PK.level = pkLevel();
     PK.clerk = !!S.clerk; PK.operator = !!S.operator;
     PK.snackOpen = !!S.snackOpen; PK.train2 = !!S.train2; PK.lights = !!S.lights; PK.rideLights = !!S.rideLights;
+    if (S.icePrice === undefined) S.icePrice = 4; if (S.toyPrice === undefined) S.toyPrice = 5;
+    if (S.iceOpen === undefined) S.iceOpen = false; if (S.toyOpen === undefined) S.toyOpen = false;
+    PK.iceOpen = !!S.iceOpen; PK.toyOpen = !!S.toyOpen;
     PK.today = S.today || (S.today = { tickets: 0, snacks: 0, rides: 0, earned: 0 });
     PK.lastDay = S.day;
     PK.stnShut = !!S.stnShut;   // the coaster's station gates remember where they were left
@@ -8473,7 +8685,6 @@
       parent.add(pkStall(-36.5, 8.2, Math.PI, th.a, th.b, 'SOUVENIRS'));
       pkFlowerBed(-43.4, 17.3, 1.8, 1.1, null, true);   // in the world, so the editor can move them
       pkFlowerBed(-43.4, 25.2, 1.8, 1.1, null, true);
-      pkBench(-37.5, 30.4, Math.PI, g);
     } else if (a.id === 'teacups') {
       var pot = new THREE.Mesh(new THREE.SphereGeometry(1.55, 16, 12), std({ color: 0xf0a6c0, roughness: 0.5 }));
       pot.position.set(p.x + p.r + 3.2, 1.8, p.z - 3.4); pot.scale.y = 0.85; parent.add(pot);
@@ -8491,16 +8702,12 @@
       [[-49.4, 6.0], [-47.6, 0.4]].forEach(function (q) { pkCupLamp(q[0], q[1], g); });   // the south one stands clear of the kids' lane
       pkTrellis(-40.8, 3, g);
     } else if (a.id === 'ferris') {
-      // the ticket hut on the wheel's south side, clear of Baron's Drop coming home up its west side
-      box(2.4, 2.2, 2.0, std({ color: th.a, roughness: 0.8 }), 39.0, 1.1, 27.4, g);
-      sign(['TICKETS'], 1.8, 0.4, 39.0, 2.4, 26.38, Math.PI, { bg: '#1b232c', fg: '#f5b53d' }, g);
       // the sky quarter: three flag poles with festoon strung between them on the north
       // rim, a viewing deck with a brass telescope on the south rim, globe lamps and benches
       pkFlagPole(27, 30.1, g, th, 5.6); pkFlagPole(34, 29.9, g, th, 6.5); pkFlagPole(41, 30.1, g, th, 5.6);
       pkFestoon(27, 30.1, 34, 29.9, g, th, 4.4, 5.1); pkFestoon(34, 29.9, 41, 30.1, g, th, 5.1, 4.4);
       pkViewDeck(32.6, 9.4, g);
       pkLandLamp(29.2, 10.2, g, th, 'globe'); pkLandLamp(40.0, 10.2, g, th, 'globe');
-      pkBench(30.0, 11.6, Math.PI, g); pkBench(40.4, 11.6, Math.PI, g);
     } else if (a.id === 'dodgems') {
       for (var n = 0; n < 4; n++) box(14, 0.1, 0.1, glowMat(0x5fd3ff, 1.1), p.x, 3.55, p.z - 5 + n * 0.06, g);
       box(0.1, 0.1, 10, glowMat(0xff5f8a, 1.1), p.x - 7.05, 3.55, p.z, g);
@@ -16604,6 +16811,23 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       osh.rotation.x = -0.1; osh.rotation.z = side * -0.05; oel.rotation.x = -0.15;
     };
   }
+  function pkGuestItemEnsure(gu, type) {
+    if (gu.g.userData.pkItem && gu.g.userData.pkItemType === type) { gu.g.userData.pkItem.visible = true; return; }
+    if (gu.g.userData.pkItem) { var old = gu.g.userData.pkItem; if (old.parent) old.parent.remove(old); }
+    var hand = pkGuestHand(gu.g, 1); if (!hand) return;
+    var grp = new THREE.Group(); grp.position.set(0, 0.02, 0.03); hand.add(grp);
+    if (type === 'fries') {
+      box(0.09, 0.12, 0.06, std({ color: 0xd94f3a, roughness: 0.8 }), 0, 0.06, 0, grp);
+      box(0.1, 0.02, 0.07, std({ color: 0xf3efe4, roughness: 0.9 }), 0, 0.13, 0, grp);
+    } else if (type === 'ice') {
+      var cone = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.09, 8), std({ color: 0xd9a066, roughness: 0.9 })); cone.rotation.x = Math.PI; cone.position.y = 0.04; grp.add(cone);
+      sphere(0.05, std({ color: 0x9fd0ff, roughness: 0.4 }), 0, 0.11, 0, grp);
+    } else if (type === 'toy' || type === 'balloon') {
+      pkRod(0, 0, 0, 0, 0.18, 0, 0.006, std({ color: 0x888888, roughness: 0.4 }), grp, 4);
+      sphere(0.07, std({ color: 0xd94f6a, roughness: 0.5 }), 0, 0.22, 0, grp);
+    }
+    gu.g.userData.pkItem = grp; gu.g.userData.pkItemType = type; grp.visible = true;
+  }
   // ── What a guest says while living a little ────────────────────────────────────────────────────────────────────
   var PK_LIFE_LINES = {
     phone: ['No way, really?', "Can you hear me?", "I'll call you back.", 'One sec, bad signal.', "We're at the park!"],
@@ -18328,10 +18552,10 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     for (var vx = -29.5; vx <= -2.5; vx += 0.9) { var sc = trCone(0.28, 0.45, [M.red, M.cream, M.green][Math.round((vx + 30) / 0.9) % 3], vx, 4.0, 2.9, g, 4); sc.rotation.x = Math.PI; }
     
     // FIXED: Benches now face the track properly
-    trBench(g, -8, 6.4, 0, 0.95); 
-    trBench(g, 6, 6.4, 0, 0.95); 
-    trBench(g, 16, 6.4, 0, 0.95); 
-    trBench(g, -15, 3.1, Math.PI, 0.95);
+    trBench(g, -8, 6.4, Math.PI, 0.95); 
+    trBench(g, 6, 6.4, Math.PI, 0.95); 
+    trBench(g, 16, 6.4, Math.PI, 0.95); 
+    trBench(g, -15, 3.1, 0, 0.95);
     
     trBin(g, -4.5, 6.6, 0.95); trBin(g, 20.5, 6.6, 0.95);
     [-10, 2, 14, 24].forEach(function (lx) { trLamp(st, lx, 6.7, 0.95); });
@@ -18843,8 +19067,8 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var cabLight = new THREE.PointLight(0xffd9a0, 2.1, 5.6, 2); cabLight.position.set(0, -0.34, 0); lampG.add(cabLight);
     u.cabLamp = lampG; u.cabBulb = lampLens; u.cabLight = cabLight; u.cabBulbOn = cabBulbOn; u.cabBulbOff = cabBulbOff;
     
-    // --- a brass bulkhead clock on the right wall, on the front pillar above the displays ---
-    var clockG = new THREE.Group(); clockG.position.set(-1.5, 2.95, 1.02); clockG.rotation.y = Math.PI; g.add(clockG);
+    // --- a brass bulkhead clock on the front wall, screwed to the green centre mullion above the backhead ---
+    var clockG = new THREE.Group(); clockG.position.set(-1.185, 3.0, 0); clockG.rotation.y = -Math.PI / 2; clockG.scale.setScalar(0.85); g.add(clockG);
     var cface = document.createElement('canvas'); cface.width = cface.height = 128; var cc = cface.getContext('2d');
     if (cc) {
       cc.fillStyle = '#f6f0df'; cc.beginPath(); cc.arc(64, 64, 60, 0, 7); cc.fill();
@@ -18864,7 +19088,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var clockM = new THREE.Group(); clockM.position.z = 0.045; clockG.add(clockM); box(0.01, 0.1, 0.006, M.black, 0, 0.05, 0, clockM);
     sphere(0.012, brass, 0, 0, 0.048, clockG);
     u.clockH = clockH; u.clockM = clockM;
-    sign(['TIME'], 0.22, 0.055, -1.5, 2.76, 1.01, Math.PI, { w: 152, h: 42, bg: '#151a1e', fg: '#f5f2e8' }, g);
+    sign(['TIME'], 0.18, 0.045, -1.175, 2.78, 0, -Math.PI / 2, { w: 152, h: 42, bg: '#151a1e', fg: '#f5f2e8' }, g);
 
     // --- operator displays: right-hand wall, ahead of the crew seat (the PAGE / REPEAT controls sit on the desk right below) ---
     function cabDisplay(x, y, z, w, h, ry) {
@@ -18878,12 +19102,17 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       return { canvas: cv, tex: tex };
     }
     TR.cabDisplays = {
-      alignment: cabDisplay(-1.9, 2.22, 1.0, 0.56, 0.33, Math.PI),
-      passenger: cabDisplay(-2.6, 2.22, 1.0, 0.56, 0.33, Math.PI)
+      alignment: cabDisplay(-1.5, 3.05, 0.72, 0.56, 0.33, -3 * Math.PI / 4),   // hangs in the front-right corner, angled toward the driver
+      passenger: cabDisplay(-2.0, 2.22, 1.0, 0.56, 0.33, Math.PI)
     };
+    // two brass rods hang the alignment screen from the roof, with little ceiling flanges
+    [[-1.656, 0.876], [-1.344, 0.564]].forEach(function (r) {
+      pkRod(r[0], 3.285, r[1], r[0], 3.52, r[1], 0.014, brass, g, 6);
+      pkRoundCyl(0.04, 0.02, brass, r[0], 3.49, r[1], g, 10);
+    });
     TR.cabDisplays.pageLever = u.pageLeverRef;   // the display tick swings this lever
-    sign(['STOP'], 0.2, 0.05, -1.9, 2.0, 0.96, Math.PI, { w: 128, h: 36, bg: '#151a1e', fg: '#f5f2e8' }, g);   // little captions under each screen
-    sign(['PASSENGERS'], 0.3, 0.05, -2.6, 2.0, 0.96, Math.PI, { w: 192, h: 36, bg: '#151a1e', fg: '#f5f2e8' }, g);
+    sign(['STOP'], 0.2, 0.05, -1.528, 2.77, 0.692, -3 * Math.PI / 4, { w: 128, h: 36, bg: '#151a1e', fg: '#f5f2e8' }, g);   // little captions under each screen
+    sign(['PASSENGERS'], 0.3, 0.05, -2.0, 2.0, 0.96, Math.PI, { w: 192, h: 36, bg: '#151a1e', fg: '#f5f2e8' }, g);
 
     // --- rear bulkhead, open in the middle ---
     pkBevelBox(0.1, 0.1, 2.2, M.greenD, -4.08, 3.24, 0, g, 0.02);
@@ -18931,6 +19160,17 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       c.fillText('SPEED: ' + Math.round(t.v * 3.6) + ' km/h', 24, 192);
       c.fillText('PLATFORM GATES: ' + (st && st.gatesAmt > 0.5 ? 'OPEN' : 'CLOSED'), 24, 230);
       c.fillText('WAGON DOORS: ' + (t.doorsOpen ? 'OPEN' : 'SHUT'), 24, 268);
+      // alignment bar: wagon door vs platform gate
+      var barX = 24, barY = 150, barW = 460, barH = 16;
+      c.fillStyle = '#0a1410'; c.fillRect(barX, barY, barW, barH);
+      c.strokeStyle = '#c9a45e'; c.lineWidth = 1; c.strokeRect(barX, barY, barW, barH);
+      // platform gate marker (centre)
+      c.fillStyle = '#5fd38d'; c.fillRect(barX + barW / 2 - 2, barY - 4, 4, barH + 8);
+      // wagon door marker, offset by remaining distance (clamped)
+      var off = clamp(distance, -50, 50) / 50 * (barW / 2);
+      c.fillStyle = '#f2c75c'; c.fillRect(barX + barW / 2 + off - 3, barY - 6, 6, barH + 12);
+      c.fillStyle = '#dbe8d7'; c.font = '14px Consolas, monospace'; c.fillText('gate', barX + barW / 2 - 12, barY - 8);
+      c.fillText('door', barX + barW / 2 + off - 12, barY + barH + 14);
       a.tex.needsUpdate = true;
     }
 
@@ -19293,6 +19533,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var t = TR.t;
     if (TR.built && t && (t.driving || t.seat) && !e.repeat) {
       if (e.code === 'KeyE') { if (t.driving && focusText) return false; return trLeave(); }
+      if (e.code === 'KeyC') { t.thirdPerson = !t.thirdPerson; if (!t.camDist) t.camDist = 5.5; sfx('click'); toast(t.thirdPerson ? '3rd person view. Scroll to zoom.' : '1st person view.', ''); return true; }
       if (t.driving) {
         if (e.code === 'KeyI') { trToggleEngine(); return true; }
         if (e.code === 'KeyU') { trToggleDoors(); return true; }

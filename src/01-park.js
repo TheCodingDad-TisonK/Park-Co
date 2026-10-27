@@ -27,7 +27,9 @@
   var PK_LEVELS = [
     { xp: 0,   name: 'The gate',      note: 'Sell tickets at the window and work the coaster.' },
     { xp: 40,  name: 'Snack stand',   note: 'A snack stand opens on the midway.', unlock: 'snack' },
+    { xp: 80,  name: 'Ice cream',     note: 'An ice cream stand opens beside the snack stand.', unlock: 'ice' },
     { xp: 120, name: 'Ticket clerk',  note: 'Hire a clerk and the window serves itself.', unlock: 'clerk' },
+    { xp: 160, name: 'Toys stand',    note: 'A toys stand opens on the midway.', unlock: 'toy' },
     { xp: 280, name: 'Ride operator', note: 'Hire an operator and the coaster runs itself.', unlock: 'operator' },
     { xp: 520, name: 'Park lights',   note: 'The park stays open into the evening.', unlock: 'lights' }
   ];
@@ -36,11 +38,11 @@
     guests: [], booths: [], turnstiles: [], gates: [], seats: [], cars: [], train: null,
     curve: null, len: 1, cpU: [], stationU: 0.02, stationX0: 0, liftU: [0, 0], carGap: 2.9,
     ride: { state: 'idle', t: 0, u: 0.02, v: 0, riders: 0, bars: 0, barsWant: 0, gates: 0, beat: 0, autoT: 0, loadT: 0, wait: 0, fault: '', last: '' },
-    queue: [], spawnT: 0, nextId: 1, today: { tickets: 0, snacks: 0, rides: 0, earned: 0 },
+    queue: [], spawnT: 0, nextId: 1, today: { tickets: 0, snacks: 0, rides: 0, earned: 0, ice: 0, toys: 0 },
     attractions: [], attrById: {}, plots: {}, rides: {}, lanes: [],
     playerRide: null, playerWait: null,
-    lastMin: -1, lastDay: 1, level: 1, xp: 0, clerk: false, operator: false, snackOpen: false, train2: false, lights: false, rideLights: false, duty: null,
-    served: 0, refused: 0, screen: null, snack: null, closed: false
+    lastMin: -1, lastDay: 1, level: 1, xp: 0, clerk: false, operator: false, snackOpen: false, iceOpen: false, toyOpen: false, train2: false, lights: false, rideLights: false, duty: null,
+    served: 0, refused: 0, screen: null, snack: null, ice: null, toy: null, closed: false
   };
   // ── The tables the park reads ─────────────────────────────────────
   function pkLevel() { var lv = 1; for (var i = 0; i < PK_LEVELS.length; i++) if (PK.xp >= PK_LEVELS[i].xp) lv = i + 1; return lv; }
@@ -59,6 +61,8 @@
     showCard('h-card', '<b>Level ' + lv + '</b><br>' + esc(L.name) + '<br><span class="dc-sub">' + esc(L.note) + '</span>', 6);
     toast('Level ' + lv + ' - ' + L.name, 'good');
     if (L.unlock === 'snack') { PK.snackOpen = true; S.snackOpen = true; }
+    if (L.unlock === 'ice') { PK.iceOpen = true; S.iceOpen = true; }
+    if (L.unlock === 'toy') { PK.toyOpen = true; S.toyOpen = true; }
     if (L.unlock === 'lights') { PK.lights = true; S.lights = true; PK.rideLights = true; S.rideLights = true; }
     if (L.unlock && L.unlock !== 'snack' && L.unlock !== 'lights' && L.unlock !== 'clerk' && L.unlock !== 'operator') pkOpenRide(L.unlock);
     hudDirty = true;
@@ -463,7 +467,7 @@
   }
   // ── The game ──────────────────────────────────────────────────────
   var GAME = {
-    handle: 'PARK_CO', version: '0.2.1',
+    handle: 'PARK_CO', version: '0.2.1', editMode: false,
     floorY: function (x, z) { return pkFloor(x, z); },
     insideWalk: function (x, z) { return pkInsidePark(x, z); },
     // the coaster's control room (part 03, PK_OP): indoors, under its roof, inside its four walls
@@ -487,14 +491,14 @@
     ridePowered: function () { return !!PK.rideLights && (S.time >= 18 || S.time < 7); },
     freshState: function () {
       return { day: 1, time: 9, bank: 500, level: 1, log: [], ledger: [], stats: { earned: 0, spent: 0 }, layout: {}, custom: [], hdoors: {},
-        ticketPrice: 25, snackPrice: 6, auto: false, ctlAuto: {}, ctlKey: {}, coasterKey: false, cycles: 0, xp: 0, clerk: true, operator: false, snackOpen: false, train2: false, lights: false, rideLights: false,   // the starter clerk works day one for free
-        wear: 0, rides: {}, today: { tickets: 0, snacks: 0, rides: 0, earned: 0 }, gateOpen: true };
+        ticketPrice: 25, snackPrice: 6, icePrice: 4, toyPrice: 5, auto: false, ctlAuto: {}, ctlKey: {}, coasterKey: false, cycles: 0, xp: 0, clerk: true, operator: false, snackOpen: false, iceOpen: false, toyOpen: false, train2: false, lights: false, rideLights: false,   // the starter clerk works day one for free
+        wear: 0, rides: {}, today: { tickets: 0, snacks: 0, rides: 0, earned: 0, ice: 0, toys: 0 }, gateOpen: true };
     },
     // a day one save from before the starter clerk gets one too; later days keep the park they earned
     // a save from before the gate was a switch of its own: open if the old automatic hours say it would have been
     migrate: function (s) { if (s.day === 1 && !s.clerk) s.clerk = true; if (s.gateOpen === undefined) s.gateOpen = s.time >= 9 && s.time < 22; if (s.rideLights === undefined) s.rideLights = !!s.lights; return s; },
     buildWorld: function (loaded) {
-      pkGround(); pkGate(); pkBooths(); pkOffice(); pkMidway(); pkBuildCoaster(); pkBuildOperatorRoom(); pkBuildSnack();
+      pkGround(); pkGate(); pkBooths(); pkOffice(); pkMidway(); pkBuildCoaster(); pkBuildOperatorRoom(); pkBuildSnack(); pkBuildIceCream(); pkBuildToys();
       pkBuildAttractions();
       pkBuildCart(); pkBuildCartGate(); pkBuildTablet();
       pkDressAll();
@@ -552,7 +556,7 @@
         pkGateReminders: pkGateReminders, pkGateToggle: pkGateToggle,
         pkCoasterAuto: pkCoasterAuto,
         pkSeats: function () { return PK.seats; }, pkCounts: function () { return { guests: PK.guests.length, queue: PK.queue.length, seats: PK.seats.length, cars: PK.cars.length, track: PK.len }; },
-        pkBuildCoaster: pkBuildCoaster, pkBuildOperatorRoom: pkBuildOperatorRoom, pkBuildSnack: pkBuildSnack,
+        pkBuildCoaster: pkBuildCoaster, pkBuildOperatorRoom: pkBuildOperatorRoom, pkBuildSnack: pkBuildSnack, pkBuildIceCream: pkBuildIceCream, pkBuildToys: pkBuildToys,
         pkBuildAttractions: pkBuildAttractions, pkOpenRide: pkOpenRide, pkOpenCount: pkOpenCount, pkRideList: pkRideList,
         pkSetRideOpen: pkSetRideOpen, pkCoasterOpen: pkCoasterOpen,
         pkOffice: pkOffice, pkService: pkService, pkFire: pkFire, pkAdminPanel: pkAdminPanel,

@@ -104,7 +104,7 @@
     // the platform, south of the track, with a ramp down to the apron at its south edge
     box(20, 0.6, 3.0, MAT.floor, 0, 0.3, -2.1);
     var ramp = box(20, 0.1, 1.17, MAT.floor, 0, 0.3, 0.1);
-    ramp.rotation.x = -0.54;
+    ramp.rotation.x = 0.54;
     // the canopy over it
     [[-9.4, -3.4], [9.4, -3.4], [-9.4, -0.8], [9.4, -0.8]].forEach(function (p) { cyl(0.1, 3.2, MAT.steelDark, p[0], 2.2, p[1], null, 8); });
     box(20.4, 0.2, 3.4, MAT.roof, 0, 3.9, -2.1);
@@ -561,6 +561,16 @@
     box(0.07, 0.3, 0.07, MAT.trim, 1.55, 2.36, 2.3, g);
     sign(['SNACKS'], 2.6, 0.6, 0, 2.75, 1.72, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
     sign(['FRIES ' + money(S.snackPrice)], 2.2, 0.4, 0, 1.9, 1.72, 0, { bg: '#0d1216', fg: '#eef1f5' }, g);
+    // interior: a fryer counter along the back wall, a shelf of cups and napkins, and a warm pendant lamp
+    box(3.0, 0.85, 0.5, MAT.wood, 0, 0.425, -1.25, g);
+    box(2.9, 0.06, 0.46, MAT.trim, 0, 0.86, -1.25, g);
+    box(0.9, 0.35, 0.4, MAT.steelDark, -0.95, 0.62, -1.25, g);
+    box(0.9, 0.35, 0.4, MAT.steelDark, 0.05, 0.62, -1.25, g);
+    box(0.9, 0.35, 0.4, MAT.steelDark, 1.05, 0.62, -1.25, g);
+    box(2.6, 0.18, 0.28, MAT.wood, 0, 1.55, -1.5, g);
+    for (var sc = 0; sc < 5; sc++) box(0.16, 0.22, 0.12, std({ color: 0xf3efe4, roughness: 0.9 }), -1.0 + sc * 0.52, 1.7, -1.5, g);
+    pkRoundCyl(0.04, 0.5, std({ color: 0xffe2a0, emissive: 0xffc966, emissiveIntensity: 1.2, roughness: 0.3 }), 0, 2.4, 0, g, 8);
+
     hitBox(3.0, 1.4, 0.6, 0, 1.5, 1.5, {
       prompt: function () { return PK.snackOpen ? 'Sell a snack (' + money(S.snackPrice) + ')' : 'The snack stand is shut'; },
       use: function () { pkSnackBuy(); }
@@ -577,6 +587,97 @@
       }
     });
   }
+  function pkBuildIceCream() {
+    var g = new THREE.Group(); g.position.set(-8, 0, 8); scene.add(g);
+    box(3.4, 3.0, 0.2, MAT.plaster, 0, 1.5, -1.6, g);
+    box(0.2, 3.0, 3.4, MAT.plaster, -1.6, 1.5, 0, g);
+    box(0.2, 3.0, 3.4, MAT.plaster, 1.6, 1.5, 0, g);
+    box(3.6, 0.16, 3.6, MAT.roof, 0, 3.05, 0, g);
+    box(3.4, 1.05, 0.5, MAT.wood, 0, 0.52, 1.5, g);
+    box(3.5, 0.08, 0.6, MAT.trim, 0, 1.08, 1.5, g);
+    // interior
+    box(3.0, 0.85, 0.5, MAT.wood, 0, 0.425, -1.25, g);
+    box(2.9, 0.06, 0.46, MAT.trim, 0, 0.86, -1.25, g);
+    box(1.2, 0.5, 0.4, std({ color: 0x9fd0ff, roughness: 0.4 }), -0.9, 0.62, -1.25, g);
+    box(1.2, 0.5, 0.4, std({ color: 0x9fd0ff, roughness: 0.4 }), 0.9, 0.62, -1.25, g);
+    box(2.6, 0.18, 0.28, MAT.wood, 0, 1.55, -1.5, g);
+    // worker figure (decorative)
+    var wg = new THREE.Group(); wg.position.set(0.6, 0, -0.6); g.add(wg);
+    box(0.35, 0.9, 0.25, std({ color: 0xffffff, roughness: 0.9 }), 0, 1.3, 0, wg);
+    sphere(0.16, std({ color: 0xf2d4a0, roughness: 0.9 }), 0, 1.95, 0, wg);
+    // signs
+    sign(['ICE CREAM'], 2.6, 0.6, 0, 2.75, 1.72, 0, { bg: '#1b232c', fg: '#9fd0ff' }, g);
+    sign(['SCOOP ' + money(S.icePrice)], 2.2, 0.4, 0, 1.9, 1.72, 0, { bg: '#0d1216', fg: '#eef1f5' }, g);
+    solid(-9.75, -6.25, 6.25, 9.75, 0, 3.0);
+    hitBox(3.0, 1.4, 0.6, 0, 1.5, 1.5, {
+      prompt: function () { return PK.iceOpen ? 'Buy ice cream (' + money(S.icePrice) + ')' : 'The ice cream stand is shut'; },
+      use: function () { pkIceBuy(); }
+    }, g);
+    PK.ice = touchScreen({ w: 300, h: 220, pw: 0.62, ph: 0.45, x: 0, y: 1.35, z: 1.28, parent: g, title: 'Ice cream', draw: function (ctx, s) {
+        scBg(ctx, s.w, s.h); scHead(ctx, s.w, 'ICE CREAM', 'Day ' + S.day);
+        scText(ctx, 16, 66, 'Scoop ' + money(S.icePrice));
+        scText(ctx, 16, 88, PK.iceOpen ? 'Open' : 'Shut', PK.iceOpen ? '#5fd38d' : '#a0acb8');
+        scText(ctx, 16, 110, 'Sold today: ' + (PK.today.ice || 0), '#a0acb8');
+        scButton(s, 16, 130, 130, 40, 'Sell', PK.iceOpen, function () { pkIceBuy(); });
+        scButton(s, 154, 130, 130, 40, 'Price +', true, function () { pkIcePrice(1); });
+      }
+    });
+  }
+  function pkBuildToys() {
+    var g = new THREE.Group(); g.position.set(-18, 0, 8); scene.add(g);
+    box(3.4, 3.0, 0.2, MAT.plaster, 0, 1.5, -1.6, g);
+    box(0.2, 3.0, 3.4, MAT.plaster, -1.6, 1.5, 0, g);
+    box(0.2, 3.0, 3.4, MAT.plaster, 1.6, 1.5, 0, g);
+    box(3.6, 0.16, 3.6, MAT.roof, 0, 3.05, 0, g);
+    box(3.4, 1.05, 0.5, MAT.wood, 0, 0.52, 1.5, g);
+    box(3.5, 0.08, 0.6, MAT.trim, 0, 1.08, 1.5, g);
+    // interior
+    box(3.0, 0.85, 0.5, MAT.wood, 0, 0.425, -1.25, g);
+    box(2.9, 0.06, 0.46, MAT.trim, 0, 0.86, -1.25, g);
+    for (var t = 0; t < 6; t++) box(0.35, 0.45, 0.25, std({ color: [0xd94f6a, 0xf3c84a, 0x5fd38d, 0x2f8fb3, 0x7a3fb3, 0xd94f8a][t], roughness: 0.8 }), -1.2 + t * 0.5, 0.7, -1.25, g);
+    box(2.6, 0.18, 0.28, MAT.wood, 0, 1.55, -1.5, g);
+    // worker figure (decorative)
+    var wg = new THREE.Group(); wg.position.set(0.6, 0, -0.6); g.add(wg);
+    box(0.35, 0.9, 0.25, std({ color: 0xfff0c0, roughness: 0.9 }), 0, 1.3, 0, wg);
+    sphere(0.16, std({ color: 0xf2d4a0, roughness: 0.9 }), 0, 1.95, 0, wg);
+    sign(['TOYS'], 2.6, 0.6, 0, 2.75, 1.72, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
+    sign(['TOY ' + money(S.toyPrice)], 2.2, 0.4, 0, 1.9, 1.72, 0, { bg: '#0d1216', fg: '#eef1f5' }, g);
+    solid(-19.75, -16.25, 6.25, 9.75, 0, 3.0);
+    hitBox(3.0, 1.4, 0.6, 0, 1.5, 1.5, {
+      prompt: function () { return PK.toyOpen ? 'Buy a toy (' + money(S.toyPrice) + ')' : 'The toys stand is shut'; },
+      use: function () { pkToyBuy(); }
+    }, g);
+    PK.toy = touchScreen({ w: 300, h: 220, pw: 0.62, ph: 0.45, x: 0, y: 1.35, z: 1.28, parent: g, title: 'Toys', draw: function (ctx, s) {
+        scBg(ctx, s.w, s.h); scHead(ctx, s.w, 'TOYS', 'Day ' + S.day);
+        scText(ctx, 16, 66, 'Toy ' + money(S.toyPrice));
+        scText(ctx, 16, 88, PK.toyOpen ? 'Open' : 'Shut', PK.toyOpen ? '#5fd38d' : '#a0acb8');
+        scText(ctx, 16, 110, 'Sold today: ' + (PK.today.toys || 0), '#a0acb8');
+        scButton(s, 16, 130, 130, 40, 'Sell', PK.toyOpen, function () { pkToyBuy(); });
+        scButton(s, 154, 130, 130, 40, 'Price +', true, function () { pkToyPrice(1); });
+      }
+    });
+  }
+  function pkIcePrice(n) { S.icePrice = clamp(Math.round((S.icePrice + n) * 100) / 100, 1, 40); screenDirtyAll(); hudDirty = true; toast('Ice cream ' + money(S.icePrice), ''); return S.icePrice; }
+  function pkIceBuy() {
+    if (!PK.iceOpen) { sfx('bad'); toast('The ice cream stand is not open yet', 'bad'); return false; }
+    var gu = pkNearestHuman(-8, 8);
+    if (!gu) { sfx('bad'); toast('Nobody is at the stand', 'bad'); return false; }
+    pay(S.icePrice, 'Ice cream'); PK.today.ice = (PK.today.ice || 0) + 1; PK.today.earned += S.icePrice; pkXp(1); sfx('cash'); say(gu, 'Thanks!'); toast('Ice cream sold', 'good');
+    var _gi = null; PK.guests.forEach(function (x) { if (x.g === gu) _gi = x; });
+    if (_gi) { _gi.carryItem = 'ice'; pkGuestItemEnsure(_gi, 'ice'); }
+    screenDirtyAll(); hudDirty = true; return true;
+  }
+  function pkToyPrice(n) { S.toyPrice = clamp(Math.round((S.toyPrice + n) * 100) / 100, 1, 40); screenDirtyAll(); hudDirty = true; toast('Toy ' + money(S.toyPrice), ''); return S.toyPrice; }
+  function pkToyBuy() {
+    if (!PK.toyOpen) { sfx('bad'); toast('The toys stand is not open yet', 'bad'); return false; }
+    var gu = pkNearestHuman(-18, 8);
+    if (!gu) { sfx('bad'); toast('Nobody is at the stand', 'bad'); return false; }
+    pay(S.toyPrice, 'Toy'); PK.today.toys = (PK.today.toys || 0) + 1; PK.today.earned += S.toyPrice; pkXp(1); sfx('cash'); say(gu, 'Thanks!'); toast('Toy sold', 'good');
+    var _gt = null; PK.guests.forEach(function (x) { if (x.g === gu) _gt = x; });
+    if (_gt) { _gt.carryItem = 'toy'; pkGuestItemEnsure(_gt, 'toy'); }
+    screenDirtyAll(); hudDirty = true; return true;
+  }
+
   function pkSnackPrice(n) {
     S.snackPrice = clamp(Math.round((S.snackPrice + n) * 100) / 100, 1, 40);
     screenDirtyAll(); hudDirty = true;
@@ -590,6 +691,8 @@
     pay(S.snackPrice, 'Snack');
     PK.today.snacks++; PK.today.earned += S.snackPrice;
     pkXp(1); sfx('cash'); say(gu, 'Thanks!'); toast('Snack sold', 'good');
+    var _gs = null; PK.guests.forEach(function (x) { if (x.g === gu) _gs = x; });
+    if (_gs) { _gs.carryItem = 'fries'; pkGuestItemEnsure(_gs, 'fries'); }
     screenDirtyAll(); hudDirty = true; return true;
   }
   // ── Placing the train ─────────────────────────────────────────────

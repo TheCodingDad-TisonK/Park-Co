@@ -287,7 +287,6 @@
       parent.add(pkStall(-36.5, 8.2, Math.PI, th.a, th.b, 'SOUVENIRS'));
       pkFlowerBed(-43.4, 17.3, 1.8, 1.1, null, true);   // in the world, so the editor can move them
       pkFlowerBed(-43.4, 25.2, 1.8, 1.1, null, true);
-      pkBench(-37.5, 30.4, Math.PI, g);
     } else if (a.id === 'teacups') {
       var pot = new THREE.Mesh(new THREE.SphereGeometry(1.55, 16, 12), std({ color: 0xf0a6c0, roughness: 0.5 }));
       pot.position.set(p.x + p.r + 3.2, 1.8, p.z - 3.4); pot.scale.y = 0.85; parent.add(pot);
@@ -305,16 +304,12 @@
       [[-49.4, 6.0], [-47.6, 0.4]].forEach(function (q) { pkCupLamp(q[0], q[1], g); });   // the south one stands clear of the kids' lane
       pkTrellis(-40.8, 3, g);
     } else if (a.id === 'ferris') {
-      // the ticket hut on the wheel's south side, clear of Baron's Drop coming home up its west side
-      box(2.4, 2.2, 2.0, std({ color: th.a, roughness: 0.8 }), 39.0, 1.1, 27.4, g);
-      sign(['TICKETS'], 1.8, 0.4, 39.0, 2.4, 26.38, Math.PI, { bg: '#1b232c', fg: '#f5b53d' }, g);
       // the sky quarter: three flag poles with festoon strung between them on the north
       // rim, a viewing deck with a brass telescope on the south rim, globe lamps and benches
       pkFlagPole(27, 30.1, g, th, 5.6); pkFlagPole(34, 29.9, g, th, 6.5); pkFlagPole(41, 30.1, g, th, 5.6);
       pkFestoon(27, 30.1, 34, 29.9, g, th, 4.4, 5.1); pkFestoon(34, 29.9, 41, 30.1, g, th, 5.1, 4.4);
       pkViewDeck(32.6, 9.4, g);
       pkLandLamp(29.2, 10.2, g, th, 'globe'); pkLandLamp(40.0, 10.2, g, th, 'globe');
-      pkBench(30.0, 11.6, Math.PI, g); pkBench(40.4, 11.6, Math.PI, g);
     } else if (a.id === 'dodgems') {
       for (var n = 0; n < 4; n++) box(14, 0.1, 0.1, glowMat(0x5fd3ff, 1.1), p.x, 3.55, p.z - 5 + n * 0.06, g);
       box(0.1, 0.1, 10, glowMat(0xff5f8a, 1.1), p.x - 7.05, 3.55, p.z, g);

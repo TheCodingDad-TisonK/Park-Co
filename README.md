@@ -84,7 +84,6 @@ From selling tickets at the gate to dispatching coasters, running the railway, a
 - **Living Park** - Dynamic guests that wander, socialize on benches, and unfortunately litter (thankfully, sweepers are on duty!)
 - **Beautiful Grounds** - Stroll through gardens featuring a flower clock, bandstand, windmill, and hedge maze
 - **Extra Amenities** - Lindenburg Arena for shows, golf cart at HQ forecourt, and a bed in the office to skip time to 07:00
-- **Build Mode** - Get creative and expand your park from the pause menu
 
 </details>
 
