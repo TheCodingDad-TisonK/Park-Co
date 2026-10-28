@@ -250,6 +250,7 @@
     "group@72.6,-75": { hidden: true },
     "group@75,83.94": { x: 49.35, z: 87.55 },
     "group@75.4,5": { x: 76.15, z: 5.05, hidden: true },
+    "group@75.4,56.5": { hidden: true },
     "group@77.17,105.18": { x: 77.2, z: 105.2, hidden: true },
     "group@77.45,-136.23": { hidden: true },
     "group@79.4,-47.5": { hidden: true },

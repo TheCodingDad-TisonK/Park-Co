@@ -30,36 +30,47 @@ function pkCtlM() {
 
 // ── Gauge faces ──────────────────────────────────────────────────────
 var PK_GAUGE_TEX = {};
+// a dial's printing: cream is the classic, the others are what a themed booth desk asks for (part 14, the booth panels)
+var PK_DIALS = {
+  cream: { f: ['#fbf7ec', '#efe9d8', '#d3ccb8'], ink: '#2f3439', sub: '#6c7176', red: '#c0392b', wear: 'rgba(120,110,90,' },
+  black: { f: ['#2a3036', '#181c20', '#0d1013'], ink: '#eef1f2', sub: '#9aa6ae', red: '#e0483a', wear: 'rgba(255,255,255,' },
+  brass: { f: ['#f6e7b8', '#e2c682', '#b8914e'], ink: '#3a2a14', sub: '#6a5130', red: '#9c2a1c', wear: 'rgba(90,60,20,' },
+  bone:  { f: ['#efe4c8', '#d9caa2', '#a8956a'], ink: '#2b1d12', sub: '#5a4630', red: '#8a2318', wear: 'rgba(70,40,20,' },
+  night: { f: ['#2c2350', '#1a1534', '#0d0b1e'], ink: '#b9f5c8', sub: '#8fa2d8', red: '#ff6b8a', wear: 'rgba(180,200,255,' },
+  toy:   { f: ['#ffffff', '#fff6e0', '#ffe3a8'], ink: '#2a2f6a', sub: '#e0563f', red: '#e0563f', wear: 'rgba(255,180,80,', rainbow: true }
+};
 function pkCtlGaugeTex(o) {
-  var key = [o.label, o.min, o.max, o.unit, o.red || 0, o.ticks || 10].join('|');
+  var key = [o.label, o.min, o.max, o.unit, o.red || 0, o.ticks || 10, o.dial || 'cream'].join('|');
   if (PK_GAUGE_TEX[key]) return PK_GAUGE_TEX[key];
+  var D = PK_DIALS[o.dial] || PK_DIALS.cream;
   var t = tex(256, 256, function (c, W, H) {
     var cx = W / 2, cy = H / 2, R = W * 0.48;
     c.clearRect(0, 0, W, H);
     var g = c.createRadialGradient(cx, cy - R * 0.3, R * 0.12, cx, cy, R);
-    g.addColorStop(0, '#fbf7ec'); g.addColorStop(0.72, '#efe9d8'); g.addColorStop(1, '#d3ccb8');
+    g.addColorStop(0, D.f[0]); g.addColorStop(0.72, D.f[1]); g.addColorStop(1, D.f[2]);
     c.fillStyle = g; c.beginPath(); c.arc(cx, cy, R, 0, 6.2832); c.fill();
     // the sweep runs 270 degrees from the lower left, the way a real dial does
     var A = function (v) { return -(135 + 270 * v) * Math.PI / 180; };
     var P = function (v, rr) { var a = A(v); return [cx + Math.cos(a) * rr, cy - Math.sin(a) * rr]; };
-    if (o.red) { c.beginPath(); c.lineWidth = R * 0.09; c.strokeStyle = '#c0392b'; c.arc(cx, cy, R * 0.80, (135 + 270 * o.red) * Math.PI / 180, (135 + 270) * Math.PI / 180); c.stroke(); }
+    if (D.rainbow) ['#5fd38d', '#8fd3c7', '#f0c04a', '#ff9d6b'].forEach(function (col, k) { var span = o.red || 1; c.beginPath(); c.lineWidth = R * 0.11; c.strokeStyle = col; c.arc(cx, cy, R * 0.80, (135 + 270 * span * k / 4) * Math.PI / 180, (135 + 270 * span * (k + 1) / 4) * Math.PI / 180); c.stroke(); });
+    if (o.red) { c.beginPath(); c.lineWidth = R * 0.09; c.strokeStyle = D.red; c.arc(cx, cy, R * 0.80, (135 + 270 * o.red) * Math.PI / 180, (135 + 270) * Math.PI / 180); c.stroke(); }
     var n = o.ticks || 10;
     for (var i = 0; i <= n; i++) {
       var v = i / n, major = i % 2 === 0, a = P(v, R * (major ? 0.74 : 0.80)), b = P(v, R * 0.90);
-      c.beginPath(); c.lineWidth = major ? R * 0.028 : R * 0.016; c.strokeStyle = '#2f3439';
+      c.beginPath(); c.lineWidth = major ? R * 0.028 : R * 0.016; c.strokeStyle = D.ink;
       c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
       if (major) {
         var q = P(v, R * 0.60);
-        c.fillStyle = '#2f3439'; c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillStyle = D.ink; c.textAlign = 'center'; c.textBaseline = 'middle';
         c.font = 'bold ' + Math.round(R * 0.13) + 'px Arial';
         c.fillText(String(Math.round((o.min + (o.max - o.min) * v) * 10) / 10), q[0], q[1]);
       }
     }
-    c.fillStyle = '#2f3439'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillStyle = D.ink; c.textAlign = 'center'; c.textBaseline = 'middle';
     c.font = 'bold ' + Math.round(R * 0.115) + 'px Arial'; c.fillText(o.label, cx, cy + R * 0.30);
-    if (o.unit) { c.fillStyle = '#6c7176'; c.font = Math.round(R * 0.10) + 'px Arial'; c.fillText(o.unit, cx, cy + R * 0.47); }
+    if (o.unit) { c.fillStyle = D.sub; c.font = Math.round(R * 0.10) + 'px Arial'; c.fillText(o.unit, cx, cy + R * 0.47); }
     // a little wear so the dial is not a clip-art circle
-    for (var k = 0; k < 60; k++) { c.fillStyle = 'rgba(120,110,90,' + randf(0.02, 0.07) + ')'; c.fillRect(randf(0, W), randf(0, H), randf(1, 5), randf(1, 3)); }
+    for (var k = 0; k < 60; k++) { c.fillStyle = D.wear + randf(0.02, 0.07) + ')'; c.fillRect(randf(0, W), randf(0, H), randf(1, 5), randf(1, 3)); }
   });
   t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
   return (PK_GAUGE_TEX[key] = t);
@@ -69,10 +80,12 @@ function pkCtlGaugeTex(o) {
 // One canvas per panel: painted steel, section lines, engraved lettering. The hardware is
 // mounted on top at the same coordinates the legend is drawn at, so nothing can drift.
 var PK_FACE_TEX = {};
-function pkCtlFace(key, w, h, draw) {
+// paint(c, W, H), when given, lays the plate's own finish instead of the plain grey steel (the themed booth desks)
+function pkCtlFace(key, w, h, draw, paint) {
   if (PK_FACE_TEX[key]) return PK_FACE_TEX[key];
   var W = 2048, H = Math.max(160, Math.round(W * h / w));
   var t = tex(W, H, function (c) {
+    if (paint) { paint(c, W, H); draw(c, W, H); return; }
     c.fillStyle = '#46525b'; c.fillRect(0, 0, W, H);
     for (var i = 0; i < 3200; i++) {
       c.fillStyle = 'rgba(' + (Math.random() < 0.5 ? '255,255,255' : '0,0,0') + ',' + randf(0.01, 0.04) + ')';
@@ -125,22 +138,27 @@ function pkCtlPanel(o) {
   g.rotation.y = o.ry || 0;
   g.rotation.x = o.tilt || 0;
   parentOf(o.parent).add(g);
-  pkBevelBox(o.w + 0.07, o.h + 0.07, 0.055, M.case, 0, 0, -0.030, g, 0.012);
-  var faceTex = pkCtlFace(o.key, o.w, o.h, o.draw);
+  // o.caseMat, o.rim and o.screw dress the plate's case, its machined rim and its screws; o.paint its finish; o.glow,
+  // o.rough and o.metal how the printed plate takes the light
+  pkBevelBox(o.w + 0.07, o.h + 0.07, 0.055, o.caseMat || M.case, 0, 0, -0.030, g, 0.012);
+  var faceTex = pkCtlFace(o.key, o.w, o.h, o.draw, o.paint);
+  var glowK = o.glow === undefined ? 0.34 : o.glow;
   var face = new THREE.Mesh(new THREE.PlaneGeometry(o.w, o.h),
-    new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.55, metalness: 0.22, emissive: 0xffffff, emissiveMap: faceTex, emissiveIntensity: 0.34 }));
+    new THREE.MeshStandardMaterial({ map: faceTex, roughness: o.rough === undefined ? 0.55 : o.rough, metalness: o.metal === undefined ? 0.22 : o.metal, emissive: 0xffffff, emissiveMap: faceTex, emissiveIntensity: glowK }));
   face.position.z = 0.0005; face.receiveShadow = true; g.add(face);
-  g.userData.pkSetPower = function (on) { face.material.emissiveIntensity = on ? 0.34 : 0.03; };
+  g.userData.pkFace = face;
+  g.userData.pkSetPower = function (on) { face.material.emissiveIntensity = on ? glowK : 0.03; };
   var pkWasLive = true;
   pkCtlLive({ tick: function () {
     var live = pkCtlPowered(g);
     if (live !== pkWasLive) { pkWasLive = live; g.userData.pkSetPower(live); }
   } });
   // the machined rim round the plate, and four screws
-  pkBevelBox(o.w + 0.10, 0.018, 0.06, M.bezel, 0, o.h / 2 + 0.038, -0.028, g, 0.005);
-  pkBevelBox(o.w + 0.10, 0.018, 0.06, M.bezel, 0, -o.h / 2 - 0.038, -0.028, g, 0.005);
+  pkBevelBox(o.w + 0.10, 0.018, 0.06, o.rim || M.bezel, 0, o.h / 2 + 0.038, -0.028, g, 0.005);
+  pkBevelBox(o.w + 0.10, 0.018, 0.06, o.rim || M.bezel, 0, -o.h / 2 - 0.038, -0.028, g, 0.005);
+  if (o.rim) [-1, 1].forEach(function (sx) { pkBevelBox(0.018, o.h + 0.094, 0.06, o.rim, sx * (o.w / 2 + 0.041), 0, -0.028, g, 0.005); });
   [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (s) {
-    var sc = new THREE.Mesh(roundCylGeo(0.011, 0.011, 0.005, 10), MAT.chrome);
+    var sc = new THREE.Mesh(roundCylGeo(0.011, 0.011, 0.005, 10), o.screw || MAT.chrome);
     sc.rotation.x = Math.PI / 2; sc.position.set(s[0] * (o.w / 2 - 0.012), s[1] * (o.h / 2 - 0.012), 0.004); g.add(sc);
   });
   return g;
@@ -182,7 +200,7 @@ function pkCtlStart() {
 function pkCtlBtn(g, x, y, o) {
   o = o || {};
   var M = pkCtlM(), r = o.r || 0.038;
-  var collar = new THREE.Mesh(roundCylGeo(r * 1.40, r * 1.46, 0.011, 20), MAT.chrome);
+  var collar = new THREE.Mesh(roundCylGeo(r * 1.40, r * 1.46, 0.011, 20), o.collar || MAT.chrome);
   collar.rotation.x = Math.PI / 2; collar.position.set(x, y, 0.006); g.add(collar);
   var well = new THREE.Mesh(roundCylGeo(r * 1.18, r * 1.18, 0.010, 20), M.well);
   well.rotation.x = Math.PI / 2; well.position.set(x, y, 0.010); g.add(well);
@@ -426,7 +444,7 @@ function pkCtlLamp(g, x, y, o) {
 function pkCtlGauge(g, x, y, o) {
   o = o || {};
   var M = pkCtlM(), r = o.r || 0.10;
-  var bez = new THREE.Mesh(roundCylGeo(r * 1.13, r * 1.17, 0.013, 28), MAT.chrome);
+  var bez = new THREE.Mesh(roundCylGeo(r * 1.13, r * 1.17, 0.013, 28), o.bezel || MAT.chrome);
   bez.rotation.x = Math.PI / 2; bez.position.set(x, y, 0.0065); g.add(bez);
   var face = new THREE.Mesh(new THREE.CircleGeometry(r * 0.99, 40),
     new THREE.MeshStandardMaterial({ map: pkCtlGaugeTex(o), roughness: 0.42, metalness: 0.02 }));
@@ -514,62 +532,105 @@ function pkBuildCoasterConsole(at) {
   pkSign3D(['PARK CO', 'COASTER CONTROL'], 0.62, 0.20, CX - 0.72, 0.40, CZ + 0.365, 0, { bg: '#1b232c', fg: '#e8e4d8' }, G);
 
   // ── the fascia ──
+  // The flagship's own plate (part 14, the booth panels, has the styles): three fields. DRIVE: the crest and the maker's
+  // plate, the four lamps, the three dials, master power, panel lamps and the mode knob. CONTROL: the eight buttons over the
+  // train and station mimic, every seat of the train, its restraints car by car, the platform gates and the air that works
+  // them. DISPATCH: the stop, the operator key, the telemetry strip, the READY lamp and the lever. The track itself is on the
+  // mimic board on the wall (part 03).
+  var SS = pkPnStyles(), ST = SS.flagship; pkPnCaps();
   var B = [
-    ['gates', 'GATES', 'green', -0.35, 0.17],
-    ['barsDown', 'BARS DN', 'amber', -0.11, 0.17],
-    ['barsUp', 'BARS UP', 'white', 0.13, 0.17],
-    ['station', 'STN GATES', 'white', 0.37, 0.17],
-    ['reset', 'RESET', 'white', -0.35, -0.04],
-    ['test', 'TEST RUN', 'blue', -0.11, -0.04],
-    ['maint', 'MAINT', 'amber', 0.13, -0.04],
-    ['horn', 'BELL', 'white', 0.37, -0.04]
+    ['gates', 'GATES', 'green', -0.28, 0.245],
+    ['barsDown', 'BARS DN', 'amber', -0.04, 0.245],
+    ['barsUp', 'BARS UP', 'white', 0.20, 0.245],
+    ['station', 'STN GATES', 'white', 0.44, 0.245],
+    ['reset', 'RESET', 'white', -0.28, 0.105],
+    ['test', 'TEST RUN', 'blue', -0.04, 0.105],
+    ['maint', 'MAINT', 'amber', 0.20, 0.105],
+    ['horn', 'BELL', 'white', 0.44, 0.105]
   ];
   var GA = [
     ['speed', 'SPEED', 'km/h', 0, 80, 0.80, -1.14],
-    ['air', 'AIR', 'bar', 0, 10, 0.72, -0.85],
-    ['load', 'LOAD', 'riders', 0, 12, 0.90, -0.56]
+    ['air', 'AIR', 'bar', 0, 10, 0.72, -0.88],
+    ['load', 'LOAD', 'riders', 0, 12, 0.90, -0.62]
   ];
   var LA = [['power', 'POWER'], ['gate', 'GATES'], ['bars', 'BARS'], ['fault', 'FAULT']];
-  var TOG = [['powerSw', 'POWER', -1.15], ['lampSw', 'LAMPS', -0.88]];
+  var LAX = [-1.17, -1.0, -0.83, -0.66];
+  var MW = { x0: -0.44, x1: 0.60, y0: -0.345, y1: -0.005 };   // the train and station mimic's window
+  // the mimic's layout: three cars nose to tail along the platform, the gates under them, the air plant to the right
+  var CARW = 0.17, CARH = 0.085, CAR0 = MW.x0 + 0.05, CARY = MW.y0 + 0.2, PNX = MW.x0 + 0.72;
+  var carX = function (i) { return CAR0 + (PK.cars.length - 1 - i) * (CARW + 0.035); };   // the lead car on the right, as the train runs
+  var serial = pkPnSerial('coaster');
 
   var P = pkCtlPanel({
     w: PW, h: PH, x: CX, y: TOP + (PH / 2) * Math.cos(TILT), z: CZ + 0.31 - (PH / 2) * Math.sin(TILT),
     tilt: -TILT, key: 'pk-coaster-desk', parent: G,
+    paint: function (c, W, H) { ST.base(c, W, H); }, rim: ST.rim, glow: ST.glow,
     draw: function (c, W, H) {
-      var R2 = pkCtlRuler(W, H, PW, PH); R2.c = c;
-      // section boxes
-      R2.box(-0.87, 0, 0.86, 0.70, 'rgba(0,0,0,0.30)', 0.006);
-      R2.box(0.08, 0, 1.04, 0.70, 'rgba(0,0,0,0.30)', 0.006);
-      R2.box(0.95, 0, 0.70, 0.70, 'rgba(0,0,0,0.30)', 0.006);
-      R2.engrave('DRIVE', -0.87, 0.300, 0.030);
-      R2.engrave('CONTROL', 0.08, 0.300, 0.030);
-      R2.engrave('DISPATCH', 0.95, 0.300, 0.030);
-      // section 1: lamp captions, gauge captions, switch captions
-      for (var i = 0; i < LA.length; i++) R2.txt(LA[i][1], -1.14 + i * 0.19, 0.262, 0.020, '#aebcc4');
-      R2.txt('MASTER', -1.15, -0.272, 0.020, '#aebcc4');
-      R2.txt('PANEL LAMPS', -0.88, -0.272, 0.020, '#aebcc4');
-      R2.txt('MODE', -0.57, -0.272, 0.020, '#aebcc4');
-      // section 2: button captions
-      for (var b = 0; b < B.length; b++) R2.txt(B[b][1], B[b][3], B[b][4] - 0.068, 0.024, '#d6dee3');
-      R2.txt('PARK CO  ·  COASTER CONTROL  ·  STATION 01', 0.08, -0.268, 0.021, '#8f9ca4');
-      // section 3: the emergency stop
-      R2.engrave('EMERGENCY STOP', 0.80, 0.058, 0.026);
-      R2.txt('turn to release', 0.80, 0.028, 0.017, '#c8d2d8');
-      R2.txt('DISPATCH', 1.03, -0.258, 0.024, '#d6dee3');
-      R2.txt('PULL', 1.03, -0.228, 0.016, '#8f9ca4');
-      // a hazard band along the bottom edge
-      R2.txt('OPERATOR KEY', 0.60, -0.262, 0.016, '#e8c86a');
-      R2.txt('OFF', 0.555, -0.12, 0.013, '#aebcc4'); R2.txt('ON', 0.65, -0.12, 0.013, '#5fd38d');
-      var hy = R2.Y(-0.322), hh = R2.L(0.028);
-      c.save();
-      c.beginPath(); c.rect(R2.X(-1.30), hy, R2.L(2.60), hh); c.clip();
-      c.fillStyle = '#151a1e'; c.fillRect(R2.X(-1.30), hy, R2.L(2.60), hh);
-      c.fillStyle = '#c9a227';
-      for (var hz = 0; hz < 62; hz++) {
-        var x0 = R2.X(-1.30) + hz * R2.L(0.048);
-        c.beginPath(); c.moveTo(x0, hy + hh); c.lineTo(x0 + R2.L(0.022), hy + hh);
-        c.lineTo(x0 + R2.L(0.022) + hh, hy); c.lineTo(x0 + hh, hy); c.closePath(); c.fill();
+      var R = pkCtlRuler(W, H, PW, PH), i; R.c = c;
+      pkPnZone(R, ST, -1.29, -0.35, -0.47, 0.35);
+      pkPnZone(R, ST, -0.46, -0.35, 0.62, 0.35, 'CONTROL');
+      pkPnZone(R, ST, 0.63, -0.35, 1.29, 0.35, 'DISPATCH');
+      // who it is
+      var cx = R.X(-1.215), cy = R.Y(0.285), cr = R.L(0.046);
+      c.save(); c.beginPath(); c.arc(cx, cy, cr * 1.08, 0, 6.2832); c.fillStyle = ST.zone2; c.fill(); c.lineWidth = R.L(0.003); c.strokeStyle = ST.acc; c.stroke(); c.restore();
+      c.save(); c.beginPath(); c.arc(cx, cy, cr * 0.96, 0, 6.2832); c.clip(); PK_PN_CRESTS.coaster(c, cx, cy, cr * 0.9, ST); c.restore();
+      pkPnText(R, ST, 'The Coaster', -1.15, 0.302, 0.036, { align: 'left', font: ST.head, max: 0.6 });
+      pkPnText(R, ST, 'PARK CO FLAGSHIP  ·  LIFT, LOOP AND CORKSCREW  ·  STATION 01', -1.15, 0.262, 0.0125, { align: 'left', col: ST.dim, max: 0.66 });
+      pkPnText(R, ST, 'LINDENBURG RIDE WORKS  ·  ' + serial + '  ·  400 V 3~ 50 HZ', -1.15, 0.24, 0.0105, { align: 'left', col: ST.dim, max: 0.66 });
+      for (i = 0; i < LA.length; i++) pkPnText(R, ST, LA[i][1], LAX[i], 0.138, 0.0145, { col: ST.dim });
+      pkPnText(R, ST, 'MASTER', -1.15, -0.322, 0.0145, { col: ST.dim });
+      pkPnText(R, ST, 'PANEL LAMPS', -0.92, -0.322, 0.0145, { col: ST.dim });
+      pkPnText(R, ST, 'MODE', -0.64, -0.322, 0.0145, { col: ST.dim });
+      pkPnText(R, ST, 'MAN', -0.712, -0.2, 0.0095, { col: ST.dim, align: 'right' }); pkPnText(R, ST, 'AUTO', -0.64, -0.158, 0.0095, { col: ST.dim }); pkPnText(R, ST, 'TEST', -0.568, -0.2, 0.0095, { col: ST.dim, align: 'left' });
+      // the buttons' names under them
+      for (i = 0; i < B.length; i++) pkPnText(R, ST, B[i][1], B[i][3], B[i][4] - 0.062, 0.0165, { max: 0.2 });
+      // the train and station mimic
+      c.save(); pkPnRect(R, MW.x0, MW.y0, MW.x1, MW.y1, 0.008); c.fillStyle = ST.win; c.fill(); c.clip();
+      for (var gx = MW.x0; gx < MW.x1; gx += 0.02) pkPnLine(R, [[gx, MW.y0], [gx, MW.y1]], ST.grid, 0.0007);
+      for (var gy = MW.y0; gy < MW.y1; gy += 0.02) pkPnLine(R, [[MW.x0, gy], [MW.x1, gy]], ST.grid, 0.0007);
+      pkPnText(R, ST, 'TRAIN AND STATION', MW.x0 + 0.012, MW.y1 - 0.016, 0.011, { align: 'left', col: ST.dim });
+      // the platform edge, the rails under the train, the direction of travel
+      var x0 = CAR0 - 0.02, x1 = carX(0) + CARW + 0.03;
+      pkPnLine(R, [[x0, CARY - 0.012], [x1, CARY - 0.012]], 'rgba(200,215,230,0.55)', 0.0022);
+      pkPnLine(R, [[x0, CARY - 0.019], [x1, CARY - 0.019]], 'rgba(200,215,230,0.35)', 0.0014);
+      c.save(); c.fillStyle = 'rgba(201,162,39,0.25)'; c.fillRect(R.X(x0), R.Y(CARY - 0.05), R.L(x1 - x0), R.L(0.012)); c.restore();
+      pkPnText(R, ST, 'PLATFORM', x0 + 0.004, CARY - 0.064, 0.009, { align: 'left', col: ST.dim });
+      pkPnText(R, ST, 'TRAVEL  >', x1 - 0.004, CARY + CARH + 0.03, 0.009, { align: 'right', col: ST.dim });
+      for (i = 0; i < PK.cars.length; i++) {
+        var X0 = carX(i);
+        c.save(); pkPnRect(R, X0, CARY, X0 + CARW, CARY + CARH, 0.014); c.fillStyle = 'rgba(80,140,220,0.16)'; c.fill(); c.strokeStyle = 'rgba(200,220,255,0.7)'; c.lineWidth = R.L(0.002); c.stroke(); c.restore();
+        pkPnText(R, ST, 'CAR ' + (i + 1) + (i === 0 ? '  LEAD' : ''), X0 + CARW / 2, CARY + CARH + 0.014, 0.0095, { col: ST.ink });
+        pkPnText(R, ST, 'BAR', X0 + CARW - 0.028, CARY - 0.03, 0.0085, { col: ST.dim });
+        pkPnText(R, ST, 'GATE ' + (i + 1), X0 + 0.04, CARY - 0.03, 0.0085, { col: ST.dim });
       }
+      // the air plant: compressor, receiver, the brake and gate valves, piped up
+      var ax = PNX, ay = MW.y0 + 0.07;
+      pkPnText(R, ST, 'PNEUMATICS', ax + 0.1, MW.y1 - 0.016, 0.011, { col: ST.dim });
+      c.save(); c.strokeStyle = 'rgba(255,207,90,0.6)'; c.lineWidth = R.L(0.0025);
+      c.beginPath(); c.arc(R.X(ax + 0.025), R.Y(ay + 0.16), R.L(0.022), 0, 6.2832); c.stroke();
+      pkPnRect(R, ax + 0.07, ay + 0.13, ax + 0.18, ay + 0.19, 0.02); c.stroke();
+      c.restore();
+      pkPnText(R, ST, 'COMP', ax + 0.025, ay + 0.122, 0.0085, { col: ST.dim });
+      pkPnText(R, ST, 'RECEIVER', ax + 0.125, ay + 0.118, 0.0085, { col: ST.dim });
+      pkPnLine(R, [[ax + 0.047, ay + 0.16], [ax + 0.07, ay + 0.16]], 'rgba(255,207,90,0.6)', 0.0025);
+      pkPnLine(R, [[ax + 0.18, ay + 0.16], [ax + 0.21, ay + 0.16], [ax + 0.21, ay + 0.02], [ax + 0.02, ay + 0.02]], 'rgba(255,207,90,0.6)', 0.0025);
+      [['BRAKES', ax + 0.05], ['GATES', ax + 0.12], ['BARS', ax + 0.19]].forEach(function (v) { pkPnLine(R, [[v[1], ay + 0.02], [v[1], ay + 0.055]], 'rgba(255,207,90,0.6)', 0.0025); pkPnText(R, ST, v[0], v[1], ay - 0.002, 0.0085, { col: ST.dim }); });
+      pkPnText(R, ST, '6.9 BAR  ·  MIN 5.5', ax + 0.125, ay + 0.21, 0.0085, { col: ST.dim });
+      c.restore();
+      c.save(); pkPnRect(R, MW.x0, MW.y0, MW.x1, MW.y1, 0.008); c.strokeStyle = ST.edge; c.lineWidth = R.L(0.003); c.stroke(); c.restore();
+      // dispatch
+      pkPnText(R, ST, 'EMERGENCY STOP', 0.80, 0.093, 0.0175, { col: '#ff8a7a' });
+      pkPnText(R, ST, 'turn to release', 0.80, 0.072, 0.012, { col: ST.dim, weight: '600' });
+      pkPnText(R, ST, 'OPERATOR KEY', 1.14, 0.152, 0.0145, { col: ST.acc });
+      pkPnText(R, ST, 'OFF', 1.095, 0.282, 0.012, { col: ST.dim }); pkPnText(R, ST, 'ON', 1.19, 0.282, 0.012, { col: '#5fd38d' });
+      pkPnText(R, ST, 'READY', 1.15, -0.098, 0.013, { col: '#5fd38d' });
+      pkPnText(R, ST, 'DISPATCH', 1.15, -0.25, 0.019, { col: ST.ink });
+      pkPnText(R, ST, 'PULL', 1.15, -0.282, 0.012, { col: ST.dim });
+      // a hazard band along the foot of the dispatch field
+      var hy = R.Y(-0.334), hh = R.L(0.012);
+      c.save(); c.beginPath(); c.rect(R.X(0.645), hy, R.L(0.63), hh); c.clip();
+      c.fillStyle = '#151a1e'; c.fillRect(R.X(0.645), hy, R.L(0.63), hh); c.fillStyle = '#c9a227';
+      for (var hz = 0; hz < 40; hz++) { var hx0 = R.X(0.645) + hz * R.L(0.024); c.beginPath(); c.moveTo(hx0, hy + hh); c.lineTo(hx0 + R.L(0.012), hy + hh); c.lineTo(hx0 + R.L(0.012) + hh, hy); c.lineTo(hx0 + hh, hy); c.closePath(); c.fill(); }
       c.restore();
     }
   });
@@ -579,20 +640,20 @@ function pkBuildCoasterConsole(at) {
   var gauges = {}, lamps = {}, buttons = {};
   for (var gi = 0; gi < GA.length; gi++) {
     var gd = GA[gi];
-    gauges[gd[0]] = pkCtlGauge(P, gd[6], 0.115, {
-      id: gd[0], label: gd[1], unit: gd[2], min: gd[3], max: gd[4], red: gd[5], ticks: 8, r: 0.098,
+    gauges[gd[0]] = pkCtlGauge(P, gd[6], 0.0, {
+      id: gd[0], label: gd[1], unit: gd[2], min: gd[3], max: gd[4], red: gd[5], ticks: 8, r: 0.09, dial: ST.dial,
       get: gd[0] === 'speed' ? function () { return (PK.ride.v || 0) * 3.6 / 80; }
         : gd[0] === 'air' ? function () { return pkCtlState().air / 10; }
         : function () { return PK.seats.length ? PK.ride.riders / PK.seats.length : 0; }
     });
   }
   for (var li = 0; li < LA.length; li++) {
-    lamps[LA[li][0]] = pkCtlLamp(P, -1.14 + li * 0.19, 0.305, { id: LA[li][0], r: 0.022, col: li === 0 ? 0x5fd38d : li === 3 ? 0xff4d3d : 0xf0c04a });
+    lamps[LA[li][0]] = pkCtlLamp(P, LAX[li], 0.178, { id: LA[li][0], r: 0.02, col: li === 0 ? 0x5fd38d : li === 3 ? 0xff4d3d : 0xf0c04a });
   }
   for (var bi = 0; bi < B.length; bi++) {
     var bd = B[bi];
     buttons[bd[0]] = pkCtlBtn(P, bd[3], bd[4], {
-      id: bd[0], label: bd[1], col: bd[2], r: 0.040,
+      id: bd[0], label: bd[1], col: bd[2], r: 0.038,
       lampCol: bd[2] === 'green' ? 0x5fd38d : bd[2] === 'amber' ? 0xf0c04a : bd[2] === 'blue' ? 0x5aa9ff : 0xe8e4d8,
       prompt: 'Press ' + bd[1],
       act: function () {
@@ -611,18 +672,18 @@ function pkBuildCoasterConsole(at) {
   }
   // the buttons carry a live lamp: green when the thing they do is ready
   var toggles = {};
-  toggles.powerSw = pkCtlToggle(P, -1.15, -0.19, {
+  toggles.powerSw = pkCtlToggle(P, -1.15, -0.225, {
     id: 'powerSw', on: true, prompt: 'Master power',
     act: function (on) {
       C.on = on; sfx('click');
       toast(on ? 'Console live' : 'Console dead', on ? 'good' : 'bad');
     }
   });
-  toggles.lampSw = pkCtlToggle(P, -0.88, -0.19, {
+  toggles.lampSw = pkCtlToggle(P, -0.92, -0.225, {
     id: 'lampSw', on: true, prompt: 'Panel lamps',
     act: function (on) { C.lamps = on; PK.consoleLamps = on; sfx('click'); }
   });
-  var mode = pkCtlRotary(P, -0.57, -0.19, {
+  var mode = pkCtlRotary(P, -0.64, -0.235, {
     id: 'mode', n: 3, pos: S.auto ? 1 : 0, r: 0.040, names: ['MANUAL', 'AUTO', 'TEST'],
     prompt: 'Mode selector',
     act: function (pos) {
@@ -631,19 +692,62 @@ function pkBuildCoasterConsole(at) {
       else pkSetAuto(pos === 1);
     }
   });
-  var stop = pkCtlMushroom(P, 0.80, 0.175, {
+  var stop = pkCtlMushroom(P, 0.80, 0.215, {
     id: 'estop', r: 0.070, prompt: 'Emergency stop',
     act: function () { pkStop(); },
     release: function () { pkReset(); }
   });
-  var lever = pkCtlLever(P, 1.03, -0.045, {
-    id: 'throttle', len: 0.215, col: 'black', prompt: 'Pull the dispatch lever',
+  var lever = pkCtlLever(P, 0.79, -0.21, {
+    id: 'throttle', len: 0.15, col: 'black', prompt: 'Pull the dispatch lever',
     act: function () { if (!pkCtlGuard()) return; if (C.mode === 2) pkTestRun(); else pkDispatch(); }
   });
 
-  var key = pkCtlKey(P, 0.60, -0.175, { id: 'opKey', on: !!S.coasterKey, label: 'Coaster operator key',
+  var key = pkCtlKey(P, 1.14, 0.225, { id: 'opKey', on: !!S.coasterKey, label: 'Coaster operator key',
     act: function (on) { return pkSetCoasterKey(on); } });
-  C.parts = { gauges: gauges, lamps: lamps, buttons: buttons, toggles: toggles, mode: mode, stop: stop, lever: lever, key: key, panel: P };
+  // the train and station mimic's live parts: a lamp per seat, per restraint and per gate, the air plant's valves
+  var seatPips = PK.seats.map(function (st, k) {
+    var ci = st.car, n = k - ci * 4, X0 = carX(ci);
+    var p = pkPnPip(P, 0.011, 0xffd27a); p.set(X0 + 0.03 + (n >> 1) * 0.06, CARY + 0.025 + (n & 1) * 0.035); return p;
+  });
+  var barLeds = PK.cars.map(function (cr, i) { return pkPnLed(P, carX(i) + CARW - 0.028, CARY - 0.03 + 0.017, { col: 0xf0c04a, r: 0.0085 }); });
+  var gateLeds = PK.gates.map(function (gt, i) { return pkPnLed(P, carX(i) + 0.04, CARY - 0.03 + 0.017, { col: 0x5fd38d, r: 0.0085 }); });
+  var trainHome = pkPnLed(P, MW.x0 + 0.16, MW.y1 - 0.016, { col: 0x5fd38d, r: 0.008 });
+  var airLeds = { comp: pkPnLed(P, PNX + 0.025, MW.y0 + 0.23, { col: 0x5fd38d, r: 0.009 }), brakes: pkPnLed(P, PNX + 0.05, MW.y0 + 0.125 + 0.0, { col: 0xff6b5e, r: 0.0085 }),
+    gates: pkPnLed(P, PNX + 0.12, MW.y0 + 0.125, { col: 0x5fd38d, r: 0.0085 }), bars: pkPnLed(P, PNX + 0.19, MW.y0 + 0.125, { col: 0xf0c04a, r: 0.0085 }) };
+  // the receiver's gauge glass: a bar that fills with the pressure
+  var rcvBar = new THREE.Group(); rcvBar.userData.dynamic = true; rcvBar.position.set(PNX + 0.075, MW.y0 + 0.07 + 0.16, 0.004); P.add(rcvBar);
+  var rcvM = pkPnGlow(0x8fc3ff); var rcv = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.018), rcvM); rcv.position.x = 0.5; rcvBar.add(rcv);
+  var tele = pkCtlReadout(P, 0.96, 0.0, 0.6, 0.085, { col: ST.tele, bg: '#040506' });
+  var ready = pkPnLed(P, 1.15, -0.14, { col: 0x5fd38d, r: 0.022 });
+  C.parts = { gauges: gauges, lamps: lamps, buttons: buttons, toggles: toggles, mode: mode, stop: stop, lever: lever, key: key, panel: P, seats: seatPips, tele: tele, ready: ready };
+  var pv = null, pvV = new THREE.Vector3(), gLoad = 1, prevVel = new THREE.Vector3(), velNow = new THREE.Vector3(), ymin = 1e9;
+  for (var yi = 0; yi < 120; yi++) ymin = Math.min(ymin, PK.curve.getPointAt(yi / 120).y);
+  pkCtlLive({ tick: function (dt) {
+    var R = PK.ride, live = C.on && !!S.coasterKey && pkCoasterOpen(), home = R.state !== 'running' && R.state !== 'dispatch' && R.state !== 'arrive';
+    PK.seats.forEach(function (st, k) { pkPnPipLight(seatPips[k], !pkCoasterOpen() ? 0 : st.guest ? 1 : (home ? 0.14 : 0.05), Math.max(1e-3, dt)); });
+    barLeds.forEach(function (l) { l.on = live ? (R.bars > 0.5 ? true : R.barsWant > 0.5 ? 'flash' : 'dim') : false; });
+    gateLeds.forEach(function (l, i) { var gt = PK.gates[i]; l.on = live ? (gt.open ? true : 'dim') : false; l.mat.emissive.setHex(gt.open ? 0x5fd38d : 0xff6b5e); });
+    trainHome.on = live && home;
+    var moving = R.state === 'dispatch' || R.state === 'running';
+    airLeds.comp.on = live ? (C.air < 6.7 ? 'flash' : 'dim') : false;
+    airLeds.brakes.on = live && (home || R.state === 'arrive'); airLeds.gates.on = live && PK.gates.some(function (gt) { return gt.open; }); airLeds.bars.on = live && R.barsWant > 0.5;
+    rcvBar.scale.x = Math.max(0.001, 0.1 * clamp(C.air / 10, 0, 1)); rcvM.emissiveIntensity = live ? 0.9 : 0.03;
+    // dispatch: the same order pkDispatch asks for
+    var ok = live && !R.fault && R.state === 'ready' && !pkStillBoarding() && (S.wear || 0) < 90 && !(PK.closed && R.riders === 0);
+    ready.on = ok ? (S.auto ? true : 'flash') : false;
+    // the telemetry: speed, height and the load, from the lead car
+    var car = PK.cars[0];
+    if (car && dt > 0) {
+      if (pv) { velNow.copy(car.position).sub(pv).divideScalar(dt); var acc = velNow.clone().sub(prevVel).divideScalar(dt); prevVel.copy(velNow); var g2 = Math.sqrt(acc.x * acc.x + (acc.y + 9.81) * (acc.y + 9.81) + acc.z * acc.z) / 9.81; if (!isFinite(g2) || g2 > 7 || !moving) g2 = 1; gLoad += (g2 - gLoad) * Math.min(1, dt * 2.5); }
+      else pv = new THREE.Vector3();
+      pv.copy(car.position);
+    }
+    tele.setPower(live);
+    if (!pkCoasterOpen()) { tele.set(['NO POWER', 'BREAKER OFF']); return; }
+    if (!live) { tele.set([!S.coasterKey ? 'KEY OFF' : 'CONSOLE DEAD', 'TELEMETRY STANDBY']); return; }
+    tele.set(['V ' + ('  ' + ((R.v || 0) * 3.6).toFixed(1)).slice(-5) + ' KM/H  H ' + Math.max(0, car ? car.position.y - ymin : 0).toFixed(1) + ' M',
+      'G ' + gLoad.toFixed(1) + '  AIR ' + C.air.toFixed(1) + '  WEAR ' + Math.round(S.wear || 0) + '%']);
+  } });
 
   // ── the status bank: where the train is on the track, and the counts ──
   // the mimic's sections start at points on the track, laid in lap order from the station
@@ -651,9 +755,11 @@ function pkBuildCoasterConsole(at) {
   var at0 = function (x, z) { return ((pkCoUAt(PK.curve, x, z) - PK.stationU) % 1 + 1) % 1; };
   var SEC = [['STATION', 0], ['LIFT', ((PK.liftU[0] - PK.stationU) % 1 + 1) % 1], ['DROP\nLOOP', ((PK.liftU[1] - PK.stationU) % 1 + 1) % 1],
     ['TURN\nHILLS', at0(-12.4, -28.9)], ['CORK-\nSCREW', at0(16, -28.3)], ['BRAKES', at0(-9, -28.3)], ['STATION', at0(-19, -14)]];
+  PK.coasterSections = SEC;   // the wall's track display (part 03) names the same sections
   var mimic = [];
   for (var si = 0; si < 6; si++) mimic.push(pkCtlAnnun(HB, -1.08 + si * 0.2, 0, 0.18, 0.12, SEC[si][0], { col: si === 0 ? '#5fd38d' : si === 5 ? '#ff9a52' : '#8fc3ff' }));
-  var ro = pkCtlReadout(HB, 0.62, 0, 1.0, 0.17), lapT = 0, lastLap = 0;
+  var ro = pkCtlReadout(HB, 0.62, -0.025, 1.0, 0.13), lapT = 0, lastLap = 0;
+  pkPnHoodPlate(HB, ST, { title: 'The Coaster' }, 0.62, 0.08);
   C.parts.mimic = mimic; C.parts.readout = ro;
   pkCtlLive({
     tick: function (dt) {
@@ -662,6 +768,7 @@ function pkBuildCoasterConsole(at) {
       if (k === 6) k = 0;
       for (var j = 0; j < 6; j++) mimic[j].on = live && j === k;
       if (R.state === 'running') lapT += dt; else if (lapT > 0) { lastLap = lapT; lapT = 0; }
+      PK.lastLap = lastLap; PK.lapT = lapT;
       ro.setPower(live);
       if (!live) { ro.set(['NO POWER', 'BREAKER OFF']); return; }
       ro.set(['SPEED ' + ('  ' + Math.round((R.v || 0) * 3.6)).slice(-3) + ' KM/H  LAP ' + ('  ' + Math.round(lapT || lastLap)).slice(-3) + 's',
@@ -761,13 +868,13 @@ function pkCtlReadout(g, x, y, w, h, o) {
     set: function (lines) {
       var s = lines.join('\n'); if (s === last) return; last = s;
       var c = cv.getContext('2d'), W = cv.width, H = cv.height;
-      c.fillStyle = '#050a07'; c.fillRect(0, 0, W, H);
+      c.fillStyle = o.bg || '#050a07'; c.fillRect(0, 0, W, H);
       // the unlit segments behind the lit ones, so it reads as a real display
       var fs = Math.floor(H / lines.length * 0.62);
       c.font = '700 ' + fs + 'px "Consolas", "Courier New", monospace'; c.textBaseline = 'middle';
       lines.forEach(function (ln, i) {
         var yy = H * (i + 0.5) / lines.length;
-        c.fillStyle = 'rgba(109,255,154,0.07)'; c.textAlign = 'left'; c.fillText(ln.replace(/[^ ]/g, '8'), W * 0.05, yy);
+        c.globalAlpha = 0.08; c.fillStyle = col; c.textAlign = 'left'; c.fillText(ln.replace(/[^ ]/g, '8'), W * 0.05, yy); c.globalAlpha = 1;
         c.fillStyle = col; c.shadowColor = col; c.shadowBlur = 10; c.fillText(ln, W * 0.05, yy); c.shadowBlur = 0;
       });
       for (var k = 0; k < H; k += 3) { c.fillStyle = 'rgba(0,0,0,0.18)'; c.fillRect(0, k, W, 1); }
@@ -787,135 +894,7 @@ function pkCtlHood(parent, x, y, z, w, h, lean) {
 }
 
 // ── The compact desk in a ride booth ────────────────────────────────
-// Four buttons, a bat switch, a mushroom and a load gauge on the booth's console: the screen
-// above still explains the ride, but the operator works it with hands, not a mouse.
-function pkBoothPanel(a, con) {
-  // The console lives in `con`'s frame, whose local +Z faces the operator.
-  var C = pkCtl(a);
-  var PW = 1.72, PH = 0.50, TILT = 0.50;
-  var TOP = 0.72;
-  var PY = TOP + (PH / 2) * Math.cos(TILT);
-  var PZ = (PH / 2) * Math.sin(TILT) + 0.06;
-
-  var B = [
-    ['gates', 'GATES', 'green', -0.18],
-    ['bars', 'BARS', 'amber', 0.04],
-    ['station', 'STN GATES', 'white', 0.26],
-    ['test', 'TEST', 'blue', 0.48]
-  ];
-  var P = pkCtlPanel({
-    w: PW, h: PH, x: 0, y: PY, z: PZ, tilt: -TILT, key: 'pk-booth-desk-' + a.id, parent: con,
-    draw: function (c, W, H) {
-      var R2 = pkCtlRuler(W, H, PW, PH); R2.c = c;
-      R2.box(-0.60, 0.0, 0.50, 0.44, 'rgba(0,0,0,0.26)', 0.005);
-      R2.box(0.09, 0.0, 1.00, 0.44, 'rgba(0,0,0,0.26)', 0.005);
-      R2.box(0.66, 0.0, 0.34, 0.44, 'rgba(0,0,0,0.26)', 0.005);
-      R2.engrave('PARK CO  ·  ' + a.name.toUpperCase(), -0.60, 0.205, 0.020);
-      R2.txt('LOAD', -0.70, -0.092, 0.019, '#aebcc4');
-      R2.txt('SPEED', -0.50, -0.092, 0.019, '#aebcc4');
-      for (var i = 0; i < B.length; i++) R2.txt(B[i][1], B[i][3], 0.192, 0.021, '#d6dee3');
-      R2.txt('AUTO', -0.18, -0.206, 0.018, '#aebcc4');
-      R2.txt('E-STOP', 0.04, -0.206, 0.018, '#d6dee3');
-      R2.txt('RESET', 0.26, -0.206, 0.018, '#aebcc4');
-      R2.txt('DISPATCH', 0.66, -0.206, 0.018, '#d6dee3');
-      R2.txt('OPERATOR KEY', -0.60, -0.232, 0.014, '#e8c86a');
-      R2.txt('OFF', -0.645, -0.135, 0.012, '#aebcc4'); R2.txt('ON', -0.555, -0.135, 0.012, '#5fd38d');
-    }
-  });
-  pkCtlSetPower(P, function () { return !!a.open; });
-  var parts = { buttons: {} };
-  parts.panel = P;
-  for (var i = 0; i < B.length; i++) {
-    var b = B[i];
-    parts.buttons[b[0]] = pkCtlBtn(P, b[3], 0.105, {
-      id: b[0], label: b[1], col: b[2], r: 0.034,
-      lampCol: b[2] === 'green' ? 0x5fd38d : b[2] === 'amber' ? 0xf0c04a : b[2] === 'blue' ? 0x5aa9ff : 0xe8e4d8,
-      prompt: 'Press ' + b[1],
-      act: function () {
-        var id = this.id;
-        if (C.fault && id !== 'gates') { sfx('bad'); toast('Reset ' + a.name + ' first', 'bad'); return; }
-        if (id === 'gates') return pkBoothGates(a);
-        if (id === 'bars') {
-          C.barsWant = C.barsWant > 0.5 ? 0 : 1;
-          if (!C.key) { sfx('bad'); toast(a.name + ' is locked - turn the operator key on', 'bad'); return; }
-          sfx('click'); toast(a.name + ': restraints ' + (C.barsWant > 0.5 ? 'down' : 'up'), '');
-          screenDirtyAll(); return true;
-        }
-        if (id === 'station') return pkStationGatesRide(a);
-        if (id === 'test') return pkBoothTest(a);
-      }
-    });
-  }
-  parts.auto = pkCtlToggle(P, -0.18, -0.135, {
-    id: 'auto', on: C.auto, prompt: 'Automatic cycle',
-    act: function () { pkBoothAuto(a); }
-  });
-  parts.stop = pkCtlMushroom(P, 0.04, -0.118, {
-    id: 'stop', r: 0.050, prompt: 'Emergency stop',
-    act: function () { pkBoothStop(a); }
-  });
-  parts.reset = pkCtlBtn(P, 0.26, -0.135, {
-    id: 'reset', label: 'RESET', col: 'white', r: 0.034, lampCol: 0xe8e4d8,
-    prompt: 'Reset after a stop',
-    act: function () { if (C.fault) { pkBoothStop(a); } else { sfx('click'); toast(a.name + ': nothing to reset', ''); } }
-  });
-  parts.lever = pkCtlLever(P, 0.66, -0.010, {
-    id: 'dispatchLever', len: 0.19, col: 'black', prompt: 'Pull the dispatch lever',
-    act: function () { pkBoothDispatch(a); }
-  });
-  parts.key = pkCtlKey(P, -0.60, -0.175, { id: 'opKey', on: !!C.key, label: a.name + ' operator key',
-    act: function (on) { return pkSetRideKey(a, on); } });
-  parts.load = pkCtlGauge(P, -0.70, 0.025, {
-    id: 'load', label: '', unit: 'riders', min: 0, max: Math.max(4, a.seats.length), red: 0.92, ticks: 6, r: 0.075,
-    get: function () { return a.seats.length ? a.riders / a.seats.length : 0; }
-  });
-  parts.speed = pkCtlGauge(P, -0.50, 0.025, {
-    id: 'speed', label: '', unit: 'cycle', min: 0, max: 1, red: 0.94, ticks: 5, r: 0.075,
-    get: function () { return a.state === 'running' ? Math.min(1, (a.t || 0) / Math.max(1, a.run || 1)) : 0; }
-  });
-  pkCtlLive({
-    tick: function (dt) {
-      var live = !C.fault && !!C.key;
-      if (parts.key.on !== !!C.key) parts.key.set(!!C.key);
-      if (parts.auto.on !== C.auto) parts.auto.set(C.auto);
-      if (parts.stop.latched !== !!C.fault) parts.stop.setLatched(!!C.fault);
-      parts.buttons.gates.setLit(live && (a.state === 'idle' || a.state === 'unloading' || a.state === 'boarding'));
-      parts.buttons.station.setLit(live && a.stationGates === false);
-      parts.buttons.test.setLit(live && !PK.closed && a.state === 'idle' && !a.queue.length && !a.riders);
-    }
-  });
-  // the status bank on the back of the desk: six legend windows and the counts
-  var top = TOP + PH * Math.cos(TILT), hz = PZ - (PH / 2) * Math.sin(TILT) - 0.05;
-  var HB = pkCtlHood(con, 0, top + 0.15, hz, 1.56, 0.2, 0.22);
-  var ANN = [['key', 'KEY\nON', '#5fd38d'], ['auto', 'AUTO', '#8fc3ff'], ['gates', 'GATES\nOPEN', '#f0c04a'], ['bars', 'BARS\nLOCKED', '#f0c04a'], ['run', 'RIDE\nRUNNING', '#5fd38d'], ['fault', 'FAULT\nMAINT', '#ff6b5e']];
-  parts.ann = {};
-  ANN.forEach(function (d, i) { parts.ann[d[0]] = pkCtlAnnun(HB, -0.70 + i * 0.15, 0, 0.135, 0.1, d[1], { col: d[2], flash: d[0] === 'fault' }); });
-  parts.readout = pkCtlReadout(HB, 0.46, 0, 0.56, 0.16);
-  pkCtlLive({
-    tick: function () {
-      var power = !!a.open, A = parts.ann;
-      var live = power && !C.fault && !!C.key;
-      if (parts.key.on !== !!C.key) parts.key.set(!!C.key);
-      if (parts.auto.on !== C.auto) parts.auto.set(C.auto);
-      if (parts.stop.latched !== !!C.fault) parts.stop.setLatched(!!C.fault);
-      // the key window follows the key itself, so it still shows ON while a fault holds the rest of the panel dead
-      A.key.on = power && !!C.key; A.auto.on = live && !!C.auto; A.gates.on = live && !!C.gates; A.bars.on = live && C.barsWant > 0.5;
-      A.run.on = live && a.state === 'running';
-      // the fault lamp has to stay lit while the ride is faulted, even though a fault drops the rest of the panel dead
-      A.fault.on = power && !!C.key && ((C.fault || C.maint) ? 'flash' : false);
-      parts.buttons.gates.setLit(live && (a.state === 'idle' || a.state === 'unloading' || a.state === 'boarding'));
-      parts.buttons.station.setLit(live && a.stationGates === false);
-      parts.buttons.test.setLit(live && !PK.closed && a.state === 'idle' && !a.queue.length && !a.riders);
-      parts.readout.setPower(power);
-      if (!power) { parts.readout.set(['NO POWER', 'BREAKER OFF']); return; }
-      var left = a.state === 'running' ? Math.max(0, Math.ceil((a.run || 0) - (a.t || 0))) + 's' : '--';
-      parts.readout.set(['QUEUE ' + ('  ' + pkAttrWaiting(a)).slice(-3) + '  RIDE ' + a.riders + '/' + a.seats.length,
-        (C.fault ? 'FAULT   ' : C.maint ? 'MAINT   ' : !C.key ? 'LOCKED  ' : (a.state.toUpperCase() + '        ').slice(0, 8)) + ' END ' + left]);
-    }
-  });
-  a.boothPanel = parts;
-  return parts;
-}
+// Every ride's booth desk is its own design now: pkBoothPanel and the per-ride sheets live in part 14 (the booth panels).
 
 // ── The park services cabinet ───────────────────────────────────────
 // The coaster desk is the coaster's. Everything that belongs to the whole park - a breaker per

@@ -147,8 +147,8 @@
     pkBevelBox(W * 0.82, 0.16, 0.16, trim, 0, 0.62, D / 2 + 0.02, g, 0.04);
     // two seats, side by side; the platform-side one is filled first
     [-0.31, 0.31].forEach(function (sx) {
-      pkBevelBox(0.5, 0.09, 0.6, MAT.seat, sx, 0.66, -0.06, g, 0.03);
-      pkBevelBox(0.5, 0.56, 0.11, MAT.seat, sx, 0.97, -0.4, g, 0.03);
+      pkBevelBox(0.5, 0.09, 0.6, pkMats().seat, sx, 0.66, -0.06, g, 0.03);
+      pkBevelBox(0.5, 0.56, 0.11, pkMats().seat, sx, 0.97, -0.4, g, 0.03);
       pkBevelBox(0.34, 0.22, 0.1, body, sx, 1.3, -0.42, g, 0.03);
     });
     // lap bar: a padded U on a pivot behind the seats
@@ -325,12 +325,12 @@
       solid(x - 0.14, x + 0.14, zSouth - 0.14, zSouth + 0.14, lift, 3.0 + lift);
     }
     var mid = (x0 + x1) / 2;
-    box(x1 - x0, 0.1, depth, pkMats().roof, mid, 3.06 + lift, zSouth - depth / 2, g);
+    box(x1 - x0, 0.1, depth, MAT.roof, mid, 3.06 + lift, zSouth - depth / 2, g);
     box(x1 - x0, 0.06, depth - 0.3, std({ color: th.a, roughness: 0.6 }), mid, 3.12 + lift, zSouth - depth / 2, g);
     box(x1 - x0, 0.34, 0.1, MAT.steelDark, mid, 3.02 + lift, zSouth + 0.02, g);
     pkSign3D([label], Math.min(4.8, x1 - x0 - 1.2), 0.28, mid, 3.02 + lift, zSouth + 0.08, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
     [-1, 1].forEach(function (sx) {
-      pkRoundCyl(0.16, 0.22, MAT.bulb, mid + sx * (x1 - x0) / 4, 2.86 + lift, zSouth - 0.6, g, 10);
+      pkRoundCyl(0.16, 0.22, pkMats().bulb, mid + sx * (x1 - x0) / 4, 2.86 + lift, zSouth - 0.6, g, 10);
     });
   }
   // a coaster platform: kerb, deck, edge stripe, a plant tub and a lamp at each end
@@ -341,10 +341,10 @@
     box(x1 - x0 - 0.12, 0.07, zS - zN - 0.12, pkMats().pavers, (x0 + x1) / 2, 0.145 + lift, (zN + zS) / 2, g);
     box(x1 - x0, 0.03, 0.16, MAT.hazard, (x0 + x1) / 2, 0.17 + lift, zN + 0.08, g);
     [x0 + 0.5, x1 - 0.5].forEach(function (x) {
-      pkRoundCyl(0.26, 0.5, MAT.stone, x, 0.25 + lift, zS - 0.4, g, 12);
-      pkRoundCyl(0.3, 0.08, MAT.stone, x, 0.52 + lift, zS - 0.4, g, 12);
+      pkRoundCyl(0.26, 0.5, pkMats().stone, x, 0.25 + lift, zS - 0.4, g, 12);
+      pkRoundCyl(0.3, 0.08, pkMats().stone, x, 0.52 + lift, zS - 0.4, g, 12);
       pkRoundCyl(0.04, 2.5, MAT.steelDark, x, 1.25 + lift, zS - 0.34, g, 8);
-      pkRoundCyl(0.17, 0.24, MAT.bulb, x, 2.6 + lift, zS - 0.34, g, 10);
+      pkRoundCyl(0.17, 0.24, pkMats().bulb, x, 2.6 + lift, zS - 0.34, g, 10);
     });
     if (lift > 0.02) {
       var rampLen = Math.max(2, lift * 2);
@@ -762,14 +762,14 @@
     var disc = pkRoundCyl(2.0, 0.3, band, emX, 10.0, Z1 + 0.5, g, 28); disc.rotation.x = Math.PI / 2;
     var inner = pkRoundCyl(1.62, 0.34, std({ color: 0x151a20, roughness: 0.6 }), emX, 10.0, Z1 + 0.52, g, 28); inner.rotation.x = Math.PI / 2;
     pkIndoorEmblem(g, cfg, emX, 10.0, Z1 + 0.72, glow);
-    for (i = 0; i < 26; i++) sphere(0.1, MAT.bulb, X0 + 0.8 + (X1 - X0 - 1.6) * i / 25, 6.95, Z1 + 0.46, g);
+    for (i = 0; i < 26; i++) sphere(0.1, pkMats().bulb, X0 + 0.8 + (X1 - X0 - 1.6) * i / 25, 6.95, Z1 + 0.46, g);
     // the portal: jambs, lintel, the marquee, the portico
     box(0.5, PH + 0.6, 0.55, trim, P0 + s * 0.25, (PH + 0.6) / 2, Z1 + 0.3, g);
     box(0.5, PH + 0.6, 0.55, trim, P1 - s * 0.25, (PH + 0.6) / 2, Z1 + 0.3, g);
     box(PW + 1.5, 0.62, 0.6, band, (pLo + pHi) / 2, PH + 0.45, Z1 + 0.3, g);
     pkSign3D([cfg.name.toUpperCase()], Math.min(6.8, PW + 1.8), 0.46, (pLo + pHi) / 2, PH + 1.3, Z1 + 0.46, 0, { bg: '#151a20', fg: cfg.sign }, g);
-    for (i = 0; i < 9; i++) sphere(0.09, MAT.bulb, pLo - 0.4 + (PW + 0.8) * i / 8, PH + 0.86, Z1 + 0.62, g);
-    box(PW + 3.4, 0.22, 3.5, pkMats().roof, (pLo + pHi) / 2, 4.78, Z1 + 1.75, g);
+    for (i = 0; i < 9; i++) sphere(0.09, pkMats().bulb, pLo - 0.4 + (PW + 0.8) * i / 8, PH + 0.86, Z1 + 0.62, g);
+    box(PW + 3.4, 0.22, 3.5, MAT.roof, (pLo + pHi) / 2, 4.78, Z1 + 1.75, g);
     box(PW + 3.4, 0.5, 0.16, band, (pLo + pHi) / 2, 4.62, Z1 + 3.42, g);
     [pLo - 0.5, pHi + 0.5].forEach(function (px) {
       box(0.34, 4.7, 0.34, trim, px, 2.35, Z1 + 1.1, g);
@@ -817,7 +817,7 @@
     if (cfg.centre === 'moon') {
       var m = pkRoundCyl(1.2, 0.12, std({ color: 0xe8ecff, emissive: 0xc8d0ff, emissiveIntensity: 0.4, roughness: 0.5 }), x - 0.25, y, z, g, 24); m.rotation.x = Math.PI / 2;
       var cut = pkRoundCyl(1.05, 0.14, std({ color: 0x151a20, roughness: 0.6 }), x + 0.3, y + 0.25, z + 0.03, g, 24); cut.rotation.x = Math.PI / 2;
-      for (i = 0; i < 5; i++) { a = i / 5 * Math.PI * 2 + 0.3; sphere(0.08, MAT.bulb, x + Math.cos(a) * 1.3, y + Math.sin(a) * 1.3, z + 0.05, g); }
+      for (i = 0; i < 5; i++) { a = i / 5 * Math.PI * 2 + 0.3; sphere(0.08, pkMats().bulb, x + Math.cos(a) * 1.3, y + Math.sin(a) * 1.3, z + 0.05, g); }
     } else if (cfg.centre === 'ship') {
       var hub = pkRoundCyl(0.3, 0.16, glow, x, y, z, g, 14); hub.rotation.x = Math.PI / 2;
       for (i = 0; i < 8; i++) {
@@ -865,7 +865,7 @@
       sphere(2.3, std({ color: 0xe8ecff, emissive: 0x9aa4d8, emissiveIntensity: 0.25, roughness: 0.5 }), CX, 10.9, CZ, g);
       for (i = 0; i < 16; i++) {
         a = i / 16 * Math.PI * 2;
-        sphere(0.09 + (i % 3) * 0.04, MAT.bulb, CX + Math.cos(a) * 1.85, 8.65 + (i % 4) * 0.1, CZ + Math.sin(a) * 1.85, g);
+        sphere(0.09 + (i % 3) * 0.04, pkMats().bulb, CX + Math.cos(a) * 1.85, 8.65 + (i % 4) * 0.1, CZ + Math.sin(a) * 1.85, g);
       }
       var moonLight = new THREE.PointLight(0xc8d4ff, 0.7, 14, 2); moonLight.position.set(CX, 7.5, CZ); g.add(moonLight);
     } else if (cfg.centre === 'ship') {
@@ -904,7 +904,7 @@
       for (i = 0; i < 5; i++) {
         a = i / 5 * Math.PI * 2 + 0.4;
         var lx = CX + Math.cos(a) * 2.2, lz = CZ + Math.sin(a) * 2.2;
-        pkRoundCyl(0.032, 1.4, MAT.brass || MAT.gold, lx, 7.6, lz, g, 6);
+        pkRoundCyl(0.032, 1.4, pkMats().brass, lx, 7.6, lz, g, 6);
         pkRoundCyl(0.19, 0.26, shade, lx, 6.85, lz, g, 10);
       }
     }
@@ -1031,7 +1031,7 @@
     pkCoPlatform(g, Math.min(AX + s * 0.6, AX + s * 14.8), Math.max(AX + s * 0.6, AX + s * 14.8), -82.8, -80.2, th, 1.0);
     var stationShade = std({ color: 0xfff3d6, emissive: 0xffdda0, emissiveIntensity: 0.5, roughness: 0.55 });
     [AX + s * 3, AX + s * 8, AX + s * 13].forEach(function (lx) {
-      pkRoundCyl(0.045, PK_HALL_CEIL - 5.9, MAT.gold, lx, (PK_HALL_CEIL + 5.9) / 2, -81.5, g, 6);
+      pkRoundCyl(0.045, PK_HALL_CEIL - 5.9, pkMats().gold, lx, (PK_HALL_CEIL + 5.9) / 2, -81.5, g, 6);
       pkRoundCyl(0.34, 0.24, stationShade, lx, 5.75, -81.5, g, 12);
     });
     // the station and the hall are lit, so the train and the platform are not silhouettes

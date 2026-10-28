@@ -11,15 +11,23 @@
   // the queue east of the grandstand, where the Dark Woods street (z -40) comes in from the spine at x -31.
   var PK_TH = { CX: -97, CZ: -68 };
   PK_PARK.x0 = Math.min(PK_PARK.x0, -132);   // a whole number of route cells (0.6 m) west of -72: the grid keeps its lattice
-  PK_PLOTS.push({ id: 'theater', name: 'The Lindenburg Arena', x: PK_TH.CX, z: PK_TH.CZ, r: 30, q: [PK_TH.CX + 18.5, PK_TH.CZ + 20], level: 24 });
+  PK_PLOTS.push({ id: 'theater', name: 'The Lindenburg Arena', x: PK_TH.CX, z: PK_TH.CZ, r: 30, q: [PK_TH.CX + 21.4, PK_TH.CZ + 18.1], level: 24 });
   PK_ROUTES.push([-31, -40, PK_TH.CX + 23, -40, 4.2, 'dark']);
   PK_KEEP.push([PK_TH.CX - 1, PK_TH.CZ, 44]);
   PK_CAB_RIDES.push(['theater', 'LINDENBURG ARENA']);
 
   // ── The grandstand's floor: six rows, the walkway behind the back row, the control room a step above it ──────────
   var PK_THG = { x: 14.6, z0: 10, row: 1.15, rows: 6, h0: 0.3, rise: 0.45, back: 21.4, booth: 3.6 };
+  // the stair hall (part 37) beside the stand: a lobby at ground level, the stair along its west side, the landing at the
+  // height of the stand's top walkway
+  var PK_TH_HALL = { x1: 20.4, z0: 9.8, sx1: 17.6, s0: 12.6, s1: 18.0 };
   function pkTheaterFloorAt(x, z) {
-    var G = PK_THG, lx = x - PK_TH.CX, lz = z - PK_TH.CZ;
+    var G = PK_THG, lx = x - PK_TH.CX, lz = z - PK_TH.CZ, HL = PK_TH_HALL, top = G.h0 + G.rise * (G.rows - 1);
+    if (lx > G.x && lx < HL.x1 && lz > HL.z0 && lz < G.back) {
+      if (lz >= HL.s1) return top;
+      if (lx < HL.sx1 && lz >= HL.s0) return top * (lz - HL.s0) / (HL.s1 - HL.s0);
+      return null;
+    }
     if (lx < -G.x || lx > G.x || lz < G.z0 || lz > G.back) return null;
     var k = Math.floor((lz - G.z0) / G.row);
     if (k >= G.rows) return G.h0 + G.rise * (Math.abs(lx) < G.booth ? G.rows : G.rows - 1);
@@ -220,7 +228,12 @@
       });
     }
     a.seats = seats; a.cap = seats.length;
-    [-1, 1].forEach(function (s) { box(0.3, 4.4, G.back - 9.5, M.stone, s * (G.x + 0.15), 2.2, (9.5 + G.back) / 2, g); S_(s * G.x, s * (G.x + 0.3), 9.5, G.back, 0, 7.6); });
+    box(0.3, 4.4, G.back - 9.5, M.stone, -(G.x + 0.15), 2.2, (9.5 + G.back) / 2, g); S_(-G.x - 0.3, -G.x, 9.5, G.back, 0, 7.6);
+    var HO = PK_TH_HALL.s1, top0 = G.h0 + G.rise * (G.rows - 1);
+    box(0.3, 4.4, HO - 9.5, M.stone, G.x + 0.15, 2.2, (9.5 + HO) / 2, g); S_(G.x, G.x + 0.3, 9.5, HO, 0, 7.6);
+    box(0.3, top0, G.back - HO, M.stone, G.x + 0.15, top0 / 2, (HO + G.back) / 2, g);
+    // the parapet along the front of the stand: the audience comes in at the top, down the aisles, never up from the sand
+    box(G.x * 2, 1.05, 0.3, M.stone, 0, 0.525, 9.65, g); box(G.x * 2 + 0.1, 0.08, 0.4, M.gold, 0, 1.09, 9.65, g); S_(-G.x, G.x, 9.45, 9.85, 0, 1.1);
     box(G.x * 2 + 0.6, 7.2, 0.3, M.brick, 0, 3.6, G.back + 0.15, g); S_(-G.x - 0.3, G.x + 0.3, G.back, G.back + 0.3, 0, 7.2);
     sign(['LINDENBURG ARENA'], 9, 1.1, 0, 5.4, G.back + 0.31, 0, { bg: '#2a1a12', fg: '#f0c04a' }, g);
     // the roof: posts, a slate deck falling to the back, a fascia with the show's name toward the arena
@@ -249,20 +262,9 @@
     L.fire = new THREE.PointLight(0xff7a2a, 0, 26, 1.8); L.fire.position.set(0, 6, -13); g.add(L.fire);
     L.hydra = new THREE.PointLight(0xff4a1a, 0, 30, 1.6); L.hydra.position.set(0, 9, -16); g.add(L.hydra);
 
-    // ── The entrance: the audience gate (the ride's own gates: shut, it stops you too) and a staff door beside it ───
-    [15.2, 21.4, 23.4].forEach(function (x) { pkBevelBox(0.8, 5.0, 0.8, M.stone, x, 2.5, 9.8, g, 0.04); pkFtSpire(g, x, 5.0, 9.8, 0.75, 1.6, M.slate, 4); S_(x - 0.4, x + 0.4, 9.4, 10.2, 0, 5); });
-    box(6.6, 0.6, 0.4, M.cream, 18.3, 4.6, 9.8, g);
-    sign(['THE FIVE RIDERS', 'OF LINDENBURG'], 5.4, 1.2, 18.3, 6.0, 10.05, 0, { bg: '#2a1a12', fg: '#f0c04a' }, g);
-    [-1, 1].forEach(function (s) {
-      var hinge = pkMover(g, s < 0 ? 15.6 : 21.0, 0, 9.8);
-      box(2.65, 1.4, 0.08, M.iron, s < 0 ? 1.32 : -1.32, 0.85, 0, hinge);
-      for (var v = 0.2; v < 2.6; v += 0.3) box(0.04, 1.3, 0.06, M.iron, (s < 0 ? 1 : -1) * v, 0.8, 0, hinge);
-      C.gateObjs.push(function (t) { hinge.rotation.y = (s < 0 ? -1 : 1) * t * 1.4; });
-    });
-    pkBkWaitBoard(a, g, 18.3, 3.6, 10.0, 0);
-    // the shut audience gate keeps the player out as well (guests only ever pass it while it is open)
-    var gx0 = CX + 15.6, gx1 = CX + 21.0, gzw = CZ + 9.8, _pkThPrevCollides = GAME.collides;
-    GAME.collides = function (x, z, opt) { if (_pkThPrevCollides && _pkThPrevCollides(x, z, opt)) return true; return C.gateT < 0.5 && x > gx0 && x < gx1 && Math.abs(z - gzw) < 0.3; };
+    // ── The entrance: the audience comes in through the stair hall (part 37, which has the ride's gates); where the old
+    // audience gate stood is the hall's north wall now, and the staff door beside it stays where it was ───
+    [21.4, 23.4].forEach(function (x) { pkBevelBox(0.8, 5.0, 0.8, M.stone, x, 2.5, 9.8, g, 0.04); pkFtSpire(g, x, 5.0, 9.8, 0.75, 1.6, M.slate, 4); S_(x - 0.4, x + 0.4, 9.4, 10.2, 0, 5); });
     // the staff door between the gate and the east wall: E opens and shuts it, and it swings into the arena
     box(0.15, 2.3, 0.3, M.stone, 21.875, 1.15, 9.8, g); S_(21.8, 21.95, 9.6, 10.0, 0, 2.3);
     box(1.2, 2.7, 0.4, M.stone, 22.4, 3.65, 9.8, g);
@@ -308,6 +310,7 @@
     // ── The cast and the hydra wait, hidden, in the yard ─────────────────────────────────────────────────────────
     pkTheaterCast(a); X.hydra = pkThHydra(g);
     pkTheaterDress(a, g, M, G, X, BF, BZ0, BZ1, BX, BH, S_);
+    pkArenaPlus(a, g, M, G, X, BF, BZ0, BZ1, BX, BH, S_);   // part 37: the castle front, the effects, backstage, the desk
     return g;
   }
 
@@ -534,17 +537,34 @@
     var C = pkCtl(a), X = a.extra, lw = X.lightWant, parts = { lamps: {} };
     a.boothShowPanel = parts;
     // SHOW: the key, AUTO, the gate, start/pause/end, the stop, two dials and the status screen
+    // both desks wear the Arena's own plate (part 14, the booth panels, has the style): ebony and stage velvet in a gilt
+    // proscenium, the five riders' colours along the foot. The SHOW desk carries the running order, the thirteen scenes
+    // against the show clock; the STAGE desk a level meter under every lighting circuit and a travel meter under the
+    // curtain and the city gate.
+    var ST = pkPnStyles().arena, crest = function (R, mx, my) { var c = R.c, cx = R.X(mx), cy = R.Y(my), cr = R.L(0.032); c.save(); c.beginPath(); c.arc(cx, cy, cr * 1.1, 0, 6.2832); c.fillStyle = ST.zone2; c.fill(); c.lineWidth = R.L(0.0025); c.strokeStyle = ST.acc; c.stroke(); c.beginPath(); c.arc(cx, cy, cr, 0, 6.2832); c.clip(); PK_PN_CRESTS.arena(c, cx, cy, cr * 0.9, ST); c.restore(); };
+    var RUNT = 300, TL = { x0: 0.04, x1: 0.6, y: 0.245 }, tlX = function (t) { return TL.x0 + clamp(t / RUNT, 0, 1) * (TL.x1 - TL.x0); };
     var W1 = 1.3, H1 = 0.85, P = pkCtlPanel({
       w: W1, h: H1, x: -2.15, y: BF + 1.02, z: BZ0 + 0.55, tilt: -0.9, parent: g, key: 'pk-th-show',
+      paint: function (c, W, H) { ST.base(c, W, H); }, rim: ST.rim, screw: ST.screw, glow: ST.glow,
       draw: function (c, W, H) {
         var R = pkCtlRuler(W, H, W1, H1); R.c = c;
-        R.engrave('SHOW CONTROL', 0, 0.385, 0.026);
-        R.txt('RUN', 0.18, 0.2, 0.011, '#aebcc4'); R.txt('AUTO', 0.3, 0.2, 0.011, '#aebcc4'); R.txt('HOLD', 0.42, 0.2, 0.011, '#aebcc4');
-        R.box(-0.3, -0.01, 0.62, 0.16, 'rgba(0,0,0,0.2)', 0.004);
-        R.txt('KEY', -0.5, -0.09, 0.012, '#d6dee3'); R.txt('AUTO', -0.3, -0.09, 0.012, '#d6dee3'); R.txt('GATE', -0.1, -0.09, 0.012, '#d6dee3');
-        R.box(0.33, -0.01, 0.56, 0.16, 'rgba(0,0,0,0.2)', 0.004);
-        R.txt('START', 0.15, -0.09, 0.012, '#9fe0b0'); R.txt('PAUSE', 0.33, -0.09, 0.012, '#f0c04a'); R.txt('END', 0.51, -0.09, 0.012, '#ff8a7a');
-        R.txt('SEATS', -0.42, -0.385, 0.011, '#aebcc4'); R.txt('SHOW', -0.17, -0.385, 0.011, '#aebcc4'); R.txt('TEST SHOW', 0.13, -0.385, 0.011, '#9fc6ff'); R.txt('STAGE STOP', 0.42, -0.385, 0.011, '#ff8a7a');
+        crest(R, -0.6, 0.372);
+        pkPnText(R, ST, 'The Lindenburg Arena', -0.56, 0.374, 0.03, { align: 'left', font: ST.head });
+        pkPnText(R, ST, 'SHOW CONTROL  ·  PROMPT DESK', 0.57, 0.374, 0.013, { align: 'right', col: ST.dim });
+        pkPnZone(R, ST, -0.64, 0.145, -0.015, 0.335);
+        pkPnZone(R, ST, 0.0, 0.145, 0.64, 0.335, 'RUNNING ORDER');
+        pkPnZone(R, ST, -0.64, -0.12, -0.015, 0.11, 'HOUSE');
+        pkPnZone(R, ST, 0.0, -0.12, 0.64, 0.11, 'SHOW');
+        pkPnZone(R, ST, -0.64, -0.405, 0.64, -0.14);
+        // the running order: the show clock as a rail, a tick and a lamp for every scene, the minutes under it
+        pkPnLine(R, [[TL.x0, TL.y], [TL.x1, TL.y]], ST.dim, 0.003);
+        for (var m = 0; m <= 5; m++) { var mx = tlX(m * 60); pkPnLine(R, [[mx, TL.y - 0.012], [mx, TL.y - 0.022]], ST.dim, 0.0018); pkPnText(R, ST, m + ' MIN', mx, TL.y - 0.034, 0.0095, { col: ST.dim }); }
+        PK_TH_SCENES.forEach(function (sc, i) { var close = i > 0 && tlX(sc[0]) - tlX(PK_TH_SCENES[i - 1][0]) < 0.03 && i % 2; pkPnText(R, ST, String(i + 1), tlX(sc[0]), TL.y + (close ? 0.05 : 0.03), 0.0095, { col: ST.ink }); });
+        pkPnText(R, ST, 'RUN', 0.135, 0.175, 0.0115, { col: ST.dim, align: 'left' }); pkPnText(R, ST, 'AUTO', 0.295, 0.175, 0.0115, { col: ST.dim, align: 'left' }); pkPnText(R, ST, 'HOLD', 0.455, 0.175, 0.0115, { col: ST.dim, align: 'left' });
+        pkPnText(R, ST, 'KEY', -0.5, -0.09, 0.0125); pkPnText(R, ST, 'AUTO', -0.3, -0.09, 0.0125); pkPnText(R, ST, 'GATE', -0.1, -0.09, 0.0125);
+        pkPnText(R, ST, 'START', 0.15, -0.09, 0.0125, { col: '#9fe0b0' }); pkPnText(R, ST, 'PAUSE', 0.33, -0.09, 0.0125, { col: '#f0c04a' }); pkPnText(R, ST, 'END', 0.51, -0.09, 0.0125, { col: '#ff8a7a' });
+        pkPnText(R, ST, 'SEATED', -0.42, -0.375, 0.0115, { col: ST.dim }); pkPnText(R, ST, 'SHOW CLOCK', -0.17, -0.375, 0.0115, { col: ST.dim });
+        pkPnText(R, ST, 'TEST SHOW', 0.13, -0.375, 0.0115, { col: '#9fc6ff' }); pkPnText(R, ST, 'STAGE STOP', 0.42, -0.375, 0.0115, { col: '#ff8a7a' });
       }
     });
     parts.key = pkCtlKey(P, -0.5, 0.0, { id: 'opKey', on: !!C.key, label: a.name + ' operator key', act: function (on) { return pkSetRideKey(a, on); } });
@@ -563,9 +583,12 @@
       get: function () { return a.seats.length ? a.riders / a.seats.length : 0; } });
     parts.clock = pkCtlGauge(P, -0.17, -0.26, { id: 'show', label: '', unit: 'minutes', min: 0, max: 5, ticks: 5, r: 0.07, ease: 4,
       get: function () { return a.state === 'running' ? clamp(a.t / a.run, 0, 1) : 0; } });
-    parts.lamps.run = pkCtlLamp(P, 0.18, 0.27, { r: 0.016, col: 0xff3b30 });
-    parts.lamps.auto = pkCtlLamp(P, 0.3, 0.27, { r: 0.016, col: 0x5fd38d });
-    parts.lamps.hold = pkCtlLamp(P, 0.42, 0.27, { r: 0.016, col: 0xf0c04a });
+    parts.lamps.run = pkCtlLamp(P, 0.11, 0.175, { r: 0.014, col: 0xff3b30 });
+    parts.lamps.auto = pkCtlLamp(P, 0.27, 0.175, { r: 0.014, col: 0x5fd38d });
+    parts.lamps.hold = pkCtlLamp(P, 0.43, 0.175, { r: 0.014, col: 0xf0c04a });
+    // a lamp for every scene on the rail, and the show clock's own light running along it
+    parts.scenes = PK_TH_SCENES.map(function (sc, i) { return pkPnLed(P, tlX(sc[0]), TL.y, { col: [0xe04a3a, 0x4f8fe0, 0x5fae54, 0xf0c040, 0x9a6ad0][i % 5], r: 0.0085, bezel: ST.collar }); });
+    parts.clockPip = pkPnPip(P, 0.007, 0xffffff); parts.clockPip.set(TL.x0, TL.y);
     var status = touchScreen({ w: 440, h: 120, pw: 0.58, ph: 0.16, x: -0.33, y: 0.24, z: 0.012, parent: P, title: 'Show status', draw: function (c, s) {
       c.fillStyle = '#0b0606'; c.fillRect(0, 0, s.w, s.h);
       c.fillStyle = '#ff9d6b'; c.font = 'bold 22px monospace'; c.textAlign = 'left'; c.textBaseline = 'alphabetic';
@@ -584,16 +607,21 @@
     // STAGE: the curtain, the city gate, four lighting circuits, five mechanics and the cue screen
     var W2 = 1.6, H2 = 0.85, Q = pkCtlPanel({
       w: W2, h: H2, x: -0.35, y: BF + 1.02, z: BZ0 + 0.55, tilt: -0.9, parent: g, key: 'pk-th-stage',
+      paint: function (c, W, H) { ST.base(c, W, H); }, rim: ST.rim, screw: ST.screw, glow: ST.glow,
       draw: function (c, W, H) {
         var R = pkCtlRuler(W, H, W2, H2); R.c = c;
-        R.engrave('STAGE  ·  LIGHTS  ·  MECHANICS', 0, 0.385, 0.026);
-        R.box(-0.55, 0.17, 0.46, 0.25, 'rgba(0,0,0,0.2)', 0.004); R.box(0.3, 0.17, 0.92, 0.25, 'rgba(0,0,0,0.2)', 0.004);
-        R.txt('CURTAIN', -0.65, 0.07, 0.012, '#d6dee3'); R.txt('CITY GATE', -0.45, 0.07, 0.012, '#d6dee3');
-        R.txt('HOUSE', -0.09, 0.07, 0.012, '#d6dee3'); R.txt('ARENA', 0.15, 0.07, 0.012, '#d6dee3'); R.txt('SPOT', 0.39, 0.07, 0.012, '#d6dee3'); R.txt('CITY', 0.63, 0.07, 0.012, '#d6dee3');
-        R.box(-0.2, -0.17, 1.12, 0.3, 'rgba(0,0,0,0.2)', 0.004);
-        R.txt('HYDRA', -0.64, -0.28, 0.012, '#d6dee3'); R.txt('FIRE', -0.42, -0.28, 0.012, '#d6dee3'); R.txt('MOAT', -0.2, -0.28, 0.012, '#d6dee3');
-        R.txt('THUNDER', 0.02, -0.28, 0.012, '#d6dee3'); R.txt('BOW', 0.24, -0.28, 0.012, '#d6dee3');
-        R.txt('CUE LAMPS: SLOW = STANDBY  ·  FAST = GO', -0.2, -0.385, 0.011, '#f0c04a');
+        crest(R, -0.75, 0.372);
+        pkPnText(R, ST, 'Stage  ·  Lights  ·  Mechanics', -0.71, 0.374, 0.028, { align: 'left', font: ST.head });
+        pkPnText(R, ST, 'THE LINDENBURG ARENA  ·  STAGE MANAGER', 0.72, 0.374, 0.012, { align: 'right', col: ST.dim });
+        pkPnZone(R, ST, -0.78, -0.005, -0.32, 0.33, 'SCENERY');
+        pkPnZone(R, ST, -0.3, -0.005, 0.78, 0.33, 'LIGHTING');
+        pkPnZone(R, ST, -0.78, -0.325, 0.38, -0.025, 'MECHANICS AND EFFECTS');
+        pkPnZone(R, ST, 0.4, -0.325, 0.78, -0.025, 'PROMPT');
+        pkPnText(R, ST, 'CURTAIN', -0.65, 0.07, 0.0125); pkPnText(R, ST, 'CITY GATE', -0.45, 0.07, 0.0125);
+        pkPnText(R, ST, 'HOUSE', -0.09, 0.07, 0.0125); pkPnText(R, ST, 'ARENA WASH', 0.15, 0.07, 0.0125); pkPnText(R, ST, 'FOLLOW SPOT', 0.39, 0.07, 0.0125); pkPnText(R, ST, 'CITY', 0.63, 0.07, 0.0125);
+        pkPnText(R, ST, 'HYDRA', -0.64, -0.28, 0.0125); pkPnText(R, ST, 'FIRE', -0.42, -0.28, 0.0125); pkPnText(R, ST, 'MOAT', -0.2, -0.28, 0.0125);
+        pkPnText(R, ST, 'THUNDER', 0.02, -0.28, 0.0125); pkPnText(R, ST, 'BOW', 0.24, -0.28, 0.0125);
+        pkPnText(R, ST, 'CUE LAMPS: SLOW = STANDBY  ·  FAST = GO', -0.2, -0.372, 0.0115, { col: '#f0c04a' });
       }
     });
     var tog = function (name, x, on, onName, offName, prompt) {
@@ -619,6 +647,9 @@
       ['hydra', -0.64, -0.065], ['fire', -0.42, -0.065], ['moat', -0.2, -0.065], ['thunder', 0.02, -0.065], ['bow', 0.24, -0.065]].forEach(function (q) {
       parts.cue[q[0]] = pkCtlLamp(Q, q[1], q[2], { r: 0.013, col: 0xf0c04a });
     });
+    // a bar of six lamps under every lighting circuit, lit to its level; under the curtain and the gate, how far they have run
+    var meter = function (x, col) { var ls = []; for (var i = 0; i < 6; i++) ls.push(pkPnLed(Q, x - 0.06 + i * 0.024, 0.032, { col: i > 3 ? 0xff9d6b : col, r: 0.0075, bezel: ST.collar })); return ls; };
+    parts.meters = { curtain: meter(-0.65, 0xe3c26a), cityGate: meter(-0.45, 0xe3c26a), house: meter(-0.09, 0xfff0c8), wash: meter(0.15, 0xffd27a), spot: meter(0.39, 0xd8e6ff), city: meter(0.63, 0xffb04a) };
     var cue = touchScreen({ w: 240, h: 150, pw: 0.34, ph: 0.21, x: 0.6, y: -0.19, z: 0.012, parent: Q, title: 'Cue screen', draw: function (c, s) {
       c.fillStyle = '#060a0e'; c.fillRect(0, 0, s.w, s.h);
       c.textAlign = 'left'; c.textBaseline = 'alphabetic';
@@ -662,6 +693,13 @@
       if (parts.wash.on !== (lw.wash > 0)) parts.wash.set(lw.wash > 0);
       if (parts.spot.on !== (lw.spot > 0)) parts.spot.set(lw.spot > 0);
       if (parts.city.on !== (lw.city > 0.5)) parts.city.set(lw.city > 0.5);
+      // the running order and the meters
+      var run = a.state === 'running', now = run ? a.t : 0, cur = -1;
+      PK_TH_SCENES.forEach(function (sc, i) { if (run && now >= sc[0]) cur = i; });
+      parts.scenes.forEach(function (l, i) { l.on = !a.open ? false : i === cur ? (C.fault ? 'flash' : true) : i < cur ? 'dim' : false; });
+      parts.clockPip.set(tlX(now), TL.y + 0.018); pkPnPipLight(parts.clockPip, run ? 1 : 0, 0.05);
+      var lvl = { curtain: C.bars, cityGate: X.gateK, house: lw.house / 1.4, wash: lw.wash / 2.2, spot: lw.spot / 3, city: lw.city / 1.1 };
+      Object.keys(parts.meters).forEach(function (k) { var v = clamp(lvl[k] || 0, 0, 1); parts.meters[k].forEach(function (l, i) { l.on = a.open && v > (i + 0.5) / 6 - 0.001; }); });
     } });
 
     // what every booth in the park carries (part 09 and the smoke test read these); no boothFrame, so hired operators leave it be
@@ -815,8 +853,13 @@
     a.extra.cast = cast;
     return cast;
   }
-  function pkThShow(A, x, z, face) { A.on = true; A.root.visible = true; A.x = x; A.z = z; A.yaw = face === undefined ? A.yaw : face; A.face = A.yaw; A.path = []; A.loop = null; A.hideAtEnd = false; }
-  function pkThHide(A) { A.on = false; A.root.visible = false; A.path = []; A.loop = null; }
+  function pkThShow(A, x, z, face) { A.on = true; A.root.visible = true; A.g.visible = true; A.x = x; A.z = z; A.yaw = face === undefined ? A.yaw : face; A.face = A.yaw; A.path = []; A.loop = null; A.hideAtEnd = false; }
+  // a rider's horse goes back to its stall in the yard (part 37 gives it one), saddled and riderless; everyone else drops out of sight
+  function pkThHide(A) {
+    A.on = false; A.path = []; A.loop = null;
+    if (A.horse && A.stall) { A.root.visible = true; A.g.visible = false; A.root.position.copy(A.stall); A.root.rotation.y = 0; pkThHorseTick(A.horse, 0, 0); }
+    else A.root.visible = false;
+  }
   function pkThGo(A, pts, speed, opt) {
     A.path = pts.map(function (p) { return { x: p[0], z: p[1] }; }); A.speed = speed || A.speed;
     A.loop = opt && opt.loop ? opt.loop.map(function (p) { return { x: p[0], z: p[1] }; }) : null;
@@ -845,39 +888,104 @@
   function pkThSay(a, who, text) { var A = pkTheaterCast(a)[who]; if (A && A.on) say(A.g, text); }
 
   // ── The hydra: five necks and a pair of wings on a body that rises behind the wall ─────────────────────────────
+  // A sculpted show beast: a scaled body with a plated belly and a ridge of back spikes, two forelegs whose claws come to
+  // grip the city wall as it rises, a tail curled down into the pit, bat wings on finger bones, and five necks of tapered,
+  // scaled segments with a spine fin down each. Every head has a long snout, a heavy brow, swept horns and a spiked frill,
+  // glowing eyes and nostrils, and a jaw full of teeth that drops when it breathes fire.
+  var PK_TH_SCALES = null;
+  function pkThScaleMats() {
+    if (PK_TH_SCALES) return PK_TH_SCALES;
+    var skin = tex(512, 512, function (c, W, H) {
+      c.fillStyle = '#26432d'; c.fillRect(0, 0, W, H);
+      for (var row = 0, y = -16; y < H + 32; y += 16, row++) for (var x = (row % 2) * 16 - 32; x < W + 32; x += 32) {
+        var g = c.createRadialGradient(x, y - 6, 2, x, y, 20); g.addColorStop(0, '#5f9a5a'); g.addColorStop(0.7, '#2f5a38'); g.addColorStop(1, '#1a3020');
+        c.fillStyle = g; c.beginPath(); c.arc(x, y, 18, 0, Math.PI); c.fill();
+        c.strokeStyle = 'rgba(10,20,12,0.6)'; c.lineWidth = 2; c.beginPath(); c.arc(x, y, 18, 0, Math.PI); c.stroke();
+      }
+    }, 3, 3);
+    var plates = tex(256, 256, function (c, W, H) {
+      c.fillStyle = '#b09a5a'; c.fillRect(0, 0, W, H);
+      for (var y = 0; y < H; y += 32) { var g = c.createLinearGradient(0, y, 0, y + 32); g.addColorStop(0, '#d8c48a'); g.addColorStop(1, '#7a683a'); c.fillStyle = g; c.fillRect(0, y + 2, W, 28); }
+    }, 1, 2);
+    PK_TH_SCALES = {
+      skin: std({ map: skin, color: 0xffffff, roughness: 0.5, metalness: 0.15 }),
+      dark: std({ color: 0x1a2a1e, roughness: 0.6, metalness: 0.1 }),
+      belly: std({ map: plates, roughness: 0.6 }),
+      horn: std({ color: 0xe6d6a6, roughness: 0.45 }),
+      tooth: std({ color: 0xf4efe0, roughness: 0.35 }),
+      mouth: std({ color: 0x5a1414, roughness: 0.7 }),
+      wing: std({ color: 0x4a2a3a, roughness: 0.75, side: THREE.DoubleSide, transparent: true, opacity: 0.92 }),
+      bone: std({ color: 0x6a5a3a, roughness: 0.6 }),
+      eye: pkThGlow(0xffa01a, 2.6), nostril: pkThGlow(0xff4a10, 1.2)
+    };
+    return PK_TH_SCALES;
+  }
   function pkThHydra(g) {
     var root = pkMover(g, 0, -11, -22.5); root.visible = false;
-    var scale = std({ color: 0x2c4a33, roughness: 0.55, metalness: 0.15 }), belly = std({ color: 0x8a7a4a, roughness: 0.7 }), horn = std({ color: 0xe6d6a6, roughness: 0.5 });
-    var wingM = std({ color: 0x3a2a3a, roughness: 0.8, side: THREE.DoubleSide }), eyeM = pkThGlow(0xff5a1a, 2.5);
-    var body = new THREE.Mesh(new THREE.SphereGeometry(3.2, 20, 14), scale); body.scale.set(1.2, 0.85, 0.9); body.position.y = 4.2; root.add(body);
+    var Q = pkThScaleMats(), add = function (geo, mat, x, y, z, par) { var m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; (par || root).add(m); return m; };
+    // the body: a long barrel, the belly plates down its front, the spikes along its ridge
+    var body = add(new THREE.SphereGeometry(3.2, 28, 18), Q.skin, 0, 4.2, 0); body.scale.set(1.25, 0.9, 1.0);
+    var belly = add(new THREE.SphereGeometry(3.05, 24, 14, 0, Math.PI * 2, Math.PI * 0.35, Math.PI * 0.5), Q.belly, 0, 4.1, 0.25); belly.scale.set(1.0, 0.92, 1.0);
+    for (var sp = 0; sp < 9; sp++) { var a = -0.9 + sp * 0.225, sk = add(new THREE.ConeGeometry(0.28, 1.3 - Math.abs(a) * 0.5, 6), Q.horn, Math.sin(a) * 3.3, 4.2 + Math.cos(a) * 2.75, -0.9); sk.rotation.z = -a; sk.rotation.x = -0.35; }
+    // the forelegs: shoulder, upper and fore limb, a foot of four claws that comes to rest on the wall's top
+    [-1, 1].forEach(function (s) {
+      var sh = new THREE.Vector3(s * 2.9, 4.6, 1.6), el = new THREE.Vector3(s * 5.2, 7.1, 3.2), ft = new THREE.Vector3(s * 7.6, 8.05, 5.4);
+      add(new THREE.SphereGeometry(1.0, 14, 10), Q.skin, sh.x, sh.y, sh.z);
+      [[sh, el, 0.75, 0.6], [el, ft, 0.6, 0.42]].forEach(function (L) { var d = L[1].clone().sub(L[0]), m = add(new THREE.CylinderGeometry(L[3], L[2], d.length(), 12), Q.skin, (L[0].x + L[1].x) / 2, (L[0].y + L[1].y) / 2, (L[0].z + L[1].z) / 2); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); });
+      add(new THREE.SphereGeometry(0.62, 12, 9), Q.skin, el.x, el.y, el.z);
+      var foot = add(new THREE.SphereGeometry(0.55, 12, 9), Q.skin, ft.x, ft.y, ft.z); foot.scale.set(1.2, 0.6, 1.3);
+      for (var c2 = 0; c2 < 4; c2++) { var cl = add(new THREE.ConeGeometry(0.12, 0.7, 6), Q.horn, ft.x + (c2 - 1.5) * 0.3, ft.y - 0.25, ft.z + 0.75); cl.rotation.x = 2.2; }
+    });
+    // the tail, curling down behind into the pit
+    for (var tk = 0; tk < 8; tk++) { var tt = tk / 7, tx = Math.sin(tt * 2.4) * 2.2, ty = 3.2 - tt * 3.6, tz = -2.8 - tt * 2.4; add(new THREE.SphereGeometry(1.15 - tt * 0.8, 12, 9), Q.skin, tx, ty, tz); }
+    // the wings: a membrane on four finger bones and a thumb claw at the wrist
     var wings = [-1, 1].map(function (s) {
-      var piv = new THREE.Group(); piv.position.set(s * 2.6, 6.0, 0.4); root.add(piv);
-      var sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(s * 7, 3.6); sh.lineTo(s * 8.2, 1.2); sh.lineTo(s * 6.3, 0.5); sh.lineTo(s * 7.1, -1.1); sh.lineTo(s * 4.7, -0.5); sh.lineTo(s * 4.9, -2.3); sh.lineTo(s * 2.2, -0.8); sh.lineTo(0, 0);
-      piv.add(new THREE.Mesh(new THREE.ShapeGeometry(sh), wingM));
-      [[7, 3.6], [8.2, 1.2], [7.1, -1.1], [4.9, -2.3]].forEach(function (q) { pkRod(0, 0, 0.02, s * q[0], q[1], 0.02, 0.07, belly, piv, 5); });
+      var piv = new THREE.Group(); piv.position.set(s * 2.6, 8.4, -0.8); root.add(piv);
+      var sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(s * 3.2, 3.0); sh.lineTo(s * 7.4, 4.0); sh.quadraticCurveTo(s * 7.2, 2.6, s * 8.6, 1.4); sh.quadraticCurveTo(s * 7.0, 0.9, s * 7.4, -0.8);
+      sh.quadraticCurveTo(s * 6.0, -0.4, s * 5.3, -2.2); sh.quadraticCurveTo(s * 4.2, -1.0, s * 2.6, -1.4); sh.lineTo(0, 0);
+      piv.add(new THREE.Mesh(new THREE.ShapeGeometry(sh, 6), Q.wing));
+      pkRod(0, 0, 0.03, s * 3.2, 3.0, 0.03, 0.12, Q.bone, piv, 6);
+      [[7.4, 4.0], [8.6, 1.4], [7.4, -0.8], [5.3, -2.2]].forEach(function (q) { pkRod(s * 3.2, 3.0, 0.03, s * q[0], q[1], 0.03, 0.06, Q.bone, piv, 5); });
+      var th = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.6, 6), Q.horn); th.position.set(s * 3.2, 3.35, 0.05); piv.add(th);
       return piv;
     });
-    var necks = [];
+    // the necks: tapered segments (re-laid every frame along each neck's curve), a joint between each, a fin on each
+    var necks = [], NS = 8, cylGeo = new THREE.CylinderGeometry(1, 1, 1, 12, 1, true), jointGeo = new THREE.SphereGeometry(1, 12, 9), finGeo = new THREE.ConeGeometry(0.16, 0.7, 4);
     for (var i = 0; i < 5; i++) {
-      var segs = [];
-      for (var k = 0; k < 7; k++) { var m = new THREE.Mesh(new THREE.SphereGeometry(0.66 - k * 0.05, 12, 9), scale); root.add(m); segs.push(m); }
+      var segs = [], joints = [];
+      for (var k = 0; k < NS; k++) {
+        var r = 0.74 - k * 0.042;
+        var seg = add(cylGeo, Q.skin, 0, 0, 0); seg.userData.r = r; segs.push(seg);
+        var fin = new THREE.Mesh(finGeo, Q.horn); fin.position.set(0, 0, -1.0); fin.rotation.x = -1.2; seg.add(fin);
+        var jt = add(jointGeo, Q.skin, 0, 0, 0); jt.scale.setScalar(r); joints.push(jt);
+      }
       var head = new THREE.Group(); root.add(head);
-      var skull = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 9), scale); skull.scale.set(1, 0.85, 1.1); head.add(skull);
-      var snout = new THREE.Mesh(new THREE.ConeGeometry(0.42, 1.3, 10), scale); snout.rotation.x = Math.PI / 2; snout.position.set(0, 0.05, 0.85); head.add(snout);
+      var skull = new THREE.Mesh(new THREE.SphereGeometry(0.6, 16, 12), Q.skin); skull.scale.set(1, 0.85, 1.15); skull.castShadow = true; head.add(skull);
+      var snout = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.46, 1.3, 12), Q.skin); snout.rotation.x = Math.PI / 2; snout.position.set(0, 0.1, 0.95); head.add(snout);
       [-1, 1].forEach(function (s) {
-        var hn = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.7, 6), horn); hn.position.set(s * 0.28, 0.5, -0.2); hn.rotation.x = -0.5; hn.rotation.z = -s * 0.3; head.add(hn);
-        var eye = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), eyeM); eye.position.set(s * 0.3, 0.22, 0.42); head.add(eye);
+        var brow = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.14, 0.62), Q.dark); brow.position.set(s * 0.27, 0.42, 0.42); brow.rotation.z = s * 0.25; head.add(brow);
+        var eye = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), Q.eye); eye.position.set(s * 0.33, 0.28, 0.48); head.add(eye);
+        var nos = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), Q.nostril); nos.position.set(s * 0.12, 0.3, 1.58); head.add(nos);
+        // the horns sweep back in three tapering pieces
+        var hb = new THREE.Group(); hb.position.set(s * 0.3, 0.45, -0.15); hb.rotation.set(-0.9, 0, -s * 0.35); head.add(hb);
+        for (var hk = 0; hk < 3; hk++) { var hm = new THREE.Mesh(new THREE.CylinderGeometry(0.05 - hk * 0.012, 0.1 - hk * 0.02, 0.4, 8), Q.horn); hm.position.y = 0.2 + hk * 0.36; hm.rotation.x = -hk * 0.25; hb.add(hm); }
+        // the upper teeth along each side of the snout
+        for (var tq = 0; tq < 4; tq++) { var tth = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.16, 5), Q.tooth); tth.position.set(s * (0.3 - tq * 0.04), -0.12, 0.6 + tq * 0.25); tth.rotation.x = Math.PI; head.add(tth); }
       });
-      var jaw = new THREE.Group(); jaw.position.set(0, -0.25, 0.1); head.add(jaw);
-      var jm = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.16, 1.15), belly); jm.position.set(0, 0, 0.55); jaw.add(jm);
-      necks.push({ o: i - 2, segs: segs, head: head, jaw: jaw, ph: i * 1.3, to: PK_TH_HEADS[i] });
+      // the frill: a fan of spikes behind the skull
+      for (var fq = 0; fq < 5; fq++) { var fa = -0.9 + fq * 0.45, fs = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.75, 5), Q.horn); fs.position.set(Math.sin(fa) * 0.5, 0.2 + Math.cos(fa) * 0.35, -0.55); fs.rotation.set(-1.0, 0, -fa); head.add(fs); }
+      var jaw = new THREE.Group(); jaw.position.set(0, -0.22, 0.1); head.add(jaw);
+      var jm = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.36, 1.2, 10), Q.skin); jm.rotation.x = Math.PI / 2; jm.scale.set(1, 1, 0.5); jm.position.set(0, -0.05, 0.75); jaw.add(jm);
+      var tongue = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.04, 0.9), Q.mouth); tongue.position.set(0, 0.06, 0.8); jaw.add(tongue);
+      [-1, 1].forEach(function (s) { for (var tq = 0; tq < 4; tq++) { var lt = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.13, 5), Q.tooth); lt.position.set(s * (0.22 - tq * 0.03), 0.1, 0.5 + tq * 0.25); jaw.add(lt); } });
+      necks.push({ o: i - 2, segs: segs, joints: joints, head: head, jaw: jaw, ph: i * 1.3, to: PK_TH_HEADS[i] });
     }
     return { root: root, wings: wings, necks: necks, y: -11, t: 0 };
   }
-  // where each head comes to rest (x, y): two over the houses either side, and the middle one high over the gatehouse spire,
+  // where each head comes to rest (x, y): high over the houses either side and over the gatehouse spire, leaning out toward the stand,
   // so none of them sits in a tower, a gable or the spire
-  var PK_TH_HEADS = [[-11.8, 12.8], [-9.2, 13.4], [0, 16.6], [9.2, 13.4], [11.8, 12.8]];
-  var _thV = new THREE.Vector3();
+  var PK_TH_HEADS = [[-12.5, 15.4], [-8.6, 17.0], [0, 19.6], [8.6, 17.0], [12.5, 15.4]];
+  var _thV = new THREE.Vector3(), _thD = new THREE.Vector3(), _thUp = new THREE.Vector3(0, 1, 0), _thPts = [];
   function pkThHydraTick(a, dt) {
     var X = a.extra, H = X.hydra; if (!H) return;
     var want = X.hydraUp ? 0 : -11;
@@ -889,11 +997,19 @@
     H.wings.forEach(function (w, i) { var s = i ? 1 : -1; w.rotation.z = s * (0.15 + Math.sin(H.t * 1.6) * 0.22); w.rotation.y = -s * 0.25; });
     H.necks.forEach(function (N) {
       var o = N.o, sway = Math.sin(H.t * 0.9 + N.ph) * 0.6, bob = Math.sin(H.t * 1.3 + N.ph * 1.7) * 0.4;
-      var bx = o * 0.9, by = 6.0, bz = 0.6, hx = N.to[0] + sway, hy = N.to[1] + bob, hz = 5.9 + (breath ? 0.7 : 0);
+      var bx = o * 0.9, by = 6.0, bz = 0.6, hx = N.to[0] + sway, hy = N.to[1] + bob, hz = 7.0 + (breath ? 0.8 : 0);
       var cx = N.to[0] * 0.5, cy = N.to[1] + 1.2, cz = 1.4;
-      for (var k = 0; k < N.segs.length; k++) {
-        var t = (k + 1) / (N.segs.length + 1), u = 1 - t;
-        N.segs[k].position.set(u * u * bx + 2 * u * t * cx + t * t * hx, u * u * by + 2 * u * t * cy + t * t * hy, u * u * bz + 2 * u * t * cz + t * t * hz);
+      // the neck: a quadratic curve from the shoulder to the head, a tapered segment from each point to the next
+      var n = N.segs.length;
+      for (var k = 0; k <= n; k++) {
+        var t = k / n, u = 1 - t, P = _thPts[k] || (_thPts[k] = new THREE.Vector3());
+        P.set(u * u * bx + 2 * u * t * cx + t * t * hx, u * u * by + 2 * u * t * cy + t * t * hy, u * u * bz + 2 * u * t * cz + t * t * hz);
+      }
+      for (var k2 = 0; k2 < n; k2++) {
+        var A = _thPts[k2], B = _thPts[k2 + 1], sg = N.segs[k2], r = sg.userData.r;
+        _thD.subVectors(B, A); var L = _thD.length(); _thD.multiplyScalar(1 / Math.max(1e-4, L));
+        sg.position.addVectors(A, B).multiplyScalar(0.5); sg.quaternion.setFromUnitVectors(_thUp, _thD); sg.scale.set(r, L * 1.08, r);
+        N.joints[k2].position.copy(A);
       }
       N.head.position.set(hx, hy, hz);
       N.head.rotation.set(0.35 + bob * 0.15 + (breath ? 0.25 : 0), o * 0.18 + sway * 0.06, 0);
@@ -1072,6 +1188,7 @@
       op(278, 'curtain', 1), op(281, 'cityGate', 0),
       op(286, 'house', 1), op(288, 'wash', 0), op(290, 'city', 0)
     );
+    pkArenaPlusCues(cues, c, each, line);   // part 37: the music, the gifts' effects, the lights' moods, the fireworks
     cues.forEach(function (q, i) { q.i = i; });
     cues.sort(function (p, q) { return p.t - q.t || p.i - q.i; });
     return cues;
@@ -1089,6 +1206,7 @@
     X.moatUp = 0; X.moatY = -2.4; X.gateWant = 0; X.pending = [];
     var lw = X.lightWant; lw.house = 1.4; lw.wash = 0; lw.spot = 0; lw.city = 0.15;
     pkCtl(a).barsWant = 1;
+    pkArenaPlusTidy(a);
   }
   function pkTheaterTickRun(a, dt) {
     var C = pkCtl(a), X = a.extra, lw = X.lightWant, cast = pkTheaterCast(a);
@@ -1142,6 +1260,7 @@
     var M = pkThM(); M.win.emissiveIntensity += (lw.city - M.win.emissiveIntensity) * k;
     PK_TH_RIDERS.forEach(function (r) { var A = cast[r[0]]; A.horse.pennant.emissiveIntensity += ((X.gifts ? 2.2 : 0) - A.horse.pennant.emissiveIntensity) * k; });
     pkThHydraTick(a, dt);
+    pkArenaPlusTick(a, dt);
   }
   // the clock tower keeps the park's time, whatever the show is doing
   hook('frame', function () {
@@ -1154,7 +1273,8 @@
   function pkBuildTheater(p) {
     var a = pkAttr({
       id: 'theater', name: 'The Lindenburg Arena', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1],
-      seats: [], board: 120, run: 300, unload: 18, start: pkTheaterShowBegin, tickRun: pkTheaterTickRun   // doors open two minutes: the walk from the gate is about 95 s
+      seats: [], board: 120, run: 300, unload: 18, exit: [PK_TH.CX + 23.5, PK_TH.CZ + 11.0],   // out through the stair hall's gates, along the forecourt's north edge
+      start: pkTheaterShowBegin, tickRun: pkTheaterTickRun   // doors open two minutes: the walk from the gate is about 95 s
     });
     pkTheaterBuild(a);
     var C = pkCtl(a); C.barsWant = 1; C.bars = 1;   // the curtain starts closed

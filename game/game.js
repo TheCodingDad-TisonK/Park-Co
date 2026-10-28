@@ -4770,6 +4770,7 @@
     "group@72.6,-75": { hidden: true },
     "group@75,83.94": { x: 49.35, z: 87.55 },
     "group@75.4,5": { x: 76.15, z: 5.05, hidden: true },
+    "group@75.4,56.5": { hidden: true },
     "group@77.17,105.18": { x: 77.2, z: 105.2, hidden: true },
     "group@77.45,-136.23": { hidden: true },
     "group@79.4,-47.5": { hidden: true },
@@ -5492,11 +5493,11 @@
     // material for the ground alone, and repeat it at 2.8 m a tile, so the blades read as turf underfoot.
     var lawnMap = TEX.grass.clone();
     lawnMap.wrapS = lawnMap.wrapT = THREE.RepeatWrapping;
-    lawnMap.repeat.set(150, 150);   // 420 m plane / 150 = a 2.8 m tile
+    lawnMap.repeat.set(443, 443);   // 1240 m plane / 443 = a 2.8 m tile (part 46 carries the world out past the railway)
     lawnMap.needsUpdate = true;
     var lawnMat = MAT.grass.clone();
     lawnMat.map = lawnMap;
-    plane(420, 420, lawnMat, 0, -0.03, 0, -Math.PI / 2);
+    plane(1240, 1240, lawnMat, 0, -0.03, 0, -Math.PI / 2);
     pkSlab(34, 18, 0, 44, 0.012, M.paversWarm);      // the forecourt, where the guests arrive
     pkSlab(28, 10, 0, 33, 0.014, M.paversWarm);      // the plaza under the gate
     pkSlab(3.2, 5.0, -18.0, 42.5, 0.013, M.paversWarm);   // out of the HQ's door onto the forecourt
@@ -5672,6 +5673,7 @@
         var jx = (rng2() - 0.5) * 4, jz = (rng2() - 0.5) * 4, thin = rng2(), sc = 0.95 + rng2() * 1.2;
         if (thin < 0.28) continue;                                  // thin the ring a little
         var qx = fx + jx, qz = fz + jz, qseed = Math.abs(Math.round(qx * 13 + qz * 7));
+        if (typeof pkXpClear === 'function' && pkXpClear(qx, qz)) continue;   // part 46: felled for the expansion site and the viaduct
         if (qseed % 4 === 0) pkConifer(qx, qz, sc, null, qseed); else pkTree(qx, qz, sc, null, qseed);
       }
     }
@@ -5928,7 +5930,7 @@
     var night = S.time >= 18 || S.time < 7;
     pkLightsApply(!!power, !!PK.rideLights && night);
   });
-  CO.setup({ canvas: 'co-canvas', save: 'park-co', game: GAME, spawn: { x: 0, z: 42, yaw: 0 }, sun: { box: 120, far: 320, mapSize: 2048, target: [0, 0, 0] }, lightBudget: 10, fog: { color: 0x9dbbd8, near: 210, far: 520 } });
+  CO.setup({ canvas: 'co-canvas', save: 'park-co', game: GAME, spawn: { x: 0, z: 42, yaw: 0 }, sun: { box: 120, far: 320, mapSize: 2048, target: [0, 0, 0] }, lightBudget: 10, far: 720, fog: { color: 0x9dbbd8, near: 300, far: 700 } });
   // ── The guests ────────────────────────────────────────────────────
   // A guest arrives from the car park, joins the shorter ticket line, buys a ticket, passes a turnstile, queues for the
   // coaster, boards when the gates open, rides, and goes home. The whole thing is a small state machine on a walk record.
@@ -6777,41 +6779,126 @@
   }
 
   // ── The track mimic board ─────────────────────────────────────────
-  // the circuit drawn from above on a lit panel: the station, the lift, the blocks, and the train going round it live. Each
-  // block is a lamp: red while the train is in it, green when it is clear.
+  // The control room's big display: the circuit from above on a lit panel, eight blocks that go red while the train is in
+  // them, the six named sections the desk's status bank shows, the lift with its chain, the train car by car with every seat,
+  // and a trail behind it coloured by its speed. Down the side the live numbers: speed, height, the load the riders feel,
+  // the lap clock and the last lap. Along the foot the lap's height profile, with this lap's speed traced over it and the
+  // last lap's beside it in grey, so a slow trim or a stuck brake shows as a dip on the trace.
   var PK_MIMIC = null;
   function pkOpMimic(x, z) {
     var g = new THREE.Group(); g.position.set(x, 1.95, z); g.rotation.y = -Math.PI / 2; scene.add(g);
     pkBevelBox(1.5, 0.92, 0.06, MAT.steelDark, 0, 0, -0.03, g, 0.015);
-    var N = 240, P = [], xs = [], zs = [];
-    for (var i = 0; i < N; i++) { var p = PK.curve.getPointAt(i / N); P.push(p); xs.push(p.x); zs.push(p.z); }
-    var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs), z0 = Math.min.apply(null, zs), z1 = Math.max.apply(null, zs);
-    var BL = 8;   // blocks round the lap
-    var sc = touchScreen({ w: 420, h: 256, pw: 1.4, ph: 0.85, x: 0, y: 0, z: 0.006, parent: g, title: 'The track mimic',
+    pkBevelBox(1.54, 0.03, 0.08, pkMats().brass || MAT.chrome, 0, 0.475, -0.02, g, 0.008);
+    var N = 360, P = [], xs = [], zs = [], ys = [];
+    for (var i = 0; i < N; i++) { var p = PK.curve.getPointAt(((PK.stationU + i / N) % 1)); P.push(p); xs.push(p.x); zs.push(p.z); ys.push(p.y); }
+    var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs), z0 = Math.min.apply(null, zs), z1 = Math.max.apply(null, zs), y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ys);
+    var BL = 8, BINS = 180, trace = new Array(BINS).fill(0), last = null, trail = [], trailT = 0, prevD = 0, prevPos = null, gLoad = 1, prevVel = new THREE.Vector3(), vNow = new THREE.Vector3(), topV = 0;
+    var lift = [((PK.liftU[0] - PK.stationU) % 1 + 1) % 1, ((PK.liftU[1] - PK.stationU) % 1 + 1) % 1];
+    var W = 900, H = 546, PLAN = { x: 18, y: 48, w: 600, h: 330 }, SIDE = { x: 636, y: 48, w: 248, h: 330 }, PROF = { x: 18, y: 398, w: 866, h: 128 };
+    var k = Math.min((PLAN.w - 40) / (x1 - x0), (PLAN.h - 40) / (z1 - z0)), ox = PLAN.x + (PLAN.w - (x1 - x0) * k) / 2, oz = PLAN.y + (PLAN.h - (z1 - z0) * k) / 2;
+    function X(p) { return ox + (p.x - x0) * k; } function Z(p) { return oz + (p.z - z0) * k; }
+    function PX(f) { return PROF.x + 40 + f * (PROF.w - 56); } function PY(y) { return PROF.y + PROF.h - 22 - (y - y0) / Math.max(1, y1 - y0) * (PROF.h - 44); }
+    function VY(v) { return PROF.y + PROF.h - 22 - clamp(v / 30, 0, 1) * (PROF.h - 44); }
+    function lapOf(u) { return ((u - PK.stationU) % 1 + 1) % 1; }
+    var font = SCREEN_THEME.font, bg = null;
+    // the parts that never move, drawn once: the panel, the grid, the plan's casing, the profile and its scales
+    function background() {
+      var cv = document.createElement('canvas'); cv.width = W; cv.height = H; var c = cv.getContext('2d');
+      var gr = c.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#0d1620'); gr.addColorStop(1, '#070b10'); c.fillStyle = gr; c.fillRect(0, 0, W, H);
+      [PLAN, SIDE, PROF].forEach(function (b) { c.fillStyle = 'rgba(0,0,0,0.35)'; c.fillRect(b.x, b.y, b.w, b.h); c.strokeStyle = 'rgba(201,162,39,0.45)'; c.lineWidth = 1.5; c.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1); });
+      c.strokeStyle = 'rgba(143,195,255,0.06)'; c.lineWidth = 1;
+      for (var gx = PLAN.x; gx < PLAN.x + PLAN.w; gx += 20) { c.beginPath(); c.moveTo(gx, PLAN.y); c.lineTo(gx, PLAN.y + PLAN.h); c.stroke(); }
+      for (var gy = PLAN.y; gy < PLAN.y + PLAN.h; gy += 20) { c.beginPath(); c.moveTo(PLAN.x, gy); c.lineTo(PLAN.x + PLAN.w, gy); c.stroke(); }
+      // a scale bar and the north arrow
+      c.fillStyle = '#7d8a96'; c.font = '11px ' + font; c.textAlign = 'left';
+      c.fillRect(PLAN.x + 14, PLAN.y + PLAN.h - 16, 10 * k, 3); c.fillText('10 m', PLAN.x + 18 + 10 * k, PLAN.y + PLAN.h - 11);
+      c.beginPath(); c.moveTo(PLAN.x + PLAN.w - 22, PLAN.y + 12); c.lineTo(PLAN.x + PLAN.w - 28, PLAN.y + 28); c.lineTo(PLAN.x + PLAN.w - 16, PLAN.y + 28); c.closePath(); c.fill(); c.fillText('N', PLAN.x + PLAN.w - 26, PLAN.y + 42);
+      // the track's casing under the live block colours
+      c.lineCap = 'round'; c.lineJoin = 'round'; c.strokeStyle = 'rgba(0,0,0,0.7)'; c.lineWidth = 12; c.beginPath(); P.forEach(function (q, n) { if (n) c.lineTo(X(q), Z(q)); else c.moveTo(X(q), Z(q)); }); c.closePath(); c.stroke();
+      // the profile: height over the lap, five-metre lines, the lift picked out
+      c.strokeStyle = 'rgba(143,195,255,0.12)'; c.fillStyle = '#7d8a96'; c.font = '10px ' + font; c.textAlign = 'right';
+      for (var hm = 0; hm <= y1 - y0 + 0.1; hm += 5) { var yy = PY(y0 + hm); c.beginPath(); c.moveTo(PX(0), yy); c.lineTo(PX(1), yy); c.stroke(); c.fillText(hm + ' m', PX(0) - 4, yy + 3); }
+      c.beginPath(); c.moveTo(PX(0), PY(y0)); P.forEach(function (q, n) { c.lineTo(PX(n / N), PY(q.y)); }); c.lineTo(PX(1), PY(y0)); c.closePath();
+      var fg = c.createLinearGradient(0, PROF.y, 0, PROF.y + PROF.h); fg.addColorStop(0, 'rgba(143,195,255,0.28)'); fg.addColorStop(1, 'rgba(143,195,255,0.04)'); c.fillStyle = fg; c.fill();
+      c.strokeStyle = '#8fc3ff'; c.lineWidth = 1.5; c.beginPath(); P.forEach(function (q, n) { if (n) c.lineTo(PX(n / N), PY(q.y)); else c.moveTo(PX(0), PY(q.y)); }); c.stroke();
+      c.strokeStyle = '#ffcf5a'; c.lineWidth = 3; c.beginPath(); for (var n = Math.floor(lift[0] * N); n <= Math.ceil(lift[1] * N) && n < N; n++) { if (n === Math.floor(lift[0] * N)) c.moveTo(PX(n / N), PY(P[n].y)); else c.lineTo(PX(n / N), PY(P[n].y)); } c.stroke();
+      c.textAlign = 'left'; c.fillStyle = '#c9a227'; c.font = 'bold 11px ' + font; c.fillText('PROFILE  ·  HEIGHT AND SPEED OVER THE LAP', PROF.x + 10, PROF.y + 14);
+      c.fillStyle = '#7d8a96'; c.font = '10px ' + font; c.textAlign = 'right'; c.fillText('SPEED 0 - 108 KM/H', PROF.x + PROF.w - 10, PROF.y + 14);
+      // the section names along the profile's foot
+      var SEC = PK.coasterSections || [];
+      c.textAlign = 'left'; c.font = '10px ' + font;
+      for (var s2 = 0; s2 < SEC.length - 1; s2++) { var fx = PX(SEC[s2][1]); c.fillStyle = 'rgba(143,195,255,0.3)'; c.fillRect(fx, PROF.y + 20, 1, PROF.h - 40); c.fillStyle = '#9fb2c0'; c.fillText(SEC[s2][0].replace(/\n/g, ' ').replace('- ', ''), fx + 3, PROF.y + PROF.h - (s2 % 2 ? 22 : 8)); }
+      bg = cv;
+    }
+    var sc = touchScreen({ w: W, h: H, pw: 1.4, ph: 0.85, x: 0, y: 0, z: 0.006, parent: g, title: 'The track mimic',
       draw: function (c, s) {
-        c.fillStyle = '#10161b'; c.fillRect(0, 0, s.w, s.h);
-        c.fillStyle = '#c9a227'; c.font = 'bold 14px ' + SCREEN_THEME.font; c.textAlign = 'left'; c.fillText('THE COASTER  ·  TRACK MIMIC', 12, 20);
-        c.fillStyle = '#7d8a96'; c.font = '11px ' + SCREEN_THEME.font; c.fillText('BLOCKS ' + BL + '   LAP ' + Math.round(PK.len) + ' m', 12, 36);
-        var m = 30, kx = (s.w - m * 2) / (x1 - x0), kz = (s.h - 60 - m) / (z1 - z0), k = Math.min(kx, kz), ox = (s.w - (x1 - x0) * k) / 2, oz = 48;
-        function X(p) { return ox + (p.x - x0) * k; } function Z(p) { return oz + (p.z - z0) * k; }
-        var R = PK.ride, tb = Math.floor((((R.u - PK.stationU) % 1 + 1) % 1) * BL);
+        if (!bg) background();
+        c.drawImage(bg, 0, 0, s.w, s.h);
+        var R = PK.ride, d = lapOf(R.u), tb = Math.floor(d * BL), run = R.state === 'running' || R.state === 'dispatch' || R.state === 'arrive';
+        c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+        c.fillStyle = '#ffcf5a'; c.font = 'bold 20px ' + font; c.fillText('THE COASTER  ·  TRACK MIMIC', 18, 30);
+        c.fillStyle = R.fault ? '#ff6b5e' : '#d6dee3'; c.font = 'bold 15px ' + font; c.textAlign = 'right';
+        c.fillText((R.fault ? 'STOPPED  ' : '') + pkRideWord().toUpperCase() + '   ' + fmtTime(S.time), W - 18, 30);
+        // the blocks: green clear, red occupied, the block behind the train amber while it clears
+        c.lineCap = 'round'; c.lineJoin = 'round';
         for (var b = 0; b < BL; b++) {
-          c.strokeStyle = b === tb ? '#ff4a3a' : '#3f8f5f'; c.lineWidth = 6; c.lineCap = 'round'; c.beginPath();
-          for (var j = 0; j <= N / BL; j++) { var q = P[(Math.floor(PK.stationU * N) + b * N / BL + j) % N]; if (j === 0) c.moveTo(X(q), Z(q)); else c.lineTo(X(q), Z(q)); }
+          var occ = b === tb, behind = run && b === (tb + BL - 1) % BL;
+          c.strokeStyle = occ ? '#ff4a3a' : behind ? '#f0c04a' : '#3f9f6a'; c.lineWidth = 6; c.beginPath();
+          for (var j = 0; j <= N / BL; j++) { var q = P[(b * N / BL + j) % N]; if (j === 0) c.moveTo(X(q), Z(q)); else c.lineTo(X(q), Z(q)); }
           c.stroke();
+          var mid = P[Math.floor((b + 0.5) * N / BL) % N]; c.fillStyle = 'rgba(214,222,227,0.55)'; c.font = '10px ' + font; c.textAlign = 'center'; c.fillText('B' + (b + 1), X(mid), Z(mid) - 9);
         }
-        // the lift and the station, marked
-        c.fillStyle = '#9fb2c0'; c.font = '10px ' + SCREEN_THEME.font; c.textAlign = 'center';
-        var ps = PK.curve.getPointAt(PK.stationU), pl = PK.curve.getPointAt((PK.liftU[0] + PK.liftU[1]) / 2);
-        c.fillText('STATION', X(ps), Z(ps) + 18); c.fillText('LIFT', X(pl) + 18, Z(pl));
-        // the train: three cars, the lead one brighter
-        for (var t = 0; t < 3; t++) { var u = ((R.u - t * PK.carGap / PK.len) % 1 + 1) % 1, pt = PK.curve.getPointAt(u); c.fillStyle = t ? '#ffd27a' : '#ffffff'; c.beginPath(); c.arc(X(pt), Z(pt), t ? 4 : 5, 0, 6.283); c.fill(); }
-        c.textAlign = 'left'; c.fillStyle = R.fault ? '#ff6b5e' : '#d6dee3'; c.font = 'bold 12px ' + SCREEN_THEME.font;
-        c.fillText((R.fault ? 'STOP  ' : '') + 'BLOCK ' + (tb + 1) + '   ' + (R.v || 0).toFixed(1) + ' m/s', 12, s.h - 10);
+        // the lift's chain, ticking along while it runs
+        c.strokeStyle = 'rgba(0,0,0,0.75)'; c.lineWidth = 2; c.setLineDash([4, 4]); c.lineDashOffset = -PK_BK_T * (run ? 20 : 0); c.beginPath();
+        for (var n = Math.floor(lift[0] * N); n <= Math.ceil(lift[1] * N) && n < N; n++) { if (n === Math.floor(lift[0] * N)) c.moveTo(X(P[n]), Z(P[n])); else c.lineTo(X(P[n]), Z(P[n])); }
+        c.stroke(); c.setLineDash([]);
+        // the station and the named sections
+        var ps = P[0], pl = P[Math.floor((lift[0] + lift[1]) / 2 * N)];
+        c.fillStyle = '#ffcf5a'; c.fillRect(X(ps) - 7, Z(ps) - 7, 14, 14);
+        c.fillStyle = '#9fb2c0'; c.font = 'bold 11px ' + font; c.textAlign = 'center'; c.fillText('STATION', X(ps), Z(ps) + 22); c.fillText('LIFT', X(pl) + 22, Z(pl) + 4);
+        var top = P[ys.indexOf(y1)]; c.fillStyle = '#d6dee3'; c.font = '10px ' + font; c.fillText('^ ' + (y1 - y0).toFixed(1) + ' m', X(top), Z(top) - 12);
+        // the trail: where the train has been the last few seconds, coloured by its speed
+        for (var t = 1; t < trail.length; t++) { var A = trail[t - 1], B2 = trail[t], f = clamp(B2.v / 25, 0, 1); c.strokeStyle = 'rgba(' + Math.round(120 + 135 * f) + ',' + Math.round(220 - 150 * f) + ',' + Math.round(255 - 200 * f) + ',' + (t / trail.length).toFixed(2) + ')'; c.lineWidth = 4; c.beginPath(); c.moveTo(X(A.p), Z(A.p)); c.lineTo(X(B2.p), Z(B2.p)); c.stroke(); }
+        // the train: each car along the track, its seats lit for the riders in it
+        for (var ci = 0; ci < PK.cars.length; ci++) {
+          var u = ((R.u - ci * PK.carGap / PK.len) % 1 + 1) % 1, pt = PK.curve.getPointAt(u), tg = PK.curve.getTangentAt(u), an = Math.atan2(tg.z * k, tg.x * k);
+          c.save(); c.translate(X(pt), Z(pt)); c.rotate(an);
+          c.fillStyle = ci ? '#d8b04a' : '#ffffff'; c.strokeStyle = '#000'; c.lineWidth = 1.5; roundRect(c, -11, -7, 22, 14, 4); c.fill(); c.stroke();
+          for (var st = 0; st < 4; st++) { var seat = PK.seats[ci * 4 + st]; c.fillStyle = seat && seat.guest ? '#1b6fd0' : 'rgba(0,0,0,0.25)'; c.beginPath(); c.arc(-5 + (st >> 1) * 10, -3 + (st & 1) * 6, 2.4, 0, 6.283); c.fill(); }
+          c.restore();
+        }
+        // the side column: the live numbers
+        var sx = SIDE.x + 14, sy = SIDE.y + 26, v = (R.v || 0) * 3.6;
+        c.textAlign = 'left'; c.fillStyle = '#7d8a96'; c.font = 'bold 11px ' + font; c.fillText('SPEED', sx, sy);
+        c.fillStyle = '#ffcf5a'; c.font = 'bold 46px ' + font; c.fillText(v.toFixed(0), sx, sy + 46); var vw = c.measureText(v.toFixed(0)).width; c.font = 'bold 14px ' + font; c.fillStyle = '#c9a227'; c.fillText('KM/H', sx + vw + 8, sy + 46);
+        c.fillStyle = 'rgba(255,207,90,0.15)'; c.fillRect(sx, sy + 56, SIDE.w - 28, 8); c.fillStyle = '#ffcf5a'; c.fillRect(sx, sy + 56, (SIDE.w - 28) * clamp(v / 108, 0, 1), 8);
+        var rows = [['HEIGHT', (PK.cars[0] ? Math.max(0, PK.cars[0].position.y - y0) : 0).toFixed(1) + ' m'], ['LOAD', gLoad.toFixed(2) + ' g'], ['TOP SPEED', (topV * 3.6).toFixed(0) + ' km/h'],
+          ['BLOCK', 'B' + (tb + 1) + ' of ' + BL], ['LAP CLOCK', (PK.lapT || 0).toFixed(1) + ' s'], ['LAST LAP', PK.lastLap ? PK.lastLap.toFixed(1) + ' s' : '--'], ['ABOARD', R.riders + ' / ' + PK.seats.length], ['CYCLES', String(S.cycles || 0)]];
+        rows.forEach(function (rw, i2) { var yy = sy + 92 + i2 * 26; c.fillStyle = '#7d8a96'; c.font = 'bold 11px ' + font; c.textAlign = 'left'; c.fillText(rw[0], sx, yy); c.fillStyle = '#e8eef2'; c.font = 'bold 15px ' + font; c.textAlign = 'right'; c.fillText(rw[1], SIDE.x + SIDE.w - 14, yy); });
+        // the foot: this lap's speed over the profile, the last lap's in grey, the train's cursor
+        var drawTrace = function (arr, col, w) { c.strokeStyle = col; c.lineWidth = w; c.beginPath(); var on = false; for (var bi = 0; bi < BINS; bi++) { if (!arr[bi]) { on = false; continue; } var xx = PX(bi / BINS), yy = VY(arr[bi]); if (on) c.lineTo(xx, yy); else { c.moveTo(xx, yy); on = true; } } c.stroke(); };
+        if (last) drawTrace(last, 'rgba(200,210,220,0.35)', 1.5);
+        drawTrace(trace, '#ff9d6b', 2);
+        var cy = PY(P[Math.min(N - 1, Math.floor(d * N))].y); c.fillStyle = '#ffffff'; c.beginPath(); c.arc(PX(d), cy, 5, 0, 6.283); c.fill();
+        c.fillStyle = 'rgba(255,255,255,0.25)'; c.fillRect(PX(d), PROF.y + 20, 1, PROF.h - 40);
       } });
+    // the board keeps the trace and the trail whether or not anyone is looking, so it is right when you look up
+    pkCtlLive({ tick: function (dt) {
+      var R = PK.ride, d = lapOf(R.u), car = PK.cars[0];
+      if (d + 0.5 < prevD) { if (trace.some(function (v) { return v > 0; })) last = trace.slice(); trace = new Array(BINS).fill(0); }
+      prevD = d;
+      if (R.state === 'running' || R.state === 'arrive') { var bi = Math.min(BINS - 1, Math.floor(d * BINS)); trace[bi] = Math.max(0.01, R.v || 0); topV = Math.max(topV, R.v || 0); }
+      trailT -= dt;
+      if (trailT <= 0) { trailT = 0.12; trail.push({ p: PK.curve.getPointAt(R.u).clone(), v: R.v || 0 }); if (trail.length > 30) trail.shift(); }
+      if (car && dt > 0) {
+        if (prevPos) { vNow.copy(car.position).sub(prevPos).divideScalar(dt); var acc = vNow.clone().sub(prevVel).divideScalar(dt); prevVel.copy(vNow); var gl = Math.sqrt(acc.x * acc.x + (acc.y + 9.81) * (acc.y + 9.81) + acc.z * acc.z) / 9.81; if (!isFinite(gl) || gl > 7 || R.state !== 'running') gl = 1; gLoad += (gl - gLoad) * Math.min(1, dt * 2.5); }
+        else prevPos = new THREE.Vector3();
+        prevPos.copy(car.position);
+      }
+    } });
     pkPowerScreen(sc, pkCoasterOpen);
-    PK_BK_LIVE.push({ sc: sc, g: g, every: 0.25 });
-    PK_MIMIC = sc;
+    PK_BK_LIVE.push({ sc: sc, g: g, every: 0.2 });
+    PK_MIMIC = sc; sc.board = g;
   }
   // two CCTV monitors on their stands on the station desk, turned to the operator: the queue lane and the platform
   function pkOpMonitors(x, z, ry) {
@@ -6866,7 +6953,7 @@
     box(3.4, 0.5, 0.06, MAT.wood, 0, 0.25, -1.73, g);
     for (var sb = 0; sb < 5; sb++) box(0.07, 2.2, 0.05, MAT.trim, -1.45 + sb * 0.725, 1.75, -1.74, g);
     box(0.85, 2.0, 0.07, MAT.wood, 0.75, 1.0, -1.74, g);
-    sphere(0.035, MAT.gold, 1.05, 1.0, -1.79, g);
+    sphere(0.035, pkMats().gold, 1.05, 1.0, -1.79, g);
     box(0.06, 0.5, 3.4, MAT.wood, -1.73, 0.25, 0, g);
     box(0.06, 0.5, 3.4, MAT.wood, 1.73, 0.25, 0, g);
     for (var sw = 0; sw < 4; sw++) {
@@ -9266,11 +9353,11 @@
       pkRoundCyl(0.07, 0.42, M.iron, l[0], 0.21, l[2], g, 8);
     });
     [-0.18, 0, 0.18].forEach(function (sy) {
-      pkBevelBox(1.8, 0.05, 0.42, M.wood, 0, 0.45, sy, g, 0.02);
+      pkBevelBox(1.8, 0.05, 0.42, pkMatWoodRich(), 0, 0.45, sy, g, 0.02);
     });
     pkBevelBox(1.9, 0.06, 0.5, M.iron, 0, 0.42, 0, g, 0.02);
     [-0.18, 0, 0.18].forEach(function (sy) {
-      pkBevelBox(1.8, 0.32, 0.05, M.wood, 0, 0.78, sy - 0.2, g, 0.02);
+      pkBevelBox(1.8, 0.32, 0.05, pkMatWoodRich(), 0, 0.78, sy - 0.2, g, 0.02);
     });
     pkBevelBox(1.9, 0.34, 0.12, M.iron, 0, 0.78, -0.22, g, 0.02);
     [[-0.95, 0.55, 0], [0.95, 0.55, 0]].forEach(function (a) {
@@ -10481,6 +10568,7 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
   }
   // true where something else (a tree) must not stand: the routes, the hub, the coaster's footprint
   function pkThemeKeepClear(x, z) {
+    if (typeof pkXpClear === 'function' && pkXpClear(x, z)) return true;   // part 46: the expansion site, the new viaduct's line, the town and the farms
     for (var i = 0; i < PK_ROUTES.length; i++) {
       var r = PK_ROUTES[i], hw = r[4] / 2 + 2.5;
       if (x > Math.min(r[0], r[2]) - hw && x < Math.max(r[0], r[2]) + hw && z > Math.min(r[1], r[3]) - hw && z < Math.max(r[1], r[3]) + hw) return true;
@@ -10570,6 +10658,7 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
           var pa = at(ta + (rng() - 0.5) * 2, sd * (w / 2 + 3.3 + rng() * 1.2));
           if (pkNearRide(pa[0], pa[1], 3) || pkNearRoute(pa[0], pa[1], i, 3.2)) return;
           if (pkNearTrack(pa[0], pa[1], 4.5)) return;
+          if (typeof pkXpViaNear === 'function' && pkXpViaNear(pa[0], pa[1], 5)) return;   // part 46: felled for the new viaduct
           var seed = Math.abs(Math.round(pa[0] * 13 + pa[1] * 7)), sc = 0.9 + rng() * 0.5;
           if (seed % 6 === 0) pkConifer(pa[0], pa[1], sc, null, seed); else pkTree(pa[0], pa[1], sc, null, seed);
         });
@@ -10943,36 +11032,47 @@ function pkCtlM() {
 
 // ── Gauge faces ──────────────────────────────────────────────────────
 var PK_GAUGE_TEX = {};
+// a dial's printing: cream is the classic, the others are what a themed booth desk asks for (part 14, the booth panels)
+var PK_DIALS = {
+  cream: { f: ['#fbf7ec', '#efe9d8', '#d3ccb8'], ink: '#2f3439', sub: '#6c7176', red: '#c0392b', wear: 'rgba(120,110,90,' },
+  black: { f: ['#2a3036', '#181c20', '#0d1013'], ink: '#eef1f2', sub: '#9aa6ae', red: '#e0483a', wear: 'rgba(255,255,255,' },
+  brass: { f: ['#f6e7b8', '#e2c682', '#b8914e'], ink: '#3a2a14', sub: '#6a5130', red: '#9c2a1c', wear: 'rgba(90,60,20,' },
+  bone:  { f: ['#efe4c8', '#d9caa2', '#a8956a'], ink: '#2b1d12', sub: '#5a4630', red: '#8a2318', wear: 'rgba(70,40,20,' },
+  night: { f: ['#2c2350', '#1a1534', '#0d0b1e'], ink: '#b9f5c8', sub: '#8fa2d8', red: '#ff6b8a', wear: 'rgba(180,200,255,' },
+  toy:   { f: ['#ffffff', '#fff6e0', '#ffe3a8'], ink: '#2a2f6a', sub: '#e0563f', red: '#e0563f', wear: 'rgba(255,180,80,', rainbow: true }
+};
 function pkCtlGaugeTex(o) {
-  var key = [o.label, o.min, o.max, o.unit, o.red || 0, o.ticks || 10].join('|');
+  var key = [o.label, o.min, o.max, o.unit, o.red || 0, o.ticks || 10, o.dial || 'cream'].join('|');
   if (PK_GAUGE_TEX[key]) return PK_GAUGE_TEX[key];
+  var D = PK_DIALS[o.dial] || PK_DIALS.cream;
   var t = tex(256, 256, function (c, W, H) {
     var cx = W / 2, cy = H / 2, R = W * 0.48;
     c.clearRect(0, 0, W, H);
     var g = c.createRadialGradient(cx, cy - R * 0.3, R * 0.12, cx, cy, R);
-    g.addColorStop(0, '#fbf7ec'); g.addColorStop(0.72, '#efe9d8'); g.addColorStop(1, '#d3ccb8');
+    g.addColorStop(0, D.f[0]); g.addColorStop(0.72, D.f[1]); g.addColorStop(1, D.f[2]);
     c.fillStyle = g; c.beginPath(); c.arc(cx, cy, R, 0, 6.2832); c.fill();
     // the sweep runs 270 degrees from the lower left, the way a real dial does
     var A = function (v) { return -(135 + 270 * v) * Math.PI / 180; };
     var P = function (v, rr) { var a = A(v); return [cx + Math.cos(a) * rr, cy - Math.sin(a) * rr]; };
-    if (o.red) { c.beginPath(); c.lineWidth = R * 0.09; c.strokeStyle = '#c0392b'; c.arc(cx, cy, R * 0.80, (135 + 270 * o.red) * Math.PI / 180, (135 + 270) * Math.PI / 180); c.stroke(); }
+    if (D.rainbow) ['#5fd38d', '#8fd3c7', '#f0c04a', '#ff9d6b'].forEach(function (col, k) { var span = o.red || 1; c.beginPath(); c.lineWidth = R * 0.11; c.strokeStyle = col; c.arc(cx, cy, R * 0.80, (135 + 270 * span * k / 4) * Math.PI / 180, (135 + 270 * span * (k + 1) / 4) * Math.PI / 180); c.stroke(); });
+    if (o.red) { c.beginPath(); c.lineWidth = R * 0.09; c.strokeStyle = D.red; c.arc(cx, cy, R * 0.80, (135 + 270 * o.red) * Math.PI / 180, (135 + 270) * Math.PI / 180); c.stroke(); }
     var n = o.ticks || 10;
     for (var i = 0; i <= n; i++) {
       var v = i / n, major = i % 2 === 0, a = P(v, R * (major ? 0.74 : 0.80)), b = P(v, R * 0.90);
-      c.beginPath(); c.lineWidth = major ? R * 0.028 : R * 0.016; c.strokeStyle = '#2f3439';
+      c.beginPath(); c.lineWidth = major ? R * 0.028 : R * 0.016; c.strokeStyle = D.ink;
       c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
       if (major) {
         var q = P(v, R * 0.60);
-        c.fillStyle = '#2f3439'; c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillStyle = D.ink; c.textAlign = 'center'; c.textBaseline = 'middle';
         c.font = 'bold ' + Math.round(R * 0.13) + 'px Arial';
         c.fillText(String(Math.round((o.min + (o.max - o.min) * v) * 10) / 10), q[0], q[1]);
       }
     }
-    c.fillStyle = '#2f3439'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillStyle = D.ink; c.textAlign = 'center'; c.textBaseline = 'middle';
     c.font = 'bold ' + Math.round(R * 0.115) + 'px Arial'; c.fillText(o.label, cx, cy + R * 0.30);
-    if (o.unit) { c.fillStyle = '#6c7176'; c.font = Math.round(R * 0.10) + 'px Arial'; c.fillText(o.unit, cx, cy + R * 0.47); }
+    if (o.unit) { c.fillStyle = D.sub; c.font = Math.round(R * 0.10) + 'px Arial'; c.fillText(o.unit, cx, cy + R * 0.47); }
     // a little wear so the dial is not a clip-art circle
-    for (var k = 0; k < 60; k++) { c.fillStyle = 'rgba(120,110,90,' + randf(0.02, 0.07) + ')'; c.fillRect(randf(0, W), randf(0, H), randf(1, 5), randf(1, 3)); }
+    for (var k = 0; k < 60; k++) { c.fillStyle = D.wear + randf(0.02, 0.07) + ')'; c.fillRect(randf(0, W), randf(0, H), randf(1, 5), randf(1, 3)); }
   });
   t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
   return (PK_GAUGE_TEX[key] = t);
@@ -10982,10 +11082,12 @@ function pkCtlGaugeTex(o) {
 // One canvas per panel: painted steel, section lines, engraved lettering. The hardware is
 // mounted on top at the same coordinates the legend is drawn at, so nothing can drift.
 var PK_FACE_TEX = {};
-function pkCtlFace(key, w, h, draw) {
+// paint(c, W, H), when given, lays the plate's own finish instead of the plain grey steel (the themed booth desks)
+function pkCtlFace(key, w, h, draw, paint) {
   if (PK_FACE_TEX[key]) return PK_FACE_TEX[key];
   var W = 2048, H = Math.max(160, Math.round(W * h / w));
   var t = tex(W, H, function (c) {
+    if (paint) { paint(c, W, H); draw(c, W, H); return; }
     c.fillStyle = '#46525b'; c.fillRect(0, 0, W, H);
     for (var i = 0; i < 3200; i++) {
       c.fillStyle = 'rgba(' + (Math.random() < 0.5 ? '255,255,255' : '0,0,0') + ',' + randf(0.01, 0.04) + ')';
@@ -11038,22 +11140,27 @@ function pkCtlPanel(o) {
   g.rotation.y = o.ry || 0;
   g.rotation.x = o.tilt || 0;
   parentOf(o.parent).add(g);
-  pkBevelBox(o.w + 0.07, o.h + 0.07, 0.055, M.case, 0, 0, -0.030, g, 0.012);
-  var faceTex = pkCtlFace(o.key, o.w, o.h, o.draw);
+  // o.caseMat, o.rim and o.screw dress the plate's case, its machined rim and its screws; o.paint its finish; o.glow,
+  // o.rough and o.metal how the printed plate takes the light
+  pkBevelBox(o.w + 0.07, o.h + 0.07, 0.055, o.caseMat || M.case, 0, 0, -0.030, g, 0.012);
+  var faceTex = pkCtlFace(o.key, o.w, o.h, o.draw, o.paint);
+  var glowK = o.glow === undefined ? 0.34 : o.glow;
   var face = new THREE.Mesh(new THREE.PlaneGeometry(o.w, o.h),
-    new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.55, metalness: 0.22, emissive: 0xffffff, emissiveMap: faceTex, emissiveIntensity: 0.34 }));
+    new THREE.MeshStandardMaterial({ map: faceTex, roughness: o.rough === undefined ? 0.55 : o.rough, metalness: o.metal === undefined ? 0.22 : o.metal, emissive: 0xffffff, emissiveMap: faceTex, emissiveIntensity: glowK }));
   face.position.z = 0.0005; face.receiveShadow = true; g.add(face);
-  g.userData.pkSetPower = function (on) { face.material.emissiveIntensity = on ? 0.34 : 0.03; };
+  g.userData.pkFace = face;
+  g.userData.pkSetPower = function (on) { face.material.emissiveIntensity = on ? glowK : 0.03; };
   var pkWasLive = true;
   pkCtlLive({ tick: function () {
     var live = pkCtlPowered(g);
     if (live !== pkWasLive) { pkWasLive = live; g.userData.pkSetPower(live); }
   } });
   // the machined rim round the plate, and four screws
-  pkBevelBox(o.w + 0.10, 0.018, 0.06, M.bezel, 0, o.h / 2 + 0.038, -0.028, g, 0.005);
-  pkBevelBox(o.w + 0.10, 0.018, 0.06, M.bezel, 0, -o.h / 2 - 0.038, -0.028, g, 0.005);
+  pkBevelBox(o.w + 0.10, 0.018, 0.06, o.rim || M.bezel, 0, o.h / 2 + 0.038, -0.028, g, 0.005);
+  pkBevelBox(o.w + 0.10, 0.018, 0.06, o.rim || M.bezel, 0, -o.h / 2 - 0.038, -0.028, g, 0.005);
+  if (o.rim) [-1, 1].forEach(function (sx) { pkBevelBox(0.018, o.h + 0.094, 0.06, o.rim, sx * (o.w / 2 + 0.041), 0, -0.028, g, 0.005); });
   [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (s) {
-    var sc = new THREE.Mesh(roundCylGeo(0.011, 0.011, 0.005, 10), MAT.chrome);
+    var sc = new THREE.Mesh(roundCylGeo(0.011, 0.011, 0.005, 10), o.screw || MAT.chrome);
     sc.rotation.x = Math.PI / 2; sc.position.set(s[0] * (o.w / 2 - 0.012), s[1] * (o.h / 2 - 0.012), 0.004); g.add(sc);
   });
   return g;
@@ -11095,7 +11202,7 @@ function pkCtlStart() {
 function pkCtlBtn(g, x, y, o) {
   o = o || {};
   var M = pkCtlM(), r = o.r || 0.038;
-  var collar = new THREE.Mesh(roundCylGeo(r * 1.40, r * 1.46, 0.011, 20), MAT.chrome);
+  var collar = new THREE.Mesh(roundCylGeo(r * 1.40, r * 1.46, 0.011, 20), o.collar || MAT.chrome);
   collar.rotation.x = Math.PI / 2; collar.position.set(x, y, 0.006); g.add(collar);
   var well = new THREE.Mesh(roundCylGeo(r * 1.18, r * 1.18, 0.010, 20), M.well);
   well.rotation.x = Math.PI / 2; well.position.set(x, y, 0.010); g.add(well);
@@ -11339,7 +11446,7 @@ function pkCtlLamp(g, x, y, o) {
 function pkCtlGauge(g, x, y, o) {
   o = o || {};
   var M = pkCtlM(), r = o.r || 0.10;
-  var bez = new THREE.Mesh(roundCylGeo(r * 1.13, r * 1.17, 0.013, 28), MAT.chrome);
+  var bez = new THREE.Mesh(roundCylGeo(r * 1.13, r * 1.17, 0.013, 28), o.bezel || MAT.chrome);
   bez.rotation.x = Math.PI / 2; bez.position.set(x, y, 0.0065); g.add(bez);
   var face = new THREE.Mesh(new THREE.CircleGeometry(r * 0.99, 40),
     new THREE.MeshStandardMaterial({ map: pkCtlGaugeTex(o), roughness: 0.42, metalness: 0.02 }));
@@ -11427,62 +11534,105 @@ function pkBuildCoasterConsole(at) {
   pkSign3D(['PARK CO', 'COASTER CONTROL'], 0.62, 0.20, CX - 0.72, 0.40, CZ + 0.365, 0, { bg: '#1b232c', fg: '#e8e4d8' }, G);
 
   // ── the fascia ──
+  // The flagship's own plate (part 14, the booth panels, has the styles): three fields. DRIVE: the crest and the maker's
+  // plate, the four lamps, the three dials, master power, panel lamps and the mode knob. CONTROL: the eight buttons over the
+  // train and station mimic, every seat of the train, its restraints car by car, the platform gates and the air that works
+  // them. DISPATCH: the stop, the operator key, the telemetry strip, the READY lamp and the lever. The track itself is on the
+  // mimic board on the wall (part 03).
+  var SS = pkPnStyles(), ST = SS.flagship; pkPnCaps();
   var B = [
-    ['gates', 'GATES', 'green', -0.35, 0.17],
-    ['barsDown', 'BARS DN', 'amber', -0.11, 0.17],
-    ['barsUp', 'BARS UP', 'white', 0.13, 0.17],
-    ['station', 'STN GATES', 'white', 0.37, 0.17],
-    ['reset', 'RESET', 'white', -0.35, -0.04],
-    ['test', 'TEST RUN', 'blue', -0.11, -0.04],
-    ['maint', 'MAINT', 'amber', 0.13, -0.04],
-    ['horn', 'BELL', 'white', 0.37, -0.04]
+    ['gates', 'GATES', 'green', -0.28, 0.245],
+    ['barsDown', 'BARS DN', 'amber', -0.04, 0.245],
+    ['barsUp', 'BARS UP', 'white', 0.20, 0.245],
+    ['station', 'STN GATES', 'white', 0.44, 0.245],
+    ['reset', 'RESET', 'white', -0.28, 0.105],
+    ['test', 'TEST RUN', 'blue', -0.04, 0.105],
+    ['maint', 'MAINT', 'amber', 0.20, 0.105],
+    ['horn', 'BELL', 'white', 0.44, 0.105]
   ];
   var GA = [
     ['speed', 'SPEED', 'km/h', 0, 80, 0.80, -1.14],
-    ['air', 'AIR', 'bar', 0, 10, 0.72, -0.85],
-    ['load', 'LOAD', 'riders', 0, 12, 0.90, -0.56]
+    ['air', 'AIR', 'bar', 0, 10, 0.72, -0.88],
+    ['load', 'LOAD', 'riders', 0, 12, 0.90, -0.62]
   ];
   var LA = [['power', 'POWER'], ['gate', 'GATES'], ['bars', 'BARS'], ['fault', 'FAULT']];
-  var TOG = [['powerSw', 'POWER', -1.15], ['lampSw', 'LAMPS', -0.88]];
+  var LAX = [-1.17, -1.0, -0.83, -0.66];
+  var MW = { x0: -0.44, x1: 0.60, y0: -0.345, y1: -0.005 };   // the train and station mimic's window
+  // the mimic's layout: three cars nose to tail along the platform, the gates under them, the air plant to the right
+  var CARW = 0.17, CARH = 0.085, CAR0 = MW.x0 + 0.05, CARY = MW.y0 + 0.2, PNX = MW.x0 + 0.72;
+  var carX = function (i) { return CAR0 + (PK.cars.length - 1 - i) * (CARW + 0.035); };   // the lead car on the right, as the train runs
+  var serial = pkPnSerial('coaster');
 
   var P = pkCtlPanel({
     w: PW, h: PH, x: CX, y: TOP + (PH / 2) * Math.cos(TILT), z: CZ + 0.31 - (PH / 2) * Math.sin(TILT),
     tilt: -TILT, key: 'pk-coaster-desk', parent: G,
+    paint: function (c, W, H) { ST.base(c, W, H); }, rim: ST.rim, glow: ST.glow,
     draw: function (c, W, H) {
-      var R2 = pkCtlRuler(W, H, PW, PH); R2.c = c;
-      // section boxes
-      R2.box(-0.87, 0, 0.86, 0.70, 'rgba(0,0,0,0.30)', 0.006);
-      R2.box(0.08, 0, 1.04, 0.70, 'rgba(0,0,0,0.30)', 0.006);
-      R2.box(0.95, 0, 0.70, 0.70, 'rgba(0,0,0,0.30)', 0.006);
-      R2.engrave('DRIVE', -0.87, 0.300, 0.030);
-      R2.engrave('CONTROL', 0.08, 0.300, 0.030);
-      R2.engrave('DISPATCH', 0.95, 0.300, 0.030);
-      // section 1: lamp captions, gauge captions, switch captions
-      for (var i = 0; i < LA.length; i++) R2.txt(LA[i][1], -1.14 + i * 0.19, 0.262, 0.020, '#aebcc4');
-      R2.txt('MASTER', -1.15, -0.272, 0.020, '#aebcc4');
-      R2.txt('PANEL LAMPS', -0.88, -0.272, 0.020, '#aebcc4');
-      R2.txt('MODE', -0.57, -0.272, 0.020, '#aebcc4');
-      // section 2: button captions
-      for (var b = 0; b < B.length; b++) R2.txt(B[b][1], B[b][3], B[b][4] - 0.068, 0.024, '#d6dee3');
-      R2.txt('PARK CO  ·  COASTER CONTROL  ·  STATION 01', 0.08, -0.268, 0.021, '#8f9ca4');
-      // section 3: the emergency stop
-      R2.engrave('EMERGENCY STOP', 0.80, 0.058, 0.026);
-      R2.txt('turn to release', 0.80, 0.028, 0.017, '#c8d2d8');
-      R2.txt('DISPATCH', 1.03, -0.258, 0.024, '#d6dee3');
-      R2.txt('PULL', 1.03, -0.228, 0.016, '#8f9ca4');
-      // a hazard band along the bottom edge
-      R2.txt('OPERATOR KEY', 0.60, -0.262, 0.016, '#e8c86a');
-      R2.txt('OFF', 0.555, -0.12, 0.013, '#aebcc4'); R2.txt('ON', 0.65, -0.12, 0.013, '#5fd38d');
-      var hy = R2.Y(-0.322), hh = R2.L(0.028);
-      c.save();
-      c.beginPath(); c.rect(R2.X(-1.30), hy, R2.L(2.60), hh); c.clip();
-      c.fillStyle = '#151a1e'; c.fillRect(R2.X(-1.30), hy, R2.L(2.60), hh);
-      c.fillStyle = '#c9a227';
-      for (var hz = 0; hz < 62; hz++) {
-        var x0 = R2.X(-1.30) + hz * R2.L(0.048);
-        c.beginPath(); c.moveTo(x0, hy + hh); c.lineTo(x0 + R2.L(0.022), hy + hh);
-        c.lineTo(x0 + R2.L(0.022) + hh, hy); c.lineTo(x0 + hh, hy); c.closePath(); c.fill();
+      var R = pkCtlRuler(W, H, PW, PH), i; R.c = c;
+      pkPnZone(R, ST, -1.29, -0.35, -0.47, 0.35);
+      pkPnZone(R, ST, -0.46, -0.35, 0.62, 0.35, 'CONTROL');
+      pkPnZone(R, ST, 0.63, -0.35, 1.29, 0.35, 'DISPATCH');
+      // who it is
+      var cx = R.X(-1.215), cy = R.Y(0.285), cr = R.L(0.046);
+      c.save(); c.beginPath(); c.arc(cx, cy, cr * 1.08, 0, 6.2832); c.fillStyle = ST.zone2; c.fill(); c.lineWidth = R.L(0.003); c.strokeStyle = ST.acc; c.stroke(); c.restore();
+      c.save(); c.beginPath(); c.arc(cx, cy, cr * 0.96, 0, 6.2832); c.clip(); PK_PN_CRESTS.coaster(c, cx, cy, cr * 0.9, ST); c.restore();
+      pkPnText(R, ST, 'The Coaster', -1.15, 0.302, 0.036, { align: 'left', font: ST.head, max: 0.6 });
+      pkPnText(R, ST, 'PARK CO FLAGSHIP  ·  LIFT, LOOP AND CORKSCREW  ·  STATION 01', -1.15, 0.262, 0.0125, { align: 'left', col: ST.dim, max: 0.66 });
+      pkPnText(R, ST, 'LINDENBURG RIDE WORKS  ·  ' + serial + '  ·  400 V 3~ 50 HZ', -1.15, 0.24, 0.0105, { align: 'left', col: ST.dim, max: 0.66 });
+      for (i = 0; i < LA.length; i++) pkPnText(R, ST, LA[i][1], LAX[i], 0.138, 0.0145, { col: ST.dim });
+      pkPnText(R, ST, 'MASTER', -1.15, -0.322, 0.0145, { col: ST.dim });
+      pkPnText(R, ST, 'PANEL LAMPS', -0.92, -0.322, 0.0145, { col: ST.dim });
+      pkPnText(R, ST, 'MODE', -0.64, -0.322, 0.0145, { col: ST.dim });
+      pkPnText(R, ST, 'MAN', -0.712, -0.2, 0.0095, { col: ST.dim, align: 'right' }); pkPnText(R, ST, 'AUTO', -0.64, -0.158, 0.0095, { col: ST.dim }); pkPnText(R, ST, 'TEST', -0.568, -0.2, 0.0095, { col: ST.dim, align: 'left' });
+      // the buttons' names under them
+      for (i = 0; i < B.length; i++) pkPnText(R, ST, B[i][1], B[i][3], B[i][4] - 0.062, 0.0165, { max: 0.2 });
+      // the train and station mimic
+      c.save(); pkPnRect(R, MW.x0, MW.y0, MW.x1, MW.y1, 0.008); c.fillStyle = ST.win; c.fill(); c.clip();
+      for (var gx = MW.x0; gx < MW.x1; gx += 0.02) pkPnLine(R, [[gx, MW.y0], [gx, MW.y1]], ST.grid, 0.0007);
+      for (var gy = MW.y0; gy < MW.y1; gy += 0.02) pkPnLine(R, [[MW.x0, gy], [MW.x1, gy]], ST.grid, 0.0007);
+      pkPnText(R, ST, 'TRAIN AND STATION', MW.x0 + 0.012, MW.y1 - 0.016, 0.011, { align: 'left', col: ST.dim });
+      // the platform edge, the rails under the train, the direction of travel
+      var x0 = CAR0 - 0.02, x1 = carX(0) + CARW + 0.03;
+      pkPnLine(R, [[x0, CARY - 0.012], [x1, CARY - 0.012]], 'rgba(200,215,230,0.55)', 0.0022);
+      pkPnLine(R, [[x0, CARY - 0.019], [x1, CARY - 0.019]], 'rgba(200,215,230,0.35)', 0.0014);
+      c.save(); c.fillStyle = 'rgba(201,162,39,0.25)'; c.fillRect(R.X(x0), R.Y(CARY - 0.05), R.L(x1 - x0), R.L(0.012)); c.restore();
+      pkPnText(R, ST, 'PLATFORM', x0 + 0.004, CARY - 0.064, 0.009, { align: 'left', col: ST.dim });
+      pkPnText(R, ST, 'TRAVEL  >', x1 - 0.004, CARY + CARH + 0.03, 0.009, { align: 'right', col: ST.dim });
+      for (i = 0; i < PK.cars.length; i++) {
+        var X0 = carX(i);
+        c.save(); pkPnRect(R, X0, CARY, X0 + CARW, CARY + CARH, 0.014); c.fillStyle = 'rgba(80,140,220,0.16)'; c.fill(); c.strokeStyle = 'rgba(200,220,255,0.7)'; c.lineWidth = R.L(0.002); c.stroke(); c.restore();
+        pkPnText(R, ST, 'CAR ' + (i + 1) + (i === 0 ? '  LEAD' : ''), X0 + CARW / 2, CARY + CARH + 0.014, 0.0095, { col: ST.ink });
+        pkPnText(R, ST, 'BAR', X0 + CARW - 0.028, CARY - 0.03, 0.0085, { col: ST.dim });
+        pkPnText(R, ST, 'GATE ' + (i + 1), X0 + 0.04, CARY - 0.03, 0.0085, { col: ST.dim });
       }
+      // the air plant: compressor, receiver, the brake and gate valves, piped up
+      var ax = PNX, ay = MW.y0 + 0.07;
+      pkPnText(R, ST, 'PNEUMATICS', ax + 0.1, MW.y1 - 0.016, 0.011, { col: ST.dim });
+      c.save(); c.strokeStyle = 'rgba(255,207,90,0.6)'; c.lineWidth = R.L(0.0025);
+      c.beginPath(); c.arc(R.X(ax + 0.025), R.Y(ay + 0.16), R.L(0.022), 0, 6.2832); c.stroke();
+      pkPnRect(R, ax + 0.07, ay + 0.13, ax + 0.18, ay + 0.19, 0.02); c.stroke();
+      c.restore();
+      pkPnText(R, ST, 'COMP', ax + 0.025, ay + 0.122, 0.0085, { col: ST.dim });
+      pkPnText(R, ST, 'RECEIVER', ax + 0.125, ay + 0.118, 0.0085, { col: ST.dim });
+      pkPnLine(R, [[ax + 0.047, ay + 0.16], [ax + 0.07, ay + 0.16]], 'rgba(255,207,90,0.6)', 0.0025);
+      pkPnLine(R, [[ax + 0.18, ay + 0.16], [ax + 0.21, ay + 0.16], [ax + 0.21, ay + 0.02], [ax + 0.02, ay + 0.02]], 'rgba(255,207,90,0.6)', 0.0025);
+      [['BRAKES', ax + 0.05], ['GATES', ax + 0.12], ['BARS', ax + 0.19]].forEach(function (v) { pkPnLine(R, [[v[1], ay + 0.02], [v[1], ay + 0.055]], 'rgba(255,207,90,0.6)', 0.0025); pkPnText(R, ST, v[0], v[1], ay - 0.002, 0.0085, { col: ST.dim }); });
+      pkPnText(R, ST, '6.9 BAR  ·  MIN 5.5', ax + 0.125, ay + 0.21, 0.0085, { col: ST.dim });
+      c.restore();
+      c.save(); pkPnRect(R, MW.x0, MW.y0, MW.x1, MW.y1, 0.008); c.strokeStyle = ST.edge; c.lineWidth = R.L(0.003); c.stroke(); c.restore();
+      // dispatch
+      pkPnText(R, ST, 'EMERGENCY STOP', 0.80, 0.093, 0.0175, { col: '#ff8a7a' });
+      pkPnText(R, ST, 'turn to release', 0.80, 0.072, 0.012, { col: ST.dim, weight: '600' });
+      pkPnText(R, ST, 'OPERATOR KEY', 1.14, 0.152, 0.0145, { col: ST.acc });
+      pkPnText(R, ST, 'OFF', 1.095, 0.282, 0.012, { col: ST.dim }); pkPnText(R, ST, 'ON', 1.19, 0.282, 0.012, { col: '#5fd38d' });
+      pkPnText(R, ST, 'READY', 1.15, -0.098, 0.013, { col: '#5fd38d' });
+      pkPnText(R, ST, 'DISPATCH', 1.15, -0.25, 0.019, { col: ST.ink });
+      pkPnText(R, ST, 'PULL', 1.15, -0.282, 0.012, { col: ST.dim });
+      // a hazard band along the foot of the dispatch field
+      var hy = R.Y(-0.334), hh = R.L(0.012);
+      c.save(); c.beginPath(); c.rect(R.X(0.645), hy, R.L(0.63), hh); c.clip();
+      c.fillStyle = '#151a1e'; c.fillRect(R.X(0.645), hy, R.L(0.63), hh); c.fillStyle = '#c9a227';
+      for (var hz = 0; hz < 40; hz++) { var hx0 = R.X(0.645) + hz * R.L(0.024); c.beginPath(); c.moveTo(hx0, hy + hh); c.lineTo(hx0 + R.L(0.012), hy + hh); c.lineTo(hx0 + R.L(0.012) + hh, hy); c.lineTo(hx0 + hh, hy); c.closePath(); c.fill(); }
       c.restore();
     }
   });
@@ -11492,20 +11642,20 @@ function pkBuildCoasterConsole(at) {
   var gauges = {}, lamps = {}, buttons = {};
   for (var gi = 0; gi < GA.length; gi++) {
     var gd = GA[gi];
-    gauges[gd[0]] = pkCtlGauge(P, gd[6], 0.115, {
-      id: gd[0], label: gd[1], unit: gd[2], min: gd[3], max: gd[4], red: gd[5], ticks: 8, r: 0.098,
+    gauges[gd[0]] = pkCtlGauge(P, gd[6], 0.0, {
+      id: gd[0], label: gd[1], unit: gd[2], min: gd[3], max: gd[4], red: gd[5], ticks: 8, r: 0.09, dial: ST.dial,
       get: gd[0] === 'speed' ? function () { return (PK.ride.v || 0) * 3.6 / 80; }
         : gd[0] === 'air' ? function () { return pkCtlState().air / 10; }
         : function () { return PK.seats.length ? PK.ride.riders / PK.seats.length : 0; }
     });
   }
   for (var li = 0; li < LA.length; li++) {
-    lamps[LA[li][0]] = pkCtlLamp(P, -1.14 + li * 0.19, 0.305, { id: LA[li][0], r: 0.022, col: li === 0 ? 0x5fd38d : li === 3 ? 0xff4d3d : 0xf0c04a });
+    lamps[LA[li][0]] = pkCtlLamp(P, LAX[li], 0.178, { id: LA[li][0], r: 0.02, col: li === 0 ? 0x5fd38d : li === 3 ? 0xff4d3d : 0xf0c04a });
   }
   for (var bi = 0; bi < B.length; bi++) {
     var bd = B[bi];
     buttons[bd[0]] = pkCtlBtn(P, bd[3], bd[4], {
-      id: bd[0], label: bd[1], col: bd[2], r: 0.040,
+      id: bd[0], label: bd[1], col: bd[2], r: 0.038,
       lampCol: bd[2] === 'green' ? 0x5fd38d : bd[2] === 'amber' ? 0xf0c04a : bd[2] === 'blue' ? 0x5aa9ff : 0xe8e4d8,
       prompt: 'Press ' + bd[1],
       act: function () {
@@ -11524,18 +11674,18 @@ function pkBuildCoasterConsole(at) {
   }
   // the buttons carry a live lamp: green when the thing they do is ready
   var toggles = {};
-  toggles.powerSw = pkCtlToggle(P, -1.15, -0.19, {
+  toggles.powerSw = pkCtlToggle(P, -1.15, -0.225, {
     id: 'powerSw', on: true, prompt: 'Master power',
     act: function (on) {
       C.on = on; sfx('click');
       toast(on ? 'Console live' : 'Console dead', on ? 'good' : 'bad');
     }
   });
-  toggles.lampSw = pkCtlToggle(P, -0.88, -0.19, {
+  toggles.lampSw = pkCtlToggle(P, -0.92, -0.225, {
     id: 'lampSw', on: true, prompt: 'Panel lamps',
     act: function (on) { C.lamps = on; PK.consoleLamps = on; sfx('click'); }
   });
-  var mode = pkCtlRotary(P, -0.57, -0.19, {
+  var mode = pkCtlRotary(P, -0.64, -0.235, {
     id: 'mode', n: 3, pos: S.auto ? 1 : 0, r: 0.040, names: ['MANUAL', 'AUTO', 'TEST'],
     prompt: 'Mode selector',
     act: function (pos) {
@@ -11544,19 +11694,62 @@ function pkBuildCoasterConsole(at) {
       else pkSetAuto(pos === 1);
     }
   });
-  var stop = pkCtlMushroom(P, 0.80, 0.175, {
+  var stop = pkCtlMushroom(P, 0.80, 0.215, {
     id: 'estop', r: 0.070, prompt: 'Emergency stop',
     act: function () { pkStop(); },
     release: function () { pkReset(); }
   });
-  var lever = pkCtlLever(P, 1.03, -0.045, {
-    id: 'throttle', len: 0.215, col: 'black', prompt: 'Pull the dispatch lever',
+  var lever = pkCtlLever(P, 0.79, -0.21, {
+    id: 'throttle', len: 0.15, col: 'black', prompt: 'Pull the dispatch lever',
     act: function () { if (!pkCtlGuard()) return; if (C.mode === 2) pkTestRun(); else pkDispatch(); }
   });
 
-  var key = pkCtlKey(P, 0.60, -0.175, { id: 'opKey', on: !!S.coasterKey, label: 'Coaster operator key',
+  var key = pkCtlKey(P, 1.14, 0.225, { id: 'opKey', on: !!S.coasterKey, label: 'Coaster operator key',
     act: function (on) { return pkSetCoasterKey(on); } });
-  C.parts = { gauges: gauges, lamps: lamps, buttons: buttons, toggles: toggles, mode: mode, stop: stop, lever: lever, key: key, panel: P };
+  // the train and station mimic's live parts: a lamp per seat, per restraint and per gate, the air plant's valves
+  var seatPips = PK.seats.map(function (st, k) {
+    var ci = st.car, n = k - ci * 4, X0 = carX(ci);
+    var p = pkPnPip(P, 0.011, 0xffd27a); p.set(X0 + 0.03 + (n >> 1) * 0.06, CARY + 0.025 + (n & 1) * 0.035); return p;
+  });
+  var barLeds = PK.cars.map(function (cr, i) { return pkPnLed(P, carX(i) + CARW - 0.028, CARY - 0.03 + 0.017, { col: 0xf0c04a, r: 0.0085 }); });
+  var gateLeds = PK.gates.map(function (gt, i) { return pkPnLed(P, carX(i) + 0.04, CARY - 0.03 + 0.017, { col: 0x5fd38d, r: 0.0085 }); });
+  var trainHome = pkPnLed(P, MW.x0 + 0.16, MW.y1 - 0.016, { col: 0x5fd38d, r: 0.008 });
+  var airLeds = { comp: pkPnLed(P, PNX + 0.025, MW.y0 + 0.23, { col: 0x5fd38d, r: 0.009 }), brakes: pkPnLed(P, PNX + 0.05, MW.y0 + 0.125 + 0.0, { col: 0xff6b5e, r: 0.0085 }),
+    gates: pkPnLed(P, PNX + 0.12, MW.y0 + 0.125, { col: 0x5fd38d, r: 0.0085 }), bars: pkPnLed(P, PNX + 0.19, MW.y0 + 0.125, { col: 0xf0c04a, r: 0.0085 }) };
+  // the receiver's gauge glass: a bar that fills with the pressure
+  var rcvBar = new THREE.Group(); rcvBar.userData.dynamic = true; rcvBar.position.set(PNX + 0.075, MW.y0 + 0.07 + 0.16, 0.004); P.add(rcvBar);
+  var rcvM = pkPnGlow(0x8fc3ff); var rcv = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.018), rcvM); rcv.position.x = 0.5; rcvBar.add(rcv);
+  var tele = pkCtlReadout(P, 0.96, 0.0, 0.6, 0.085, { col: ST.tele, bg: '#040506' });
+  var ready = pkPnLed(P, 1.15, -0.14, { col: 0x5fd38d, r: 0.022 });
+  C.parts = { gauges: gauges, lamps: lamps, buttons: buttons, toggles: toggles, mode: mode, stop: stop, lever: lever, key: key, panel: P, seats: seatPips, tele: tele, ready: ready };
+  var pv = null, pvV = new THREE.Vector3(), gLoad = 1, prevVel = new THREE.Vector3(), velNow = new THREE.Vector3(), ymin = 1e9;
+  for (var yi = 0; yi < 120; yi++) ymin = Math.min(ymin, PK.curve.getPointAt(yi / 120).y);
+  pkCtlLive({ tick: function (dt) {
+    var R = PK.ride, live = C.on && !!S.coasterKey && pkCoasterOpen(), home = R.state !== 'running' && R.state !== 'dispatch' && R.state !== 'arrive';
+    PK.seats.forEach(function (st, k) { pkPnPipLight(seatPips[k], !pkCoasterOpen() ? 0 : st.guest ? 1 : (home ? 0.14 : 0.05), Math.max(1e-3, dt)); });
+    barLeds.forEach(function (l) { l.on = live ? (R.bars > 0.5 ? true : R.barsWant > 0.5 ? 'flash' : 'dim') : false; });
+    gateLeds.forEach(function (l, i) { var gt = PK.gates[i]; l.on = live ? (gt.open ? true : 'dim') : false; l.mat.emissive.setHex(gt.open ? 0x5fd38d : 0xff6b5e); });
+    trainHome.on = live && home;
+    var moving = R.state === 'dispatch' || R.state === 'running';
+    airLeds.comp.on = live ? (C.air < 6.7 ? 'flash' : 'dim') : false;
+    airLeds.brakes.on = live && (home || R.state === 'arrive'); airLeds.gates.on = live && PK.gates.some(function (gt) { return gt.open; }); airLeds.bars.on = live && R.barsWant > 0.5;
+    rcvBar.scale.x = Math.max(0.001, 0.1 * clamp(C.air / 10, 0, 1)); rcvM.emissiveIntensity = live ? 0.9 : 0.03;
+    // dispatch: the same order pkDispatch asks for
+    var ok = live && !R.fault && R.state === 'ready' && !pkStillBoarding() && (S.wear || 0) < 90 && !(PK.closed && R.riders === 0);
+    ready.on = ok ? (S.auto ? true : 'flash') : false;
+    // the telemetry: speed, height and the load, from the lead car
+    var car = PK.cars[0];
+    if (car && dt > 0) {
+      if (pv) { velNow.copy(car.position).sub(pv).divideScalar(dt); var acc = velNow.clone().sub(prevVel).divideScalar(dt); prevVel.copy(velNow); var g2 = Math.sqrt(acc.x * acc.x + (acc.y + 9.81) * (acc.y + 9.81) + acc.z * acc.z) / 9.81; if (!isFinite(g2) || g2 > 7 || !moving) g2 = 1; gLoad += (g2 - gLoad) * Math.min(1, dt * 2.5); }
+      else pv = new THREE.Vector3();
+      pv.copy(car.position);
+    }
+    tele.setPower(live);
+    if (!pkCoasterOpen()) { tele.set(['NO POWER', 'BREAKER OFF']); return; }
+    if (!live) { tele.set([!S.coasterKey ? 'KEY OFF' : 'CONSOLE DEAD', 'TELEMETRY STANDBY']); return; }
+    tele.set(['V ' + ('  ' + ((R.v || 0) * 3.6).toFixed(1)).slice(-5) + ' KM/H  H ' + Math.max(0, car ? car.position.y - ymin : 0).toFixed(1) + ' M',
+      'G ' + gLoad.toFixed(1) + '  AIR ' + C.air.toFixed(1) + '  WEAR ' + Math.round(S.wear || 0) + '%']);
+  } });
 
   // ── the status bank: where the train is on the track, and the counts ──
   // the mimic's sections start at points on the track, laid in lap order from the station
@@ -11564,9 +11757,11 @@ function pkBuildCoasterConsole(at) {
   var at0 = function (x, z) { return ((pkCoUAt(PK.curve, x, z) - PK.stationU) % 1 + 1) % 1; };
   var SEC = [['STATION', 0], ['LIFT', ((PK.liftU[0] - PK.stationU) % 1 + 1) % 1], ['DROP\nLOOP', ((PK.liftU[1] - PK.stationU) % 1 + 1) % 1],
     ['TURN\nHILLS', at0(-12.4, -28.9)], ['CORK-\nSCREW', at0(16, -28.3)], ['BRAKES', at0(-9, -28.3)], ['STATION', at0(-19, -14)]];
+  PK.coasterSections = SEC;   // the wall's track display (part 03) names the same sections
   var mimic = [];
   for (var si = 0; si < 6; si++) mimic.push(pkCtlAnnun(HB, -1.08 + si * 0.2, 0, 0.18, 0.12, SEC[si][0], { col: si === 0 ? '#5fd38d' : si === 5 ? '#ff9a52' : '#8fc3ff' }));
-  var ro = pkCtlReadout(HB, 0.62, 0, 1.0, 0.17), lapT = 0, lastLap = 0;
+  var ro = pkCtlReadout(HB, 0.62, -0.025, 1.0, 0.13), lapT = 0, lastLap = 0;
+  pkPnHoodPlate(HB, ST, { title: 'The Coaster' }, 0.62, 0.08);
   C.parts.mimic = mimic; C.parts.readout = ro;
   pkCtlLive({
     tick: function (dt) {
@@ -11575,6 +11770,7 @@ function pkBuildCoasterConsole(at) {
       if (k === 6) k = 0;
       for (var j = 0; j < 6; j++) mimic[j].on = live && j === k;
       if (R.state === 'running') lapT += dt; else if (lapT > 0) { lastLap = lapT; lapT = 0; }
+      PK.lastLap = lastLap; PK.lapT = lapT;
       ro.setPower(live);
       if (!live) { ro.set(['NO POWER', 'BREAKER OFF']); return; }
       ro.set(['SPEED ' + ('  ' + Math.round((R.v || 0) * 3.6)).slice(-3) + ' KM/H  LAP ' + ('  ' + Math.round(lapT || lastLap)).slice(-3) + 's',
@@ -11674,13 +11870,13 @@ function pkCtlReadout(g, x, y, w, h, o) {
     set: function (lines) {
       var s = lines.join('\n'); if (s === last) return; last = s;
       var c = cv.getContext('2d'), W = cv.width, H = cv.height;
-      c.fillStyle = '#050a07'; c.fillRect(0, 0, W, H);
+      c.fillStyle = o.bg || '#050a07'; c.fillRect(0, 0, W, H);
       // the unlit segments behind the lit ones, so it reads as a real display
       var fs = Math.floor(H / lines.length * 0.62);
       c.font = '700 ' + fs + 'px "Consolas", "Courier New", monospace'; c.textBaseline = 'middle';
       lines.forEach(function (ln, i) {
         var yy = H * (i + 0.5) / lines.length;
-        c.fillStyle = 'rgba(109,255,154,0.07)'; c.textAlign = 'left'; c.fillText(ln.replace(/[^ ]/g, '8'), W * 0.05, yy);
+        c.globalAlpha = 0.08; c.fillStyle = col; c.textAlign = 'left'; c.fillText(ln.replace(/[^ ]/g, '8'), W * 0.05, yy); c.globalAlpha = 1;
         c.fillStyle = col; c.shadowColor = col; c.shadowBlur = 10; c.fillText(ln, W * 0.05, yy); c.shadowBlur = 0;
       });
       for (var k = 0; k < H; k += 3) { c.fillStyle = 'rgba(0,0,0,0.18)'; c.fillRect(0, k, W, 1); }
@@ -11700,135 +11896,7 @@ function pkCtlHood(parent, x, y, z, w, h, lean) {
 }
 
 // ── The compact desk in a ride booth ────────────────────────────────
-// Four buttons, a bat switch, a mushroom and a load gauge on the booth's console: the screen
-// above still explains the ride, but the operator works it with hands, not a mouse.
-function pkBoothPanel(a, con) {
-  // The console lives in `con`'s frame, whose local +Z faces the operator.
-  var C = pkCtl(a);
-  var PW = 1.72, PH = 0.50, TILT = 0.50;
-  var TOP = 0.72;
-  var PY = TOP + (PH / 2) * Math.cos(TILT);
-  var PZ = (PH / 2) * Math.sin(TILT) + 0.06;
-
-  var B = [
-    ['gates', 'GATES', 'green', -0.18],
-    ['bars', 'BARS', 'amber', 0.04],
-    ['station', 'STN GATES', 'white', 0.26],
-    ['test', 'TEST', 'blue', 0.48]
-  ];
-  var P = pkCtlPanel({
-    w: PW, h: PH, x: 0, y: PY, z: PZ, tilt: -TILT, key: 'pk-booth-desk-' + a.id, parent: con,
-    draw: function (c, W, H) {
-      var R2 = pkCtlRuler(W, H, PW, PH); R2.c = c;
-      R2.box(-0.60, 0.0, 0.50, 0.44, 'rgba(0,0,0,0.26)', 0.005);
-      R2.box(0.09, 0.0, 1.00, 0.44, 'rgba(0,0,0,0.26)', 0.005);
-      R2.box(0.66, 0.0, 0.34, 0.44, 'rgba(0,0,0,0.26)', 0.005);
-      R2.engrave('PARK CO  ·  ' + a.name.toUpperCase(), -0.60, 0.205, 0.020);
-      R2.txt('LOAD', -0.70, -0.092, 0.019, '#aebcc4');
-      R2.txt('SPEED', -0.50, -0.092, 0.019, '#aebcc4');
-      for (var i = 0; i < B.length; i++) R2.txt(B[i][1], B[i][3], 0.192, 0.021, '#d6dee3');
-      R2.txt('AUTO', -0.18, -0.206, 0.018, '#aebcc4');
-      R2.txt('E-STOP', 0.04, -0.206, 0.018, '#d6dee3');
-      R2.txt('RESET', 0.26, -0.206, 0.018, '#aebcc4');
-      R2.txt('DISPATCH', 0.66, -0.206, 0.018, '#d6dee3');
-      R2.txt('OPERATOR KEY', -0.60, -0.232, 0.014, '#e8c86a');
-      R2.txt('OFF', -0.645, -0.135, 0.012, '#aebcc4'); R2.txt('ON', -0.555, -0.135, 0.012, '#5fd38d');
-    }
-  });
-  pkCtlSetPower(P, function () { return !!a.open; });
-  var parts = { buttons: {} };
-  parts.panel = P;
-  for (var i = 0; i < B.length; i++) {
-    var b = B[i];
-    parts.buttons[b[0]] = pkCtlBtn(P, b[3], 0.105, {
-      id: b[0], label: b[1], col: b[2], r: 0.034,
-      lampCol: b[2] === 'green' ? 0x5fd38d : b[2] === 'amber' ? 0xf0c04a : b[2] === 'blue' ? 0x5aa9ff : 0xe8e4d8,
-      prompt: 'Press ' + b[1],
-      act: function () {
-        var id = this.id;
-        if (C.fault && id !== 'gates') { sfx('bad'); toast('Reset ' + a.name + ' first', 'bad'); return; }
-        if (id === 'gates') return pkBoothGates(a);
-        if (id === 'bars') {
-          C.barsWant = C.barsWant > 0.5 ? 0 : 1;
-          if (!C.key) { sfx('bad'); toast(a.name + ' is locked - turn the operator key on', 'bad'); return; }
-          sfx('click'); toast(a.name + ': restraints ' + (C.barsWant > 0.5 ? 'down' : 'up'), '');
-          screenDirtyAll(); return true;
-        }
-        if (id === 'station') return pkStationGatesRide(a);
-        if (id === 'test') return pkBoothTest(a);
-      }
-    });
-  }
-  parts.auto = pkCtlToggle(P, -0.18, -0.135, {
-    id: 'auto', on: C.auto, prompt: 'Automatic cycle',
-    act: function () { pkBoothAuto(a); }
-  });
-  parts.stop = pkCtlMushroom(P, 0.04, -0.118, {
-    id: 'stop', r: 0.050, prompt: 'Emergency stop',
-    act: function () { pkBoothStop(a); }
-  });
-  parts.reset = pkCtlBtn(P, 0.26, -0.135, {
-    id: 'reset', label: 'RESET', col: 'white', r: 0.034, lampCol: 0xe8e4d8,
-    prompt: 'Reset after a stop',
-    act: function () { if (C.fault) { pkBoothStop(a); } else { sfx('click'); toast(a.name + ': nothing to reset', ''); } }
-  });
-  parts.lever = pkCtlLever(P, 0.66, -0.010, {
-    id: 'dispatchLever', len: 0.19, col: 'black', prompt: 'Pull the dispatch lever',
-    act: function () { pkBoothDispatch(a); }
-  });
-  parts.key = pkCtlKey(P, -0.60, -0.175, { id: 'opKey', on: !!C.key, label: a.name + ' operator key',
-    act: function (on) { return pkSetRideKey(a, on); } });
-  parts.load = pkCtlGauge(P, -0.70, 0.025, {
-    id: 'load', label: '', unit: 'riders', min: 0, max: Math.max(4, a.seats.length), red: 0.92, ticks: 6, r: 0.075,
-    get: function () { return a.seats.length ? a.riders / a.seats.length : 0; }
-  });
-  parts.speed = pkCtlGauge(P, -0.50, 0.025, {
-    id: 'speed', label: '', unit: 'cycle', min: 0, max: 1, red: 0.94, ticks: 5, r: 0.075,
-    get: function () { return a.state === 'running' ? Math.min(1, (a.t || 0) / Math.max(1, a.run || 1)) : 0; }
-  });
-  pkCtlLive({
-    tick: function (dt) {
-      var live = !C.fault && !!C.key;
-      if (parts.key.on !== !!C.key) parts.key.set(!!C.key);
-      if (parts.auto.on !== C.auto) parts.auto.set(C.auto);
-      if (parts.stop.latched !== !!C.fault) parts.stop.setLatched(!!C.fault);
-      parts.buttons.gates.setLit(live && (a.state === 'idle' || a.state === 'unloading' || a.state === 'boarding'));
-      parts.buttons.station.setLit(live && a.stationGates === false);
-      parts.buttons.test.setLit(live && !PK.closed && a.state === 'idle' && !a.queue.length && !a.riders);
-    }
-  });
-  // the status bank on the back of the desk: six legend windows and the counts
-  var top = TOP + PH * Math.cos(TILT), hz = PZ - (PH / 2) * Math.sin(TILT) - 0.05;
-  var HB = pkCtlHood(con, 0, top + 0.15, hz, 1.56, 0.2, 0.22);
-  var ANN = [['key', 'KEY\nON', '#5fd38d'], ['auto', 'AUTO', '#8fc3ff'], ['gates', 'GATES\nOPEN', '#f0c04a'], ['bars', 'BARS\nLOCKED', '#f0c04a'], ['run', 'RIDE\nRUNNING', '#5fd38d'], ['fault', 'FAULT\nMAINT', '#ff6b5e']];
-  parts.ann = {};
-  ANN.forEach(function (d, i) { parts.ann[d[0]] = pkCtlAnnun(HB, -0.70 + i * 0.15, 0, 0.135, 0.1, d[1], { col: d[2], flash: d[0] === 'fault' }); });
-  parts.readout = pkCtlReadout(HB, 0.46, 0, 0.56, 0.16);
-  pkCtlLive({
-    tick: function () {
-      var power = !!a.open, A = parts.ann;
-      var live = power && !C.fault && !!C.key;
-      if (parts.key.on !== !!C.key) parts.key.set(!!C.key);
-      if (parts.auto.on !== C.auto) parts.auto.set(C.auto);
-      if (parts.stop.latched !== !!C.fault) parts.stop.setLatched(!!C.fault);
-      // the key window follows the key itself, so it still shows ON while a fault holds the rest of the panel dead
-      A.key.on = power && !!C.key; A.auto.on = live && !!C.auto; A.gates.on = live && !!C.gates; A.bars.on = live && C.barsWant > 0.5;
-      A.run.on = live && a.state === 'running';
-      // the fault lamp has to stay lit while the ride is faulted, even though a fault drops the rest of the panel dead
-      A.fault.on = power && !!C.key && ((C.fault || C.maint) ? 'flash' : false);
-      parts.buttons.gates.setLit(live && (a.state === 'idle' || a.state === 'unloading' || a.state === 'boarding'));
-      parts.buttons.station.setLit(live && a.stationGates === false);
-      parts.buttons.test.setLit(live && !PK.closed && a.state === 'idle' && !a.queue.length && !a.riders);
-      parts.readout.setPower(power);
-      if (!power) { parts.readout.set(['NO POWER', 'BREAKER OFF']); return; }
-      var left = a.state === 'running' ? Math.max(0, Math.ceil((a.run || 0) - (a.t || 0))) + 's' : '--';
-      parts.readout.set(['QUEUE ' + ('  ' + pkAttrWaiting(a)).slice(-3) + '  RIDE ' + a.riders + '/' + a.seats.length,
-        (C.fault ? 'FAULT   ' : C.maint ? 'MAINT   ' : !C.key ? 'LOCKED  ' : (a.state.toUpperCase() + '        ').slice(0, 8)) + ' END ' + left]);
-    }
-  });
-  a.boothPanel = parts;
-  return parts;
-}
+// Every ride's booth desk is its own design now: pkBoothPanel and the per-ride sheets live in part 14 (the booth panels).
 
 // ── The park services cabinet ───────────────────────────────────────
 // The coaster desk is the coaster's. Everything that belongs to the whole park - a breaker per
@@ -11997,6 +12065,1037 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   C.cabinet = parts;
   return parts;
 }
+
+  // ── The kit ──────────────────────────────────────────────────────
+  var PK_PN = { mats: {}, geo: null };
+  function pkPnStd(def) { var k = JSON.stringify(def); return PK_PN.mats[k] || (PK_PN.mats[k] = std(def)); }
+  function pkPnCaps() {
+    var M = pkCtlM(), K = pkMats();
+    var add = function (k, col) { if (!M.caps[k]) M.caps[k] = std({ color: col, roughness: 0.42 }); };
+    add('pink', 0xe57fa5); add('teal', 0x2f9e9a); add('purple', 0x7a5bc4); add('orange', 0xe0702a); add('sky', 0x5aa9e6);
+    add('cream', 0xf1e6c8); add('lime', 0x7fc23a); add('crimson', 0x9a1f2a); add('jade', 0x2f8f6f); add('navy', 0x2a3a6a);
+    if (!M.caps.brass) M.caps.brass = K.brass || K.gold;
+    return M;
+  }
+  // a lamp that is the panel's own: its own material, written every frame, so the park's light switches (part 01, which
+  // collect the glowing lenses once) can never leave a desk lamp stuck dark or lit
+  function pkPnGlow(col) { var m = std({ color: 0x0b0b0b, emissive: col, emissiveIntensity: 0.05, roughness: 0.35 }); m.userData.pkPanelLamp = true; return m; }
+  function pkPnDome() { return PK_PN.geo || (PK_PN.geo = new THREE.SphereGeometry(1, 12, 8)); }
+  // an indicator on the plate: a bezel and a domed lens. api.on: true (lit), 'dim' (a glow), 'flash', false
+  function pkPnLed(P, x, y, o) {
+    o = o || {};
+    var r = o.r || 0.011, mat = pkPnGlow(o.col || 0x5fd38d);
+    var bz = new THREE.Mesh(roundCylGeo(r * 1.5, r * 1.58, 0.006, 14), o.bezel || pkCtlM().bezel); bz.rotation.x = Math.PI / 2; bz.position.set(x, y, 0.003); P.add(bz);
+    var lens = new THREE.Mesh(pkPnDome(), mat); lens.scale.set(r, r, r * 0.6); lens.position.set(x, y, 0.007); P.add(lens);
+    var api = { on: false, level: 0, mat: mat, k: o.k || 2.2, t: Math.random() * 3 };
+    pkCtlLive({ tick: function (dt) {
+      api.t += dt;
+      var w = api.on === 'flash' ? (Math.sin(api.t * 9) > 0 ? 1 : 0.12) : api.on === 'dim' ? 0.22 : api.on ? 1 : 0;
+      if (!pkCtlPowered(P)) w = 0;
+      api.level += (w - api.level) * Math.min(1, dt * 14);
+      mat.emissiveIntensity = 0.05 + api.level * api.k;
+    } });
+    return api;
+  }
+  // a moving light on the mimic: a pip under the glass, in a group of its own that the tick slides about
+  function pkPnPip(parent, r, col) {
+    var g = new THREE.Group(); g.userData.dynamic = true; parent.add(g);
+    var mat = pkPnGlow(col), m = new THREE.Mesh(pkPnDome(), mat); m.scale.set(r, r, r * 0.55); g.add(m);
+    return { g: g, mat: mat, level: 0, col: col, set: function (x, y) { g.position.set(x, y, 0.0045); } };
+  }
+  function pkPnPipLight(p, w, dt, k) { p.level += (w - p.level) * Math.min(1, dt * 10); p.mat.emissiveIntensity = 0.05 + p.level * (k || 2.4); }
+
+  // ── Drawing on the plate ─────────────────────────────────────────
+  // the ruler of part 14 (metres in, pixels out) plus a few shapes; S is the plate's style
+  function pkPnText(R, S, s, mx, my, size, o) {
+    o = o || {};
+    var c = R.c; c.save(); c.textAlign = o.align || 'center'; c.textBaseline = 'middle';
+    c.font = (o.weight || '700') + ' ' + Math.max(7, Math.round(R.L(size))) + 'px ' + (o.font || S.font);
+    if (o.spacing) c.letterSpacing = R.L(o.spacing) + 'px';
+    var X = R.X(mx), Y = R.Y(my);
+    if (!o.flat && S.engrave !== false) { c.fillStyle = S.shadow || 'rgba(0,0,0,0.5)'; if (o.max) c.fillText(s, X + R.L(0.0013), Y + R.L(0.0013), R.L(o.max)); else c.fillText(s, X + R.L(0.0013), Y + R.L(0.0013)); }
+    c.fillStyle = o.col || S.ink;
+    if (o.max) c.fillText(s, X, Y, R.L(o.max)); else c.fillText(s, X, Y);
+    c.restore();
+  }
+  function pkPnRect(R, x0, y0, x1, y1, r) { roundRect(R.c, R.X(x0), R.Y(y1), R.L(x1 - x0), R.L(y1 - y0), R.L(r || 0.01)); }
+  // a field on the plate: a recessed rounded panel with its edge line and a small title in its corner
+  function pkPnZone(R, S, x0, y0, x1, y1, title) {
+    var c = R.c; c.save();
+    pkPnRect(R, x0, y0, x1, y1, S.zr || 0.012); c.fillStyle = S.zone; c.fill();
+    c.lineWidth = R.L(S.zw || 0.0028); c.strokeStyle = S.edge; c.stroke();
+    pkPnRect(R, x0 + 0.005, y0 + 0.005, x1 - 0.005, y1 - 0.005, (S.zr || 0.012) * 0.7); c.lineWidth = R.L(0.0011); c.strokeStyle = S.edge2 || 'rgba(255,255,255,0.10)'; c.stroke();
+    c.restore();
+    if (title) pkPnText(R, S, title, x0 + 0.014, y1 - 0.014, 0.0115, { align: 'left', col: S.dim, weight: '700', spacing: 0.0012 });
+  }
+  function pkPnLine(R, pts, col, w) { var c = R.c; c.beginPath(); pts.forEach(function (p, i) { if (i) c.lineTo(R.X(p[0]), R.Y(p[1])); else c.moveTo(R.X(p[0]), R.Y(p[1])); }); c.strokeStyle = col; c.lineWidth = R.L(w || 0.002); c.stroke(); }
+  function pkPnCircle(R, x, y, r, fill, stroke, w) { var c = R.c; c.beginPath(); c.arc(R.X(x), R.Y(y), R.L(r), 0, 6.2832); if (fill) { c.fillStyle = fill; c.fill(); } if (stroke) { c.strokeStyle = stroke; c.lineWidth = R.L(w || 0.002); c.stroke(); } }
+  // finishes
+  function pkPnFill(c, W, H, top, bot) { var g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, top); g.addColorStop(1, bot || top); c.fillStyle = g; c.fillRect(0, 0, W, H); }
+  function pkPnStreaks(c, W, H, n, a) { for (var i = 0; i < n; i++) { c.fillStyle = 'rgba(' + (Math.random() < 0.5 ? '255,255,255' : '0,0,0') + ',' + randf(0.008, a || 0.035) + ')'; c.fillRect(Math.random() * W, Math.random() * H, randf(2, 30), 1); } }
+  function pkPnVignette(c, W, H, k) { var g = c.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.2, W / 2, H / 2, Math.max(W, H) * 0.7); g.addColorStop(0, 'rgba(255,255,255,0.05)'); g.addColorStop(1, 'rgba(0,0,0,' + (k || 0.3) + ')'); c.fillStyle = g; c.fillRect(0, 0, W, H); }
+  function pkPnStars(c, W, H, n, col) { for (var i = 0; i < n; i++) { var r = Math.random() < 0.08 ? randf(2, 3.5) : randf(0.6, 1.6); c.globalAlpha = randf(0.3, 0.95); c.fillStyle = col || '#ffffff'; c.beginPath(); c.arc(Math.random() * W, Math.random() * H, r, 0, 6.2832); c.fill(); } c.globalAlpha = 1; }
+  function pkPnScales(c, W, H, s, light, dark) {
+    for (var row = 0, y = -s; y < H + s; y += s * 0.5, row++) for (var x = (row % 2) * s * 0.5 - s; x < W + s; x += s) {
+      var g = c.createRadialGradient(x, y - s * 0.2, s * 0.05, x, y, s * 0.62); g.addColorStop(0, light); g.addColorStop(1, dark);
+      c.fillStyle = g; c.beginPath(); c.arc(x, y, s * 0.56, 0, Math.PI); c.fill();
+      c.strokeStyle = 'rgba(0,0,0,0.25)'; c.lineWidth = 2; c.beginPath(); c.arc(x, y, s * 0.56, 0, Math.PI); c.stroke();
+    }
+  }
+  function pkPnPlanks(c, W, H, n, a, b) {
+    var ph = H / n;
+    for (var i = 0; i < n; i++) {
+      c.fillStyle = i % 2 ? a : b; c.fillRect(0, i * ph, W, ph);
+      for (var k = 0; k < 40; k++) { c.strokeStyle = 'rgba(40,20,5,' + randf(0.06, 0.18) + ')'; c.lineWidth = randf(1, 3); var yy = i * ph + randf(4, ph - 4); c.beginPath(); c.moveTo(0, yy); c.bezierCurveTo(W * 0.3, yy + randf(-6, 6), W * 0.7, yy + randf(-6, 6), W, yy + randf(-4, 4)); c.stroke(); }
+      c.fillStyle = 'rgba(0,0,0,0.45)'; c.fillRect(0, i * ph, W, 3);
+      for (var j = 0; j < 3; j++) { var bx = (j * 0.37 + i * 0.21) % 1 * W; c.fillStyle = 'rgba(0,0,0,0.4)'; c.fillRect(bx, i * ph, 3, ph); c.fillStyle = '#2a2a2a'; c.beginPath(); c.arc(bx + 18, i * ph + ph * 0.3, 5, 0, 6.28); c.arc(bx + 18, i * ph + ph * 0.7, 5, 0, 6.28); c.fill(); }
+    }
+  }
+  function pkPnTread(c, W, H) {
+    pkPnFill(c, W, H, '#7d858b', '#5f676d'); pkPnStreaks(c, W, H, 3000, 0.05);
+    for (var y = 0, r = 0; y < H + 40; y += 34, r++) for (var x = (r % 2) * 34; x < W + 40; x += 68) {
+      [[0, 1], [1, 0]].forEach(function (d, k) {
+        c.save(); c.translate(x + k * 34, y); c.rotate(k ? -0.6 : 0.6);
+        c.fillStyle = 'rgba(255,255,255,0.22)'; c.fillRect(-14, -3.5, 28, 4); c.fillStyle = 'rgba(0,0,0,0.3)'; c.fillRect(-14, 0.5, 28, 3); c.restore();
+      });
+    }
+  }
+  function pkPnHazard(c, x, y, w, h, s, a, b) { c.save(); c.beginPath(); c.rect(x, y, w, h); c.clip(); c.fillStyle = a; c.fillRect(x, y, w, h); c.fillStyle = b; for (var k = -h; k < w + h; k += s * 2) { c.beginPath(); c.moveTo(x + k, y + h); c.lineTo(x + k + s, y + h); c.lineTo(x + k + s + h, y); c.lineTo(x + k + h, y); c.closePath(); c.fill(); } c.restore(); }
+  function pkPnDots(c, W, H, step, r, col) { c.fillStyle = col; for (var y = step / 2, row = 0; y < H; y += step, row++) for (var x = (row % 2) * step / 2 + step / 4; x < W; x += step) { c.beginPath(); c.arc(x, y, r, 0, 6.2832); c.fill(); } }
+  function pkPnStone(c, W, H, a, b) {
+    pkPnFill(c, W, H, a, b);
+    var bh = H / 5;
+    for (var row = 0; row < 5; row++) for (var x = (row % 2) * -90; x < W; x += 180 + randf(-20, 30)) {
+      c.fillStyle = 'rgba(' + (Math.random() < 0.5 ? '255,255,255' : '0,0,0') + ',' + randf(0.02, 0.08) + ')'; c.fillRect(x + 3, row * bh + 3, 176, bh - 6);
+      c.strokeStyle = 'rgba(0,0,0,0.45)'; c.lineWidth = 4; c.strokeRect(x, row * bh, 180, bh);
+    }
+    blotches(c, W, H, 30, 20, 120, true, 0.12); cracks(c, W, H, 18, 0.3);
+  }
+  function pkPnDamask(c, W, H, col) {
+    c.fillStyle = col;
+    for (var y = 0, r = 0; y < H + 80; y += 90, r++) for (var x = (r % 2) * 70; x < W + 80; x += 140) {
+      c.save(); c.translate(x, y);
+      for (var k = 0; k < 4; k++) { c.rotate(Math.PI / 2); c.beginPath(); c.ellipse(0, -14, 7, 16, 0, 0, 6.2832); c.fill(); }
+      c.beginPath(); c.arc(0, 0, 5, 0, 6.2832); c.fill(); c.restore();
+    }
+  }
+  function pkPnRope(c, x, y, w, h, col) {
+    c.save(); c.strokeStyle = col; c.lineWidth = 7; c.strokeRect(x, y, w, h);
+    c.strokeStyle = 'rgba(0,0,0,0.45)'; c.lineWidth = 2.5;
+    var P = 2 * (w + h);
+    for (var d = 0; d < P; d += 14) {
+      var px, py; if (d < w) { px = x + d; py = y; } else if (d < w + h) { px = x + w; py = y + d - w; } else if (d < 2 * w + h) { px = x + w - (d - w - h); py = y + h; } else { px = x; py = y + h - (d - 2 * w - h); }
+      c.beginPath(); c.moveTo(px - 4, py - 4); c.lineTo(px + 4, py + 4); c.stroke();
+    }
+    c.restore();
+  }
+  function pkPnPinstripe(c, W, H, inset, col, lw, r) { c.save(); roundRect(c, inset, inset, W - inset * 2, H - inset * 2, r || 18); c.strokeStyle = col; c.lineWidth = lw || 3; c.stroke(); c.restore(); }
+  // a scroll in a corner: two curls of a vine, gold leaf on enamel
+  function pkPnScroll(c, x, y, s, sx, sy, col) {
+    c.save(); c.translate(x, y); c.scale(sx * s, sy * s); c.strokeStyle = col; c.lineWidth = 2.6 / s; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(0, 0); c.bezierCurveTo(40, 0, 60, 20, 50, 40); c.bezierCurveTo(44, 52, 28, 48, 30, 36); c.bezierCurveTo(32, 28, 42, 30, 40, 36); c.stroke();
+    c.beginPath(); c.moveTo(0, 0); c.bezierCurveTo(0, 40, 20, 60, 40, 50); c.bezierCurveTo(52, 44, 48, 28, 36, 30); c.stroke();
+    c.beginPath(); c.moveTo(6, 6); c.lineTo(70, 6); c.moveTo(6, 6); c.lineTo(6, 70); c.stroke();
+    c.fillStyle = col; c.beginPath(); c.arc(0, 0, 5 / s, 0, 6.2832); c.fill(); c.restore();
+  }
+  function pkPnVines(c, W, H, col) {
+    c.save(); c.strokeStyle = col; c.fillStyle = col; c.lineWidth = 3;
+    [[0, 1], [H, -1]].forEach(function (e) {
+      c.beginPath(); for (var x = 0; x <= W; x += 8) { var y = e[0] + e[1] * (22 + Math.sin(x / 60) * 10); if (x) c.lineTo(x, y); else c.moveTo(x, y); } c.stroke();
+      for (var lx = 30; lx < W; lx += 60) { var ly = e[0] + e[1] * (22 + Math.sin(lx / 60) * 10); c.save(); c.translate(lx, ly); c.rotate((lx / 60) % 2 ? 0.7 : -0.7); c.beginPath(); c.ellipse(0, e[1] * 12, 6, 13, 0, 0, 6.2832); c.fill(); c.restore(); }
+    });
+    c.restore();
+  }
+  function pkPnRunes(c, x, y, w, n, col, size) {
+    c.save(); c.strokeStyle = col; c.lineWidth = Math.max(2, size * 0.12); c.lineCap = 'round';
+    var rnd = 1; var rr = function () { rnd = (rnd * 16807) % 2147483647; return rnd / 2147483647; };
+    for (var i = 0; i < n; i++) {
+      var cx = x + i * (w / n), cy = y;
+      c.beginPath(); c.moveTo(cx, cy - size / 2); c.lineTo(cx, cy + size / 2);
+      var k = Math.floor(rr() * 4);
+      if (k === 0) { c.moveTo(cx, cy - size / 2); c.lineTo(cx + size * 0.35, cy - size * 0.2); c.moveTo(cx, cy); c.lineTo(cx + size * 0.35, cy - size * 0.3); }
+      else if (k === 1) { c.moveTo(cx, cy - size * 0.1); c.lineTo(cx + size * 0.35, cy - size / 2); c.moveTo(cx, cy - size * 0.1); c.lineTo(cx + size * 0.35, cy + size * 0.3); }
+      else if (k === 2) { c.moveTo(cx - size * 0.3, cy - size * 0.3); c.lineTo(cx + size * 0.3, cy + size * 0.1); }
+      else { c.moveTo(cx, cy - size / 2); c.lineTo(cx + size * 0.3, cy - size * 0.15); c.lineTo(cx, cy + size * 0.2); }
+      c.stroke();
+    }
+    c.restore();
+  }
+  function pkPnMountains(c, x, y, w, h, col, snow) {
+    c.save(); c.fillStyle = col; c.beginPath(); c.moveTo(x, y + h);
+    var peaks = [[0, 0.55], [0.12, 0.2], [0.22, 0.5], [0.34, 0.05], [0.48, 0.45], [0.6, 0.15], [0.72, 0.55], [0.84, 0.25], [1, 0.6]];
+    peaks.forEach(function (p) { c.lineTo(x + p[0] * w, y + p[1] * h); }); c.lineTo(x + w, y + h); c.closePath(); c.fill();
+    if (snow) { c.fillStyle = snow; [[0.12, 0.2], [0.34, 0.05], [0.6, 0.15], [0.84, 0.25]].forEach(function (p) { c.beginPath(); c.moveTo(x + p[0] * w, y + p[1] * h); c.lineTo(x + (p[0] - 0.035) * w, y + (p[1] + 0.14) * h); c.lineTo(x + (p[0] + 0.035) * w, y + (p[1] + 0.14) * h); c.closePath(); c.fill(); }); }
+    c.restore();
+  }
+  function pkPnFlames(c, W, H) {
+    for (var i = 0; i < 70; i++) {
+      var x = Math.random() * W, y = H - Math.random() * H * 0.3, h = randf(H * 0.2, H * 0.9), w = randf(20, 60);
+      var g = c.createLinearGradient(x, y, x, y - h); g.addColorStop(0, 'rgba(255,200,80,0.18)'); g.addColorStop(1, 'rgba(255,90,30,0)');
+      c.fillStyle = g; c.beginPath(); c.moveTo(x - w, y); c.bezierCurveTo(x - w, y - h * 0.5, x + w * 0.4, y - h * 0.6, x, y - h); c.bezierCurveTo(x + w * 0.2, y - h * 0.5, x + w, y - h * 0.4, x + w, y); c.closePath(); c.fill();
+    }
+  }
+
+  // ── The crests ───────────────────────────────────────────────────
+  // a medallion for each ride, drawn at (x, y) with radius r in pixels, in the style's ink and accent
+  var PK_PN_CRESTS = {
+    carousel: function (c, x, y, r, S) {
+      c.fillStyle = S.acc; c.beginPath(); c.moveTo(x, y - r * 0.78); c.lineTo(x + r * 0.7, y - r * 0.18); c.lineTo(x - r * 0.7, y - r * 0.18); c.closePath(); c.fill();
+      for (var k = 0; k < 7; k++) { c.beginPath(); c.arc(x - r * 0.6 + k * r * 0.2, y - r * 0.18, r * 0.1, 0, Math.PI); c.fill(); }
+      c.fillRect(x - r * 0.62, y + r * 0.42, r * 1.24, r * 0.12);
+      c.fillStyle = S.ink; [-0.4, 0, 0.4].forEach(function (k) { c.fillRect(x + k * r - r * 0.03, y - r * 0.1, r * 0.06, r * 0.52); c.beginPath(); c.ellipse(x + k * r, y + r * 0.16, r * 0.12, r * 0.07, 0, 0, 6.28); c.fill(); });
+      c.fillStyle = S.acc; c.beginPath(); c.arc(x, y - r * 0.82, r * 0.08, 0, 6.28); c.fill();
+    },
+    teacups: function (c, x, y, r, S) {
+      c.fillStyle = S.acc; c.beginPath(); c.ellipse(x, y + r * 0.45, r * 0.72, r * 0.14, 0, 0, 6.28); c.fill();
+      c.fillStyle = S.ink; c.beginPath(); c.moveTo(x - r * 0.5, y - r * 0.15); c.lineTo(x + r * 0.5, y - r * 0.15); c.bezierCurveTo(x + r * 0.48, y + r * 0.3, x + r * 0.25, y + r * 0.42, x, y + r * 0.42); c.bezierCurveTo(x - r * 0.25, y + r * 0.42, x - r * 0.48, y + r * 0.3, x - r * 0.5, y - r * 0.15); c.fill();
+      c.strokeStyle = S.ink; c.lineWidth = r * 0.09; c.beginPath(); c.arc(x + r * 0.55, y + r * 0.06, r * 0.16, -1.4, 1.4); c.stroke();
+      c.strokeStyle = S.acc; c.lineWidth = r * 0.06; [-0.2, 0.05, 0.3].forEach(function (k) { c.beginPath(); c.moveTo(x + k * r, y - r * 0.25); c.bezierCurveTo(x + k * r - r * 0.12, y - r * 0.4, x + k * r + r * 0.12, y - r * 0.5, x + k * r, y - r * 0.68); c.stroke(); });
+    },
+    ferris: function (c, x, y, r, S) {
+      c.strokeStyle = S.ink; c.lineWidth = r * 0.08; c.beginPath(); c.arc(x, y - r * 0.1, r * 0.6, 0, 6.28); c.stroke();
+      c.lineWidth = r * 0.04; for (var k = 0; k < 8; k++) { var a = k * Math.PI / 4; c.beginPath(); c.moveTo(x, y - r * 0.1); c.lineTo(x + Math.cos(a) * r * 0.6, y - r * 0.1 + Math.sin(a) * r * 0.6); c.stroke(); c.fillStyle = S.acc; c.beginPath(); c.arc(x + Math.cos(a) * r * 0.6, y - r * 0.1 + Math.sin(a) * r * 0.6, r * 0.09, 0, 6.28); c.fill(); }
+      c.lineWidth = r * 0.08; c.beginPath(); c.moveTo(x - r * 0.45, y + r * 0.75); c.lineTo(x, y - r * 0.1); c.lineTo(x + r * 0.45, y + r * 0.75); c.stroke();
+    },
+    dodgems: function (c, x, y, r, S) {
+      c.fillStyle = S.acc; c.beginPath(); c.moveTo(x + r * 0.15, y - r * 0.8); c.lineTo(x - r * 0.4, y + r * 0.1); c.lineTo(x - r * 0.02, y + r * 0.1); c.lineTo(x - r * 0.18, y + r * 0.8); c.lineTo(x + r * 0.42, y - r * 0.12); c.lineTo(x + r * 0.04, y - r * 0.12); c.closePath(); c.fill();
+      c.strokeStyle = S.ink; c.lineWidth = r * 0.05; c.stroke();
+    },
+    droptower: function (c, x, y, r, S) {
+      c.fillStyle = S.ink; c.fillRect(x - r * 0.08, y - r * 0.85, r * 0.16, r * 1.6); c.fillRect(x - r * 0.3, y - r * 0.9, r * 0.6, r * 0.12);
+      c.fillStyle = S.acc; c.beginPath(); c.moveTo(x - r * 0.42, y + r * 0.05); c.lineTo(x + r * 0.42, y + r * 0.05); c.lineTo(x, y + r * 0.7); c.closePath(); c.fill();
+      c.fillRect(x - r * 0.16, y - r * 0.45, r * 0.32, r * 0.5);
+    },
+    flume: function (c, x, y, r, S) {
+      c.fillStyle = S.ink; c.beginPath(); c.ellipse(x, y - r * 0.05, r * 0.62, r * 0.2, 0, 0, 6.28); c.fill();
+      c.fillStyle = S.acc; c.beginPath(); c.ellipse(x - r * 0.62, y - r * 0.05, r * 0.08, r * 0.2, 0, 0, 6.28); c.fill();
+      c.strokeStyle = S.acc; c.lineWidth = r * 0.09; for (var k = 0; k < 2; k++) { c.beginPath(); for (var i = 0; i <= 20; i++) { var xx = x - r * 0.75 + i * r * 0.075, yy = y + r * (0.35 + k * 0.22) + Math.sin(i * 0.9) * r * 0.07; if (i) c.lineTo(xx, yy); else c.moveTo(xx, yy); } c.stroke(); }
+    },
+    haunted: function (c, x, y, r, S) {
+      c.fillStyle = S.acc; c.beginPath(); c.arc(x + r * 0.32, y - r * 0.38, r * 0.3, 0, 6.28); c.fill();
+      c.fillStyle = S.zone2 || '#151318'; c.beginPath(); c.arc(x + r * 0.44, y - r * 0.46, r * 0.26, 0, 6.28); c.fill();
+      c.fillStyle = S.ink; c.beginPath(); c.moveTo(x - r * 0.7, y + r * 0.75); c.lineTo(x - r * 0.7, y); c.lineTo(x - r * 0.45, y - r * 0.3); c.lineTo(x - r * 0.2, y); c.lineTo(x - r * 0.2, y - r * 0.15); c.lineTo(x + r * 0.15, y - r * 0.5); c.lineTo(x + r * 0.5, y - r * 0.15); c.lineTo(x + r * 0.5, y + r * 0.75); c.closePath(); c.fill();
+      c.fillStyle = S.acc; [[-0.55, 0.25], [-0.05, 0.1], [0.25, 0.1], [0.25, 0.45], [-0.05, 0.45]].forEach(function (w) { c.fillRect(x + w[0] * r, y + w[1] * r, r * 0.13, r * 0.17); });
+    },
+    kround: function (c, x, y, r, S) {
+      c.fillStyle = S.acc; for (var k = 0; k < 12; k++) { var a = k * Math.PI / 6; c.beginPath(); c.moveTo(x + Math.cos(a - 0.14) * r * 0.5, y + Math.sin(a - 0.14) * r * 0.5); c.lineTo(x + Math.cos(a) * r * 0.85, y + Math.sin(a) * r * 0.85); c.lineTo(x + Math.cos(a + 0.14) * r * 0.5, y + Math.sin(a + 0.14) * r * 0.5); c.fill(); }
+      c.fillStyle = '#ffd23a'; c.beginPath(); c.arc(x, y, r * 0.5, 0, 6.28); c.fill();
+      c.fillStyle = S.ink; c.beginPath(); c.arc(x - r * 0.17, y - r * 0.1, r * 0.06, 0, 6.28); c.arc(x + r * 0.17, y - r * 0.1, r * 0.06, 0, 6.28); c.fill();
+      c.strokeStyle = S.ink; c.lineWidth = r * 0.06; c.beginPath(); c.arc(x, y + r * 0.02, r * 0.25, 0.4, Math.PI - 0.4); c.stroke();
+    },
+    kpots: function (c, x, y, r, S) {
+      c.fillStyle = S.ink; c.beginPath(); c.ellipse(x, y + r * 0.1, r * 0.52, r * 0.42, 0, 0, 6.28); c.fill();
+      c.fillRect(x - r * 0.3, y - r * 0.38, r * 0.6, r * 0.1); c.beginPath(); c.arc(x, y - r * 0.44, r * 0.09, 0, 6.28); c.fill();
+      c.strokeStyle = S.ink; c.lineWidth = r * 0.1; c.beginPath(); c.moveTo(x + r * 0.45, y); c.quadraticCurveTo(x + r * 0.8, y - r * 0.05, x + r * 0.85, y - r * 0.38); c.stroke();
+      c.beginPath(); c.arc(x - r * 0.55, y + r * 0.1, r * 0.2, Math.PI * 0.5, Math.PI * 1.5); c.stroke();
+      c.fillStyle = S.acc; [-0.22, 0.02, 0.26].forEach(function (k) { c.beginPath(); c.arc(x + k * r, y + r * 0.12, r * 0.07, 0, 6.28); c.fill(); });
+    },
+    kpuffin: function (c, x, y, r, S) {
+      c.fillStyle = '#20232a'; c.beginPath(); c.arc(x, y, r * 0.62, 0, 6.28); c.fill();
+      c.fillStyle = '#f4f1e6'; c.beginPath(); c.ellipse(x - r * 0.12, y + r * 0.02, r * 0.36, r * 0.42, 0, 0, 6.28); c.fill();
+      c.fillStyle = '#e0563f'; c.beginPath(); c.moveTo(x + r * 0.1, y - r * 0.12); c.quadraticCurveTo(x + r * 0.95, y + r * 0.0, x + r * 0.12, y + r * 0.28); c.closePath(); c.fill();
+      c.fillStyle = '#f0c04a'; c.fillRect(x + r * 0.16, y - r * 0.02, r * 0.3, r * 0.05);
+      c.fillStyle = '#20232a'; c.beginPath(); c.arc(x - r * 0.12, y - r * 0.12, r * 0.07, 0, 6.28); c.fill();
+    },
+    serpent: function (c, x, y, r, S) {
+      c.strokeStyle = S.acc; c.lineWidth = r * 0.2; c.lineCap = 'round'; c.beginPath(); c.moveTo(x - r * 0.55, y + r * 0.55); c.bezierCurveTo(x + r * 0.6, y + r * 0.6, x - r * 0.6, y - r * 0.1, x + r * 0.2, y - r * 0.35); c.stroke();
+      c.fillStyle = S.acc; c.beginPath(); c.ellipse(x + r * 0.35, y - r * 0.42, r * 0.22, r * 0.15, -0.4, 0, 6.28); c.fill();
+      c.fillStyle = S.ink; c.beginPath(); c.arc(x + r * 0.4, y - r * 0.48, r * 0.04, 0, 6.28); c.fill();
+      c.strokeStyle = '#c0392b'; c.lineWidth = r * 0.04; c.beginPath(); c.moveTo(x + r * 0.55, y - r * 0.5); c.lineTo(x + r * 0.75, y - r * 0.6); c.moveTo(x + r * 0.65, y - r * 0.55); c.lineTo(x + r * 0.78, y - r * 0.48); c.stroke();
+    },
+    baron: function (c, x, y, r, S) {
+      c.fillStyle = S.acc; c.beginPath(); c.moveTo(x - r * 0.5, y - r * 0.35); c.lineTo(x + r * 0.5, y - r * 0.35); c.lineTo(x + r * 0.5, y + r * 0.1); c.quadraticCurveTo(x + r * 0.5, y + r * 0.6, x, y + r * 0.8); c.quadraticCurveTo(x - r * 0.5, y + r * 0.6, x - r * 0.5, y + r * 0.1); c.closePath(); c.fill();
+      c.fillStyle = S.zone2 || '#4a1414'; c.beginPath(); c.moveTo(x - r * 0.42, y + r * 0.25); c.lineTo(x, y - r * 0.12); c.lineTo(x + r * 0.42, y + r * 0.25); c.lineTo(x + r * 0.42, y + r * 0.42); c.lineTo(x, y + r * 0.05); c.lineTo(x - r * 0.42, y + r * 0.42); c.closePath(); c.fill();
+      c.fillStyle = S.acc; c.beginPath(); c.moveTo(x - r * 0.4, y - r * 0.45); c.lineTo(x - r * 0.4, y - r * 0.8); c.lineTo(x - r * 0.2, y - r * 0.6); c.lineTo(x, y - r * 0.85); c.lineTo(x + r * 0.2, y - r * 0.6); c.lineTo(x + r * 0.4, y - r * 0.8); c.lineTo(x + r * 0.4, y - r * 0.45); c.closePath(); c.fill();
+    },
+    nocturne: function (c, x, y, r, S) {
+      c.fillStyle = S.acc; c.beginPath(); c.arc(x - r * 0.08, y, r * 0.55, 0, 6.28); c.fill();
+      c.fillStyle = S.zone2 || '#1d1a33'; c.beginPath(); c.arc(x + r * 0.14, y - r * 0.12, r * 0.48, 0, 6.28); c.fill();
+      c.fillStyle = S.ink; [[0.45, -0.5, 0.07], [0.62, 0.1, 0.05], [0.3, 0.45, 0.04], [0.65, -0.18, 0.03]].forEach(function (s) { c.beginPath(); c.arc(x + s[0] * r, y + s[1] * r, s[2] * r, 0, 6.28); c.fill(); });
+    },
+    wreck: function (c, x, y, r, S) {
+      c.strokeStyle = S.acc; c.lineWidth = r * 0.1; c.lineCap = 'round';
+      c.beginPath(); c.arc(x, y - r * 0.62, r * 0.13, 0, 6.28); c.moveTo(x, y - r * 0.5); c.lineTo(x, y + r * 0.62); c.moveTo(x - r * 0.32, y - r * 0.3); c.lineTo(x + r * 0.32, y - r * 0.3); c.stroke();
+      c.beginPath(); c.arc(x, y + r * 0.1, r * 0.55, 0.25, Math.PI - 0.25); c.stroke();
+      c.fillStyle = S.acc; [-1, 1].forEach(function (s) { c.beginPath(); c.moveTo(x + s * r * 0.6, y + r * 0.25); c.lineTo(x + s * r * 0.42, y + r * 0.1); c.lineTo(x + s * r * 0.4, y + r * 0.34); c.fill(); });
+    },
+    moonwood: function (c, x, y, r, S) {
+      c.fillStyle = S.ink; c.beginPath(); c.arc(x + r * 0.42, y - r * 0.5, r * 0.18, 0, 6.28); c.fill();
+      c.fillStyle = S.acc; c.fillRect(x - r * 0.07, y - r * 0.05, r * 0.14, r * 0.8);
+      [[0, -0.35, 0.42], [-0.32, -0.12, 0.3], [0.3, -0.1, 0.3], [0, -0.62, 0.25]].forEach(function (b) { c.beginPath(); c.arc(x + b[0] * r, y + b[1] * r, b[2] * r, 0, 6.28); c.fill(); });
+      c.strokeStyle = S.acc; c.lineWidth = r * 0.06; c.beginPath(); c.moveTo(x, y + r * 0.75); c.lineTo(x - r * 0.35, y + r * 0.82); c.moveTo(x, y + r * 0.75); c.lineTo(x + r * 0.35, y + r * 0.82); c.stroke();
+    },
+    dragon: function (c, x, y, r, S) {
+      c.fillStyle = S.acc; c.beginPath(); c.moveTo(x - r * 0.75, y); c.quadraticCurveTo(x, y - r * 0.75, x + r * 0.75, y); c.quadraticCurveTo(x, y + r * 0.75, x - r * 0.75, y); c.fill();
+      var g = c.createRadialGradient(x, y, 1, x, y, r * 0.42); g.addColorStop(0, '#fff2a8'); g.addColorStop(1, '#d88a1a'); c.fillStyle = g; c.beginPath(); c.arc(x, y, r * 0.4, 0, 6.28); c.fill();
+      c.fillStyle = '#111'; c.beginPath(); c.ellipse(x, y, r * 0.07, r * 0.36, 0, 0, 6.28); c.fill();
+      c.fillStyle = 'rgba(255,255,255,0.7)'; c.beginPath(); c.arc(x - r * 0.14, y - r * 0.14, r * 0.06, 0, 6.28); c.fill();
+    },
+    firebird: function (c, x, y, r, S) {
+      var g = c.createLinearGradient(x, y + r * 0.8, x, y - r * 0.8); g.addColorStop(0, '#ffe08a'); g.addColorStop(0.5, '#ff8a30'); g.addColorStop(1, '#c8452a'); c.fillStyle = g;
+      c.beginPath(); c.moveTo(x, y + r * 0.8); c.bezierCurveTo(x - r * 0.75, y + r * 0.2, x - r * 0.1, y - r * 0.2, x - r * 0.3, y - r * 0.85); c.bezierCurveTo(x + r * 0.15, y - r * 0.4, x + r * 0.2, y - r * 0.6, x + r * 0.15, y - r * 0.9); c.bezierCurveTo(x + r * 0.7, y - r * 0.3, x + r * 0.6, y + r * 0.4, x, y + r * 0.8); c.fill();
+      c.fillStyle = '#fff6d0'; c.beginPath(); c.ellipse(x + r * 0.05, y + r * 0.35, r * 0.14, r * 0.28, 0, 0, 6.28); c.fill();
+    },
+    coaster: function (c, x, y, r, S) {
+      c.strokeStyle = S.ink; c.lineWidth = r * 0.12; c.lineCap = 'round'; c.lineJoin = 'round';
+      c.beginPath(); c.moveTo(x - r * 0.85, y + r * 0.55); c.lineTo(x - r * 0.45, y - r * 0.65); c.quadraticCurveTo(x - r * 0.3, y - r * 0.8, x - r * 0.15, y - r * 0.55); c.lineTo(x + r * 0.05, y + r * 0.2);
+      c.bezierCurveTo(x + r * 0.2, y + r * 0.55, x + r * 0.7, y + r * 0.45, x + r * 0.6, y); c.bezierCurveTo(x + r * 0.5, y - r * 0.45, x + r * 0.05, y - r * 0.2, x + r * 0.25, y + r * 0.35); c.lineTo(x + r * 0.85, y + r * 0.55); c.stroke();
+      c.fillStyle = S.acc; c.beginPath(); c.arc(x - r * 0.3, y - r * 0.72, r * 0.12, 0, 6.28); c.fill();
+      c.strokeStyle = S.acc; c.lineWidth = r * 0.06; c.beginPath(); c.moveTo(x - r * 0.9, y + r * 0.72); c.lineTo(x + r * 0.9, y + r * 0.72); c.stroke();
+    },
+    arena: function (c, x, y, r, S) {
+      c.fillStyle = S.ink;
+      c.fillRect(x - r * 0.7, y - r * 0.05, r * 1.4, r * 0.75);
+      [[-0.7, 0.32], [-0.12, 0.24], [0.4, 0.32]].forEach(function (t) { c.fillRect(x + t[0] * r, y - r * 0.55, t[1] * r, r * 0.6); c.beginPath(); c.moveTo(x + t[0] * r - r * 0.04, y - r * 0.55); c.lineTo(x + (t[0] + t[1] / 2) * r, y - r * 0.9); c.lineTo(x + (t[0] + t[1]) * r + r * 0.04, y - r * 0.55); c.fill(); });
+      c.fillStyle = S.zone2 || '#3a0e14'; c.beginPath(); c.arc(x, y + r * 0.42, r * 0.2, Math.PI, 0); c.fillRect(x - r * 0.2, y + r * 0.42, r * 0.4, r * 0.3); c.fill();
+      ['#e04a3a', '#4f8fe0', '#5fae54', '#f0c040', '#9a6ad0'].forEach(function (col, i) { c.fillStyle = col; var fx = x + (i - 2) * r * 0.32; c.beginPath(); c.moveTo(fx, y - r * 0.08); c.lineTo(fx + r * 0.2, y - r * 0.02); c.lineTo(fx, y + r * 0.06); c.fill(); });
+    },
+    mountain: function (c, x, y, r, S) {
+      c.fillStyle = S.ink; c.beginPath(); c.moveTo(x - r * 0.8, y + r * 0.7); c.lineTo(x - r * 0.25, y - r * 0.1); c.lineTo(x - r * 0.05, y + r * 0.15); c.lineTo(x + r * 0.3, y - r * 0.3); c.lineTo(x + r * 0.8, y + r * 0.7); c.closePath(); c.fill();
+      c.fillStyle = '#f4f1e6'; c.beginPath(); c.moveTo(x + r * 0.3, y - r * 0.3); c.lineTo(x + r * 0.17, y - r * 0.1); c.lineTo(x + r * 0.42, y - r * 0.1); c.fill();
+      c.fillStyle = S.acc; c.beginPath(); c.moveTo(x - r * 0.4, y - r * 0.4); c.lineTo(x - r * 0.4, y - r * 0.82); c.lineTo(x - r * 0.2, y - r * 0.6); c.lineTo(x, y - r * 0.88); c.lineTo(x + r * 0.2, y - r * 0.6); c.lineTo(x + r * 0.4, y - r * 0.82); c.lineTo(x + r * 0.4, y - r * 0.4); c.closePath(); c.fill();
+      c.fillStyle = '#c0392b'; c.beginPath(); c.arc(x, y - r * 0.55, r * 0.06, 0, 6.28); c.fill();
+    }
+  };
+
+  // ── The styles ───────────────────────────────────────────────────
+  // a plate's finish and printing. base(c, W, H) lays the enamel; the rest is ink, the zones and the hardware it takes
+  function pkPnStyles() {
+    if (PK_PN.styles) return PK_PN.styles;
+    var K = pkMats(), M = pkCtlM();
+    var gold = K.gold || K.brass, brass = K.brass || K.gold, chrome = MAT.chrome;
+    var iron = pkPnStd({ color: 0x2a2724, roughness: 0.55, metalness: 0.6 });
+    var bronze = pkPnStd({ color: 0x8a5a2a, roughness: 0.35, metalness: 0.85 });
+    var white = pkPnStd({ color: 0xf2efe6, roughness: 0.4, metalness: 0.1 });
+    var ser = 'Georgia, "Palatino Linotype", "Times New Roman", serif', sans = 'Bahnschrift, "Segoe UI", Arial, sans-serif', toy = '"Segoe UI Black", "Arial Black", "Segoe UI", sans-serif';
+    var S = PK_PN.styles = {
+      brass: { font: ser, ink: '#f3dfa6', dim: '#c9a86a', acc: '#ffd27a', zone: 'rgba(20,4,8,0.38)', edge: '#c9a050', win: '#120608', grid: 'rgba(255,210,122,0.07)', rim: gold, collar: brass, screw: brass, dial: 'brass', lever: 'brass', tele: '#ffb03a', glow: 0.3,
+        base: function (c, W, H) { pkPnFill(c, W, H, '#6a1a26', '#3d0e15'); pkPnDamask(c, W, H, 'rgba(255,210,140,0.04)'); pkPnStreaks(c, W, H, 1500, 0.025); pkPnVignette(c, W, H, 0.35); pkPnPinstripe(c, W, H, 10, '#c9a050', 4, 22); pkPnPinstripe(c, W, H, 20, 'rgba(201,160,80,0.55)', 1.5, 16); pkPnScroll(c, 14, 14, 1, 1, 1, '#d8b060'); pkPnScroll(c, W - 14, 14, 1, -1, 1, '#d8b060'); pkPnScroll(c, 14, H - 14, 1, 1, -1, '#d8b060'); pkPnScroll(c, W - 14, H - 14, 1, -1, -1, '#d8b060'); } },
+      pastel: { font: '"Segoe UI", Arial, sans-serif', head: 'Georgia, serif', ink: '#2c4a50', dim: '#5f8a8e', acc: '#d9608a', ok: '#1f7a3a', stop: '#b8362b', wink: '#e8fff9', wdim: '#9fd6cc', wacc: '#ffb3cf', zone: 'rgba(255,255,255,0.42)', edge: '#d98aa8', edge2: 'rgba(255,255,255,0.6)', shadow: 'rgba(255,255,255,0.6)', win: '#183034', grid: 'rgba(159,224,212,0.09)', rim: white, collar: chrome, dial: 'cream', lever: 'pink', tele: '#9fe0d4', glow: 0.2, zr: 0.022,
+        base: function (c, W, H) {
+          pkPnFill(c, W, H, '#cdeee5', '#a8dccf'); pkPnStreaks(c, W, H, 800, 0.02);
+          for (var i = 0; i < 46; i++) { var x = Math.random() * W, y = Math.random() < 0.5 ? randf(8, 46) : H - randf(8, 46); c.fillStyle = ['#f0a6c0', '#ffffff', '#f6d36a'][i % 3]; for (var p = 0; p < 5; p++) { var a = p * 1.2566; c.beginPath(); c.arc(x + Math.cos(a) * 7, y + Math.sin(a) * 7, 5.5, 0, 6.28); c.fill(); } c.fillStyle = '#f6d36a'; c.beginPath(); c.arc(x, y, 4, 0, 6.28); c.fill(); }
+          pkPnPinstripe(c, W, H, 12, '#d98aa8', 4, 30); pkPnPinstripe(c, W, H, 22, 'rgba(255,255,255,0.8)', 2, 24);
+        } },
+      sky: { font: sans, ink: '#e6f0ff', dim: '#9fb8de', acc: '#9fd0ff', zone: 'rgba(4,10,24,0.42)', edge: 'rgba(159,208,255,0.55)', win: '#040a16', grid: 'rgba(159,208,255,0.08)', rim: chrome, collar: chrome, dial: 'black', lever: 'navy', tele: '#9fd0ff', glow: 0.32,
+        base: function (c, W, H) { pkPnFill(c, W, H, '#1b3664', '#0a1530'); pkPnStars(c, W, H, 420, '#dfe9ff'); c.strokeStyle = 'rgba(200,220,255,0.18)'; c.lineWidth = 1.5; for (var k = 0; k < 6; k++) { c.beginPath(); var x = Math.random() * W, y = Math.random() * H; c.moveTo(x, y); for (var j = 0; j < 4; j++) { x += randf(-90, 90); y += randf(-50, 50); c.lineTo(x, y); } c.stroke(); } pkPnVignette(c, W, H, 0.3); pkPnPinstripe(c, W, H, 10, 'rgba(220,232,255,0.7)', 2.5, 14); } },
+      tread: { font: sans, ink: '#fff4d6', dim: '#e8dcae', acc: '#ffcf3a', zone: 'rgba(16,18,22,0.62)', edge: '#f0c04a', win: '#08090b', grid: 'rgba(255,207,58,0.07)', rim: pkPnStd({ color: 0xc9362b, roughness: 0.4, metalness: 0.3 }), collar: chrome, dial: 'black', lever: 'red', tele: '#ffcf3a', glow: 0.3,
+        base: function (c, W, H) { pkPnTread(c, W, H); for (var x = 0, k = 0; x < W; x += 26, k++) { c.fillStyle = k % 2 ? '#111' : '#f2f2f2'; c.fillRect(x, 0, 26, 13); c.fillStyle = k % 2 ? '#f2f2f2' : '#111'; c.fillRect(x, 13, 26, 13); c.fillStyle = k % 2 ? '#111' : '#f2f2f2'; c.fillRect(x, H - 26, 26, 13); c.fillStyle = k % 2 ? '#f2f2f2' : '#111'; c.fillRect(x, H - 13, 26, 13); } pkPnVignette(c, W, H, 0.3); } },
+      hazard: { font: '"Bahnschrift SemiBold Condensed", "Bahnschrift Condensed", Bahnschrift, Impact, sans-serif', ink: '#f6cf4a', dim: '#b8ad8a', acc: '#ffdf6a', zone: 'rgba(0,0,0,0.42)', edge: 'rgba(246,207,74,0.6)', win: '#060606', grid: 'rgba(246,207,74,0.07)', rim: pkPnStd({ color: 0x1b1d1f, roughness: 0.7, metalness: 0.4 }), collar: chrome, dial: 'black', lever: 'amber', tele: '#ffd23a', glow: 0.3, zr: 0.004,
+        base: function (c, W, H) { pkPnFill(c, W, H, '#2a2d30', '#17191b'); pkPnStreaks(c, W, H, 2500, 0.04); blotches(c, W, H, 20, 30, 140, true, 0.12); pkPnHazard(c, 0, 0, W, 11, 14, '#f0c04a', '#121212'); pkPnHazard(c, 0, H - 11, W, 11, 14, '#f0c04a', '#121212'); } },
+      timber: { font: ser, ink: '#f7ecd2', dim: '#dcc49a', acc: '#7fd0ff', zone: 'rgba(14,40,58,0.62)', edge: '#c9a87a', win: '#04141e', grid: 'rgba(127,208,255,0.08)', rim: bronze, collar: brass, screw: brass, dial: 'brass', lever: 'teal', tele: '#7fd0ff', glow: 0.3,
+        base: function (c, W, H) { pkPnPlanks(c, W, H, 5, '#8a5d36', '#7a5130'); pkPnVignette(c, W, H, 0.35); pkPnRope(c, 14, 14, W - 28, H - 28, '#d6b886'); } },
+      gothic: { font: '"Palatino Linotype", Georgia, serif', head: '"Old English Text MT", "Palatino Linotype", Georgia, serif', ink: '#ead9b2', dim: '#a8977a', acc: '#ff8a3d', zone: 'rgba(8,6,10,0.55)', zone2: '#1d1a20', edge: 'rgba(255,138,61,0.45)', win: '#070508', grid: 'rgba(255,138,61,0.06)', rim: iron, collar: bronze, screw: iron, dial: 'bone', lever: 'black', tele: '#ff9d5a', glow: 0.28,
+        base: function (c, W, H) {
+          pkPnStone(c, W, H, '#34313a', '#1c1a20');
+          var g = c.createRadialGradient(W * 0.5, H * 1.1, 10, W * 0.5, H, W * 0.6); g.addColorStop(0, 'rgba(255,138,61,0.16)'); g.addColorStop(1, 'rgba(255,138,61,0)'); c.fillStyle = g; c.fillRect(0, 0, W, H);
+          c.strokeStyle = 'rgba(230,230,240,0.22)'; c.lineWidth = 1.5; [[0, 0, 1, 1], [W, 0, -1, 1]].forEach(function (k) { for (var i = 1; i <= 5; i++) { c.beginPath(); c.moveTo(k[0], k[1] + i * 18); c.quadraticCurveTo(k[0] + k[2] * i * 9, k[1] + i * 9, k[0] + k[2] * i * 18, k[1]); c.stroke(); } for (var j = 0; j < 6; j++) { var a = j / 5 * Math.PI / 2; c.beginPath(); c.moveTo(k[0], k[1]); c.lineTo(k[0] + k[2] * Math.cos(a) * 110, k[1] + Math.sin(a) * 110); c.stroke(); } });
+          pkPnVignette(c, W, H, 0.45); pkPnPinstripe(c, W, H, 12, 'rgba(255,138,61,0.35)', 2, 6);
+        } },
+      toy: { font: toy, ink: '#2a2f6a', dim: '#5a5f9a', acc: '#e0563f', ok: '#1f7a3a', stop: '#c0392b', wink: '#ffffff', wdim: '#b8c0ff', wacc: '#ffe36a', zone: 'rgba(255,255,255,0.62)', edge: '#2a2f6a', edge2: 'rgba(255,255,255,0.0)', shadow: 'rgba(255,255,255,0.0)', engrave: false, win: '#1a2048', grid: 'rgba(255,255,255,0.08)', rim: pkPnStd({ color: 0xf0c04a, roughness: 0.4 }), collar: white, screw: white, dial: 'toy', lever: 'lime', tele: '#ffe36a', glow: 0.2, zr: 0.03, zw: 0.005, kid: true,
+        base: null },
+      scales: { font: sans, head: ser, ink: '#f6e2a6', dim: '#b9c9a0', acc: '#f0c04a', zone: 'rgba(4,22,14,0.55)', zone2: '#0c2a1c', edge: 'rgba(240,192,74,0.6)', win: '#03100a', grid: 'rgba(240,192,74,0.07)', rim: gold, collar: brass, dial: 'black', lever: 'jade', tele: '#b8f06a', glow: 0.3,
+        base: function (c, W, H) { pkPnFill(c, W, H, '#1f5a44', '#0f3326'); pkPnScales(c, W, H, 44, 'rgba(80,190,140,0.35)', 'rgba(10,50,30,0.0)'); pkPnVignette(c, W, H, 0.4); pkPnPinstripe(c, W, H, 10, '#d8b04a', 3, 12); } },
+      heraldic: { font: ser, ink: '#f4e2b0', dim: '#cdb27a', acc: '#e3c26a', zone: 'rgba(18,2,4,0.45)', zone2: '#4a1414', edge: '#c9a050', win: '#0e0405', grid: 'rgba(227,194,106,0.07)', rim: gold, collar: brass, screw: brass, dial: 'brass', lever: 'crimson', tele: '#ffcf6a', glow: 0.3,
+        base: function (c, W, H) { pkPnFill(c, W, H, '#6a1d1d', '#3a0c0c'); pkPnDamask(c, W, H, 'rgba(227,194,106,0.07)'); pkPnVignette(c, W, H, 0.4); pkPnPinstripe(c, W, H, 9, '#c9a050', 5, 4); pkPnPinstripe(c, W, H, 21, '#c9a050', 1.5, 4); [[24, 24], [W - 24, 24], [24, H - 24], [W - 24, H - 24]].forEach(function (p) { c.fillStyle = '#e3c26a'; c.save(); c.translate(p[0], p[1]); c.rotate(Math.PI / 4); c.fillRect(-9, -9, 18, 18); c.restore(); }); } },
+      night: { font: sans, head: ser, ink: '#ebe6ff', dim: '#a9a0dc', acc: '#cfc4ff', zone: 'rgba(8,6,24,0.5)', zone2: '#1d1a33', edge: 'rgba(185,167,240,0.55)', win: '#05041a', grid: 'rgba(185,167,240,0.08)', rim: chrome, collar: chrome, dial: 'night', lever: 'purple', tele: '#c9b8ff', glow: 0.32,
+        base: function (c, W, H) { pkPnFill(c, W, H, '#3a2f78', '#120e2c'); pkPnStars(c, W, H, 520, '#e8e4ff'); var g = c.createRadialGradient(W * 0.86, H * 0.2, 4, W * 0.86, H * 0.2, 160); g.addColorStop(0, 'rgba(255,255,240,0.5)'); g.addColorStop(0.2, 'rgba(255,255,240,0.18)'); g.addColorStop(1, 'rgba(255,255,240,0)'); c.fillStyle = g; c.fillRect(0, 0, W, H); pkPnVignette(c, W, H, 0.35); pkPnPinstripe(c, W, H, 10, 'rgba(207,196,255,0.6)', 2, 26); } },
+      nautical: { font: ser, ink: '#2a1a0a', dim: '#5a4024', acc: '#7a2a14', ok: '#1f6a30', stop: '#9a1f12', wink: '#f4e2b8', wdim: '#c9a86a', wacc: '#e8bd6a', zone: 'rgba(240,214,150,0.55)', edge: '#6a4a24', edge2: 'rgba(255,240,200,0.5)', shadow: 'rgba(255,240,200,0.45)', win: '#0b1416', grid: 'rgba(232,189,106,0.09)', rim: brass, collar: brass, screw: brass, dial: 'brass', lever: 'brass', tele: '#e8bd6a', glow: 0.24,
+        base: function (c, W, H) { pkPnPlanks(c, W, H, 6, '#6a4528', '#5d3c22'); pkPnVignette(c, W, H, 0.3); pkPnRope(c, 12, 12, W - 24, H - 24, '#cfae78'); } },
+      forest: { font: sans, head: ser, ink: '#dcfff5', dim: '#9fd6c6', acc: '#9fe0d4', zone: 'rgba(4,22,20,0.5)', zone2: '#123a34', edge: 'rgba(159,224,212,0.55)', win: '#021210', grid: 'rgba(159,224,212,0.07)', rim: bronze, collar: bronze, dial: 'black', lever: 'teal', tele: '#9fe0d4', glow: 0.32,
+        base: function (c, W, H) { pkPnFill(c, W, H, '#1e5a52', '#0c2a26'); for (var i = 0; i < 26; i++) { c.fillStyle = 'rgba(159,224,212,' + randf(0.04, 0.1) + ')'; var x = Math.random() * W, y = Math.random() * H, s = randf(20, 70); c.beginPath(); c.moveTo(x, y - s); c.lineTo(x + s * 0.35, y + s * 0.4); c.lineTo(x - s * 0.35, y + s * 0.4); c.fill(); } pkPnVines(c, W, H, 'rgba(159,224,212,0.45)'); pkPnVignette(c, W, H, 0.4); } },
+      dragon: { font: sans, head: ser, ink: '#fbe6a8', dim: '#c8c08a', acc: '#e0b04a', zone: 'rgba(6,26,14,0.55)', zone2: '#103a22', edge: 'rgba(224,176,74,0.65)', win: '#03100a', grid: 'rgba(224,176,74,0.07)', rim: gold, collar: brass, screw: brass, dial: 'brass', lever: 'jade', tele: '#f6e2a6', glow: 0.3,
+        base: function (c, W, H) { pkPnFill(c, W, H, '#2f7a4a', '#14361f'); pkPnScales(c, W, H, 64, 'rgba(240,210,110,0.22)', 'rgba(10,40,20,0.05)'); pkPnVignette(c, W, H, 0.45); pkPnPinstripe(c, W, H, 10, '#e0b04a', 4, 30); } },
+      flame: { font: sans, head: ser, ink: '#fff0d0', dim: '#ffc48a', acc: '#ffd08a', zone: 'rgba(40,6,2,0.5)', zone2: '#5a1408', edge: 'rgba(255,208,138,0.6)', win: '#120302', grid: 'rgba(255,208,138,0.07)', rim: gold, collar: brass, dial: 'black', lever: 'orange', tele: '#ffb03a', glow: 0.32,
+        base: function (c, W, H) { pkPnFill(c, W, H, '#c8452a', '#5a1408'); pkPnFlames(c, W, H); pkPnVignette(c, W, H, 0.4); pkPnPinstripe(c, W, H, 10, '#ffd08a', 2.5, 30); } },
+      mountain: { font: sans, head: ser, ink: '#f2e2b0', dim: '#b8b4c8', acc: '#d8b04a', zone: 'rgba(8,10,22,0.5)', zone2: '#1e2540', edge: 'rgba(216,176,74,0.6)', win: '#060814', grid: 'rgba(216,176,74,0.07)', rim: gold, collar: brass, screw: brass, dial: 'bone', lever: 'navy', tele: '#f2d27a', glow: 0.3,
+        base: function (c, W, H) { pkPnStone(c, W, H, '#4f5f8c', '#262e4a'); pkPnMountains(c, 0, H * 0.62, W, H * 0.38, 'rgba(10,14,30,0.4)', 'rgba(255,255,255,0.12)'); pkPnRunes(c, 40, 28, W - 80, 64, 'rgba(216,176,74,0.35)', 16); pkPnRunes(c, 40, H - 28, W - 80, 64, 'rgba(216,176,74,0.35)', 16); pkPnVignette(c, W, H, 0.4); } }
+    };
+    // the park's flagship coaster: its own deep steel blue, the lattice of its spine behind the printing, Park Co gold
+    S.flagship = { font: sans, head: '"Bahnschrift SemiBold", Bahnschrift, sans-serif', ink: '#eef3f8', dim: '#9fb4cc', acc: '#ffcf5a', zone: 'rgba(4,10,22,0.45)', zone2: '#0d1f3a', edge: 'rgba(255,207,90,0.55)', win: '#030810', grid: 'rgba(143,195,255,0.07)', rim: chrome, collar: chrome, dial: 'black', lever: 'black', tele: '#ffcf5a', glow: 0.32,
+      base: function (c, W, H) {
+        pkPnFill(c, W, H, '#21477c', '#0c1d38'); pkPnStreaks(c, W, H, 4000, 0.04);
+        c.strokeStyle = 'rgba(160,200,255,0.06)'; c.lineWidth = 6; for (var x = -H; x < W + H; x += 90) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x + H, H); c.moveTo(x + H, 0); c.lineTo(x, H); c.stroke(); }
+        c.fillStyle = 'rgba(160,200,255,0.06)'; c.fillRect(0, H * 0.08, W, 8); c.fillRect(0, H * 0.92 - 8, W, 8);
+        pkPnVignette(c, W, H, 0.35); pkPnPinstripe(c, W, H, 9, 'rgba(255,207,90,0.75)', 3, 10); pkPnPinstripe(c, W, H, 18, 'rgba(220,232,255,0.25)', 1.5, 8);
+      } };
+    // the Lindenburg Arena's prompt desks: ebony and stage velvet in a gilt proscenium, the five riders' colours along the foot
+    S.arena = { font: '"Palatino Linotype", Georgia, serif', head: '"Palatino Linotype", Georgia, serif', ink: '#f2e2b8', dim: '#c4a878', acc: '#e3c26a', zone: 'rgba(10,2,4,0.45)', zone2: '#3a0e14', edge: 'rgba(227,194,106,0.6)', win: '#0a0406', grid: 'rgba(227,194,106,0.07)', rim: gold, collar: brass, screw: brass, dial: 'brass', lever: 'crimson', tele: '#ffcf6a', glow: 0.3,
+      base: function (c, W, H) {
+        pkPnFill(c, W, H, '#5a1420', '#2a070c');
+        for (var x = 0; x < W; x += 26) { var g = c.createLinearGradient(x, 0, x + 26, 0); g.addColorStop(0, 'rgba(0,0,0,0.18)'); g.addColorStop(0.5, 'rgba(255,255,255,0.04)'); g.addColorStop(1, 'rgba(0,0,0,0.18)'); c.fillStyle = g; c.fillRect(x, 0, 26, H); }
+        pkPnDamask(c, W, H, 'rgba(227,194,106,0.05)'); pkPnVignette(c, W, H, 0.45);
+        ['#b8322a', '#2f5f9e', '#3f6e34', '#d9a730', '#5e3a80'].forEach(function (col, i) { c.fillStyle = col; c.fillRect(i * W / 5, H - 14, W / 5, 14); });
+        c.fillStyle = 'rgba(0,0,0,0.35)'; c.fillRect(0, H - 16, W, 2);
+        pkPnPinstripe(c, W, H, 8, '#c9a050', 5, 4); pkPnPinstripe(c, W, H, 22, 'rgba(201,160,80,0.6)', 1.5, 4);
+        pkPnScroll(c, 12, 12, 1.2, 1, 1, '#d8b060'); pkPnScroll(c, W - 12, 12, 1.2, -1, 1, '#d8b060');
+      } };
+    S.toy.base = function () {};
+    return S;
+  }
+  // a kids' plate is the same toy box in the ride's own colours
+  function pkPnToyBase(top, bot, dot) {
+    return function (c, W, H) {
+      pkPnFill(c, W, H, top, bot); pkPnDots(c, W, H, 70, 13, dot);
+      c.save(); roundRect(c, 8, 8, W - 16, H - 16, 40); c.strokeStyle = '#ffffff'; c.lineWidth = 10; c.stroke(); roundRect(c, 20, 20, W - 40, H - 40, 32); c.strokeStyle = 'rgba(42,47,106,0.5)'; c.lineWidth = 4; c.setLineDash([18, 14]); c.stroke(); c.restore();
+    };
+  }
+
+  // ── The sheets: what each ride's desk carries ────────────────────
+  // style, crest, maker's line, the second instrument (g2), the ride's voice (sig), its two extra windows on the hood (ann)
+  // and the mimic (kind). The telemetry lines and the instruments read the probe (T) the mimic keeps.
+  var PK_PANEL = {
+    carousel: { style: 'brass', title: 'The Grand Carousel', model: 'GALLOPER 16 · 3-ABREAST · 1908 PATTERN', kind: 'rotor', seatCol: 0xffd27a,
+      g2: { unit: 'rpm', min: 0, max: 8, ticks: 8, red: 0.85, get: function (T) { return T.rpm / 8; } },
+      sig: { label: 'BAND ORGAN', sfx: 'pkOrgan', words: 'the band organ strikes up', col: 'crimson' },
+      ann: [['voice', 'ORGAN\nON', '#ffd27a'], ['turn', 'PLATFORM\nTURNING', '#f0c04a']],
+      tele: function (a, C, T) { return ['PLATFORM ' + T.rpm.toFixed(1) + ' RPM', 'HORSES ' + a.seats.length + '  ABOARD ' + a.riders]; } },
+    teacups: { style: 'pastel', title: 'The Tea Garden', model: 'TEA PARTY 6 · TWIN-SPIN PLATTER', kind: 'rotor', sub: true, seatCol: 0xff9dc0,
+      caps: { gates: 'teal', bars: 'pink', station: 'cream', test: 'sky', reset: 'cream' },
+      g2: { unit: 'rpm', min: 0, max: 10, ticks: 5, red: 0.85, get: function (T) { return T.rpm / 10; } },
+      sig: { label: 'MUSIC BOX', sfx: 'pkTeaBell', words: 'the music box plays', col: 'pink' },
+      ann: [['voice', 'MUSIC\nBOX', '#ffb3cf'], ['turn', 'PLATTER\nTURNING', '#9fe0d4']],
+      tele: function (a, C, T) { return ['PLATTER ' + T.rpm.toFixed(1) + ' RPM', 'CUPS ' + T.n + '  CUP MAX ' + (T.subRpm || 0).toFixed(0) + ' RPM']; } },
+    ferris: { style: 'sky', title: 'The Sky Wheel', model: 'SKY WHEEL 24 · 19.4 M · GRAVITY CABINS', kind: 'wheel', seatCol: 0x9fd0ff,
+      g2: { unit: 'rpm', min: 0, max: 2, ticks: 4, red: 0.8, get: function (T) { return T.rpm / 2; } },
+      sig: { label: 'CHIMES', sfx: 'pkWheelChime', words: 'the wheel chimes ring', col: 'sky' },
+      ann: [['voice', 'CHIMES', '#9fd0ff'], ['wind', 'WIND\nOK', '#5fd38d']],
+      tele: function (a, C, T) { return ['WHEEL ' + T.rpm.toFixed(2) + ' RPM  WIND ' + T.wind.toFixed(1) + ' M/S', 'CABIN ' + (T.deck + 1) + ' AT DECK  TOP 19.4 M']; } },
+    dodgems: { style: 'tread', title: 'The Dodgem Arena', model: 'AUTOSCOOTER 12 · CEILING GRID 96 V DC', kind: 'arena', seatCol: 0xff6b5e,
+      caps: { test: 'red' },
+      g2: { unit: 'volts DC', min: 0, max: 120, ticks: 6, red: 0.9, get: function (T) { return T.volts / 120; } },
+      sig: { label: 'KLAXON', sfx: 'pkKlaxon', words: 'the klaxon sounds', col: 'orange' },
+      ann: [['voice', 'KLAXON', '#ffcf3a'], ['live', 'FLOOR\nLIVE', '#ff6b5e']],
+      tele: function (a, C, T) { return ['GRID ' + T.volts.toFixed(0) + ' V DC  ' + T.amps.toFixed(0) + ' A', 'CARS ' + T.n + '  MOVING ' + T.moving]; } },
+    droptower: { style: 'hazard', title: 'The Drop', model: 'FREEFALL 26 · MAGNETIC BRAKE · 64 KM/H', kind: 'tower', seatCol: 0xffdf6a,
+      caps: { test: 'red' },
+      g2: { unit: 'km/h', min: 0, max: 80, ticks: 8, red: 0.82, get: function (T) { return T.v * 3.6 / 80; } },
+      sig: { label: 'WARN HORN', sfx: 'pkDropHorn', words: 'the warning horn blares', col: 'amber' },
+      ann: [['voice', 'WARN\nHORN', '#ffdf6a'], ['fall', 'FREE\nFALL', '#ff6b5e']],
+      tele: function (a, C, T) { return ['H ' + T.h.toFixed(1) + ' M  V ' + (T.vy * 3.6).toFixed(0) + ' KM/H', 'G ' + T.g.toFixed(1) + '  ' + T.phase]; } },
+    flume: { style: 'timber', title: 'The Log Flume', model: 'LOG CHUTE 3 · 7.5 M DROP · 3 PUMPS', kind: 'track', seatCol: 0x7fd0ff,
+      blocks: ['DOCK', 'LIFT', 'CHANNEL', 'SPLASH'],
+      g2: { unit: 'flow m3/h', min: 0, max: 2000, ticks: 4, red: 0.9, get: function (T) { return T.flow / 2000; } },
+      sig: { label: 'DOCK BELL', sfx: 'pkFlumeBell', words: 'the dock bell rings', col: 'teal' },
+      ann: [['voice', 'DOCK\nBELL', '#7fd0ff'], ['pumps', 'PUMPS\nRUNNING', '#5fd38d']],
+      tele: function (a, C, T) { return ['FLOW ' + T.flow.toFixed(0) + ' M3/H  LVL ' + T.level.toFixed(0) + '%', 'LOGS ' + T.n + '  ' + T.block + '  ' + (T.v * 3.6).toFixed(0) + ' KM/H']; } },
+    haunted: { style: 'gothic', title: 'The Haunted Manor', model: 'DARK RIDE · SIX ROOMS · EST. 1888', kind: 'rooms', seatCol: 0xff8a3d,
+      caps: { test: 'purple', station: 'cream' },
+      g2: { unit: 'fog %', min: 0, max: 100, ticks: 5, red: 0.0, get: function (T) { return T.fog / 100; } },
+      sig: { label: 'THE HOWL', sfx: 'pkHowl', words: 'something howls in the manor', col: 'purple' },
+      ann: [['voice', 'HOWLS', '#ff8a3d'], ['fx', 'SCARE\nFX', '#c9a0ff']],
+      tele: function (a, C, T) { return ['ROOM ' + (T.room + 1) + ' ' + T.roomName, 'FOG ' + T.fog.toFixed(0) + '%  FX ' + (T.fx ? 'FIRING' : 'ARMED')]; } },
+    kround: { style: 'toy', base: ['#ff8a6a', '#e0563f', 'rgba(255,255,255,0.18)'], title: 'Little Roundabout', model: 'TINY TURN 1 · FOR SMALL RIDERS', kind: 'rotor', seatCol: 0xffe36a,
+      g2: { unit: 'rpm', min: 0, max: 8, ticks: 4, red: 0, get: function (T) { return T.rpm / 8; } },
+      sig: { label: 'TOOT TOOT', sfx: 'pkKidTune', words: 'toot toot', col: 'sky' },
+      ann: [['voice', 'TUNES', '#ffe36a'], ['happy', 'HAPPY\nRIDERS', '#5fd38d']],
+      tele: function (a, C, T) { return ['ROUND WE GO ' + T.rpm.toFixed(1) + ' RPM', 'HAPPY RIDERS ' + a.riders]; } },
+    kpots: { style: 'toy', base: ['#5fc4cf', '#2f7f8f', 'rgba(255,240,140,0.22)'], title: 'Wobbly Pots', model: 'WOBBLE POT 5 · GENTLE SPIN', kind: 'rotor', sub: true, seatCol: 0xffe36a,
+      g2: { unit: 'rpm', min: 0, max: 8, ticks: 4, red: 0, get: function (T) { return T.rpm / 8; } },
+      sig: { label: 'KETTLE', sfx: 'pkKettle', words: 'the kettle whistles', col: 'orange' },
+      ann: [['voice', 'TUNES', '#ffe36a'], ['happy', 'HAPPY\nRIDERS', '#5fd38d']],
+      tele: function (a, C, T) { return ['WOBBLE ' + T.rpm.toFixed(1) + ' RPM', 'POTS ' + T.n + '  HAPPY ' + a.riders]; } },
+    kpuffin: { style: 'toy', base: ['#7fc8f0', '#3f8fc8', 'rgba(255,255,255,0.2)'], title: 'Puffin Line', model: 'PEDAL LINE 2 · STEADY AS SHE GOES', kind: 'track', seatCol: 0xffe36a,
+      blocks: ['STATION', 'HILL', 'TRACK', 'HOME'],
+      g2: { unit: 'km/h', min: 0, max: 16, ticks: 4, red: 0, get: function (T) { return T.v * 3.6 / 16; } },
+      sig: { label: 'WHISTLE', sfx: 'pkPuffinHoot', words: 'peep peep', col: 'orange' },
+      ann: [['voice', 'TUNES', '#ffe36a'], ['happy', 'HAPPY\nRIDERS', '#5fd38d']],
+      tele: function (a, C, T) { return ['CHUFF ' + (T.v * 3.6).toFixed(1) + ' KM/H', 'HAPPY RIDERS ' + a.riders + '  ' + T.block]; } },
+    serpent: { style: 'scales', title: 'The Serpent', model: 'TERRAIN COASTER SST-5 · LIFT AND LAP', kind: 'track', coaster: true,
+      sig: { label: 'THE HISS', sfx: 'pkHiss', words: 'the Serpent hisses', col: 'jade' } },
+    baron: { style: 'heraldic', title: "Baron's Drop", model: 'DIVE MACHINE BD-1 · 90 DEGREE DROP', kind: 'track', coaster: true,
+      sig: { label: 'FANFARE', sfx: 'pkBaronFanfare', words: 'the Baron is announced', col: 'brass' } },
+    nocturne: { style: 'night', title: 'Nocturne', model: 'INDOOR SPIRAL NC-11 · AROUND THE MOON', kind: 'track', coaster: true,
+      sig: { label: 'NIGHT BELL', sfx: 'pkNightChime', words: 'a celesta rings in the dark', col: 'purple' } },
+    wreck: { style: 'nautical', title: 'The Wreck', model: 'FIGURE EIGHT FW-8 · THROUGH THE HULL', kind: 'track', coaster: true,
+      sig: { label: 'FOGHORN', sfx: 'pkFoghorn', words: 'the foghorn sounds', col: 'brass' } },
+    moonwood: { style: 'forest', title: 'Moonwood', model: 'CAMELBACK MW-3 · ROUND THE OLD TREE', kind: 'track', coaster: true,
+      sig: { label: 'THE OWL', sfx: 'pkOwl', words: 'an owl calls from the crown', col: 'teal' } },
+    dragon: { style: 'dragon', title: 'The Dragon', model: 'FAMILY DRAGON DR-21 · OVER THE HILL', kind: 'track', coaster: true,
+      sig: { label: 'THE ROAR', sfx: 'pkRoar', words: 'the Dragon roars', col: 'red' } },
+    firebird: { style: 'flame', title: 'The Firebird', model: 'LOOP COASTER FB-1 · THROUGH THE ROLL', kind: 'track', coaster: true,
+      sig: { label: 'THE CALL', sfx: 'pkFirebirdCall', words: 'the Firebird calls', col: 'orange' } },
+    mountain: { style: 'mountain', title: 'The Mountain King', model: 'MINE TRAIN MK-1 · INTO THE HALL', kind: 'track', coaster: true,
+      sig: { label: 'THE HALL', sfx: 'pkMountainKing', words: 'in the hall of the Mountain King', col: 'navy' } }
+  };
+  // every coaster on the kit gets the same instruments and windows, sized to its own top speed
+  function pkPnCoasterSheet(sh, a) {
+    var E = a.extra || {}, top = Math.max(40, Math.ceil(((E.vTop || 20) * 3.6 + 10) / 20) * 20);
+    sh.blocks = sh.blocks || ['STATION', 'LIFT', 'CIRCUIT', 'BRAKES'];
+    sh.g2 = sh.g2 || { unit: 'km/h', min: 0, max: top, ticks: top / 20, red: 0.85, get: function (T) { return T.v * 3.6 / top; } };
+    sh.ann = sh.ann || [['lift', 'LIFT\nCHAIN', '#f0c04a'], ['brake', 'BRAKES\nSET', '#5fd38d']];
+    sh.tele = sh.tele || function (a2, C, T) { return ['V ' + ('  ' + (T.v * 3.6).toFixed(1)).slice(-5) + ' KM/H  H ' + T.h.toFixed(1) + ' M', 'G ' + (T.g >= 0 ? '+' : '') + T.g.toFixed(1) + '  ' + T.block + '  LAP ' + Math.round(T.lap * 100) + '%']; };
+    sh.seatCol = sh.seatCol || 0xffd27a;
+    return sh;
+  }
+  // a serial number for the maker's plate, the same for a ride every time
+  function pkPnSerial(id) { var h = 7; for (var i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % 9973; return 'LRW-' + id.slice(0, 3).toUpperCase() + '-' + ('000' + h).slice(-4); }
+
+  // ── The mimics ───────────────────────────────────────────────────
+  // the window on the plate the mimic is drawn in (metres, in the panel's frame)
+  var PK_PN_WIN = { x0: -0.38, x1: 0.18, y0: -0.12, y1: 0.212 };
+  var PK_PN_V = new THREE.Vector3(), PK_PN_M4 = new THREE.Matrix4();
+  // the ride's own frame: a world point in the ride group's local coordinates
+  function pkPnLocal(a, obj, out) {
+    obj.updateWorldMatrix(true, false); out.setFromMatrixPosition(obj.matrixWorld);
+    a.g.updateWorldMatrix(true, false); PK_PN_M4.copy(a.g.matrixWorld).invert(); return out.applyMatrix4(PK_PN_M4);
+  }
+  // the seats grouped by what carries them: a cup, a pot, a horse, a gondola, a car, a log (or the seat itself on a shared deck)
+  function pkPnCarriers(a, key) {
+    var list = [], by = new Map();
+    a.seats.forEach(function (s, i) {
+      var o = key ? s[key] : s.par; if (!o) return;
+      var shared = !key && a.seats.every(function (t) { return t.par === o; });
+      var k = shared ? 'seat' + i : o;
+      var e = by.get(k);
+      if (!e) { e = { o: o, seats: [], seatAt: shared ? s : null }; by.set(k, e); list.push(e); }
+      e.seats.push(s);
+    });
+    return list;
+  }
+  function pkPnCarrierPos(a, e, out) {
+    if (e.seatAt) { PK_PN_V.set(e.seatAt.x, e.seatAt.y, e.seatAt.z); e.o.updateWorldMatrix(true, false); out.copy(PK_PN_V).applyMatrix4(e.o.matrixWorld); a.g.updateWorldMatrix(true, false); PK_PN_M4.copy(a.g.matrixWorld).invert(); return out.applyMatrix4(PK_PN_M4); }
+    return pkPnLocal(a, e.o, out);
+  }
+  function pkPnFull(e) { for (var i = 0; i < e.seats.length; i++) if (e.seats[i].guest) return true; return false; }
+  // a mimic is { draw(R, S) the static print, build(P) the live parts, tick(dt, T) the probe and the lights }
+  var PK_PN_KINDS = {};
+  // a rotor seen from above: the seats where they really are, turning with the deck, each lit when someone sits in it
+  PK_PN_KINDS.rotor = function (a, sh) {
+    var list = pkPnCarriers(a), pts = [], cx = 0, cz = 0, rmax = 0.1, v = new THREE.Vector3();
+    list.forEach(function (e) { pkPnCarrierPos(a, e, v); pts.push([v.x, v.z]); cx += v.x; cz += v.z; });
+    cx /= Math.max(1, pts.length); cz /= Math.max(1, pts.length);
+    pts.forEach(function (p) { rmax = Math.max(rmax, Math.hypot(p[0] - cx, p[1] - cz)); });
+    var W = PK_PN_WIN, mx = (W.x0 + W.x1) / 2 - 0.06, my = (W.y0 + W.y1) / 2, R0 = Math.min(W.x1 - W.x0, W.y1 - W.y0) / 2 - 0.022, k = R0 / (rmax * 1.12);
+    var at = function (x, z) { return [mx + (x - cx) * k, my - (z - cz) * k]; };
+    var pips = [], subs = [], ang0 = [], prevAng = null;
+    return {
+      draw: function (R, S) {
+        pkPnCircle(R, mx, my, R0 + 0.008, null, S.edge, 0.0025);
+        pkPnCircle(R, mx, my, R0 - 0.004, 'rgba(255,255,255,0.03)', S.grid.replace(/0\.0\d\)/, '0.4)'), 0.0012);
+        for (var t = 0; t < 36; t++) { var aa = t / 36 * Math.PI * 2, r1 = R0 + 0.008, r2 = R0 + (t % 3 ? 0.016 : 0.024); pkPnLine(R, [[mx + Math.cos(aa) * r1, my + Math.sin(aa) * r1], [mx + Math.cos(aa) * r2, my + Math.sin(aa) * r2]], S.dim, t % 3 ? 0.0012 : 0.002); }
+        pkPnCircle(R, mx, my, 0.012, S.acc, null);
+        pkPnText(R, S, 'N', mx, my + R0 + 0.033, 0.011, { col: S.dim });
+        var lx = W.x1 - 0.06;
+        pkPnText(R, S, 'SEATS', lx, W.y1 - 0.03, 0.0105, { col: S.dim });
+        pkPnText(R, S, String(a.seats.length), lx, W.y1 - 0.055, 0.02, { col: S.ink });
+        pkPnText(R, S, sh.sub ? 'CUPS' : 'BAYS', lx, W.y1 - 0.09, 0.0105, { col: S.dim });
+        pkPnText(R, S, String(list.length), lx, W.y1 - 0.115, 0.02, { col: S.ink });
+        pkPnText(R, S, 'DIA ' + (rmax * 2).toFixed(1) + ' M', lx, W.y0 + 0.04, 0.0105, { col: S.dim });
+        pkPnText(R, S, 'LIT = SEATED', lx, W.y0 + 0.018, 0.009, { col: S.dim });
+      },
+      build: function (P) {
+        list.forEach(function (e, i) {
+          var p = pkPnPip(P, 0.0085, sh.seatCol); var q = at(pts[i][0], pts[i][1]); p.set(q[0], q[1]); pips.push(p);
+          if (sh.sub) { var g = new THREE.Group(); g.userData.dynamic = true; g.position.set(q[0], q[1], 0.005); P.add(g); box(0.0025, 0.016, 0.002, pkPnStd({ color: 0xf4f1e6, roughness: 0.5 }), 0, 0.009, 0.002, g); subs.push(g); }
+          ang0.push(e.o.rotation.y);
+        });
+      },
+      tick: function (dt, T) {
+        T.n = list.length;
+        var a0 = null;
+        for (var i = 0; i < list.length; i++) {
+          var e = list[i]; pkPnCarrierPos(a, e, v); var q = at(v.x, v.z); pips[i].set(q[0], q[1]);
+          if (i === 0) a0 = Math.atan2(v.z - cz, v.x - cx);
+          pkPnPipLight(pips[i], pkPnFull(e) ? 1 : 0.16, dt);
+          if (subs[i]) { subs[i].position.set(q[0], q[1], 0.005); subs[i].rotation.z = e.o.rotation.y - (a0 || 0); }
+        }
+        if (a0 !== null && prevAng !== null && dt > 0) {
+          var d = a0 - prevAng; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
+          T.rpm += (Math.abs(d) / dt * 60 / (Math.PI * 2) - T.rpm) * Math.min(1, dt * 3);
+        }
+        prevAng = a0;
+        if (sh.sub && list[0]) { var sr = Math.abs(list[0].o.rotation.y - (T.sub0 === undefined ? list[0].o.rotation.y : T.sub0)) / Math.max(1e-3, dt) * 60 / (Math.PI * 2); T.subRpm = Math.max((T.subRpm || 0) * Math.max(0, 1 - dt * 0.5), sr); T.sub0 = list[0].o.rotation.y; }
+        T.moving = T.rpm > 0.3;
+      }
+    };
+  };
+  // the dodgem floor from above: the cars where they really are
+  PK_PN_KINDS.arena = function (a, sh) {
+    var cars = (a.extra && a.extra.cars) || [], W = PK_PN_WIN, mx = (W.x0 + W.x1) / 2 - 0.04, my = (W.y0 + W.y1) / 2, hw = 0.2, hh = hw * 3.8 / 5.9;
+    var at = function (x, z) { return [mx + clamp(x / 5.9, -1, 1) * hw, my - clamp(z / 3.8, -1, 1) * hh]; };
+    var pips = [], prev = [];
+    return {
+      draw: function (R, S) {
+        var c = R.c; c.save(); pkPnRect(R, mx - hw - 0.014, my - hh - 0.014, mx + hw + 0.014, my + hh + 0.014, 0.012); c.strokeStyle = S.acc; c.lineWidth = R.L(0.003); c.stroke(); c.restore();
+        for (var gx = -6; gx <= 6; gx++) pkPnLine(R, [[mx + gx / 6 * hw, my - hh], [mx + gx / 6 * hw, my + hh]], 'rgba(255,207,58,0.14)', 0.001);
+        for (var gz = -4; gz <= 4; gz++) pkPnLine(R, [[mx - hw, my + gz / 4 * hh], [mx + hw, my + gz / 4 * hh]], 'rgba(255,207,58,0.14)', 0.001);
+        pkPnText(R, S, 'CEILING GRID  +96 V', mx, my + hh + 0.03, 0.0105, { col: S.dim });
+        pkPnText(R, S, 'FLOOR  0 V', mx, my - hh - 0.028, 0.0105, { col: S.dim });
+        pkPnText(R, S, 'CARS', W.x1 - 0.04, W.y1 - 0.03, 0.0105, { col: S.dim }); pkPnText(R, S, String(cars.length), W.x1 - 0.04, W.y1 - 0.056, 0.02);
+      },
+      build: function (P) { cars.forEach(function (cr) { var p = pkPnPip(P, 0.009, sh.seatCol); var q = at(cr.g.position.x, cr.g.position.z); p.set(q[0], q[1]); pips.push(p); prev.push([cr.g.position.x, cr.g.position.z]); }); },
+      tick: function (dt, T) {
+        var mv = 0; T.n = cars.length;
+        cars.forEach(function (cr, i) {
+          var x = cr.g.position.x, z = cr.g.position.z, q = at(x, z); pips[i].set(q[0], q[1]);
+          var moving = Math.hypot(x - prev[i][0], z - prev[i][1]) > 1e-4; prev[i][0] = x; prev[i][1] = z; if (moving) mv++;
+          var full = a.seats.some(function (s) { return s.car === cr.g && s.guest; });
+          pkPnPipLight(pips[i], full ? 1 : moving ? 0.55 : 0.14, dt);
+        });
+        T.moving = mv;
+        var live = a.state === 'running' && !a.ctl.fault;
+        T.volts += ((live ? 96 + Math.sin(PK_BK_T * 3.1) * 2.5 : 0) - T.volts) * Math.min(1, dt * 4);
+        T.amps += ((live ? 6 + mv * 7.5 : 0) - T.amps) * Math.min(1, dt * 3);
+      }
+    };
+  };
+  // the wheel side on: the cabins round the rim, the spokes turning with it, the deck at the bottom
+  PK_PN_KINDS.wheel = function (a, sh) {
+    var wheel = a.extra && a.extra.wheel, list = pkPnCarriers(a, 'gon'), pts = [], cy = 0, cz = 0, rmax = 0.1, v = new THREE.Vector3();
+    list.forEach(function (e) { pkPnLocal(a, e.o, v); pts.push([v.z, v.y]); cz += v.z; cy += v.y; });
+    cz /= Math.max(1, pts.length); cy /= Math.max(1, pts.length);
+    pts.forEach(function (p) { rmax = Math.max(rmax, Math.hypot(p[0] - cz, p[1] - cy)); });
+    var W = PK_PN_WIN, mx = (W.x0 + W.x1) / 2 - 0.06, my = (W.y0 + W.y1) / 2 + 0.012, R0 = Math.min(W.x1 - W.x0, W.y1 - W.y0) / 2 - 0.035, k = R0 / rmax;
+    var pips = [], spokes = null, prev = null;
+    return {
+      draw: function (R, S) {
+        pkPnLine(R, [[mx - R0 * 0.62, W.y0 + 0.018], [mx, my], [mx + R0 * 0.62, W.y0 + 0.018]], S.dim, 0.004);
+        pkPnCircle(R, mx, my, R0, null, 'rgba(159,208,255,0.35)', 0.003);
+        pkPnLine(R, [[mx - 0.05, my - R0 - 0.012], [mx + 0.05, my - R0 - 0.012]], S.acc, 0.004);
+        pkPnText(R, S, 'DECK', mx + 0.075, my - R0 - 0.012, 0.0095, { col: S.acc });
+        pkPnText(R, S, '19.4 M', mx, my + R0 + 0.018, 0.0095, { col: S.dim });
+        var lx = W.x1 - 0.055;
+        pkPnText(R, S, 'CABINS', lx, W.y1 - 0.03, 0.0105, { col: S.dim }); pkPnText(R, S, String(list.length), lx, W.y1 - 0.056, 0.02);
+        pkPnText(R, S, 'WIND', lx, W.y0 + 0.07, 0.0105, { col: S.dim }); pkPnText(R, S, 'LIMIT 15', lx, W.y0 + 0.05, 0.009, { col: S.dim });
+      },
+      build: function (P) {
+        spokes = new THREE.Group(); spokes.userData.dynamic = true; spokes.position.set(mx, my, 0.004); P.add(spokes);
+        var sm = pkPnStd({ color: 0xcfe0ff, roughness: 0.4, metalness: 0.5 });
+        for (var s = 0; s < 8; s++) { var arm = new THREE.Group(); arm.rotation.z = s * Math.PI / 4; spokes.add(arm); box(0.0016, R0, 0.0012, sm, 0, R0 / 2, 0, arm); }
+        list.forEach(function (e, i) { var p = pkPnPip(P, 0.0085, sh.seatCol); p.set(mx + (pts[i][0] - cz) * k, my + (pts[i][1] - cy) * k); pips.push(p); });
+      },
+      tick: function (dt, T) {
+        var low = 1e9;
+        list.forEach(function (e, i) {
+          pkPnLocal(a, e.o, v); var x = mx + (v.z - cz) * k, y = my + (v.y - cy) * k; pips[i].set(x, y);
+          if (v.y < low) { low = v.y; T.deck = i; }
+          pkPnPipLight(pips[i], pkPnFull(e) ? 1 : 0.16, dt);
+        });
+        if (wheel) {
+          spokes.rotation.z = -wheel.rotation.x;
+          if (prev !== null && dt > 0) T.rpm += (Math.abs(wheel.rotation.x - prev) / dt * 60 / (Math.PI * 2) - T.rpm) * Math.min(1, dt * 3);
+          prev = wheel.rotation.x;
+        }
+        T.wind = 3.4 + Math.sin(PK_BK_T * 0.13) * 1.6 + Math.sin(PK_BK_T * 0.71) * 0.7 + Math.sin(PK_BK_T * 2.3) * 0.25;
+        T.moving = T.rpm > 0.05;
+      }
+    };
+  };
+  // the tower side on: the mast marked in metres, the carriage on it, and the four phases of a drop
+  PK_PN_KINDS.tower = function (a, sh) {
+    var car = a.extra && a.extra.car, W = PK_PN_WIN, x = W.x0 + 0.1, y0 = W.y0 + 0.02, y1 = W.y1 - 0.025, HMAX = 28;
+    var Y = function (h) { return y0 + clamp(h / HMAX, 0, 1) * (y1 - y0); };
+    var pip = null, leds = [], prevY = null, prevV = 0;
+    var PH = ['LIFT', 'HOLD', 'DROP', 'BRAKE'];
+    return {
+      draw: function (R, S) {
+        var c = R.c;
+        c.fillStyle = 'rgba(246,207,74,0.12)'; c.fillRect(R.X(x - 0.012), R.Y(Y(26.6)), R.L(0.024), R.L(Y(26.6) - Y(0)));
+        pkPnLine(R, [[x - 0.012, Y(0)], [x - 0.012, Y(26.6)]], S.dim, 0.002); pkPnLine(R, [[x + 0.012, Y(0)], [x + 0.012, Y(26.6)]], S.dim, 0.002);
+        c.save(); var bx = R.X(x - 0.012), by = R.Y(Y(10)), bw = R.L(0.024), bh = R.L(Y(10) - Y(2.2)); c.beginPath(); c.rect(bx, by, bw, bh); c.clip(); c.strokeStyle = 'rgba(255,107,94,0.6)'; c.lineWidth = 2; for (var k = -bh; k < bw + bh; k += 8) { c.beginPath(); c.moveTo(bx + k, by); c.lineTo(bx + k - bh, by + bh); c.stroke(); } c.restore();
+        for (var h = 0; h <= 25; h += 5) { pkPnLine(R, [[x + 0.016, Y(h)], [x + 0.03, Y(h)]], S.dim, 0.0015); pkPnText(R, S, h + ' M', x + 0.034, Y(h), 0.0095, { col: S.dim, align: 'left' }); }
+        pkPnText(R, S, 'BRAKE FINS', x - 0.02, Y(6), 0.0085, { col: '#ff8a7a', align: 'right' });
+        pkPnText(R, S, 'TOP 26.2', x - 0.02, Y(26.2), 0.0085, { col: S.acc, align: 'right' });
+        var lx = x + 0.15;
+        pkPnText(R, S, 'PHASE', lx + 0.05, W.y1 - 0.025, 0.011, { col: S.dim });
+        PH.forEach(function (p, i) { pkPnText(R, S, p, lx + 0.03, W.y1 - 0.06 - i * 0.045, 0.014, { align: 'left' }); });
+        pkPnText(R, S, 'FALL 1.82 S  64 KM/H', lx + 0.06, W.y0 + 0.022, 0.0095, { col: S.dim });
+      },
+      build: function (P) {
+        pip = pkPnPip(P, 0.011, sh.seatCol); pip.set(x, Y(2.2));
+        PH.forEach(function (p, i) { leds.push(pkPnLed(P, x + 0.165, W.y1 - 0.06 - i * 0.045, { col: i === 2 ? 0xff6b5e : i === 3 ? 0xff9d6b : 0xf0c04a, r: 0.009 })); });
+      },
+      tick: function (dt, T) {
+        var hy = car ? car.position.y : 2.2;
+        pip.set(x, Y(hy)); pkPnPipLight(pip, a.riders ? 1 : 0.4, dt);
+        var fall = Math.sqrt(2 * 16.2 / 9.81), t = a.state === 'running' ? a.t : -1, ph = -1;
+        if (t >= 0) ph = t < 12 ? 0 : t < 15 ? 1 : t < 15 + fall ? 2 : t < 15 + fall + 1.2 ? 3 : -1;
+        leds.forEach(function (l, i) { l.on = ph === i ? (i === 2 ? 'flash' : true) : 'dim'; });
+        T.phase = ph < 0 ? (a.state === 'running' ? 'LANDED' : 'AT BASE') : PH[ph];
+        T.fall = ph === 2;
+        if (prevY !== null && dt > 0) {
+          var vy = (hy - prevY) / dt;
+          T.vy += (vy - T.vy) * Math.min(1, dt * 8);
+          var ay = (T.vy - prevV) / dt; prevV = T.vy;
+          T.g += ((1 + ay / 9.81) - T.g) * Math.min(1, dt * 4);
+        }
+        prevY = hy; T.h = hy; T.v = Math.abs(T.vy); T.moving = T.v > 0.2;
+      }
+    };
+  };
+  // the haunted manor's plan: six rooms, the party lit room by room as it goes through
+  PK_PN_KINDS.rooms = function (a, sh) {
+    var W = PK_PN_WIN, NAMES = ['FOYER', 'LIBRARY', 'BALLROOM', 'CONSERVATORY', 'CRYPT', 'ATTIC'], leds = [], cells = [];
+    var cw = (W.x1 - W.x0 - 0.03) / 3, ch = (W.y1 - W.y0 - 0.05) / 2;
+    for (var i = 0; i < 6; i++) { var col = i < 3 ? i : 5 - i, row = i < 3 ? 0 : 1; cells.push([W.x0 + 0.015 + col * cw, W.y1 - 0.03 - (row + 1) * ch]); }
+    return {
+      draw: function (R, S) {
+        var c = R.c;
+        cells.forEach(function (p, i) {
+          c.save(); pkPnRect(R, p[0] + 0.004, p[1] + 0.004, p[0] + cw - 0.004, p[1] + ch - 0.004, 0.006); c.fillStyle = 'rgba(255,138,61,0.05)'; c.fill(); c.strokeStyle = S.edge; c.lineWidth = R.L(0.0018); c.stroke(); c.restore();
+          pkPnText(R, S, (i + 1) + '  ' + NAMES[i], p[0] + cw / 2, p[1] + ch - 0.02, 0.0105, { col: S.ink, max: cw - 0.014 });
+        });
+        for (var j = 0; j < 5; j++) { var A = cells[j], B = cells[j + 1]; pkPnLine(R, [[A[0] + cw / 2, A[1] + ch / 2 - 0.012], [B[0] + cw / 2, B[1] + ch / 2 - 0.012]], 'rgba(255,138,61,0.5)', 0.0016); }
+        pkPnText(R, S, 'THE PARTY GOES ROOM BY ROOM', (W.x0 + W.x1) / 2, W.y1 - 0.016, 0.0095, { col: S.dim });
+      },
+      build: function (P) { cells.forEach(function (p) { leds.push(pkPnLed(P, p[0] + cw / 2, p[1] + ch / 2 - 0.012, { col: 0xff8a3d, r: 0.012, bezel: pkPnStd({ color: 0x3a2a22, roughness: 0.5, metalness: 0.6 }) })); }); },
+      tick: function (dt, T) {
+        var run = a.state === 'running', f = run ? clamp(a.t / Math.max(1, a.run), 0, 0.999) : 0, room = run ? Math.floor(f * 6) : 0;
+        T.room = room; T.roomName = run ? NAMES[room] : (a.state === 'boarding' ? 'BOARDING' : 'EMPTY');
+        T.fx = run && Math.sin(PK_BK_T * 13) * Math.sin(PK_BK_T * 3.1) > 0.4;
+        leds.forEach(function (l, i) { l.on = run ? (i === room ? (T.fx ? 'flash' : true) : i < room ? 'dim' : false) : (a.state === 'boarding' && i === 0 ? 'dim' : false); });
+        T.fog = clamp(T.fog + (run ? -dt * 1.1 : dt * 0.4), 18, 100);
+        T.moving = run;
+      }
+    };
+  };
+  // a track in plan and in profile: from the coaster's own curve (or the flume's own course), the lift marked, the train on
+  // it car by car, a cursor on the profile, and block lamps that go red where the train is
+  PK_PN_KINDS.track = function (a, sh) {
+    var E = a.extra || {}, N = 220, P3 = [], i, isFlume = !E.curve;
+    if (E.curve) { for (i = 0; i <= N; i++) { var q = E.curve.getPointAt(((E.uPark || 0) + i / N) % 1); P3.push([q.x, q.y, q.z]); } }
+    else {
+      var PTS = PK_FLUME_PTS, L = [], tot = 0; for (i = 0; i < PTS.length; i++) { var A = PTS[i], B = PTS[(i + 1) % PTS.length]; var l = Math.hypot(B[0] - A[0], B[1] - A[1], B[2] - A[2]); L.push(l); tot += l; }
+      for (i = 0; i <= N; i++) { var d = i / N * tot, k = 0; while (k < L.length - 1 && d > L[k]) { d -= L[k]; k++; } var A2 = PTS[k], B2 = PTS[(k + 1) % PTS.length], f = L[k] ? d / L[k] : 0; P3.push([A2[0] + (B2[0] - A2[0]) * f, A2[1] + (B2[1] - A2[1]) * f, A2[2] + (B2[2] - A2[2]) * f]); }
+    }
+    var xmn = 1e9, xmx = -1e9, zmn = 1e9, zmx = -1e9, ymn = 1e9, ymx = -1e9;
+    P3.forEach(function (p) { xmn = Math.min(xmn, p[0]); xmx = Math.max(xmx, p[0]); zmn = Math.min(zmn, p[2]); zmx = Math.max(zmx, p[2]); ymn = Math.min(ymn, p[1]); ymx = Math.max(ymx, p[1]); });
+    // the lift: the steady climb to the highest point in the first part of the lap
+    var top = 0; for (i = 0; i <= N * 0.7; i++) if (P3[i][1] > P3[top][1]) top = i;
+    var l0 = top; while (l0 > 1 && P3[l0 - 1][1] < P3[l0][1] - 1e-3) l0--;
+    var lift = top - l0 > 3 && (P3[top][1] - P3[l0][1]) > 1.5 ? [l0 / N, top / N] : null;
+    var len = 0; for (i = 1; i <= N; i++) len += Math.hypot(P3[i][0] - P3[i - 1][0], P3[i][1] - P3[i - 1][1], P3[i][2] - P3[i - 1][2]);
+    var W = sh.win || PK_PN_WIN, px0 = W.x0 + 0.012, px1 = W.x1 - 0.09, py0 = W.y0 + 0.098, py1 = W.y1 - 0.012;
+    var k = Math.min((px1 - px0) / Math.max(1, xmx - xmn), (py1 - py0) / Math.max(1, zmx - zmn));
+    var ox = (px0 + px1) / 2 - (xmn + xmx) / 2 * k, oy = (py0 + py1) / 2 + (zmn + zmx) / 2 * k;
+    var plan = function (x, z) { return [ox + x * k, oy - z * k]; };
+    var fx0 = W.x0 + 0.012, fx1 = W.x1 - 0.09, fy0 = W.y0 + 0.014, fy1 = W.y0 + 0.08;
+    var prof = function (fr, y) { return [fx0 + fr * (fx1 - fx0), fy0 + (y - ymn) / Math.max(1, ymx - ymn) * (fy1 - fy0)]; };
+    var BL = sh.blocks || ['STATION', 'LIFT', 'CIRCUIT', 'BRAKES'];
+    var trains = isFlume ? (E.boats || []).map(function (b) { return b.g; }) : (E.cars || []).map(function (c) { return c.g; });
+    var pips = [], cur = null, leds = [], prevP = null, prevV = new THREE.Vector3(), vel = new THREE.Vector3(), acc = new THREE.Vector3();
+    var NB = BL.length, bstep = Math.min(0.052, (W.y1 - W.y0 - 0.075) / NB);
+    var blockOf = sh.blockOf || function (fr) { if (fr < 0.015 || fr > 0.985) return 0; if (lift && fr >= lift[0] && fr <= lift[1]) return 1; if (fr > 0.9) return 3; return 2; };
+    return {
+      draw: function (R, S) {
+        var c = R.c, j;
+        // the plan: a dark casing, the rail in the ink, the lift picked out with its chain
+        var pl = P3.map(function (p) { return plan(p[0], p[2]); });
+        c.save(); c.lineJoin = 'round'; c.lineCap = 'round';
+        pkPnLine(R, pl, 'rgba(0,0,0,0.55)', 0.007); pkPnLine(R, pl, S.ink, 0.0028);
+        if (lift) { var lp = pl.slice(Math.floor(lift[0] * N), Math.ceil(lift[1] * N) + 1); pkPnLine(R, lp, S.acc, 0.0045); c.setLineDash([R.L(0.003), R.L(0.003)]); pkPnLine(R, lp, 'rgba(0,0,0,0.6)', 0.002); c.setLineDash([]); }
+        c.restore();
+        var st = plan(P3[0][0], P3[0][2]); c.save(); c.fillStyle = S.acc; c.fillRect(R.X(st[0]) - R.L(0.008), R.Y(st[1]) - R.L(0.008), R.L(0.016), R.L(0.016)); c.restore();
+        pkPnText(R, S, isFlume ? 'DOCK' : 'STN', st[0], st[1] - 0.018, 0.0095, { col: S.acc });
+        var hp = plan(P3[top][0], P3[top][2]); pkPnText(R, S, '^ ' + (P3[top][1] - ymn).toFixed(1) + ' M', hp[0], hp[1] + 0.016, 0.0095, { col: S.ink });
+        // the profile: height over the lap, a grid every five metres
+        c.save(); pkPnRect(R, fx0 - 0.004, fy0 - 0.004, fx1 + 0.004, fy1 + 0.006, 0.004); c.fillStyle = 'rgba(0,0,0,0.3)'; c.fill(); c.restore();
+        for (var hm = 0; hm <= ymx - ymn; hm += 5) { var gy = prof(0, ymn + hm)[1]; pkPnLine(R, [[fx0, gy], [fx1, gy]], S.grid.replace(/0\.0\d\)/, '0.22)'), 0.0008); }
+        var pr = P3.map(function (p, n) { return prof(n / N, p[1]); });
+        c.save(); c.beginPath(); c.moveTo(R.X(fx0), R.Y(fy0)); pr.forEach(function (p) { c.lineTo(R.X(p[0]), R.Y(p[1])); }); c.lineTo(R.X(fx1), R.Y(fy0)); c.closePath(); c.fillStyle = S.grid.replace(/0\.0\d\)/, '0.35)'); c.fill(); c.restore();
+        pkPnLine(R, pr, S.ink, 0.0018);
+        if (lift) pkPnLine(R, pr.slice(Math.floor(lift[0] * N), Math.ceil(lift[1] * N) + 1), S.acc, 0.003);
+        pkPnText(R, S, 'PROFILE  ' + Math.round(len) + ' M', fx0 + 0.004, fy1 + 0.012, 0.0085, { col: S.dim, align: 'left' });
+        pkPnText(R, S, (ymx - ymn).toFixed(0) + ' M', fx1 - 0.004, fy1 + 0.012, 0.0085, { col: S.dim, align: 'right' });
+        // the blocks: one lamp a section, red while the train is in it
+        var bx = W.x1 - 0.045;
+        pkPnText(R, S, 'BLOCKS', bx, W.y1 - 0.024, 0.0105, { col: S.dim });
+        for (j = 0; j < NB; j++) pkPnText(R, S, 'B' + (j + 1) + ' ' + BL[j], bx, W.y1 - 0.075 - j * bstep, 0.0085, { col: S.ink, max: 0.082 });
+        pkPnText(R, S, (a.seats.length) + ' SEATS', bx, W.y0 + 0.02, 0.0095, { col: S.dim });
+      },
+      build: function (P) {
+        trains.forEach(function (t, n) { var p = pkPnPip(P, n ? 0.0065 : 0.0085, sh.seatCol); var q = plan(t.position.x, t.position.z); p.set(q[0], q[1]); pips.push(p); });
+        cur = pkPnPip(P, 0.007, 0xff6b5e); var q0 = prof(0, P3[0][1]); cur.set(q0[0], q0[1]);
+        for (var j = 0; j < NB; j++) leds.push(pkPnLed(P, W.x1 - 0.045, W.y1 - 0.055 - j * bstep, { col: 0xff3b30, r: 0.0085 }));
+      },
+      tick: function (dt, T) {
+        trains.forEach(function (t, n) { var q = plan(t.position.x, t.position.z); pips[n].set(q[0], q[1]); pkPnPipLight(pips[n], a.state === 'running' ? (n ? 0.7 : 1) : (a.riders ? 0.6 : 0.3), dt); });
+        var fr = 0;
+        if (sh.lap) fr = sh.lap();
+        else if (isFlume) { var b0 = E.boats && E.boats[0]; fr = b0 ? ((b0.u % 1) + 1) % 1 : 0; }
+        else if (E.uOfF && a.state === 'running') { var M = E.uOfF.length - 1, ff = clamp(a.t / Math.max(1e-3, a.run), 0, 1) * M, kk = Math.min(M - 1, Math.floor(ff)); fr = E.uOfF[kk] + (E.uOfF[kk + 1] - E.uOfF[kk]) * (ff - kk); }
+        var n2 = Math.round(clamp(fr, 0, 1) * N), q = prof(fr, P3[Math.min(N, n2)][1]); cur.set(q[0], q[1]); pkPnPipLight(cur, a.state === 'running' ? 1 : 0.3, dt);
+        var blk = a.state === 'running' || sh.lap ? blockOf(fr) : 0;
+        leds.forEach(function (l, j) { l.on = j === blk ? true : 'dim'; l.mat.emissive.setHex(j === blk ? 0xff3b30 : 0x5fd38d); });
+        T.block = BL[blk]; T.blk = blk; T.lap = fr;
+        // the probe: speed, height and the load the riders feel, from the lead car's own movement
+        var lead = trains[0];
+        if (lead && dt > 0) {
+          if (prevP) {
+            vel.copy(lead.position).sub(prevP).divideScalar(dt);
+            acc.copy(vel).sub(prevV).divideScalar(dt); prevV.copy(vel);
+            var sp = vel.length(); if (sp > 60) sp = T.v;
+            T.v += (sp - T.v) * Math.min(1, dt * 5);
+            var gl = Math.sqrt(acc.x * acc.x + (acc.y + 9.81) * (acc.y + 9.81) + acc.z * acc.z) / 9.81 * (acc.y + 9.81 >= 0 ? 1 : -1);
+            if (!isFinite(gl) || Math.abs(gl) > 8 || a.state !== 'running') gl = 1;
+            T.g += (gl - T.g) * Math.min(1, dt * 2.5);
+          } else prevP = new THREE.Vector3();
+          prevP.copy(lead.position);
+          T.h = Math.max(0, lead.position.y - ymn);
+        }
+        T.moving = T.v > 0.2;
+        if (isFlume) { var on = a.state === 'running' || a.state === 'boarding' || a.state === 'ready'; T.flow += ((on ? 1240 + Math.sin(PK_BK_T * 1.3) * 35 : 0) - T.flow) * Math.min(1, dt * 1.5); T.level += ((on ? 92 : 64) - T.level) * Math.min(1, dt * 0.25); T.n = trains.length; }
+      }
+    };
+  };
+
+  // ── The voices ───────────────────────────────────────────────────
+  // every ride's own sound, synthesized like the rest of the park's (part 30 of the engine): the button on the desk plays it,
+  // and with the VOICE switch on it plays as the ride goes, when you are near enough to hear it
+  SFX.pkOrgan = function (t) {
+    var mel = [[784, 0], [659, 0.2], [784, 0.4], [1047, 0.6], [988, 0.95], [880, 1.15], [784, 1.35], [659, 1.7], [698, 1.9], [784, 2.1]];
+    mel.forEach(function (n) { sTone('square', n[0], t + n[1], 0.28, 0.03, { lp: 2600 }); sTone('triangle', n[0] * 2, t + n[1], 0.18, 0.012); });
+    [0, 0.6, 1.2, 1.8].forEach(function (b, i) { sTone('triangle', i % 2 ? 196 : 131, t + b, 0.22, 0.05); sTone('triangle', 392, t + b + 0.2, 0.12, 0.025); sTone('triangle', 392, t + b + 0.4, 0.12, 0.025); });
+  };
+  SFX.pkTeaBell = function (t) { [1568, 1976, 2349, 1976, 2637].forEach(function (f, i) { sTone('sine', f, t + i * 0.22, 0.9, 0.035); sTone('sine', f * 2.01, t + i * 0.22, 0.4, 0.008); }); };
+  SFX.pkWheelChime = function (t) { [659, 880, 1319, 988].forEach(function (f, i) { sTone('sine', f, t + i * 0.42, 1.6, 0.045); }); };
+  SFX.pkKlaxon = function (t) { for (var i = 0; i < 2; i++) { sTone('sawtooth', 210, t + i * 0.55, 0.42, 0.06, { f1: 470, lp: 1800 }); sTone('square', 105, t + i * 0.55, 0.42, 0.025, { f1: 235, lp: 900 }); } };
+  SFX.pkDropHorn = function (t) { for (var i = 0; i < 3; i++) { sTone('square', 349, t + i * 0.5, 0.24, 0.035, { lp: 1300 }); sTone('square', 277, t + i * 0.5 + 0.25, 0.24, 0.035, { lp: 1300 }); } };
+  SFX.pkFlumeBell = function (t) { [0, 0.35, 0.7].forEach(function (d) { sTone('sine', 1319, t + d, 0.8, 0.05); sTone('sine', 1760, t + d + 0.004, 0.6, 0.025); }); sNoise(t + 1.0, 0.9, 0.08, { type: 'lowpass', freq: 1800, fade: true }); };
+  SFX.pkHowl = function (t) { sTone('sine', 220, t, 1.0, 0.05, { f1: 520 }); sTone('sine', 520, t + 1.0, 1.4, 0.045, { f1: 170 }); sTone('sine', 330, t + 0.1, 1.9, 0.015, { f1: 260 }); sNoise(t, 2.6, 0.06, { type: 'lowpass', freq: 500, shape: 'swell', fade: true }); SFX.door(t + 2.2); };
+  SFX.pkKidTune = function (t) { [[523, 0], [659, 0.15], [784, 0.3], [659, 0.45], [880, 0.6], [784, 0.85], [1047, 1.1]].forEach(function (n) { sTone('triangle', n[0], t + n[1], 0.24, 0.05); }); sTone('sine', 1568, t + 1.1, 0.5, 0.025); };
+  SFX.pkKettle = function (t) { sTone('sine', 1100, t, 1.6, 0.03, { f1: 2400, attack: 0.4 }); sTone('sine', 1650, t + 0.2, 1.4, 0.012, { f1: 3200, attack: 0.4 }); sNoise(t, 1.7, 0.04, { freq: 5000, shape: 'swell' }); };
+  SFX.pkPuffinHoot = function (t) { [[0, 0.32], [0.45, 0.7]].forEach(function (p) { sTone('sine', 587, t + p[0], p[1], 0.05, { attack: 0.04 }); sTone('sine', 740, t + p[0], p[1], 0.035, { attack: 0.04 }); sNoise(t + p[0], p[1], 0.03, { type: 'bandpass', freq: 2400, q: 2, shape: 'flat', fade: true }); }); };
+  SFX.pkHiss = function (t) { sNoise(t, 1.5, 0.12, { freq: 4200, shape: 'swell', fade: true }); sNoise(t + 0.3, 0.9, 0.05, { type: 'bandpass', freq: 7000, q: 3, fade: true }); sTone('sine', 90, t, 1.2, 0.03, { f1: 60 }); };
+  SFX.pkBaronFanfare = function (t) { [[392, 0, 0.2], [523, 0.22, 0.2], [659, 0.44, 0.2], [784, 0.66, 0.9]].forEach(function (n) { sTone('sawtooth', n[0], t + n[1], n[2], 0.035, { lp: 1700 }); sTone('sawtooth', n[0] / 2, t + n[1], n[2], 0.02, { lp: 900 }); }); sThud(t + 0.66, 90, 0.1, 0.4); };
+  SFX.pkNightChime = function (t) { [1760, 1568, 1319, 1175, 1047, 880].forEach(function (f, i) { sTone('sine', f, t + i * 0.26, 1.8, 0.035); sTone('sine', f * 3, t + i * 0.26, 0.3, 0.006); }); };
+  SFX.pkFoghorn = function (t) { sTone('sawtooth', 87, t, 2.2, 0.08, { lp: 420, attack: 0.15 }); sTone('sawtooth', 174, t, 2.2, 0.03, { lp: 520, attack: 0.15 }); [2.4, 2.75].forEach(function (d) { SFX.bell(t + d); }); };
+  SFX.pkOwl = function (t) { [[0, 0.42], [0.62, 0.16], [0.82, 0.38]].forEach(function (p) { sTone('sine', 410, t + p[0], p[1], 0.06, { f1: 360, attack: 0.04 }); }); };
+  SFX.pkRoar = function (t) { sNoise(t, 1.8, 0.22, { type: 'lowpass', freq: 650, shape: 'swell', fade: true }); sTone('sawtooth', 140, t, 1.6, 0.06, { f1: 55, lp: 600 }); sTone('sawtooth', 93, t + 0.1, 1.5, 0.04, { f1: 40, lp: 400 }); };
+  SFX.pkFirebirdCall = function (t) { sNoise(t, 1.0, 0.1, { type: 'bandpass', freq: 1800, q: 1.2, shape: 'swell' }); for (var i = 0; i < 8; i++) sTone('sine', i % 2 ? 1760 : 1397, t + 0.5 + i * 0.07, 0.09, 0.04); sTone('sine', 1319, t + 1.1, 0.7, 0.04, { f1: 2093 }); };
+  // the opening of In the Hall of the Mountain King, plucked, the way it creeps in
+  SFX.pkMountainKing = function (t) {
+    var B = 246.94, Cs = 277.18, D = 293.66, E = 329.63, Fs = 369.99, F = 349.23, Cn = 261.63;
+    [[B, 0], [Cs, 1], [D, 2], [E, 3], [Fs, 4], [D, 5], [Fs, 6], [F, 8], [Cs, 9], [F, 10], [E, 12], [Cn, 13], [E, 14]].forEach(function (n) { sTone('triangle', n[0], t + n[1] * 0.17, 0.16, 0.06); sTone('sine', n[0] / 2, t + n[1] * 0.17, 0.12, 0.03); });
+  };
+
+  // ── The desk ─────────────────────────────────────────────────────
+  // The plate in four fields, left to right: who it is (crest, maker's plate, LOAD and the ride's own dial, the operator key and
+  // the VOICE switch), the mimic and its telemetry, the sequence (the four buttons, the dispatch interlock chain, AUTO, the
+  // stop and RESET) and dispatch (the ride's voice, the READY lamp, the lever or, on a kids' ride, a big GO button).
+  // Built in `con`'s frame, whose local +Z faces the operator; the status bank stands on the back of the desk as before.
+  function pkBoothPanel(a, con) {
+    var C = pkCtl(a), M = pkPnCaps(), SS = pkPnStyles();
+    var sh = PK_PANEL[a.id] || { style: 'scales', title: a.name, model: 'RIDE CONTROL', kind: 'track', coaster: true, sig: { label: 'HORN', sfx: 'bell', words: 'stand clear', col: 'amber' } };
+    if (sh.coaster || (sh.kind === 'track' && !sh.g2)) pkPnCoasterSheet(sh, a);
+    var S = SS[sh.style] || SS.scales, kid = !!S.kid;
+    if (sh.base) S = Object.assign({}, S, { base: pkPnToyBase(sh.base[0], sh.base[1], sh.base[2]) });
+    var caps = Object.assign({ gates: kid ? 'lime' : 'green', bars: kid ? 'orange' : 'amber', station: kid ? 'sky' : 'white', test: kid ? 'purple' : 'blue', reset: 'white' }, sh.caps || {});
+    var PW = 1.80, PH = 0.50, TILT = 0.50, TOP = 0.72;
+    var PY = TOP + (PH / 2) * Math.cos(TILT), PZ = (PH / 2) * Math.sin(TILT) + 0.06;
+    var T = { rpm: 0, v: 0, vy: 0, g: 1, h: 0, volts: 0, amps: 0, wind: 3, deck: 0, n: 0, moving: false, phase: '', block: 'STATION', blk: 0, lap: 0, flow: 0, level: 64, fog: 100, room: 0, roomName: '', fx: false, fall: false };
+    var mim = (PK_PN_KINDS[sh.kind] || PK_PN_KINDS.rotor)(a, sh);
+    var BX = [0.265, 0.367, 0.469, 0.571], B = [['gates', 'GATES'], ['bars', 'BARS'], ['station', 'STN GATES'], ['test', 'TEST']];
+    var IL = ['KEY', 'GATES SHUT', 'BARS DOWN', 'SEATED'];
+    var Wn = PK_PN_WIN, serial = pkPnSerial(a.id);
+    var P = pkCtlPanel({
+      w: PW, h: PH, x: 0, y: PY, z: PZ, tilt: -TILT, key: 'pk-booth-desk-' + a.id, parent: con,
+      paint: function (c, W, H) { S.base(c, W, H); },
+      rim: S.rim, screw: S.screw, glow: S.glow, rough: S.rough, metal: kid ? 0.05 : S.metal,
+      draw: function (c, W, H) {
+        var R = pkCtlRuler(W, H, PW, PH); R.c = c;
+        var head = S.head || S.font;
+        // the four fields
+        pkPnZone(R, S, -0.895, -0.245, -0.405, 0.245);
+        pkPnZone(R, S, -0.395, -0.245, 0.195, 0.245, 'MIMIC · LIVE');
+        pkPnZone(R, S, 0.205, -0.245, 0.635, 0.245, 'SEQUENCE');
+        pkPnZone(R, S, 0.645, -0.245, 0.895, 0.245, 'DISPATCH');
+        // who it is: the crest in its medallion, the name, the maker's plate
+        var cx = R.X(-0.835), cy = R.Y(0.183), cr = R.L(0.046);
+        c.save(); c.beginPath(); c.arc(cx, cy, cr * 1.08, 0, 6.2832); c.fillStyle = S.zone2 || 'rgba(0,0,0,0.35)'; c.fill(); c.lineWidth = R.L(0.003); c.strokeStyle = S.acc; c.stroke();
+        c.beginPath(); c.arc(cx, cy, cr * 0.98, 0, 6.2832); c.lineWidth = R.L(0.001); c.strokeStyle = S.edge; c.stroke(); c.restore();
+        c.save(); c.beginPath(); c.arc(cx, cy, cr * 0.96, 0, 6.2832); c.clip(); (PK_PN_CRESTS[a.id] || PK_PN_CRESTS.carousel)(c, cx, cy, cr * 0.9, S); c.restore();
+        pkPnText(R, S, sh.title, -0.775, 0.198, kid ? 0.03 : 0.027, { align: 'left', font: head, max: 0.36, weight: kid ? '900' : '700' });
+        pkPnText(R, S, sh.model, -0.775, 0.163, 0.0105, { align: 'left', col: S.dim, max: 0.36 });
+        pkPnText(R, S, 'LINDENBURG RIDE WORKS  ·  ' + serial, -0.775, 0.143, 0.0085, { align: 'left', col: S.dim, max: 0.36 });
+        // the instruments and what they read
+        pkPnText(R, S, 'LOAD', -0.78, -0.052, 0.0135, { col: S.ink });
+        pkPnText(R, S, (sh.g2.unit || '').toUpperCase(), -0.55, -0.052, 0.0135, { col: S.ink, max: 0.12 });
+        // the operator key and the voice switch
+        pkPnText(R, S, 'OPERATOR KEY', -0.78, -0.228, 0.0125, { col: S.acc });
+        pkPnText(R, S, 'OFF', -0.82, -0.118, 0.0105, { col: S.dim }); pkPnText(R, S, 'ON', -0.738, -0.118, 0.0105, { col: S.ok || '#5fd38d' });
+        pkPnText(R, S, 'VOICE', -0.55, -0.228, 0.0125, { col: S.acc });
+        pkPnText(R, S, 'ON DISPATCH', -0.55, -0.104, 0.009, { col: S.dim });
+        // the mimic window
+        c.save(); pkPnRect(R, Wn.x0, Wn.y0, Wn.x1, Wn.y1, 0.008); c.fillStyle = S.win; c.fill(); c.clip();
+        var gs = 0.02; for (var gx = Wn.x0; gx < Wn.x1; gx += gs) pkPnLine(R, [[gx, Wn.y0], [gx, Wn.y1]], S.grid, 0.0007);
+        for (var gy = Wn.y0; gy < Wn.y1; gy += gs) pkPnLine(R, [[Wn.x0, gy], [Wn.x1, gy]], S.grid, 0.0007);
+        mim.draw(R, Object.assign({}, S, { ink: S.wink || S.ink, dim: S.wdim || S.dim, acc: S.wacc || S.acc, shadow: 'rgba(0,0,0,0.5)', engrave: true }));
+        c.restore();
+        c.save(); pkPnRect(R, Wn.x0, Wn.y0, Wn.x1, Wn.y1, 0.008); c.strokeStyle = S.edge; c.lineWidth = R.L(0.003); c.stroke(); c.restore();
+        // the sequence: button names, the interlock chain, the bottom row
+        for (var i = 0; i < B.length; i++) pkPnText(R, S, B[i][1], BX[i], 0.192, 0.0135, { max: 0.098 });
+        pkPnLine(R, [[BX[0], 0.03], [BX[3], 0.03]], S.dim, 0.0016);
+        for (i = 0; i < 4; i++) pkPnText(R, S, IL[i], BX[i], -0.004, 0.0088, { col: S.dim, max: 0.098 });
+        pkPnText(R, S, 'INTERLOCK', 0.42, 0.058, 0.0095, { col: S.dim });
+        pkPnText(R, S, 'AUTO', 0.27, -0.226, 0.0125, { col: S.ink });
+        pkPnText(R, S, 'E-STOP', 0.42, -0.226, 0.0135, { col: S.stop || '#ff8a7a' });
+        pkPnText(R, S, 'RESET', 0.57, -0.226, 0.0125, { col: S.ink });
+        // dispatch
+        pkPnText(R, S, sh.sig.label, 0.82, 0.208, 0.0115, { max: 0.12 });
+        pkPnText(R, S, 'READY', 0.695, 0.208, 0.0115, { col: S.ok || '#5fd38d' });
+        pkPnText(R, S, kid ? 'GO!' : 'DISPATCH', 0.77, -0.228, kid ? 0.022 : 0.0135, { col: kid ? '#2f9e44' : S.ink, weight: kid ? '900' : '700' });
+        if (!kid) pkPnText(R, S, 'PULL', 0.86, -0.15, 0.009, { col: S.dim });
+      }
+    });
+    pkCtlSetPower(P, function () { return !!a.open; });
+    var parts = { buttons: {}, tel: T, sheet: sh };
+    parts.panel = P;
+    var collar = S.collar || MAT.chrome, bezel = S.collar === MAT.chrome ? undefined : S.collar;
+    var lampCol = function (col) { return { green: 0x5fd38d, lime: 0x9fef6a, amber: 0xf0c04a, orange: 0xffa060, blue: 0x5aa9ff, sky: 0x9fd0ff, red: 0xff6b5e, crimson: 0xff6b5e, pink: 0xffb3cf, teal: 0x7fe0d4, jade: 0x7fe0b4, purple: 0xc9a0ff, navy: 0x9fb8ff, brass: 0xffd27a }[col] || 0xe8e4d8; };
+    var br = kid ? 0.033 : 0.027;
+    for (var i = 0; i < B.length; i++) {
+      var b = B[i], col = caps[b[0]];
+      parts.buttons[b[0]] = pkCtlBtn(P, BX[i], 0.112, {
+        id: b[0], label: b[1], col: col, r: br, collar: collar, lampCol: lampCol(col),
+        prompt: 'Press ' + b[1],
+        act: function () {
+          var id = this.id;
+          if (C.fault && id !== 'gates') { sfx('bad'); toast('Reset ' + a.name + ' first', 'bad'); return; }
+          if (id === 'gates') return pkBoothGates(a);
+          if (id === 'bars') {
+            if (!C.key) { sfx('bad'); toast(a.name + ' is locked - turn the operator key on', 'bad'); return; }
+            C.barsWant = C.barsWant > 0.5 ? 0 : 1;
+            sfx('click'); toast(a.name + ': restraints ' + (C.barsWant > 0.5 ? 'down' : 'up'), '');
+            screenDirtyAll(); return true;
+          }
+          if (id === 'station') return pkStationGatesRide(a);
+          if (id === 'test') return pkBoothTest(a);
+        }
+      });
+    }
+    // the interlock chain: every link has to be green before the ride will go
+    parts.chain = IL.map(function (n, k) { return pkPnLed(P, BX[k], 0.03, { col: 0x5fd38d, r: 0.0095 }); });
+    parts.auto = pkCtlToggle(P, 0.27, -0.125, { id: 'auto', on: C.auto, prompt: 'Automatic cycle', onName: 'AUTO', offName: 'MANUAL', act: function () { pkBoothAuto(a); } });
+    parts.stop = pkCtlMushroom(P, 0.42, -0.112, { id: 'stop', r: kid ? 0.05 : 0.046, prompt: 'Emergency stop', act: function () { pkBoothStop(a); } });
+    parts.reset = pkCtlBtn(P, 0.57, -0.125, { id: 'reset', label: 'RESET', col: caps.reset, r: br, collar: collar, lampCol: 0xe8e4d8, prompt: 'Reset after a stop',
+      act: function () { if (C.fault) { pkBoothStop(a); } else { sfx('click'); toast(a.name + ': nothing to reset', ''); } } });
+    // the left field: the operator key, the voice switch, LOAD and the ride's own dial
+    parts.key = pkCtlKey(P, -0.78, -0.165, { id: 'opKey', on: !!C.key, label: a.name + ' operator key', tag: kid ? 'blue' : 'red', act: function (on) { return pkSetRideKey(a, on); } });
+    parts.voice = pkCtlToggle(P, -0.55, -0.16, { id: 'voice', on: pkPnVoice(a.id), prompt: a.name + ': the ride\'s voice on dispatch', onName: 'ON', offName: 'OFF',
+      act: function (on) { pkPnSetVoice(a.id, on); sfx('click'); toast(a.name + ': voice ' + (on ? 'on - ' + sh.sig.words + ' on every dispatch' : 'off'), ''); } });
+    var gaugeO = { dial: S.dial, bezel: bezel, r: kid ? 0.07 : 0.064 };
+    parts.load = pkCtlGauge(P, -0.78, 0.04, Object.assign({}, gaugeO, { id: 'load', label: '', unit: 'riders', min: 0, max: Math.max(4, a.seats.length), red: kid ? 0 : 0.92, ticks: 6,
+      get: function () { return a.seats.length ? a.riders / a.seats.length : 0; } }));
+    parts.g2 = pkCtlGauge(P, -0.55, 0.04, Object.assign({}, gaugeO, { id: 'g2', label: '', unit: sh.g2.unit, min: sh.g2.min, max: sh.g2.max, red: sh.g2.red, ticks: sh.g2.ticks, ease: 4,
+      get: function () { return clamp(sh.g2.get(T), 0, 1); } }));
+    // the telemetry strip under the mimic, in the plate's own colour
+    parts.tele = pkCtlReadout(P, -0.10, -0.181, 0.54, 0.074, { col: S.tele || '#6dff9a', bg: '#040506' });
+    // dispatch: the ride's voice, the READY lamp, the lever (or GO)
+    parts.sig = pkCtlBtn(P, 0.82, 0.14, { id: 'sig', label: sh.sig.label, col: sh.sig.col || 'amber', r: 0.03, collar: collar, lampCol: lampCol(sh.sig.col), prompt: 'Press ' + sh.sig.label,
+      act: function () { pkPnVoiceNow(a, sh, true); } });
+    parts.ready = pkPnLed(P, 0.695, 0.14, { col: 0x5fd38d, r: 0.016 });
+    if (kid) parts.go = pkCtlBtn(P, 0.77, -0.085, { id: 'go', label: 'GO', col: 'green', r: 0.058, collar: collar, lampCol: 0x9fef6a, prompt: 'Press GO - off we go', act: function () { pkBoothDispatch(a); } });
+    else parts.lever = pkCtlLever(P, 0.70, -0.06, { id: 'dispatchLever', len: 0.13, col: S.lever || 'black', prompt: 'Pull the dispatch lever', act: function () { pkBoothDispatch(a); } });
+    // the live parts of the mimic, and the glass over it: aim at it and it reads the telemetry out to you
+    mim.build(P);
+    var mimTxt = function () { return a.open ? (C.key ? sh.tele(a, C, T).join('  ·  ') : 'key off, telemetry standby') : 'no power'; };
+    hitBox(Wn.x1 - Wn.x0, Wn.y1 - Wn.y0, 0.03, (Wn.x0 + Wn.x1) / 2, (Wn.y0 + Wn.y1) / 2, 0.012, {
+      prompt: function () { return sh.title + ' mimic: ' + mimTxt(); },
+      use: function () { sfx('click'); toast(sh.title + ': ' + mimTxt(), ''); }
+    }, P);
+
+    // the status bank on the back of the desk: the six windows every booth has, the ride's own two, and the counts
+    var top = TOP + PH * Math.cos(TILT), hz = PZ - (PH / 2) * Math.sin(TILT) - 0.05;
+    var HB = pkCtlHood(con, 0, top + 0.15, hz, 1.56, 0.2, 0.22);
+    var ANN = [['key', 'KEY\nON', '#5fd38d'], ['auto', 'AUTO', '#8fc3ff'], ['gates', 'GATES\nOPEN', '#f0c04a'], ['bars', 'BARS\nLOCKED', '#f0c04a'], ['run', 'RIDE\nRUNNING', '#5fd38d'], ['fault', 'FAULT\nMAINT', '#ff6b5e']].concat(sh.ann || []);
+    parts.ann = {};
+    ANN.forEach(function (d, k) { parts.ann[d[0]] = pkCtlAnnun(HB, -0.715 + k * 0.124, 0, 0.112, 0.1, d[1], { col: d[2], flash: d[0] === 'fault' || d[0] === 'fall' || d[0] === 'fx' }); });
+    parts.readout = pkCtlReadout(HB, 0.5, -0.025, 0.5, 0.12);
+    pkPnHoodPlate(HB, S, sh);
+
+    // ── live ──
+    var near = false, nearT = 0, wasRun = false, PV = new THREE.Vector3();
+    pkCtlLive({
+      tick: function (dt) {
+        var power = !!a.open, A = parts.ann;
+        var live = power && !C.fault && !!C.key;
+        if (parts.key.on !== !!C.key) parts.key.set(!!C.key);
+        if (parts.auto.on !== C.auto) parts.auto.set(C.auto);
+        if (parts.stop.latched !== !!C.fault) parts.stop.setLatched(!!C.fault);
+        if (parts.voice.on !== pkPnVoice(a.id)) parts.voice.set(pkPnVoice(a.id));
+        // the key window follows the key itself, so it still shows ON while a fault holds the rest of the panel dead
+        A.key.on = power && !!C.key; A.auto.on = live && !!C.auto; A.gates.on = live && !!C.gates; A.bars.on = live && C.barsWant > 0.5;
+        A.run.on = live && a.state === 'running';
+        // the fault lamp has to stay lit while the ride is faulted, even though a fault drops the rest of the panel dead
+        A.fault.on = power && !!C.key && ((C.fault || C.maint) ? 'flash' : false);
+        parts.buttons.gates.setLit(live && (a.state === 'idle' || a.state === 'unloading' || a.state === 'boarding'));
+        parts.buttons.station.setLit(live && a.stationGates === false);
+        parts.buttons.test.setLit(live && !PK.closed && a.state === 'idle' && !a.queue.length && !a.riders);
+        parts.buttons.bars.setLit(live && C.barsWant > 0.5);
+        // the interlock chain and the READY lamp: the same conditions pkBoothDispatch checks, in the order it checks them
+        var walking = pkAttrWalkers(a), loading = a.state === 'boarding' || a.state === 'ready';
+        var links = [!!C.key && !C.maint, !C.gates, C.barsWant > 0.5, a.riders > 0 && !walking];
+        var ready = live && !C.maint && loading && links[0] && links[1] && links[2] && links[3];
+        parts.chain.forEach(function (l, k) { l.on = power ? (links[k] ? true : 'dim') : false; l.mat.emissive.setHex(links[k] ? 0x5fd38d : 0xff6b5e); });
+        parts.ready.on = ready ? (C.auto ? true : 'flash') : false;
+        if (parts.go) parts.go.setLit(ready);
+        parts.sig.setLit(live && pkPnVoice(a.id) && a.state === 'running');
+        // the mimic and the probe run while someone is near enough to read the desk
+        nearT -= dt;
+        if (nearT <= 0) { nearT = 0.5; P.getWorldPosition(PV); near = typeof player !== 'undefined' && player && (PV.x - player.x) * (PV.x - player.x) + (PV.z - player.z) * (PV.z - player.z) < 40 * 40; }
+        if (near) mim.tick(Math.max(1e-3, dt), T);
+        // the ride's two windows
+        if (sh.ann) sh.ann.forEach(function (d) {
+          var on = false;
+          if (d[0] === 'voice') on = live && pkPnVoice(a.id);
+          else if (d[0] === 'turn') on = live && T.rpm > 0.3;
+          else if (d[0] === 'wind') on = live && T.wind < 15;
+          else if (d[0] === 'live') on = live && T.volts > 40;
+          else if (d[0] === 'fall') on = live && T.fall ? 'flash' : false;
+          else if (d[0] === 'pumps') on = live && T.flow > 200;
+          else if (d[0] === 'fx') on = live && T.fx ? 'flash' : false;
+          else if (d[0] === 'happy') on = live && a.riders > 0;
+          else if (d[0] === 'lift') on = live && a.state === 'running' && T.blk === 1;
+          else if (d[0] === 'brake') on = live && (a.state !== 'running' || T.blk === 3);
+          A[d[0]].on = on;
+        });
+        // the voice on dispatch
+        var run = a.state === 'running';
+        if (run && !wasRun && power && pkPnVoice(a.id) && near) pkPnVoiceNow(a, sh, false);
+        wasRun = run;
+        // the counts on the bank and the telemetry strip
+        parts.readout.setPower(power); parts.tele.setPower(power);
+        if (!power) { parts.readout.set(['NO POWER', 'BREAKER OFF']); parts.tele.set(['NO POWER', '']); return; }
+        var left = a.state === 'running' ? Math.max(0, Math.ceil((a.run || 0) - (a.t || 0))) + 's' : '--';
+        parts.readout.set(['QUEUE ' + ('  ' + pkAttrWaiting(a)).slice(-3) + '  RIDE ' + a.riders + '/' + a.seats.length,
+          (C.fault ? 'FAULT   ' : C.maint ? 'MAINT   ' : !C.key ? 'LOCKED  ' : (a.state.toUpperCase() + '        ').slice(0, 8)) + ' END ' + left]);
+        if (near) parts.tele.set(C.fault ? ['E-STOP LATCHED', 'TURN THE STOP, THEN RESET'] : !C.key ? ['KEY OFF', 'TELEMETRY STANDBY'] : sh.tele(a, C, T));
+      }
+    });
+    a.boothPanel = parts;
+    return parts;
+  }
+  // a small brass plate on the hood: the ride's name in its own lettering, so the bank reads as this ride's too
+  function pkPnHoodPlate(HB, S, sh, x, y) {
+    var t = tex(512, 64, function (c, W, H) {
+      c.fillStyle = S.win || '#111'; c.fillRect(0, 0, W, H);
+      c.strokeStyle = S.edge; c.lineWidth = 4; c.strokeRect(2, 2, W - 4, H - 4);
+      c.fillStyle = S.acc; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = '700 34px ' + (S.head || S.font);
+      c.fillText(sh.title.toUpperCase(), W / 2, H / 2 + 1, W - 24);
+    });
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    var m = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.036), new THREE.MeshStandardMaterial({ map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.35, roughness: 0.4, metalness: 0.3 }));
+    m.position.set(x === undefined ? 0.5 : x, y === undefined ? 0.075 : y, 0.006); HB.add(m);
+  }
+  // the voice switch remembers where it was left, per ride, in the save
+  function pkPnSave() { if (!S.pnVoice) S.pnVoice = {}; return S; }
+  function pkPnVoice(id) { return !(S && S.pnVoice && S.pnVoice[id] === false); }
+  function pkPnSetVoice(id, on) { pkPnSave().pnVoice[id] = !!on; }
+  function pkPnVoiceNow(a, sh, byHand) {
+    if (byHand && !a.open) { sfx('bad'); toast(a.name + ' has no power - the breaker is off', 'bad'); return; }
+    sfx(sh.sig.sfx || 'bell');
+    if (byHand) toast(a.name + ': ' + sh.sig.words, '');
+  }
+
+  // the test API: the panels' sheets and their probes
+  var _pkPnTestApi = GAME.T;
+  GAME.T = function () {
+    var o = _pkPnTestApi();
+    o.PK_PANEL = PK_PANEL; o.pkPnVoice = pkPnVoice; o.pkPnSetVoice = pkPnSetVoice; o.pkMimicBoard = function () { return PK_MIMIC && PK_MIMIC.board; }; o.pkTestRun = pkTestRun; o.route = route; o.pkAttrSlot = pkAttrSlot; o.pkAttrSeatWorld = pkAttrSeatWorld; o.pkMats = pkMats;
+    return o;
+  };
 // press E, and the ride carries you: the camera sits in the seat, the mouse looks around and the
 // whole cycle runs. When the ride comes back you step off at the exit. On AUTO the ride drives
 // itself, so the player can simply get on and go; off AUTO it waits for the desk like everyone else.
@@ -12308,8 +13407,8 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     pkBevelBox(W * 0.82, 0.16, 0.16, trim, 0, 0.62, D / 2 + 0.02, g, 0.04);
     // two seats, side by side; the platform-side one is filled first
     [-0.31, 0.31].forEach(function (sx) {
-      pkBevelBox(0.5, 0.09, 0.6, MAT.seat, sx, 0.66, -0.06, g, 0.03);
-      pkBevelBox(0.5, 0.56, 0.11, MAT.seat, sx, 0.97, -0.4, g, 0.03);
+      pkBevelBox(0.5, 0.09, 0.6, pkMats().seat, sx, 0.66, -0.06, g, 0.03);
+      pkBevelBox(0.5, 0.56, 0.11, pkMats().seat, sx, 0.97, -0.4, g, 0.03);
       pkBevelBox(0.34, 0.22, 0.1, body, sx, 1.3, -0.42, g, 0.03);
     });
     // lap bar: a padded U on a pivot behind the seats
@@ -12486,12 +13585,12 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       solid(x - 0.14, x + 0.14, zSouth - 0.14, zSouth + 0.14, lift, 3.0 + lift);
     }
     var mid = (x0 + x1) / 2;
-    box(x1 - x0, 0.1, depth, pkMats().roof, mid, 3.06 + lift, zSouth - depth / 2, g);
+    box(x1 - x0, 0.1, depth, MAT.roof, mid, 3.06 + lift, zSouth - depth / 2, g);
     box(x1 - x0, 0.06, depth - 0.3, std({ color: th.a, roughness: 0.6 }), mid, 3.12 + lift, zSouth - depth / 2, g);
     box(x1 - x0, 0.34, 0.1, MAT.steelDark, mid, 3.02 + lift, zSouth + 0.02, g);
     pkSign3D([label], Math.min(4.8, x1 - x0 - 1.2), 0.28, mid, 3.02 + lift, zSouth + 0.08, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
     [-1, 1].forEach(function (sx) {
-      pkRoundCyl(0.16, 0.22, MAT.bulb, mid + sx * (x1 - x0) / 4, 2.86 + lift, zSouth - 0.6, g, 10);
+      pkRoundCyl(0.16, 0.22, pkMats().bulb, mid + sx * (x1 - x0) / 4, 2.86 + lift, zSouth - 0.6, g, 10);
     });
   }
   // a coaster platform: kerb, deck, edge stripe, a plant tub and a lamp at each end
@@ -12502,10 +13601,10 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     box(x1 - x0 - 0.12, 0.07, zS - zN - 0.12, pkMats().pavers, (x0 + x1) / 2, 0.145 + lift, (zN + zS) / 2, g);
     box(x1 - x0, 0.03, 0.16, MAT.hazard, (x0 + x1) / 2, 0.17 + lift, zN + 0.08, g);
     [x0 + 0.5, x1 - 0.5].forEach(function (x) {
-      pkRoundCyl(0.26, 0.5, MAT.stone, x, 0.25 + lift, zS - 0.4, g, 12);
-      pkRoundCyl(0.3, 0.08, MAT.stone, x, 0.52 + lift, zS - 0.4, g, 12);
+      pkRoundCyl(0.26, 0.5, pkMats().stone, x, 0.25 + lift, zS - 0.4, g, 12);
+      pkRoundCyl(0.3, 0.08, pkMats().stone, x, 0.52 + lift, zS - 0.4, g, 12);
       pkRoundCyl(0.04, 2.5, MAT.steelDark, x, 1.25 + lift, zS - 0.34, g, 8);
-      pkRoundCyl(0.17, 0.24, MAT.bulb, x, 2.6 + lift, zS - 0.34, g, 10);
+      pkRoundCyl(0.17, 0.24, pkMats().bulb, x, 2.6 + lift, zS - 0.34, g, 10);
     });
     if (lift > 0.02) {
       var rampLen = Math.max(2, lift * 2);
@@ -12923,14 +14022,14 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var disc = pkRoundCyl(2.0, 0.3, band, emX, 10.0, Z1 + 0.5, g, 28); disc.rotation.x = Math.PI / 2;
     var inner = pkRoundCyl(1.62, 0.34, std({ color: 0x151a20, roughness: 0.6 }), emX, 10.0, Z1 + 0.52, g, 28); inner.rotation.x = Math.PI / 2;
     pkIndoorEmblem(g, cfg, emX, 10.0, Z1 + 0.72, glow);
-    for (i = 0; i < 26; i++) sphere(0.1, MAT.bulb, X0 + 0.8 + (X1 - X0 - 1.6) * i / 25, 6.95, Z1 + 0.46, g);
+    for (i = 0; i < 26; i++) sphere(0.1, pkMats().bulb, X0 + 0.8 + (X1 - X0 - 1.6) * i / 25, 6.95, Z1 + 0.46, g);
     // the portal: jambs, lintel, the marquee, the portico
     box(0.5, PH + 0.6, 0.55, trim, P0 + s * 0.25, (PH + 0.6) / 2, Z1 + 0.3, g);
     box(0.5, PH + 0.6, 0.55, trim, P1 - s * 0.25, (PH + 0.6) / 2, Z1 + 0.3, g);
     box(PW + 1.5, 0.62, 0.6, band, (pLo + pHi) / 2, PH + 0.45, Z1 + 0.3, g);
     pkSign3D([cfg.name.toUpperCase()], Math.min(6.8, PW + 1.8), 0.46, (pLo + pHi) / 2, PH + 1.3, Z1 + 0.46, 0, { bg: '#151a20', fg: cfg.sign }, g);
-    for (i = 0; i < 9; i++) sphere(0.09, MAT.bulb, pLo - 0.4 + (PW + 0.8) * i / 8, PH + 0.86, Z1 + 0.62, g);
-    box(PW + 3.4, 0.22, 3.5, pkMats().roof, (pLo + pHi) / 2, 4.78, Z1 + 1.75, g);
+    for (i = 0; i < 9; i++) sphere(0.09, pkMats().bulb, pLo - 0.4 + (PW + 0.8) * i / 8, PH + 0.86, Z1 + 0.62, g);
+    box(PW + 3.4, 0.22, 3.5, MAT.roof, (pLo + pHi) / 2, 4.78, Z1 + 1.75, g);
     box(PW + 3.4, 0.5, 0.16, band, (pLo + pHi) / 2, 4.62, Z1 + 3.42, g);
     [pLo - 0.5, pHi + 0.5].forEach(function (px) {
       box(0.34, 4.7, 0.34, trim, px, 2.35, Z1 + 1.1, g);
@@ -12978,7 +14077,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     if (cfg.centre === 'moon') {
       var m = pkRoundCyl(1.2, 0.12, std({ color: 0xe8ecff, emissive: 0xc8d0ff, emissiveIntensity: 0.4, roughness: 0.5 }), x - 0.25, y, z, g, 24); m.rotation.x = Math.PI / 2;
       var cut = pkRoundCyl(1.05, 0.14, std({ color: 0x151a20, roughness: 0.6 }), x + 0.3, y + 0.25, z + 0.03, g, 24); cut.rotation.x = Math.PI / 2;
-      for (i = 0; i < 5; i++) { a = i / 5 * Math.PI * 2 + 0.3; sphere(0.08, MAT.bulb, x + Math.cos(a) * 1.3, y + Math.sin(a) * 1.3, z + 0.05, g); }
+      for (i = 0; i < 5; i++) { a = i / 5 * Math.PI * 2 + 0.3; sphere(0.08, pkMats().bulb, x + Math.cos(a) * 1.3, y + Math.sin(a) * 1.3, z + 0.05, g); }
     } else if (cfg.centre === 'ship') {
       var hub = pkRoundCyl(0.3, 0.16, glow, x, y, z, g, 14); hub.rotation.x = Math.PI / 2;
       for (i = 0; i < 8; i++) {
@@ -13026,7 +14125,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       sphere(2.3, std({ color: 0xe8ecff, emissive: 0x9aa4d8, emissiveIntensity: 0.25, roughness: 0.5 }), CX, 10.9, CZ, g);
       for (i = 0; i < 16; i++) {
         a = i / 16 * Math.PI * 2;
-        sphere(0.09 + (i % 3) * 0.04, MAT.bulb, CX + Math.cos(a) * 1.85, 8.65 + (i % 4) * 0.1, CZ + Math.sin(a) * 1.85, g);
+        sphere(0.09 + (i % 3) * 0.04, pkMats().bulb, CX + Math.cos(a) * 1.85, 8.65 + (i % 4) * 0.1, CZ + Math.sin(a) * 1.85, g);
       }
       var moonLight = new THREE.PointLight(0xc8d4ff, 0.7, 14, 2); moonLight.position.set(CX, 7.5, CZ); g.add(moonLight);
     } else if (cfg.centre === 'ship') {
@@ -13065,7 +14164,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       for (i = 0; i < 5; i++) {
         a = i / 5 * Math.PI * 2 + 0.4;
         var lx = CX + Math.cos(a) * 2.2, lz = CZ + Math.sin(a) * 2.2;
-        pkRoundCyl(0.032, 1.4, MAT.brass || MAT.gold, lx, 7.6, lz, g, 6);
+        pkRoundCyl(0.032, 1.4, pkMats().brass, lx, 7.6, lz, g, 6);
         pkRoundCyl(0.19, 0.26, shade, lx, 6.85, lz, g, 10);
       }
     }
@@ -13192,7 +14291,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     pkCoPlatform(g, Math.min(AX + s * 0.6, AX + s * 14.8), Math.max(AX + s * 0.6, AX + s * 14.8), -82.8, -80.2, th, 1.0);
     var stationShade = std({ color: 0xfff3d6, emissive: 0xffdda0, emissiveIntensity: 0.5, roughness: 0.55 });
     [AX + s * 3, AX + s * 8, AX + s * 13].forEach(function (lx) {
-      pkRoundCyl(0.045, PK_HALL_CEIL - 5.9, MAT.gold, lx, (PK_HALL_CEIL + 5.9) / 2, -81.5, g, 6);
+      pkRoundCyl(0.045, PK_HALL_CEIL - 5.9, pkMats().gold, lx, (PK_HALL_CEIL + 5.9) / 2, -81.5, g, 6);
       pkRoundCyl(0.34, 0.24, stationShade, lx, 5.75, -81.5, g, 12);
     });
     // the station and the hall are lit, so the train and the platform are not silhouettes
@@ -15335,7 +16434,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   }
   function pkMkHall(g) {
     var K = PK_MK, M = pkFtM(), H = K.H, cx = (K.x0 + K.x1) / 2, cz = (K.z0 + K.z1) / 2, W = K.x1 - K.x0, D = K.z1 - K.z0;
-    var stone = std({ color: 0x8f8a80, roughness: 0.95, map: (MAT.stone && MAT.stone.map) || null }), dark = std({ color: 0x5f5a54, roughness: 0.95 });
+    var stone = std({ color: 0x8f8a80, roughness: 0.95, map: pkMats().stone.map }), dark = std({ color: 0x5f5a54, roughness: 0.95 });
     // walls: the lift's portal and the low portal in the north wall, the west door, a blank south and east
     pkMkWall(g, stone, K.x0, K.z0, K.x1, K.z0, H, [K.liftPortal, K.lowPortal]);
     pkMkWall(g, stone, K.x0, K.z1, K.x1, K.z1, H, []);
@@ -15379,7 +16478,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // inside: the floor, the ceiling, the king in the helix, crystals along the walls, low light
   function pkMkInside(g) {
     var K = PK_MK, cx = (K.x0 + K.x1) / 2, cz = (K.z0 + K.z1) / 2, W = K.x1 - K.x0, D = K.z1 - K.z0;
-    pkPaved(W - 0.7, D - 0.7, std({ color: 0x5a564f, roughness: 0.95, map: (MAT.stone && MAT.stone.map) || null }), cx, 0.03, cz, 1.6, g);
+    pkPaved(W - 0.7, D - 0.7, std({ color: 0x5a564f, roughness: 0.95, map: pkMats().stone.map }), cx, 0.03, cz, 1.6, g);
     var ceil = box(W - 0.7, 0.12, D - 0.7, std({ color: 0x1c1d26, roughness: 0.95 }), cx, K.H - 0.06, cz, g); ceil.castShadow = false;
     // the king: a throne on a rock, a robed figure, a gold crown, a glowing staff. Inside the helix (rail at 5 m round him)
     var kx = K.king[0], kz = K.king[1], rock = std({ color: 0x4a4650, roughness: 0.95 }), robe = std({ color: 0x5a2a6a, roughness: 0.8 }), gold = pkFtM().gold;
@@ -16896,15 +17995,23 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // the queue east of the grandstand, where the Dark Woods street (z -40) comes in from the spine at x -31.
   var PK_TH = { CX: -97, CZ: -68 };
   PK_PARK.x0 = Math.min(PK_PARK.x0, -132);   // a whole number of route cells (0.6 m) west of -72: the grid keeps its lattice
-  PK_PLOTS.push({ id: 'theater', name: 'The Lindenburg Arena', x: PK_TH.CX, z: PK_TH.CZ, r: 30, q: [PK_TH.CX + 18.5, PK_TH.CZ + 20], level: 24 });
+  PK_PLOTS.push({ id: 'theater', name: 'The Lindenburg Arena', x: PK_TH.CX, z: PK_TH.CZ, r: 30, q: [PK_TH.CX + 21.4, PK_TH.CZ + 18.1], level: 24 });
   PK_ROUTES.push([-31, -40, PK_TH.CX + 23, -40, 4.2, 'dark']);
   PK_KEEP.push([PK_TH.CX - 1, PK_TH.CZ, 44]);
   PK_CAB_RIDES.push(['theater', 'LINDENBURG ARENA']);
 
   // ── The grandstand's floor: six rows, the walkway behind the back row, the control room a step above it ──────────
   var PK_THG = { x: 14.6, z0: 10, row: 1.15, rows: 6, h0: 0.3, rise: 0.45, back: 21.4, booth: 3.6 };
+  // the stair hall (part 37) beside the stand: a lobby at ground level, the stair along its west side, the landing at the
+  // height of the stand's top walkway
+  var PK_TH_HALL = { x1: 20.4, z0: 9.8, sx1: 17.6, s0: 12.6, s1: 18.0 };
   function pkTheaterFloorAt(x, z) {
-    var G = PK_THG, lx = x - PK_TH.CX, lz = z - PK_TH.CZ;
+    var G = PK_THG, lx = x - PK_TH.CX, lz = z - PK_TH.CZ, HL = PK_TH_HALL, top = G.h0 + G.rise * (G.rows - 1);
+    if (lx > G.x && lx < HL.x1 && lz > HL.z0 && lz < G.back) {
+      if (lz >= HL.s1) return top;
+      if (lx < HL.sx1 && lz >= HL.s0) return top * (lz - HL.s0) / (HL.s1 - HL.s0);
+      return null;
+    }
     if (lx < -G.x || lx > G.x || lz < G.z0 || lz > G.back) return null;
     var k = Math.floor((lz - G.z0) / G.row);
     if (k >= G.rows) return G.h0 + G.rise * (Math.abs(lx) < G.booth ? G.rows : G.rows - 1);
@@ -17105,7 +18212,12 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       });
     }
     a.seats = seats; a.cap = seats.length;
-    [-1, 1].forEach(function (s) { box(0.3, 4.4, G.back - 9.5, M.stone, s * (G.x + 0.15), 2.2, (9.5 + G.back) / 2, g); S_(s * G.x, s * (G.x + 0.3), 9.5, G.back, 0, 7.6); });
+    box(0.3, 4.4, G.back - 9.5, M.stone, -(G.x + 0.15), 2.2, (9.5 + G.back) / 2, g); S_(-G.x - 0.3, -G.x, 9.5, G.back, 0, 7.6);
+    var HO = PK_TH_HALL.s1, top0 = G.h0 + G.rise * (G.rows - 1);
+    box(0.3, 4.4, HO - 9.5, M.stone, G.x + 0.15, 2.2, (9.5 + HO) / 2, g); S_(G.x, G.x + 0.3, 9.5, HO, 0, 7.6);
+    box(0.3, top0, G.back - HO, M.stone, G.x + 0.15, top0 / 2, (HO + G.back) / 2, g);
+    // the parapet along the front of the stand: the audience comes in at the top, down the aisles, never up from the sand
+    box(G.x * 2, 1.05, 0.3, M.stone, 0, 0.525, 9.65, g); box(G.x * 2 + 0.1, 0.08, 0.4, M.gold, 0, 1.09, 9.65, g); S_(-G.x, G.x, 9.45, 9.85, 0, 1.1);
     box(G.x * 2 + 0.6, 7.2, 0.3, M.brick, 0, 3.6, G.back + 0.15, g); S_(-G.x - 0.3, G.x + 0.3, G.back, G.back + 0.3, 0, 7.2);
     sign(['LINDENBURG ARENA'], 9, 1.1, 0, 5.4, G.back + 0.31, 0, { bg: '#2a1a12', fg: '#f0c04a' }, g);
     // the roof: posts, a slate deck falling to the back, a fascia with the show's name toward the arena
@@ -17134,20 +18246,9 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     L.fire = new THREE.PointLight(0xff7a2a, 0, 26, 1.8); L.fire.position.set(0, 6, -13); g.add(L.fire);
     L.hydra = new THREE.PointLight(0xff4a1a, 0, 30, 1.6); L.hydra.position.set(0, 9, -16); g.add(L.hydra);
 
-    // ── The entrance: the audience gate (the ride's own gates: shut, it stops you too) and a staff door beside it ───
-    [15.2, 21.4, 23.4].forEach(function (x) { pkBevelBox(0.8, 5.0, 0.8, M.stone, x, 2.5, 9.8, g, 0.04); pkFtSpire(g, x, 5.0, 9.8, 0.75, 1.6, M.slate, 4); S_(x - 0.4, x + 0.4, 9.4, 10.2, 0, 5); });
-    box(6.6, 0.6, 0.4, M.cream, 18.3, 4.6, 9.8, g);
-    sign(['THE FIVE RIDERS', 'OF LINDENBURG'], 5.4, 1.2, 18.3, 6.0, 10.05, 0, { bg: '#2a1a12', fg: '#f0c04a' }, g);
-    [-1, 1].forEach(function (s) {
-      var hinge = pkMover(g, s < 0 ? 15.6 : 21.0, 0, 9.8);
-      box(2.65, 1.4, 0.08, M.iron, s < 0 ? 1.32 : -1.32, 0.85, 0, hinge);
-      for (var v = 0.2; v < 2.6; v += 0.3) box(0.04, 1.3, 0.06, M.iron, (s < 0 ? 1 : -1) * v, 0.8, 0, hinge);
-      C.gateObjs.push(function (t) { hinge.rotation.y = (s < 0 ? -1 : 1) * t * 1.4; });
-    });
-    pkBkWaitBoard(a, g, 18.3, 3.6, 10.0, 0);
-    // the shut audience gate keeps the player out as well (guests only ever pass it while it is open)
-    var gx0 = CX + 15.6, gx1 = CX + 21.0, gzw = CZ + 9.8, _pkThPrevCollides = GAME.collides;
-    GAME.collides = function (x, z, opt) { if (_pkThPrevCollides && _pkThPrevCollides(x, z, opt)) return true; return C.gateT < 0.5 && x > gx0 && x < gx1 && Math.abs(z - gzw) < 0.3; };
+    // ── The entrance: the audience comes in through the stair hall (part 37, which has the ride's gates); where the old
+    // audience gate stood is the hall's north wall now, and the staff door beside it stays where it was ───
+    [21.4, 23.4].forEach(function (x) { pkBevelBox(0.8, 5.0, 0.8, M.stone, x, 2.5, 9.8, g, 0.04); pkFtSpire(g, x, 5.0, 9.8, 0.75, 1.6, M.slate, 4); S_(x - 0.4, x + 0.4, 9.4, 10.2, 0, 5); });
     // the staff door between the gate and the east wall: E opens and shuts it, and it swings into the arena
     box(0.15, 2.3, 0.3, M.stone, 21.875, 1.15, 9.8, g); S_(21.8, 21.95, 9.6, 10.0, 0, 2.3);
     box(1.2, 2.7, 0.4, M.stone, 22.4, 3.65, 9.8, g);
@@ -17193,6 +18294,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     // ── The cast and the hydra wait, hidden, in the yard ─────────────────────────────────────────────────────────
     pkTheaterCast(a); X.hydra = pkThHydra(g);
     pkTheaterDress(a, g, M, G, X, BF, BZ0, BZ1, BX, BH, S_);
+    pkArenaPlus(a, g, M, G, X, BF, BZ0, BZ1, BX, BH, S_);   // part 37: the castle front, the effects, backstage, the desk
     return g;
   }
 
@@ -17419,17 +18521,34 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var C = pkCtl(a), X = a.extra, lw = X.lightWant, parts = { lamps: {} };
     a.boothShowPanel = parts;
     // SHOW: the key, AUTO, the gate, start/pause/end, the stop, two dials and the status screen
+    // both desks wear the Arena's own plate (part 14, the booth panels, has the style): ebony and stage velvet in a gilt
+    // proscenium, the five riders' colours along the foot. The SHOW desk carries the running order, the thirteen scenes
+    // against the show clock; the STAGE desk a level meter under every lighting circuit and a travel meter under the
+    // curtain and the city gate.
+    var ST = pkPnStyles().arena, crest = function (R, mx, my) { var c = R.c, cx = R.X(mx), cy = R.Y(my), cr = R.L(0.032); c.save(); c.beginPath(); c.arc(cx, cy, cr * 1.1, 0, 6.2832); c.fillStyle = ST.zone2; c.fill(); c.lineWidth = R.L(0.0025); c.strokeStyle = ST.acc; c.stroke(); c.beginPath(); c.arc(cx, cy, cr, 0, 6.2832); c.clip(); PK_PN_CRESTS.arena(c, cx, cy, cr * 0.9, ST); c.restore(); };
+    var RUNT = 300, TL = { x0: 0.04, x1: 0.6, y: 0.245 }, tlX = function (t) { return TL.x0 + clamp(t / RUNT, 0, 1) * (TL.x1 - TL.x0); };
     var W1 = 1.3, H1 = 0.85, P = pkCtlPanel({
       w: W1, h: H1, x: -2.15, y: BF + 1.02, z: BZ0 + 0.55, tilt: -0.9, parent: g, key: 'pk-th-show',
+      paint: function (c, W, H) { ST.base(c, W, H); }, rim: ST.rim, screw: ST.screw, glow: ST.glow,
       draw: function (c, W, H) {
         var R = pkCtlRuler(W, H, W1, H1); R.c = c;
-        R.engrave('SHOW CONTROL', 0, 0.385, 0.026);
-        R.txt('RUN', 0.18, 0.2, 0.011, '#aebcc4'); R.txt('AUTO', 0.3, 0.2, 0.011, '#aebcc4'); R.txt('HOLD', 0.42, 0.2, 0.011, '#aebcc4');
-        R.box(-0.3, -0.01, 0.62, 0.16, 'rgba(0,0,0,0.2)', 0.004);
-        R.txt('KEY', -0.5, -0.09, 0.012, '#d6dee3'); R.txt('AUTO', -0.3, -0.09, 0.012, '#d6dee3'); R.txt('GATE', -0.1, -0.09, 0.012, '#d6dee3');
-        R.box(0.33, -0.01, 0.56, 0.16, 'rgba(0,0,0,0.2)', 0.004);
-        R.txt('START', 0.15, -0.09, 0.012, '#9fe0b0'); R.txt('PAUSE', 0.33, -0.09, 0.012, '#f0c04a'); R.txt('END', 0.51, -0.09, 0.012, '#ff8a7a');
-        R.txt('SEATS', -0.42, -0.385, 0.011, '#aebcc4'); R.txt('SHOW', -0.17, -0.385, 0.011, '#aebcc4'); R.txt('TEST SHOW', 0.13, -0.385, 0.011, '#9fc6ff'); R.txt('STAGE STOP', 0.42, -0.385, 0.011, '#ff8a7a');
+        crest(R, -0.6, 0.372);
+        pkPnText(R, ST, 'The Lindenburg Arena', -0.56, 0.374, 0.03, { align: 'left', font: ST.head });
+        pkPnText(R, ST, 'SHOW CONTROL  ·  PROMPT DESK', 0.57, 0.374, 0.013, { align: 'right', col: ST.dim });
+        pkPnZone(R, ST, -0.64, 0.145, -0.015, 0.335);
+        pkPnZone(R, ST, 0.0, 0.145, 0.64, 0.335, 'RUNNING ORDER');
+        pkPnZone(R, ST, -0.64, -0.12, -0.015, 0.11, 'HOUSE');
+        pkPnZone(R, ST, 0.0, -0.12, 0.64, 0.11, 'SHOW');
+        pkPnZone(R, ST, -0.64, -0.405, 0.64, -0.14);
+        // the running order: the show clock as a rail, a tick and a lamp for every scene, the minutes under it
+        pkPnLine(R, [[TL.x0, TL.y], [TL.x1, TL.y]], ST.dim, 0.003);
+        for (var m = 0; m <= 5; m++) { var mx = tlX(m * 60); pkPnLine(R, [[mx, TL.y - 0.012], [mx, TL.y - 0.022]], ST.dim, 0.0018); pkPnText(R, ST, m + ' MIN', mx, TL.y - 0.034, 0.0095, { col: ST.dim }); }
+        PK_TH_SCENES.forEach(function (sc, i) { var close = i > 0 && tlX(sc[0]) - tlX(PK_TH_SCENES[i - 1][0]) < 0.03 && i % 2; pkPnText(R, ST, String(i + 1), tlX(sc[0]), TL.y + (close ? 0.05 : 0.03), 0.0095, { col: ST.ink }); });
+        pkPnText(R, ST, 'RUN', 0.135, 0.175, 0.0115, { col: ST.dim, align: 'left' }); pkPnText(R, ST, 'AUTO', 0.295, 0.175, 0.0115, { col: ST.dim, align: 'left' }); pkPnText(R, ST, 'HOLD', 0.455, 0.175, 0.0115, { col: ST.dim, align: 'left' });
+        pkPnText(R, ST, 'KEY', -0.5, -0.09, 0.0125); pkPnText(R, ST, 'AUTO', -0.3, -0.09, 0.0125); pkPnText(R, ST, 'GATE', -0.1, -0.09, 0.0125);
+        pkPnText(R, ST, 'START', 0.15, -0.09, 0.0125, { col: '#9fe0b0' }); pkPnText(R, ST, 'PAUSE', 0.33, -0.09, 0.0125, { col: '#f0c04a' }); pkPnText(R, ST, 'END', 0.51, -0.09, 0.0125, { col: '#ff8a7a' });
+        pkPnText(R, ST, 'SEATED', -0.42, -0.375, 0.0115, { col: ST.dim }); pkPnText(R, ST, 'SHOW CLOCK', -0.17, -0.375, 0.0115, { col: ST.dim });
+        pkPnText(R, ST, 'TEST SHOW', 0.13, -0.375, 0.0115, { col: '#9fc6ff' }); pkPnText(R, ST, 'STAGE STOP', 0.42, -0.375, 0.0115, { col: '#ff8a7a' });
       }
     });
     parts.key = pkCtlKey(P, -0.5, 0.0, { id: 'opKey', on: !!C.key, label: a.name + ' operator key', act: function (on) { return pkSetRideKey(a, on); } });
@@ -17448,9 +18567,12 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       get: function () { return a.seats.length ? a.riders / a.seats.length : 0; } });
     parts.clock = pkCtlGauge(P, -0.17, -0.26, { id: 'show', label: '', unit: 'minutes', min: 0, max: 5, ticks: 5, r: 0.07, ease: 4,
       get: function () { return a.state === 'running' ? clamp(a.t / a.run, 0, 1) : 0; } });
-    parts.lamps.run = pkCtlLamp(P, 0.18, 0.27, { r: 0.016, col: 0xff3b30 });
-    parts.lamps.auto = pkCtlLamp(P, 0.3, 0.27, { r: 0.016, col: 0x5fd38d });
-    parts.lamps.hold = pkCtlLamp(P, 0.42, 0.27, { r: 0.016, col: 0xf0c04a });
+    parts.lamps.run = pkCtlLamp(P, 0.11, 0.175, { r: 0.014, col: 0xff3b30 });
+    parts.lamps.auto = pkCtlLamp(P, 0.27, 0.175, { r: 0.014, col: 0x5fd38d });
+    parts.lamps.hold = pkCtlLamp(P, 0.43, 0.175, { r: 0.014, col: 0xf0c04a });
+    // a lamp for every scene on the rail, and the show clock's own light running along it
+    parts.scenes = PK_TH_SCENES.map(function (sc, i) { return pkPnLed(P, tlX(sc[0]), TL.y, { col: [0xe04a3a, 0x4f8fe0, 0x5fae54, 0xf0c040, 0x9a6ad0][i % 5], r: 0.0085, bezel: ST.collar }); });
+    parts.clockPip = pkPnPip(P, 0.007, 0xffffff); parts.clockPip.set(TL.x0, TL.y);
     var status = touchScreen({ w: 440, h: 120, pw: 0.58, ph: 0.16, x: -0.33, y: 0.24, z: 0.012, parent: P, title: 'Show status', draw: function (c, s) {
       c.fillStyle = '#0b0606'; c.fillRect(0, 0, s.w, s.h);
       c.fillStyle = '#ff9d6b'; c.font = 'bold 22px monospace'; c.textAlign = 'left'; c.textBaseline = 'alphabetic';
@@ -17469,16 +18591,21 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     // STAGE: the curtain, the city gate, four lighting circuits, five mechanics and the cue screen
     var W2 = 1.6, H2 = 0.85, Q = pkCtlPanel({
       w: W2, h: H2, x: -0.35, y: BF + 1.02, z: BZ0 + 0.55, tilt: -0.9, parent: g, key: 'pk-th-stage',
+      paint: function (c, W, H) { ST.base(c, W, H); }, rim: ST.rim, screw: ST.screw, glow: ST.glow,
       draw: function (c, W, H) {
         var R = pkCtlRuler(W, H, W2, H2); R.c = c;
-        R.engrave('STAGE  ·  LIGHTS  ·  MECHANICS', 0, 0.385, 0.026);
-        R.box(-0.55, 0.17, 0.46, 0.25, 'rgba(0,0,0,0.2)', 0.004); R.box(0.3, 0.17, 0.92, 0.25, 'rgba(0,0,0,0.2)', 0.004);
-        R.txt('CURTAIN', -0.65, 0.07, 0.012, '#d6dee3'); R.txt('CITY GATE', -0.45, 0.07, 0.012, '#d6dee3');
-        R.txt('HOUSE', -0.09, 0.07, 0.012, '#d6dee3'); R.txt('ARENA', 0.15, 0.07, 0.012, '#d6dee3'); R.txt('SPOT', 0.39, 0.07, 0.012, '#d6dee3'); R.txt('CITY', 0.63, 0.07, 0.012, '#d6dee3');
-        R.box(-0.2, -0.17, 1.12, 0.3, 'rgba(0,0,0,0.2)', 0.004);
-        R.txt('HYDRA', -0.64, -0.28, 0.012, '#d6dee3'); R.txt('FIRE', -0.42, -0.28, 0.012, '#d6dee3'); R.txt('MOAT', -0.2, -0.28, 0.012, '#d6dee3');
-        R.txt('THUNDER', 0.02, -0.28, 0.012, '#d6dee3'); R.txt('BOW', 0.24, -0.28, 0.012, '#d6dee3');
-        R.txt('CUE LAMPS: SLOW = STANDBY  ·  FAST = GO', -0.2, -0.385, 0.011, '#f0c04a');
+        crest(R, -0.75, 0.372);
+        pkPnText(R, ST, 'Stage  ·  Lights  ·  Mechanics', -0.71, 0.374, 0.028, { align: 'left', font: ST.head });
+        pkPnText(R, ST, 'THE LINDENBURG ARENA  ·  STAGE MANAGER', 0.72, 0.374, 0.012, { align: 'right', col: ST.dim });
+        pkPnZone(R, ST, -0.78, -0.005, -0.32, 0.33, 'SCENERY');
+        pkPnZone(R, ST, -0.3, -0.005, 0.78, 0.33, 'LIGHTING');
+        pkPnZone(R, ST, -0.78, -0.325, 0.38, -0.025, 'MECHANICS AND EFFECTS');
+        pkPnZone(R, ST, 0.4, -0.325, 0.78, -0.025, 'PROMPT');
+        pkPnText(R, ST, 'CURTAIN', -0.65, 0.07, 0.0125); pkPnText(R, ST, 'CITY GATE', -0.45, 0.07, 0.0125);
+        pkPnText(R, ST, 'HOUSE', -0.09, 0.07, 0.0125); pkPnText(R, ST, 'ARENA WASH', 0.15, 0.07, 0.0125); pkPnText(R, ST, 'FOLLOW SPOT', 0.39, 0.07, 0.0125); pkPnText(R, ST, 'CITY', 0.63, 0.07, 0.0125);
+        pkPnText(R, ST, 'HYDRA', -0.64, -0.28, 0.0125); pkPnText(R, ST, 'FIRE', -0.42, -0.28, 0.0125); pkPnText(R, ST, 'MOAT', -0.2, -0.28, 0.0125);
+        pkPnText(R, ST, 'THUNDER', 0.02, -0.28, 0.0125); pkPnText(R, ST, 'BOW', 0.24, -0.28, 0.0125);
+        pkPnText(R, ST, 'CUE LAMPS: SLOW = STANDBY  ·  FAST = GO', -0.2, -0.372, 0.0115, { col: '#f0c04a' });
       }
     });
     var tog = function (name, x, on, onName, offName, prompt) {
@@ -17504,6 +18631,9 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       ['hydra', -0.64, -0.065], ['fire', -0.42, -0.065], ['moat', -0.2, -0.065], ['thunder', 0.02, -0.065], ['bow', 0.24, -0.065]].forEach(function (q) {
       parts.cue[q[0]] = pkCtlLamp(Q, q[1], q[2], { r: 0.013, col: 0xf0c04a });
     });
+    // a bar of six lamps under every lighting circuit, lit to its level; under the curtain and the gate, how far they have run
+    var meter = function (x, col) { var ls = []; for (var i = 0; i < 6; i++) ls.push(pkPnLed(Q, x - 0.06 + i * 0.024, 0.032, { col: i > 3 ? 0xff9d6b : col, r: 0.0075, bezel: ST.collar })); return ls; };
+    parts.meters = { curtain: meter(-0.65, 0xe3c26a), cityGate: meter(-0.45, 0xe3c26a), house: meter(-0.09, 0xfff0c8), wash: meter(0.15, 0xffd27a), spot: meter(0.39, 0xd8e6ff), city: meter(0.63, 0xffb04a) };
     var cue = touchScreen({ w: 240, h: 150, pw: 0.34, ph: 0.21, x: 0.6, y: -0.19, z: 0.012, parent: Q, title: 'Cue screen', draw: function (c, s) {
       c.fillStyle = '#060a0e'; c.fillRect(0, 0, s.w, s.h);
       c.textAlign = 'left'; c.textBaseline = 'alphabetic';
@@ -17547,6 +18677,13 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       if (parts.wash.on !== (lw.wash > 0)) parts.wash.set(lw.wash > 0);
       if (parts.spot.on !== (lw.spot > 0)) parts.spot.set(lw.spot > 0);
       if (parts.city.on !== (lw.city > 0.5)) parts.city.set(lw.city > 0.5);
+      // the running order and the meters
+      var run = a.state === 'running', now = run ? a.t : 0, cur = -1;
+      PK_TH_SCENES.forEach(function (sc, i) { if (run && now >= sc[0]) cur = i; });
+      parts.scenes.forEach(function (l, i) { l.on = !a.open ? false : i === cur ? (C.fault ? 'flash' : true) : i < cur ? 'dim' : false; });
+      parts.clockPip.set(tlX(now), TL.y + 0.018); pkPnPipLight(parts.clockPip, run ? 1 : 0, 0.05);
+      var lvl = { curtain: C.bars, cityGate: X.gateK, house: lw.house / 1.4, wash: lw.wash / 2.2, spot: lw.spot / 3, city: lw.city / 1.1 };
+      Object.keys(parts.meters).forEach(function (k) { var v = clamp(lvl[k] || 0, 0, 1); parts.meters[k].forEach(function (l, i) { l.on = a.open && v > (i + 0.5) / 6 - 0.001; }); });
     } });
 
     // what every booth in the park carries (part 09 and the smoke test read these); no boothFrame, so hired operators leave it be
@@ -17700,8 +18837,13 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     a.extra.cast = cast;
     return cast;
   }
-  function pkThShow(A, x, z, face) { A.on = true; A.root.visible = true; A.x = x; A.z = z; A.yaw = face === undefined ? A.yaw : face; A.face = A.yaw; A.path = []; A.loop = null; A.hideAtEnd = false; }
-  function pkThHide(A) { A.on = false; A.root.visible = false; A.path = []; A.loop = null; }
+  function pkThShow(A, x, z, face) { A.on = true; A.root.visible = true; A.g.visible = true; A.x = x; A.z = z; A.yaw = face === undefined ? A.yaw : face; A.face = A.yaw; A.path = []; A.loop = null; A.hideAtEnd = false; }
+  // a rider's horse goes back to its stall in the yard (part 37 gives it one), saddled and riderless; everyone else drops out of sight
+  function pkThHide(A) {
+    A.on = false; A.path = []; A.loop = null;
+    if (A.horse && A.stall) { A.root.visible = true; A.g.visible = false; A.root.position.copy(A.stall); A.root.rotation.y = 0; pkThHorseTick(A.horse, 0, 0); }
+    else A.root.visible = false;
+  }
   function pkThGo(A, pts, speed, opt) {
     A.path = pts.map(function (p) { return { x: p[0], z: p[1] }; }); A.speed = speed || A.speed;
     A.loop = opt && opt.loop ? opt.loop.map(function (p) { return { x: p[0], z: p[1] }; }) : null;
@@ -17730,39 +18872,104 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   function pkThSay(a, who, text) { var A = pkTheaterCast(a)[who]; if (A && A.on) say(A.g, text); }
 
   // ── The hydra: five necks and a pair of wings on a body that rises behind the wall ─────────────────────────────
+  // A sculpted show beast: a scaled body with a plated belly and a ridge of back spikes, two forelegs whose claws come to
+  // grip the city wall as it rises, a tail curled down into the pit, bat wings on finger bones, and five necks of tapered,
+  // scaled segments with a spine fin down each. Every head has a long snout, a heavy brow, swept horns and a spiked frill,
+  // glowing eyes and nostrils, and a jaw full of teeth that drops when it breathes fire.
+  var PK_TH_SCALES = null;
+  function pkThScaleMats() {
+    if (PK_TH_SCALES) return PK_TH_SCALES;
+    var skin = tex(512, 512, function (c, W, H) {
+      c.fillStyle = '#26432d'; c.fillRect(0, 0, W, H);
+      for (var row = 0, y = -16; y < H + 32; y += 16, row++) for (var x = (row % 2) * 16 - 32; x < W + 32; x += 32) {
+        var g = c.createRadialGradient(x, y - 6, 2, x, y, 20); g.addColorStop(0, '#5f9a5a'); g.addColorStop(0.7, '#2f5a38'); g.addColorStop(1, '#1a3020');
+        c.fillStyle = g; c.beginPath(); c.arc(x, y, 18, 0, Math.PI); c.fill();
+        c.strokeStyle = 'rgba(10,20,12,0.6)'; c.lineWidth = 2; c.beginPath(); c.arc(x, y, 18, 0, Math.PI); c.stroke();
+      }
+    }, 3, 3);
+    var plates = tex(256, 256, function (c, W, H) {
+      c.fillStyle = '#b09a5a'; c.fillRect(0, 0, W, H);
+      for (var y = 0; y < H; y += 32) { var g = c.createLinearGradient(0, y, 0, y + 32); g.addColorStop(0, '#d8c48a'); g.addColorStop(1, '#7a683a'); c.fillStyle = g; c.fillRect(0, y + 2, W, 28); }
+    }, 1, 2);
+    PK_TH_SCALES = {
+      skin: std({ map: skin, color: 0xffffff, roughness: 0.5, metalness: 0.15 }),
+      dark: std({ color: 0x1a2a1e, roughness: 0.6, metalness: 0.1 }),
+      belly: std({ map: plates, roughness: 0.6 }),
+      horn: std({ color: 0xe6d6a6, roughness: 0.45 }),
+      tooth: std({ color: 0xf4efe0, roughness: 0.35 }),
+      mouth: std({ color: 0x5a1414, roughness: 0.7 }),
+      wing: std({ color: 0x4a2a3a, roughness: 0.75, side: THREE.DoubleSide, transparent: true, opacity: 0.92 }),
+      bone: std({ color: 0x6a5a3a, roughness: 0.6 }),
+      eye: pkThGlow(0xffa01a, 2.6), nostril: pkThGlow(0xff4a10, 1.2)
+    };
+    return PK_TH_SCALES;
+  }
   function pkThHydra(g) {
     var root = pkMover(g, 0, -11, -22.5); root.visible = false;
-    var scale = std({ color: 0x2c4a33, roughness: 0.55, metalness: 0.15 }), belly = std({ color: 0x8a7a4a, roughness: 0.7 }), horn = std({ color: 0xe6d6a6, roughness: 0.5 });
-    var wingM = std({ color: 0x3a2a3a, roughness: 0.8, side: THREE.DoubleSide }), eyeM = pkThGlow(0xff5a1a, 2.5);
-    var body = new THREE.Mesh(new THREE.SphereGeometry(3.2, 20, 14), scale); body.scale.set(1.2, 0.85, 0.9); body.position.y = 4.2; root.add(body);
+    var Q = pkThScaleMats(), add = function (geo, mat, x, y, z, par) { var m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; (par || root).add(m); return m; };
+    // the body: a long barrel, the belly plates down its front, the spikes along its ridge
+    var body = add(new THREE.SphereGeometry(3.2, 28, 18), Q.skin, 0, 4.2, 0); body.scale.set(1.25, 0.9, 1.0);
+    var belly = add(new THREE.SphereGeometry(3.05, 24, 14, 0, Math.PI * 2, Math.PI * 0.35, Math.PI * 0.5), Q.belly, 0, 4.1, 0.25); belly.scale.set(1.0, 0.92, 1.0);
+    for (var sp = 0; sp < 9; sp++) { var a = -0.9 + sp * 0.225, sk = add(new THREE.ConeGeometry(0.28, 1.3 - Math.abs(a) * 0.5, 6), Q.horn, Math.sin(a) * 3.3, 4.2 + Math.cos(a) * 2.75, -0.9); sk.rotation.z = -a; sk.rotation.x = -0.35; }
+    // the forelegs: shoulder, upper and fore limb, a foot of four claws that comes to rest on the wall's top
+    [-1, 1].forEach(function (s) {
+      var sh = new THREE.Vector3(s * 2.9, 4.6, 1.6), el = new THREE.Vector3(s * 5.2, 7.1, 3.2), ft = new THREE.Vector3(s * 7.6, 8.05, 5.4);
+      add(new THREE.SphereGeometry(1.0, 14, 10), Q.skin, sh.x, sh.y, sh.z);
+      [[sh, el, 0.75, 0.6], [el, ft, 0.6, 0.42]].forEach(function (L) { var d = L[1].clone().sub(L[0]), m = add(new THREE.CylinderGeometry(L[3], L[2], d.length(), 12), Q.skin, (L[0].x + L[1].x) / 2, (L[0].y + L[1].y) / 2, (L[0].z + L[1].z) / 2); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); });
+      add(new THREE.SphereGeometry(0.62, 12, 9), Q.skin, el.x, el.y, el.z);
+      var foot = add(new THREE.SphereGeometry(0.55, 12, 9), Q.skin, ft.x, ft.y, ft.z); foot.scale.set(1.2, 0.6, 1.3);
+      for (var c2 = 0; c2 < 4; c2++) { var cl = add(new THREE.ConeGeometry(0.12, 0.7, 6), Q.horn, ft.x + (c2 - 1.5) * 0.3, ft.y - 0.25, ft.z + 0.75); cl.rotation.x = 2.2; }
+    });
+    // the tail, curling down behind into the pit
+    for (var tk = 0; tk < 8; tk++) { var tt = tk / 7, tx = Math.sin(tt * 2.4) * 2.2, ty = 3.2 - tt * 3.6, tz = -2.8 - tt * 2.4; add(new THREE.SphereGeometry(1.15 - tt * 0.8, 12, 9), Q.skin, tx, ty, tz); }
+    // the wings: a membrane on four finger bones and a thumb claw at the wrist
     var wings = [-1, 1].map(function (s) {
-      var piv = new THREE.Group(); piv.position.set(s * 2.6, 6.0, 0.4); root.add(piv);
-      var sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(s * 7, 3.6); sh.lineTo(s * 8.2, 1.2); sh.lineTo(s * 6.3, 0.5); sh.lineTo(s * 7.1, -1.1); sh.lineTo(s * 4.7, -0.5); sh.lineTo(s * 4.9, -2.3); sh.lineTo(s * 2.2, -0.8); sh.lineTo(0, 0);
-      piv.add(new THREE.Mesh(new THREE.ShapeGeometry(sh), wingM));
-      [[7, 3.6], [8.2, 1.2], [7.1, -1.1], [4.9, -2.3]].forEach(function (q) { pkRod(0, 0, 0.02, s * q[0], q[1], 0.02, 0.07, belly, piv, 5); });
+      var piv = new THREE.Group(); piv.position.set(s * 2.6, 8.4, -0.8); root.add(piv);
+      var sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(s * 3.2, 3.0); sh.lineTo(s * 7.4, 4.0); sh.quadraticCurveTo(s * 7.2, 2.6, s * 8.6, 1.4); sh.quadraticCurveTo(s * 7.0, 0.9, s * 7.4, -0.8);
+      sh.quadraticCurveTo(s * 6.0, -0.4, s * 5.3, -2.2); sh.quadraticCurveTo(s * 4.2, -1.0, s * 2.6, -1.4); sh.lineTo(0, 0);
+      piv.add(new THREE.Mesh(new THREE.ShapeGeometry(sh, 6), Q.wing));
+      pkRod(0, 0, 0.03, s * 3.2, 3.0, 0.03, 0.12, Q.bone, piv, 6);
+      [[7.4, 4.0], [8.6, 1.4], [7.4, -0.8], [5.3, -2.2]].forEach(function (q) { pkRod(s * 3.2, 3.0, 0.03, s * q[0], q[1], 0.03, 0.06, Q.bone, piv, 5); });
+      var th = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.6, 6), Q.horn); th.position.set(s * 3.2, 3.35, 0.05); piv.add(th);
       return piv;
     });
-    var necks = [];
+    // the necks: tapered segments (re-laid every frame along each neck's curve), a joint between each, a fin on each
+    var necks = [], NS = 8, cylGeo = new THREE.CylinderGeometry(1, 1, 1, 12, 1, true), jointGeo = new THREE.SphereGeometry(1, 12, 9), finGeo = new THREE.ConeGeometry(0.16, 0.7, 4);
     for (var i = 0; i < 5; i++) {
-      var segs = [];
-      for (var k = 0; k < 7; k++) { var m = new THREE.Mesh(new THREE.SphereGeometry(0.66 - k * 0.05, 12, 9), scale); root.add(m); segs.push(m); }
+      var segs = [], joints = [];
+      for (var k = 0; k < NS; k++) {
+        var r = 0.74 - k * 0.042;
+        var seg = add(cylGeo, Q.skin, 0, 0, 0); seg.userData.r = r; segs.push(seg);
+        var fin = new THREE.Mesh(finGeo, Q.horn); fin.position.set(0, 0, -1.0); fin.rotation.x = -1.2; seg.add(fin);
+        var jt = add(jointGeo, Q.skin, 0, 0, 0); jt.scale.setScalar(r); joints.push(jt);
+      }
       var head = new THREE.Group(); root.add(head);
-      var skull = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 9), scale); skull.scale.set(1, 0.85, 1.1); head.add(skull);
-      var snout = new THREE.Mesh(new THREE.ConeGeometry(0.42, 1.3, 10), scale); snout.rotation.x = Math.PI / 2; snout.position.set(0, 0.05, 0.85); head.add(snout);
+      var skull = new THREE.Mesh(new THREE.SphereGeometry(0.6, 16, 12), Q.skin); skull.scale.set(1, 0.85, 1.15); skull.castShadow = true; head.add(skull);
+      var snout = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.46, 1.3, 12), Q.skin); snout.rotation.x = Math.PI / 2; snout.position.set(0, 0.1, 0.95); head.add(snout);
       [-1, 1].forEach(function (s) {
-        var hn = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.7, 6), horn); hn.position.set(s * 0.28, 0.5, -0.2); hn.rotation.x = -0.5; hn.rotation.z = -s * 0.3; head.add(hn);
-        var eye = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), eyeM); eye.position.set(s * 0.3, 0.22, 0.42); head.add(eye);
+        var brow = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.14, 0.62), Q.dark); brow.position.set(s * 0.27, 0.42, 0.42); brow.rotation.z = s * 0.25; head.add(brow);
+        var eye = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), Q.eye); eye.position.set(s * 0.33, 0.28, 0.48); head.add(eye);
+        var nos = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), Q.nostril); nos.position.set(s * 0.12, 0.3, 1.58); head.add(nos);
+        // the horns sweep back in three tapering pieces
+        var hb = new THREE.Group(); hb.position.set(s * 0.3, 0.45, -0.15); hb.rotation.set(-0.9, 0, -s * 0.35); head.add(hb);
+        for (var hk = 0; hk < 3; hk++) { var hm = new THREE.Mesh(new THREE.CylinderGeometry(0.05 - hk * 0.012, 0.1 - hk * 0.02, 0.4, 8), Q.horn); hm.position.y = 0.2 + hk * 0.36; hm.rotation.x = -hk * 0.25; hb.add(hm); }
+        // the upper teeth along each side of the snout
+        for (var tq = 0; tq < 4; tq++) { var tth = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.16, 5), Q.tooth); tth.position.set(s * (0.3 - tq * 0.04), -0.12, 0.6 + tq * 0.25); tth.rotation.x = Math.PI; head.add(tth); }
       });
-      var jaw = new THREE.Group(); jaw.position.set(0, -0.25, 0.1); head.add(jaw);
-      var jm = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.16, 1.15), belly); jm.position.set(0, 0, 0.55); jaw.add(jm);
-      necks.push({ o: i - 2, segs: segs, head: head, jaw: jaw, ph: i * 1.3, to: PK_TH_HEADS[i] });
+      // the frill: a fan of spikes behind the skull
+      for (var fq = 0; fq < 5; fq++) { var fa = -0.9 + fq * 0.45, fs = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.75, 5), Q.horn); fs.position.set(Math.sin(fa) * 0.5, 0.2 + Math.cos(fa) * 0.35, -0.55); fs.rotation.set(-1.0, 0, -fa); head.add(fs); }
+      var jaw = new THREE.Group(); jaw.position.set(0, -0.22, 0.1); head.add(jaw);
+      var jm = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.36, 1.2, 10), Q.skin); jm.rotation.x = Math.PI / 2; jm.scale.set(1, 1, 0.5); jm.position.set(0, -0.05, 0.75); jaw.add(jm);
+      var tongue = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.04, 0.9), Q.mouth); tongue.position.set(0, 0.06, 0.8); jaw.add(tongue);
+      [-1, 1].forEach(function (s) { for (var tq = 0; tq < 4; tq++) { var lt = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.13, 5), Q.tooth); lt.position.set(s * (0.22 - tq * 0.03), 0.1, 0.5 + tq * 0.25); jaw.add(lt); } });
+      necks.push({ o: i - 2, segs: segs, joints: joints, head: head, jaw: jaw, ph: i * 1.3, to: PK_TH_HEADS[i] });
     }
     return { root: root, wings: wings, necks: necks, y: -11, t: 0 };
   }
-  // where each head comes to rest (x, y): two over the houses either side, and the middle one high over the gatehouse spire,
+  // where each head comes to rest (x, y): high over the houses either side and over the gatehouse spire, leaning out toward the stand,
   // so none of them sits in a tower, a gable or the spire
-  var PK_TH_HEADS = [[-11.8, 12.8], [-9.2, 13.4], [0, 16.6], [9.2, 13.4], [11.8, 12.8]];
-  var _thV = new THREE.Vector3();
+  var PK_TH_HEADS = [[-12.5, 15.4], [-8.6, 17.0], [0, 19.6], [8.6, 17.0], [12.5, 15.4]];
+  var _thV = new THREE.Vector3(), _thD = new THREE.Vector3(), _thUp = new THREE.Vector3(0, 1, 0), _thPts = [];
   function pkThHydraTick(a, dt) {
     var X = a.extra, H = X.hydra; if (!H) return;
     var want = X.hydraUp ? 0 : -11;
@@ -17774,11 +18981,19 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     H.wings.forEach(function (w, i) { var s = i ? 1 : -1; w.rotation.z = s * (0.15 + Math.sin(H.t * 1.6) * 0.22); w.rotation.y = -s * 0.25; });
     H.necks.forEach(function (N) {
       var o = N.o, sway = Math.sin(H.t * 0.9 + N.ph) * 0.6, bob = Math.sin(H.t * 1.3 + N.ph * 1.7) * 0.4;
-      var bx = o * 0.9, by = 6.0, bz = 0.6, hx = N.to[0] + sway, hy = N.to[1] + bob, hz = 5.9 + (breath ? 0.7 : 0);
+      var bx = o * 0.9, by = 6.0, bz = 0.6, hx = N.to[0] + sway, hy = N.to[1] + bob, hz = 7.0 + (breath ? 0.8 : 0);
       var cx = N.to[0] * 0.5, cy = N.to[1] + 1.2, cz = 1.4;
-      for (var k = 0; k < N.segs.length; k++) {
-        var t = (k + 1) / (N.segs.length + 1), u = 1 - t;
-        N.segs[k].position.set(u * u * bx + 2 * u * t * cx + t * t * hx, u * u * by + 2 * u * t * cy + t * t * hy, u * u * bz + 2 * u * t * cz + t * t * hz);
+      // the neck: a quadratic curve from the shoulder to the head, a tapered segment from each point to the next
+      var n = N.segs.length;
+      for (var k = 0; k <= n; k++) {
+        var t = k / n, u = 1 - t, P = _thPts[k] || (_thPts[k] = new THREE.Vector3());
+        P.set(u * u * bx + 2 * u * t * cx + t * t * hx, u * u * by + 2 * u * t * cy + t * t * hy, u * u * bz + 2 * u * t * cz + t * t * hz);
+      }
+      for (var k2 = 0; k2 < n; k2++) {
+        var A = _thPts[k2], B = _thPts[k2 + 1], sg = N.segs[k2], r = sg.userData.r;
+        _thD.subVectors(B, A); var L = _thD.length(); _thD.multiplyScalar(1 / Math.max(1e-4, L));
+        sg.position.addVectors(A, B).multiplyScalar(0.5); sg.quaternion.setFromUnitVectors(_thUp, _thD); sg.scale.set(r, L * 1.08, r);
+        N.joints[k2].position.copy(A);
       }
       N.head.position.set(hx, hy, hz);
       N.head.rotation.set(0.35 + bob * 0.15 + (breath ? 0.25 : 0), o * 0.18 + sway * 0.06, 0);
@@ -17957,6 +19172,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       op(278, 'curtain', 1), op(281, 'cityGate', 0),
       op(286, 'house', 1), op(288, 'wash', 0), op(290, 'city', 0)
     );
+    pkArenaPlusCues(cues, c, each, line);   // part 37: the music, the gifts' effects, the lights' moods, the fireworks
     cues.forEach(function (q, i) { q.i = i; });
     cues.sort(function (p, q) { return p.t - q.t || p.i - q.i; });
     return cues;
@@ -17974,6 +19190,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     X.moatUp = 0; X.moatY = -2.4; X.gateWant = 0; X.pending = [];
     var lw = X.lightWant; lw.house = 1.4; lw.wash = 0; lw.spot = 0; lw.city = 0.15;
     pkCtl(a).barsWant = 1;
+    pkArenaPlusTidy(a);
   }
   function pkTheaterTickRun(a, dt) {
     var C = pkCtl(a), X = a.extra, lw = X.lightWant, cast = pkTheaterCast(a);
@@ -18027,6 +19244,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var M = pkThM(); M.win.emissiveIntensity += (lw.city - M.win.emissiveIntensity) * k;
     PK_TH_RIDERS.forEach(function (r) { var A = cast[r[0]]; A.horse.pennant.emissiveIntensity += ((X.gifts ? 2.2 : 0) - A.horse.pennant.emissiveIntensity) * k; });
     pkThHydraTick(a, dt);
+    pkArenaPlusTick(a, dt);
   }
   // the clock tower keeps the park's time, whatever the show is doing
   hook('frame', function () {
@@ -18039,7 +19257,8 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   function pkBuildTheater(p) {
     var a = pkAttr({
       id: 'theater', name: 'The Lindenburg Arena', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1],
-      seats: [], board: 120, run: 300, unload: 18, start: pkTheaterShowBegin, tickRun: pkTheaterTickRun   // doors open two minutes: the walk from the gate is about 95 s
+      seats: [], board: 120, run: 300, unload: 18, exit: [PK_TH.CX + 23.5, PK_TH.CZ + 11.0],   // out through the stair hall's gates, along the forecourt's north edge
+      start: pkTheaterShowBegin, tickRun: pkTheaterTickRun   // doors open two minutes: the walk from the gate is about 95 s
     });
     pkTheaterBuild(a);
     var C = pkCtl(a); C.barsWant = 1; C.bars = 1;   // the curtain starts closed
@@ -18203,6 +19422,552 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     if (ui.blocked()) return;
     openPanel('dev');
   }, true);
+
+  // ── The rider banners: a painted cloth for each of the five, used in the stand and on the castle front ──
+  var PK_AR = { banner: {} };
+  function pkArBanner(i) {
+    if (PK_AR.banner[i]) return PK_AR.banner[i];
+    var r = PK_TH_RIDERS[i], col = hexCss(r[3]), word = r[2].toUpperCase();
+    var t = tex(256, 640, function (c, W, H) {
+      c.fillStyle = col; c.fillRect(0, 0, W, H);
+      var g = c.createLinearGradient(0, 0, W, 0); g.addColorStop(0, 'rgba(0,0,0,0.25)'); g.addColorStop(0.5, 'rgba(255,255,255,0.08)'); g.addColorStop(1, 'rgba(0,0,0,0.25)'); c.fillStyle = g; c.fillRect(0, 0, W, H);
+      c.strokeStyle = '#e3c26a'; c.lineWidth = 10; c.strokeRect(14, 14, W - 28, H - 120);
+      // the swallow tail
+      c.fillStyle = 'rgba(0,0,0,0)'; c.globalCompositeOperation = 'destination-out'; c.beginPath(); c.moveTo(0, H); c.lineTo(W / 2, H - 90); c.lineTo(W, H); c.closePath(); c.fill(); c.globalCompositeOperation = 'source-over';
+      // the element's sign
+      c.save(); c.translate(W / 2, 230); c.strokeStyle = '#f6e7b8'; c.fillStyle = '#f6e7b8'; c.lineWidth = 12; c.lineCap = 'round';
+      if (i === 0) { for (var k = 0; k < 3; k++) { c.beginPath(); c.moveTo(-70, -40 + k * 40); c.bezierCurveTo(-20, -70 + k * 40, 20, -10 + k * 40, 70, -40 + k * 40); c.stroke(); } }
+      else if (i === 1) { c.beginPath(); c.moveTo(0, 80); c.bezierCurveTo(-90, 20, -20, -40, -30, -100); c.bezierCurveTo(20, -50, 30, -80, 20, -110); c.bezierCurveTo(90, -30, 70, 40, 0, 80); c.fill(); }
+      else if (i === 2) { c.beginPath(); c.moveTo(0, -100); c.bezierCurveTo(70, -10, 70, 70, 0, 80); c.bezierCurveTo(-70, 70, -70, -10, 0, -100); c.fill(); }
+      else if (i === 3) { c.beginPath(); c.moveTo(-90, 70); c.lineTo(-20, -60); c.lineTo(10, 0); c.lineTo(40, -90); c.lineTo(100, 70); c.closePath(); c.fill(); }
+      else { c.beginPath(); c.arc(0, 0, 40, 0, 6.28); c.fill(); for (var q = 0; q < 12; q++) { var a = q * Math.PI / 6; c.beginPath(); c.moveTo(Math.cos(a) * 55, Math.sin(a) * 55); c.lineTo(Math.cos(a) * 95, Math.sin(a) * 95); c.stroke(); } }
+      c.restore();
+      c.fillStyle = '#f6e7b8'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = 'bold 54px Georgia, serif'; c.fillText(r[1].toUpperCase(), W / 2, 400);
+      c.font = 'bold 30px Georgia, serif'; c.fillText(word, W / 2, 455);
+    });
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    return (PK_AR.banner[i] = std({ map: t, roughness: 0.85, side: THREE.DoubleSide, transparent: true, alphaTest: 0.5 }));
+  }
+  // a banner on a gold pole, hanging; w wide, h long, facing +z in its frame
+  function pkArHang(parent, i, x, y, z, ry, w, h) {
+    var g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry || 0; parent.add(g);
+    var m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), pkArBanner(i)); m.position.y = -h / 2; g.add(m);
+    pkRoundCyl(0.035, w + 0.3, pkMats().gold, 0, 0.02, 0, g, 8).rotation.z = Math.PI / 2;
+    [-1, 1].forEach(function (s) { sphere(0.06, pkMats().gold, s * (w / 2 + 0.17), 0.02, 0, g); });
+    return g;
+  }
+
+  // ── The particles the effects throw: sparks, flame, spray and shells, additive, each with its own gravity ──
+  var PK_AR_SP = [];
+  function pkArSpark(x, y, z, col, n, o) {
+    o = o || {};
+    var geo = new THREE.BufferGeometry(), pos = new Float32Array(n * 3), vel = [];
+    for (var i = 0; i < n; i++) {
+      pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z;
+      var th = Math.random() * 6.2832, ph = o.cone !== undefined ? Math.random() * o.cone : Math.acos(2 * Math.random() - 1), sp = (o.speed || 6) * randf(0.6, 1);
+      var dx = Math.sin(ph) * Math.cos(th), dy = Math.cos(ph), dz = Math.sin(ph) * Math.sin(th);
+      vel.push([dx * sp + (o.wx || 0), dy * sp, dz * sp + (o.wz || 0)]);
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    var mat = new THREE.PointsMaterial({ color: col, size: o.size || 0.16, transparent: true, opacity: 1, depthWrite: false, blending: THREE.AdditiveBlending });
+    var pts = new THREE.Points(geo, mat); pts.frustumCulled = false; scene.add(pts);
+    PK_AR_SP.push({ pts: pts, vel: vel, t: 0, life: o.life || 1.4, grav: o.grav === undefined ? 4 : o.grav, drag: o.drag || 0.6 });
+  }
+  function pkArSparkTick(dt) {
+    for (var i = PK_AR_SP.length - 1; i >= 0; i--) {
+      var b = PK_AR_SP[i], p = b.pts.geometry.attributes.position.array, d = Math.max(0, 1 - b.drag * dt);
+      b.t += dt;
+      for (var k = 0; k < b.vel.length; k++) { var v = b.vel[k]; v[0] *= d; v[2] *= d; v[1] = v[1] * d - b.grav * dt; p[k * 3] += v[0] * dt; p[k * 3 + 1] += v[1] * dt; p[k * 3 + 2] += v[2] * dt; }
+      b.pts.geometry.attributes.position.needsUpdate = true; b.pts.material.opacity = Math.max(0, 1 - b.t / b.life);
+      if (b.t >= b.life) { scene.remove(b.pts); b.pts.geometry.dispose(); b.pts.material.dispose(); PK_AR_SP.splice(i, 1); }
+    }
+  }
+  animate(pkArSparkTick);
+  // the show's music cues: heard in and round the arena, not across the park
+  function pkArNear(r) { return typeof player !== 'undefined' && player && Math.hypot(player.x - PK_TH.CX, player.z - PK_TH.CZ) < (r || 70); }
+  function pkArSfx(k) { if (pkArNear()) sfx(k); }
+  SFX.pkArGate = function (t) { [[392, 0], [523, 0.18], [659, 0.36], [784, 0.54], [659, 0.9], [784, 1.08], [1047, 1.26]].forEach(function (n) { sTone('sawtooth', n[0], t + n[1], 0.3, 0.03, { lp: 1900 }); sTone('triangle', n[0] / 2, t + n[1], 0.3, 0.03); }); sThud(t, 70, 0.12, 0.5); sThud(t + 1.26, 70, 0.12, 0.6); };
+  SFX.pkArDread = function (t) { [110, 104, 98].forEach(function (f, i) { sTone('sawtooth', f, t + i * 0.9, 1.2, 0.05, { lp: 500, attack: 0.3 }); sTone('sine', f / 2, t + i * 0.9, 1.4, 0.06); }); sNoise(t, 3.0, 0.05, { type: 'lowpass', freq: 300, shape: 'swell' }); };
+  SFX.pkArDrums = function (t) { for (var i = 0; i < 8; i++) { sThud(t + i * 0.25, i % 4 === 3 ? 60 : 85, 0.16, 0.2); sNoise(t + i * 0.25, 0.05, 0.05, { type: 'lowpass', freq: 900 }); } };
+  SFX.pkArHeroic = function (t) { [[523, 0, 0.4], [659, 0.4, 0.4], [784, 0.8, 0.4], [1047, 1.2, 1.2], [880, 2.4, 0.3], [1047, 2.7, 1.4]].forEach(function (n) { sTone('sawtooth', n[0], t + n[1], n[2], 0.03, { lp: 2200 }); sTone('triangle', n[0] / 2, t + n[1], n[2], 0.04); sTone('sine', n[0] * 1.5, t + n[1], n[2], 0.01); }); };
+  SFX.pkArWhoosh = function (t) { sNoise(t, 0.9, 0.12, { type: 'bandpass', freq: 900, q: 0.8, shape: 'swell' }); };
+  SFX.pkArSplash = function (t) { sNoise(t, 1.2, 0.12, { type: 'lowpass', freq: 2400, fade: true }); sNoise(t + 0.1, 0.8, 0.06, { freq: 5000, fade: true }); };
+  SFX.pkArRumble = function (t) { sNoise(t, 2.2, 0.3, { type: 'lowpass', freq: 160, shape: 'swell' }); sTone('sine', 38, t, 2.2, 0.15, { f1: 30 }); };
+  SFX.pkArShell = function (t) { sNoise(t, 0.05, 0.12, { type: 'lowpass', freq: 1200 }); sTone('sine', 700, t, 0.6, 0.015, { f1: 2200 }); sThud(t + 0.7, 80, 0.2, 0.5); sNoise(t + 0.7, 0.6, 0.12, { type: 'lowpass', freq: 1800, fade: true }); };
+
+  // ── The build ────────────────────────────────────────────────────
+  // called by part 33 at the end of the arena's build, in the arena's frame (g at the arena's centre)
+  function pkArenaPlus(a, g, M, G, X, BF, BZ0, BZ1, BX, BH, S_) {
+    var K = pkMats(), FX = X.fx = { cannon: 0, water: 0, wind: 0, earth: 0, blast: 0, works: 0, sweep: false, rider: -1 };
+    var mesh = function (geo, mat, x, y, z, par) { var m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; (par || g).add(m); return m; };
+    var iron = M.iron, gold = M.gold, stone = M.stone, timber = M.timber;
+    var hazard = pkStripes('#f0c04a', '#1b1b1b');
+
+    // ── 1. The castle front: the grandstand's back wall toward the Dark Woods street ──
+    var BZ = G.back + 0.3;                        // the outer face of the back wall
+    box(G.x * 2 + 0.6, 1.3, 0.35, stone, 0, 0.65, BZ + 0.17, g);
+    box(G.x * 2 + 0.7, 0.18, 0.45, M.stoneDark, 0, 1.36, BZ + 0.2, g);
+    for (var bx = -G.x; bx <= G.x + 0.01; bx += G.x / 3.5) {
+      pkBevelBox(0.6, 6.6, 0.55, stone, bx, 3.3, BZ + 0.27, g, 0.03);
+      pkFtSpire(g, bx, 6.6, BZ + 0.27, 0.38, 0.9, M.slate, 4);
+    }
+    // arched windows between the buttresses, lit warm by the city circuit, and a banner in every other bay
+    var bay = G.x / 3.5;
+    for (var wi = 0; wi < 7; wi++) {
+      var wx = -G.x + bay * (wi + 0.5);
+      box(1.15, 2.6, 0.06, M.win, wx, 3.9, BZ + 0.04, g);
+      var ar = mesh(new THREE.CircleGeometry(0.575, 16, 0, Math.PI), M.win, wx, 5.2, BZ + 0.04); ar.castShadow = false;
+      var ring = mesh(new THREE.TorusGeometry(0.62, 0.09, 6, 16, Math.PI), stone, wx, 5.2, BZ + 0.08); ring.castShadow = false;
+      box(1.4, 0.16, 0.25, stone, wx, 2.52, BZ + 0.12, g);
+      box(0.06, 3.1, 0.08, timber, wx, 3.95, BZ + 0.08, g);
+      if (wi % 2 === 0) pkArHang(g, (wi / 2) % 5, wx, 7.0, BZ + 0.5, 0, 1.3, 3.4);
+    }
+    // the crenellated parapet along the top of the wall and corner towers with their spires
+    for (var cx2 = -G.x; cx2 < G.x; cx2 += 1.2) box(0.62, 0.7, 0.5, stone, cx2 + 0.31, 7.55, BZ + 0.05, g);
+    // the west corner's tower (the east corner is the stair hall's, with its own turret)
+    [-1].forEach(function (s) {
+      var tx = s * (G.x + 0.4), tz = BZ + 0.2;
+      pkRoundCyl(1.35, 9.5, M.cream, tx, 4.75, tz, g, 18);
+      pkRoundCyl(1.5, 0.55, M.brick, tx, 0.28, tz, g, 18);
+      pkRoundCyl(1.45, 0.3, gold, tx, 6.2, tz, g, 18);
+      pkRoundCyl(1.55, 0.35, timber, tx, 9.6, tz, g, 18);
+      for (var k = 0; k < 2; k++) box(0.34, 0.9, 0.08, M.win, tx, 3 + k * 3.5, tz + 1.33, g);
+      pkFtSpire(g, tx, 9.75, tz, 1.95, 5.2, M.slate, 10);
+      S_(tx - 1.4, tx + 1.4, tz - 1.4, tz + 1.4, 0, 9.5);
+    });
+    // the gilt frame round the arena's name and two lanterns
+    pkBevelBox(10.4, 1.7, 0.3, gold, 0, 8.75, BZ + 0.15, g, 0.04);
+    sign(['THE LINDENBURG ARENA'], 10, 1.35, 0, 8.75, BZ + 0.31, 0, { bg: '#3a0e14', fg: '#f0c04a' }, g);
+    [-1, 1].forEach(function (s) { pkFtSpire(g, s * 5.45, 7.9, BZ + 0.15, 0.35, 1.9, M.slate, 4); });
+    [-2.1, 2.1].forEach(function (lx) { box(0.1, 0.5, 0.35, iron, lx, 6.85, BZ + 0.45, g); mesh(new THREE.SphereGeometry(0.2, 12, 10), M.lampGlow, lx, 6.5, BZ + 0.65); });
+    // the low stretch west of the stand: a crenellated top and the riders' shields
+    for (var cx3 = -26; cx3 < -G.x - 1.6; cx3 += 1.2) box(0.6, 0.6, 0.6, stone, cx3 + 0.3, 3.6, 21.4, g);
+    for (var sh = 0; sh < 4; sh++) { var shx = -24.5 + sh * 2.5; pkRoundCyl(0.42, 0.06, gold, shx, 2.2, 21.72, g, 16).rotation.x = Math.PI / 2; pkRoundCyl(0.36, 0.08, std({ color: PK_TH_RIDERS[sh % 5][3], roughness: 0.4, metalness: 0.4 }), shx, 2.2, 21.75, g, 16).rotation.x = Math.PI / 2; }
+
+    // ── 2. The stair hall: the audience's way in. The ride's gates in the hall's east face open on the head of the queue; a
+    // lobby, the stair up the hall's west side, the landing at the height of the stand's top walkway, and through the stand's
+    // east wall onto it. Nobody sees the city until they come out at the top of the stand. ──
+    var HL = PK_TH_HALL, HX0 = G.x + 0.3, HX1 = HL.x1, HZ0 = HL.z0, HZ1 = G.back, HH = 5.6, top = G.h0 + G.rise * (G.rows - 1);
+    var hmz = (HZ0 + HZ1) / 2, wallM = M.cream, trimM = stone;
+    // the forecourt's paving carried on east, under the queue's new lane and the way out round it
+    pkPaved(4.6, 20.4, M.pave, 28.3, 0.021, 19.9, 2.4, g);
+    // the walls: north (where the old audience gate stood), the east face with the gates' opening, the south end
+    box(HX1 - HX0 + 0.3, HH, 0.3, wallM, (HX0 + HX1) / 2, HH / 2, HZ0, g); S_(HX0, HX1 + 0.15, HZ0 - 0.15, HZ0 + 0.15, 0, HH);
+    box(0.6, 5.0, 0.3, wallM, HX1 + 0.3, 2.5, HZ0, g); S_(HX1, 21.0, HZ0 - 0.15, HZ0 + 0.15, 0, 5);
+    var GZ0 = 10.6, GZ1 = 13.6, GTOP = 3.8;
+    [[HZ0, GZ0], [GZ1, HZ1]].forEach(function (k) { box(0.3, HH, k[1] - k[0], wallM, HX1, HH / 2, (k[0] + k[1]) / 2, g); S_(HX1 - 0.15, HX1 + 0.15, k[0], k[1], 0, HH); });
+    box(0.3, HH - GTOP, GZ1 - GZ0, wallM, HX1, GTOP + (HH - GTOP) / 2, (GZ0 + GZ1) / 2, g);
+    box(HX1 - HX0 + 0.3, HH, 0.3, wallM, (HX0 + HX1) / 2, HH / 2, HZ1 - 0.15, g); S_(HX0, HX1 + 0.15, HZ1 - 0.3, HZ1, 0, HH);
+    // a stone base course and a cornice all round, and the slate roof on its ridge
+    [[HX1 + 0.02, hmz, 0.36, HZ1 - HZ0 + 0.1], [(HX0 + HX1) / 2, HZ0 - 0.02, HX1 - HX0 + 0.4, 0.36], [(HX0 + HX1) / 2, HZ1 - 0.13, HX1 - HX0 + 0.4, 0.36]].forEach(function (k) { box(k[2], 1.0, k[3], trimM, k[0], 0.5, k[1], g); box(k[2] + 0.1, 0.22, k[3] + 0.1, trimM, k[0], HH + 0.11, k[1], g); });
+    var rhw = (HX1 - HX0) / 2 + 0.25, rise = 1.5, slope = Math.atan2(rise, rhw), rlen = Math.hypot(rise, rhw), rmx = (HX0 + HX1) / 2;
+    [-1, 1].forEach(function (s) { var r = box(rlen, 0.16, HZ1 - HZ0 + 0.5, M.slate, rmx + s * rhw / 2, HH + 0.22 + rise / 2, hmz, g); r.rotation.z = -s * slope; });
+    var gab = new THREE.Shape(); gab.moveTo(-rhw + 0.25, 0); gab.lineTo(rhw - 0.25, 0); gab.lineTo(0, rise - 0.1); gab.closePath();
+    [HZ0, HZ1 - 0.15].forEach(function (z) { var gm = mesh(new THREE.ShapeGeometry(gab), wallM, rmx, HH + 0.22, z); gm.material = std({ map: TEX.plaster, color: 0xefe3c8, roughness: 0.9, side: THREE.DoubleSide }); });
+    pkRoundCyl(0.06, HZ1 - HZ0 + 0.5, gold, rmx, HH + 0.22 + rise + 0.02, hmz, g, 8).rotation.x = Math.PI / 2;
+    // tall windows along the east face, lit from inside at night
+    [15.0, 16.8, 18.6, 20.2].forEach(function (z) { box(0.06, 1.6, 0.8, M.win, HX1 + 0.16, 3.6, z, g); var ar = mesh(new THREE.CircleGeometry(0.4, 12, 0, Math.PI), M.win, HX1 + 0.16, 4.4, z); ar.rotation.y = Math.PI / 2; ar.castShadow = false; box(0.2, 0.12, 1.0, trimM, HX1 + 0.18, 2.75, z, g); });
+    // the entrance: an arched portal round the gates, pilasters with spires, a frontispiece with the show's name and the crest
+    var pmz = (GZ0 + GZ1) / 2, px = HX1 + 0.2;
+    var arc2 = mesh(new THREE.TorusGeometry((GZ1 - GZ0) / 2 + 0.05, 0.16, 8, 24, Math.PI), gold, px, GTOP - (GZ1 - GZ0) / 2 + 0.1, pmz); arc2.rotation.y = Math.PI / 2; arc2.castShadow = false;
+    [GZ0 - 0.35, GZ1 + 0.35].forEach(function (z) { pkBevelBox(0.55, 6.4, 0.55, trimM, px + 0.1, 3.2, z, g, 0.03); pkFtSpire(g, px + 0.1, 6.4, z, 0.4, 1.6, M.slate, 4); S_(px - 0.2, px + 0.4, z - 0.28, z + 0.28, 0, 6.4); });
+    pkBevelBox(0.35, 2.6, GZ1 - GZ0 + 0.5, wallM, px, HH + 1.1, pmz, g, 0.03);
+    for (var cm = GZ0 - 0.1; cm <= GZ1 + 0.11; cm += 0.75) box(0.35, 0.45, 0.4, trimM, px, HH + 2.6, cm, g);
+    sign(['THE FIVE RIDERS', 'OF LINDENBURG'], 3.3, 0.95, px + 0.2, HH + 0.85, pmz, Math.PI / 2, { bg: '#2a1a12', fg: '#f0c04a' }, g);
+    var crestT = tex(256, 256, function (c, W, H) { c.fillStyle = '#3a0e14'; c.beginPath(); c.arc(W / 2, H / 2, 124, 0, 6.28); c.fill(); c.strokeStyle = '#e3c26a'; c.lineWidth = 10; c.stroke(); PK_PN_CRESTS.arena(c, W / 2, H / 2, 105, { ink: '#f2e2b8', acc: '#e3c26a', zone2: '#3a0e14' }); });
+    var crest = mesh(new THREE.CircleGeometry(0.6, 32), std({ map: crestT, roughness: 0.5, metalness: 0.2 }), px + 0.19, HH + 1.95, pmz); crest.rotation.y = Math.PI / 2; crest.castShadow = false;
+    pkBkWaitBoard(a, g, px + 0.22, GTOP + 0.65, pmz, Math.PI / 2);
+    [15.6, 17.6, 19.6].forEach(function (z, i) { pkArHang(g, i * 2 % 5, px + 0.03, 5.1, z, Math.PI / 2, 0.8, 2.0); });
+    // the slim turret on the hall's south-east corner, matching the castle front's tower on the far side
+    pkRoundCyl(0.65, 8.2, M.cream, 20.2, 4.1, 21.6, g, 14); pkRoundCyl(0.72, 0.3, gold, 20.2, 5.6, 21.6, g, 14);
+    pkFtSpire(g, 20.2, 8.2, 21.6, 0.95, 2.8, M.slate, 10); S_(19.55, 20.85, 20.95, 22.25, 0, 8.2);
+    // the gates: the ride's own, two iron leaves that swing in to the lobby, clear of the queue (shut, they stop you too)
+    [[GZ0, 1], [GZ1, -1]].forEach(function (h) {
+      var hinge = pkMover(g, HX1 + 0.18, 0, h[0]), w = (GZ1 - GZ0) / 2 - 0.04;
+      box(0.08, 1.9, w, iron, 0, 1.0, h[1] * w / 2, hinge);
+      for (var v = 0.15; v < w; v += 0.22) box(0.06, 1.8, 0.04, iron, 0, 0.95, h[1] * v, hinge);
+      box(0.1, 0.12, w, gold, 0, 1.95, h[1] * w / 2, hinge);
+      pkCtl(a).gateObjs.push(function (t) { hinge.rotation.y = -h[1] * t * 1.45; });
+    });
+    var gxw = PK_TH.CX + HX1, gz0 = PK_TH.CZ + GZ0, gz1 = PK_TH.CZ + GZ1, Cg = pkCtl(a), _pkArPrevCollides = GAME.collides;
+    GAME.collides = function (x, z, opt) { if (_pkArPrevCollides && _pkArPrevCollides(x, z, opt)) return true; return Cg.gateT < 0.5 && Math.abs(x - gxw) < 0.3 && z > gz0 && z < gz1; };
+    // inside: the stair along the west wall, step by step, with its balustrade
+    var NST = 15, sd = (HL.s1 - HL.s0) / NST, swx0 = HX0, swx1 = HL.sx1, swm = (swx0 + swx1) / 2;
+    for (var st = 0; st < NST; st++) { var sh2 = top * (st + 1) / NST; box(swx1 - swx0, sh2, sd + 0.01, st % 2 ? stone : M.stoneDark, swm, sh2 / 2, HL.s0 + (st + 0.5) * sd, g); box(swx1 - swx0, 0.03, 0.06, M.nosing, swm, sh2 + 0.01, HL.s0 + st * sd + 0.04, g); }
+    for (var bp = 0; bp <= NST; bp += 3) { var bz = HL.s0 + bp * sd, by = top * bp / NST; pkRoundCyl(0.03, 1.0, iron, swx1 + 0.04, by + 0.5, bz, g, 6); }
+    pkRod(swx1 + 0.04, 1.0, HL.s0, swx1 + 0.04, top + 1.0, HL.s1, 0.04, gold, g, 8);
+    S_(swx1 - 0.02, swx1 + 0.1, HL.s0, HL.s1, 0, 1.0);
+    // the landing, and under its east half a store that nobody walks through
+    box(HX1 - HX0, 0.25, HZ1 - HL.s1 - 0.15, M.wood, (HX0 + HX1) / 2, top - 0.125, (HL.s1 + HZ1 - 0.15) / 2, g);
+    box(HX1 - swx1 - 0.15, top - 0.25, 0.2, wallM, (swx1 + HX1 - 0.15) / 2, (top - 0.25) / 2, HL.s1 + 0.1, g);
+    box(0.9, 1.9, 0.05, M.wood, (swx1 + HX1) / 2, 0.95, HL.s1 - 0.0, g); sign(['STORE'], 0.6, 0.16, (swx1 + HX1) / 2, 2.05, HL.s1 - 0.03, Math.PI, { bg: '#1b232c', fg: '#e8e4d8' }, g);
+    S_(swx1 + 0.05, HX1 - 0.15, HL.s1, HZ1 - 0.3, 0, top - 0.3);
+    for (var lp = swx1 + 0.3; lp < HX1 - 0.2; lp += 0.5) pkRoundCyl(0.025, 1.0, iron, lp, top + 0.5, HL.s1 + 0.15, g, 6);
+    pkRoundCyl(0.035, HX1 - swx1 - 0.3, gold, (swx1 + HX1) / 2, top + 1.0, HL.s1 + 0.15, g, 8).rotation.z = Math.PI / 2;
+    // the way through onto the stand, framed, with the riders' sections signed
+    box(0.35, 0.4, HZ1 - HL.s1 - 0.4, trimM, G.x + 0.15, top + 2.35, (HL.s1 + HZ1) / 2, g);
+    sign(['TO YOUR SEATS', 'FIND YOUR RIDER\'S COLOUR'], 2.4, 0.5, G.x + 0.33, top + 2.8, (HL.s1 + HZ1) / 2, Math.PI / 2, { bg: '#2a1a12', fg: '#f0c04a' }, g);
+    // the lobby: the five riders' banners, a model of Lindenburg on its plinth, a sign up the stair, lamps
+    sign(['THE STANDS', 'UP THE STAIR'], 1.6, 0.45, swm, 2.3, HZ0 + 0.17, 0, { bg: '#2a1a12', fg: '#f0c04a' }, g);
+    [14.6, 16.4].forEach(function (z, i) { pkArHang(g, [1, 3][i], HX1 - 0.17, 4.6, z, -Math.PI / 2, 0.8, 1.8); });   // clear of the gates' opening (z 10.6 to 13.6) and over head height
+    pkArHang(g, 0, 16.2, 4.6, HZ0 + 0.17, 0, 0.8, 1.6); pkArHang(g, 2, 19.2, 4.6, HZ0 + 0.17, 0, 0.8, 1.6);
+    (function () {
+      var mx0 = 19.0, mz0 = 15.6, s = 0.12;
+      pkBevelBox(1.4, 0.9, 1.2, M.timber, mx0, 0.45, mz0, g, 0.03); box(1.3, 0.04, 1.1, M.sand, mx0, 0.92, mz0, g);
+      box(1.2, 0.3, 0.12, M.brick, mx0, 1.09, mz0 - 0.4, g); box(0.3, 0.5, 0.18, M.cream, mx0, 1.19, mz0 - 0.4, g);
+      [-0.45, 0.45].forEach(function (d) { pkRoundCyl(0.07, 0.6, M.cream, mx0 + d, 1.24, mz0 - 0.35, g, 10); pkFtSpire(g, mx0 + d, 1.54, mz0 - 0.35, 0.1, 0.25, M.slate, 8); });
+      for (var r = 0; r < 5; r++) sphere(0.035, std({ color: PK_TH_RIDERS[r][3], roughness: 0.6 }), mx0 - 0.3 + r * 0.15, 0.98, mz0 + 0.2, g);
+      box(1.2, 0.02, 0.5, std({ color: 0x6f9f96, roughness: 0.2 }), mx0 + 0.3, 0.95, mz0 - 0.15, g);
+      sign(['LINDENBURG', 'A MODEL OF THE CITY'], 0.9, 0.22, mx0, 0.6, mz0 + 0.61, 0, { bg: '#2a1a12', fg: '#f0c04a' }, g);
+      S_(mx0 - 0.75, mx0 + 0.75, mz0 - 0.65, mz0 + 0.65, 0, 1.3);
+    })();
+    [[16.3, 11.2], [19.0, 11.2], [19.0, 14.0], [16.3, 18.6], [19.0, 19.6]].forEach(function (p) { var y = p[1] >= HL.s1 ? top + 2.7 : HH - 0.4; box(0.3, 0.06, 0.3, M.iron, p[0], y + 0.1, p[1], g); mesh(new THREE.SphereGeometry(0.14, 10, 8), M.lampGlow, p[0], y, p[1]); });
+    box(2.4, 0.02, 2.2, std({ color: 0x5a1a22, roughness: 0.95 }), 19.0, 0.03, 11.6, g);
+
+    // ── 3. The stand: the five riders' colour sections, their banners on the back wall, the truss and its heads ──
+    var cols = [-13, -11, -9, -7, -5, 5, 7, 9, 11, 13];
+    (a.seats || []).forEach(function (st) {
+      var ci = cols.indexOf(Math.round(st.x)), ri = ci < 0 ? 0 : Math.floor(ci / 2);
+      box(1.55, 0.05, 0.38, pkPnStd({ color: PK_TH_RIDERS[ri][3], roughness: 0.75 }), st.x, st.y + 0.76 + 0.045, st.z, g);
+      box(1.55, 0.3, 0.05, pkPnStd({ color: PK_TH_RIDERS[ri][3], roughness: 0.75 }), st.x, st.y + 0.76 + 0.25, st.z + 0.2, g);
+    });
+    [[-12, 0], [-8, 1], [-5, 2], [5, 2], [8, 3], [12, 4]].forEach(function (b) { pkArHang(g, b[1], b[0], 6.4, G.back - 0.05, Math.PI, 1.2, 2.6); });
+    // the truss along the roof's front edge: two chords and the lacing, six moving heads hung under it, a speaker stack each end
+    var TZ = 8.2, TY = 6.95, trussM = pkPnStd({ color: 0x2a2d31, roughness: 0.45, metalness: 0.7 });
+    [[0, 0], [0, 0.4], [0.4, 0], [0.4, 0.4]].forEach(function (o) { pkRoundCyl(0.03, 30, trussM, 0, TY + o[0], TZ + o[1], g, 6).rotation.z = Math.PI / 2; });
+    for (var lx = -15; lx < 15; lx += 0.8) { pkRod(lx, TY, TZ, lx + 0.4, TY + 0.4, TZ, 0.015, trussM, g, 4); pkRod(lx, TY, TZ + 0.4, lx + 0.4, TY + 0.4, TZ + 0.4, 0.015, trussM, g, 4); }
+    [-1, 1].forEach(function (s) { pkRod(s * 15, TY + 0.4, TZ + 0.2, s * 15, 7.3, 9.3, 0.04, trussM, g, 6); for (var sp = 0; sp < 3; sp++) pkBevelBox(0.7, 0.55, 0.6, pkPnStd({ color: 0x1a1c1f, roughness: 0.8 }), s * 13.8, TY - 0.35 - sp * 0.6, TZ + 0.2, g, 0.03); });
+    FX.heads = [];
+    var beamGeo = new THREE.ConeGeometry(1.1, 16, 18, 1, true); beamGeo.translate(0, -8, 0);
+    [-12, -7.5, -2.5, 2.5, 7.5, 12].forEach(function (hx, i) {
+      var yoke = pkMover(g, hx, TY - 0.05, TZ + 0.2);
+      box(0.06, 0.32, 0.36, trussM, 0, -0.16, 0, yoke);
+      var head = new THREE.Group(); head.position.y = -0.36; yoke.add(head);
+      box(0.3, 0.42, 0.3, pkPnStd({ color: 0x1d1f22, roughness: 0.5, metalness: 0.5 }), 0, -0.1, 0, head);
+      var lensM = pkThGlow(0xffffff, 0.0), lens = new THREE.Mesh(new THREE.CircleGeometry(0.11, 16), lensM); lens.rotation.x = Math.PI / 2; lens.position.y = -0.32; head.add(lens);
+      var beamM = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+      beamM.userData.noBake = true;
+      var beam = new THREE.Mesh(beamGeo, beamM); beam.position.y = -0.32; beam.castShadow = false; head.add(beam);
+      FX.heads.push({ yoke: yoke, head: head, lens: lensM, beam: beamM, i: i, x: hx, aim: new THREE.Vector3(0, 0, -2), cur: new THREE.Vector3(0, 0, -2), col: new THREE.Color(0xffffff), k: 0 });
+    });
+
+    // ── 4. The stage's effects hardware ──
+    // fire cannons along the foot of the houses: a steel box with its nozzle, the flame a glowing column that the tick sizes
+    FX.cannons = [-19, -14, -9, 9.6, 14, 19].map(function (cx) {
+      var z = -12.75;
+      pkBevelBox(0.5, 0.45, 0.5, pkPnStd({ color: 0x2a2724, roughness: 0.6, metalness: 0.6 }), cx, 0.225, z, g, 0.03);
+      box(0.52, 0.06, 0.52, hazard, cx, 0.46, z, g);
+      pkRoundCyl(0.08, 0.3, iron, cx, 0.6, z, g, 10);
+      var fl = pkMover(g, cx, 0.75, z), fm = pkThGlow(0xff7a1a, 0.0, 0x2a0a04);
+      var cone = new THREE.Mesh(new THREE.ConeGeometry(0.45, 4, 12, 1, true), fm); cone.position.y = 2; fl.add(cone); fl.scale.set(1, 0.001, 1); fl.visible = false;
+      S_(cx - 0.25, cx + 0.25, z - 0.25, z + 0.25, 0, 0.5);
+      return { x: cx, z: z, g: fl, m: fm };
+    });
+    // the moat's water jets: nozzles under the surface, the column a pale tube the tick raises
+    var jetM = new THREE.MeshBasicMaterial({ color: 0xd8f0ff, transparent: true, opacity: 0.55, depthWrite: false }); jetM.userData.noBake = true;
+    FX.jets = [9.8, 11.2, 12.6, 14.0, 15.4, 16.6].map(function (jx, i) {
+      var jz = -9.6 + (i % 2 ? 1.1 : -1.1), col = pkMover(g, jx, 0.2, jz);
+      var tube = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.14, 1, 8, 1, true), jetM); tube.position.y = 0.5; col.add(tube); col.scale.set(1, 0.001, 1); col.visible = false;
+      return { x: jx, z: jz, g: col, ph: i * 0.7 };
+    });
+    // wind and fog vents in the sand by the market side, grilled hatches
+    FX.vents = [[-18.5, -4], [-18.5, 2], [-12, -11], [12, 6.5], [-6, 7]].map(function (v) { box(0.7, 0.03, 0.7, pkPnStd({ color: 0x2b2a28, roughness: 0.7, metalness: 0.5 }), v[0], 0.065, v[1], g); for (var q = -2; q <= 2; q++) box(0.66, 0.035, 0.03, iron, v[0], 0.07, v[1] + q * 0.13, g); return { x: v[0], z: v[1] }; });
+    // the earth rocks: three boulders on hidden lifts under the sand, sunk until the earth gift calls them up
+    FX.rocks = [[-15, -5, 1.1], [-11, -9.6, 0.85], [-16.5, 1.2, 0.95]].map(function (r) {
+      var lift = pkMover(g, r[0], -2.2, r[1]);
+      var rock = new THREE.Mesh(new THREE.DodecahedronGeometry(r[2], 1), std({ color: 0x8a7a62, roughness: 0.95 })); rock.scale.set(1, 0.8, 1.1); rock.castShadow = true; lift.add(rock);
+      var ringS = mesh(new THREE.RingGeometry(r[2] * 0.8, r[2] * 1.05, 20), M.sandDark, r[0], 0.055, r[1]); ringS.rotation.x = -Math.PI / 2; ringS.castShadow = false;
+      return { g: lift, y: -2.2, r: r[2], x: r[0], z: r[1] };
+    });
+
+    // ── 5. Backstage: the yard behind the city wall (x -26..26, z -29.8..-17.7), clear of the riders' way through the
+    // gate (x -3..3) and the hydra's pit (x -4..4, z -26..-19) ──
+    var YZ = -29.6;
+    // the hydra pit: a steel kerb, the hazard edge, four rams that run up with the body
+    box(8.4, 0.04, 7.2, pkPnStd({ color: 0x1a1b1d, roughness: 0.8 }), 0, 0.03, -22.5, g);
+    [[0, -26.15, 8.6, 0.25], [0, -18.85, 8.6, 0.25], [-4.3, -22.5, 0.25, 7.5], [4.3, -22.5, 0.25, 7.5]].forEach(function (k) { box(k[2], 0.12, k[3], hazard, k[0], 0.06, k[1], g); });
+    FX.rams = [[-3.2, -25.2], [3.2, -25.2], [-3.2, -19.8], [3.2, -19.8]].map(function (p) {
+      pkRoundCyl(0.32, 0.5, pkPnStd({ color: 0x3a3d42, roughness: 0.4, metalness: 0.7 }), p[0], 0.25, p[1], g, 14);
+      var rod = pkMover(g, p[0], -10, p[1]); pkRoundCyl(0.16, 12, MAT.chrome, 0, -6, 0, rod, 12);
+      return rod;
+    });
+    sign(['HYDRA LIFT', 'KEEP CLEAR WHEN THE BEACON IS LIT'], 3.2, 0.5, 0, 1.6, -26.6, 0, { bg: '#f0c04a', fg: '#1b1b1b' }, g);
+    pkBevelBox(0.25, 1.4, 0.25, iron, 0, 0.7, -26.6 - 0.25, g, 0.02);
+    FX.beacon = pkThGlow(0xffa020, 0.0); mesh(new THREE.SphereGeometry(0.18, 12, 10), FX.beacon, 4.6, 2.2, -26.4); pkRoundCyl(0.05, 2.1, iron, 4.6, 1.05, -26.4, g, 6);
+    // the power unit: motor, oil tank, the valve block with its gauges, the hoses to the rams
+    var hx0 = 7.5, hz0 = -27.6;
+    pkBevelBox(2.4, 1.2, 1.3, pkPnStd({ color: 0x2f6f9e, roughness: 0.5, metalness: 0.4 }), hx0, 0.6, hz0, g, 0.04);
+    pkRoundCyl(0.32, 0.9, pkPnStd({ color: 0x4a7a3a, roughness: 0.5, metalness: 0.4 }), hx0 - 0.6, 1.65, hz0, g, 14).rotation.z = Math.PI / 2;
+    box(0.7, 0.6, 0.5, pkPnStd({ color: 0x8a949b, roughness: 0.45, metalness: 0.6 }), hx0 + 0.6, 1.5, hz0, g);
+    [-0.15, 0.15].forEach(function (d) { pkRoundCyl(0.09, 0.04, MAT.chrome, hx0 + 0.6 + d, 1.55, hz0 + 0.27, g, 14).rotation.x = Math.PI / 2; });
+    sign(['HPU 1', '210 BAR'], 1.0, 0.32, hx0 - 0.3, 0.75, hz0 + 0.66, 0, { bg: '#1b232c', fg: '#e8e4d8' }, g);
+    pkRod(hx0 - 1.2, 0.07, hz0, 3.4, 0.07, -25.2, 0.05, pkPnStd({ color: 0x111111, roughness: 0.8 }), g, 6);   // the hoses along the ground to the rams
+    pkRod(hx0 - 1.2, 0.07, hz0 + 0.3, 3.4, 0.07, -19.8, 0.05, pkPnStd({ color: 0x111111, roughness: 0.8 }), g, 6);
+    S_(hx0 - 1.2, hx0 + 1.2, hz0 - 0.65, hz0 + 0.65, 0, 1.9);
+    // the stables along the back wall, west of the pit: five stalls with half doors and their riders' names
+    var stallW = 3.0, sx0 = -25.4;
+    FX.stalls = [];
+    for (var si = 0; si < 5; si++) {
+      var x0 = sx0 + si * stallW, xm = x0 + stallW / 2, col = PK_TH_RIDERS[si][3];
+      box(0.15, 2.6, 3.2, timber, x0, 1.3, YZ + 1.6, g);
+      box(stallW - 0.15, 1.2, 0.12, timber, xm - 0.55, 0.6, YZ + 3.15, g);
+      box(1.2, 0.12, 0.14, pkPnStd({ color: col, roughness: 0.7 }), xm + 0.85, 1.25, YZ + 3.15, g);
+      sign([PK_TH_RIDERS[si][1].toUpperCase()], 1.1, 0.3, xm, 2.75, YZ + 3.25, 0, { bg: hexCss(col), fg: '#ffffff' }, g);
+      box(0.9, 0.5, 0.35, M.straw, xm - 0.6, 1.3, YZ + 0.35, g);
+      box(stallW - 0.3, 0.05, 2.8, M.straw, xm, 0.05, YZ + 1.6, g);
+      FX.stalls.push({ x: PK_TH.CX + xm + 0.2, z: PK_TH.CZ + YZ + 1.7 });
+    }
+    box(0.15, 2.6, 3.2, timber, sx0 + 5 * stallW, 1.3, YZ + 1.6, g);
+    var sroof = box(5 * stallW + 0.6, 0.12, 4.0, M.slate, sx0 + 2.5 * stallW, 3.05, YZ + 1.8, g); sroof.rotation.x = -0.2;
+    S_(sx0, sx0 + 5 * stallW, YZ, YZ + 3.2, 0, 3);
+    // the trough and the hay stack by the stables
+    box(1.6, 0.5, 0.6, timber, -9.2, 0.25, -27.4, g); box(1.45, 0.02, 0.45, M.water, -9.2, 0.45, -27.4, g);
+    [[-8.9, -25.6, 0], [-8.9, -24.4, 0], [-8.9, -25.0, 0.5]].forEach(function (b) { box(0.55, 0.5, 1.1, M.straw, b[0], 0.25 + b[2], b[1], g); });
+    S_(-10, -8.4, -27.8, -23.8, 0, 1);
+    // the cast and wardrobe cabins on the east side: two portacabins on blocks, steps, a lit window, their names
+    [['CAST', 14.2], ['WARDROBE', 20.4]].forEach(function (cb) {
+      var ccx = cb[1], ccz = -27.5, cab = pkPnStd({ color: 0xe8e4d8, roughness: 0.7 });
+      [-2, 2].forEach(function (d) { box(0.4, 0.3, 2.4, M.stoneDark, ccx + d, 0.15, ccz, g); });
+      pkBevelBox(5.0, 2.5, 2.4, cab, ccx, 1.55, ccz, g, 0.04);
+      box(5.1, 0.1, 2.5, pkPnStd({ color: 0x5a5f66, roughness: 0.6 }), ccx, 2.85, ccz, g);
+      box(0.9, 2.0, 0.05, pkPnStd({ color: 0x2f5f9e, roughness: 0.6 }), ccx - 1.4, 1.3, ccz + 1.23, g);
+      [0.4, 1.6].forEach(function (wx2) { box(0.9, 0.7, 0.05, M.win, ccx + wx2, 1.9, ccz + 1.23, g); });
+      for (var stp = 0; stp < 3; stp++) box(1.0, 0.12, 0.3, MAT.steelDark, ccx - 1.4, 0.12 + stp * 0.12, ccz + 1.7 - stp * 0.25, g);
+      sign([cb[0]], 1.4, 0.32, ccx + 1.0, 2.5, ccz + 1.24, 0, { bg: '#2a1a12', fg: '#f0c04a' }, g);
+      S_(ccx - 2.5, ccx + 2.5, ccz - 1.2, ccz + 1.9, 0, 2.9);
+    });
+    // a costume rail outside the wardrobe, the five riders' cloaks on it
+    pkRod(13.6, 1.7, -24.2, 15.6, 1.7, -24.2, 0.025, MAT.chrome, g, 6);
+    [13.6, 15.6].forEach(function (rx) { pkRod(rx, 0, -24.2, rx, 1.7, -24.2, 0.025, MAT.chrome, g, 6); });
+    for (var ck = 0; ck < 5; ck++) box(0.32, 1.1, 0.08, std({ color: PK_TH_RIDERS[ck][3], roughness: 0.85 }), 13.9 + ck * 0.38, 1.1, -24.2, g);
+    S_(13.5, 15.7, -24.4, -24.0, 0, 1.8);
+    // the gas store for the fire effects: two tanks behind a mesh fence, their signs
+    var gx0 = 23.4, gz0 = -20.4;
+    [-0.8, 0.8].forEach(function (d) { var tk = pkRoundCyl(0.55, 2.4, pkPnStd({ color: 0xf2f0ea, roughness: 0.4, metalness: 0.3 }), gx0, 0.8, gz0 + d, g, 16); tk.rotation.x = Math.PI / 2; tk.rotation.z = Math.PI / 2; });
+    [[gx0 - 1.6, gz0, 0.06, 2.8], [gx0, gz0 - 1.5, 3.2, 0.06], [gx0, gz0 + 1.5, 3.2, 0.06]].forEach(function (f) { box(f[2], 1.9, f[3], pkPnStd({ color: 0x9aa0a6, roughness: 0.5, metalness: 0.6, transparent: true, opacity: 0.45 }), f[0], 0.95, f[1], g); });
+    sign(['FIRE EFFECTS', 'PROPANE - NO NAKED FLAMES'], 2.4, 0.42, gx0 - 1.63, 1.4, gz0, -Math.PI / 2, { bg: '#b8362b', fg: '#ffffff' }, g);
+    pkRod(gx0 - 1.6, 0.2, gz0, 19, 0.2, -18.0, 0.04, pkPnStd({ color: 0xc9a227, roughness: 0.5, metalness: 0.6 }), g, 6);
+    S_(gx0 - 1.65, gx0 + 1.6, gz0 - 1.55, gz0 + 1.55, 0, 1.9);
+    // the pump house for the moat and the jets, in the yard's west end
+    var px0 = -22.0, pz0 = -19.8;
+    box(3.2, 2.6, 2.4, M.brick, px0, 1.3, pz0, g); box(3.5, 0.15, 2.7, M.slate, px0, 2.65, pz0, g);
+    box(0.9, 1.9, 0.05, M.wood, px0 + 0.6, 0.95, pz0 + 1.21, g);
+    sign(['PUMP HOUSE', 'MOAT AND JETS'], 1.6, 0.36, px0 - 0.6, 2.0, pz0 + 1.22, 0, { bg: '#1b232c', fg: '#9fd0ff' }, g);
+    pkRod(px0 + 1.6, 0.4, pz0, -12, 0.25, -18.0, 0.08, pkPnStd({ color: 0x2f6fb3, roughness: 0.5, metalness: 0.5 }), g, 8);
+    S_(px0 - 1.6, px0 + 1.6, pz0 - 1.2, pz0 + 1.2, 0, 2.7);
+    // the prop rack: lances, shields and a spare hydra head on a stand
+    (function () {
+      var rx = -7.2, rz = -19.2;
+      [-1, 1].forEach(function (d) { pkBevelBox(0.12, 1.9, 0.12, timber, rx + d * 1.1, 0.95, rz, g, 0.015); });
+      box(2.3, 0.08, 0.12, timber, rx, 1.8, rz, g); box(2.3, 0.08, 0.4, timber, rx, 0.3, rz, g);
+      for (var i = 0; i < 6; i++) pkRoundCyl(0.03, 2.6, std({ color: PK_TH_RIDERS[i % 5][3], roughness: 0.7 }), rx - 0.9 + i * 0.36, 1.4, rz, g, 6);
+      var hd = mesh(new THREE.SphereGeometry(0.55, 12, 9), std({ color: 0x2c4a33, roughness: 0.55 }), rx + 2.2, 1.35, rz + 0.2); hd.scale.set(1, 0.85, 1.2);
+      pkRoundCyl(0.06, 0.9, iron, rx + 2.2, 0.45, rz + 0.2, g, 6);
+      S_(rx - 1.25, rx + 2.8, rz - 0.4, rz + 0.6, 0, 2);
+    })();
+    // floodlights on poles at the yard's two ends
+    [[-25.3, -18.4], [25.3, -28.8]].forEach(function (p) { pkRoundCyl(0.08, 5.5, iron, p[0], 2.75, p[1], g, 8); box(0.6, 0.4, 0.3, pkPnStd({ color: 0x2a2d31, roughness: 0.5 }), p[0], 5.5, p[1], g); box(0.5, 0.3, 0.02, M.lampGlow, p[0], 5.5, p[1] + (p[1] < -24 ? 0.16 : -0.16), g); });
+    // the stage manager's prompt corner by the gate passage: a desk, the cue-light box that follows the show
+    pkBevelBox(0.9, 1.1, 0.6, timber, -3.6, 0.55, -19.0, g, 0.02);
+    box(0.4, 0.3, 0.12, pkPnStd({ color: 0x1b1d20, roughness: 0.5 }), -3.6, 1.35, -19.0, g);
+    FX.cueRed = pkThGlow(0xff3b30, 0.0); FX.cueGreen = pkThGlow(0x5fd38d, 0.0);
+    mesh(new THREE.CircleGeometry(0.07, 12), FX.cueRed, -3.7, 1.35, -18.93); mesh(new THREE.CircleGeometry(0.07, 12), FX.cueGreen, -3.5, 1.35, -18.93);
+    S_(-4.05, -3.15, -19.3, -18.7, 0, 1.2);
+
+    // ── 6. The control room: the lighting and sound desk on the free end of the desk, the PA microphone ──
+    var DX = 1.2, DZ = BZ0 + 0.55, DY = BF + 0.75;
+    var mx = new THREE.Group(); mx.position.set(DX, DY, DZ); mx.rotation.x = 0.18; g.add(mx);   // its face tipped up toward the operator's chair (+z)
+    pkBevelBox(1.36, 0.08, 0.4, pkPnStd({ color: 0x23262a, roughness: 0.5, metalness: 0.4 }), 0, 0.04, 0, mx, 0.02);
+    box(1.3, 0.005, 0.36, pkPnStd({ color: 0x33373c, roughness: 0.6 }), 0, 0.083, 0, mx);
+    var CH = ['HOUSE', 'WASH', 'SPOT', 'CITY', 'FIRE', 'JETS', 'FOG', 'MSTR'];
+    FX.faders = CH.map(function (n, i) {
+      var fx2 = -0.56 + i * 0.16;
+      box(0.012, 0.004, 0.26, pkPnStd({ color: 0x0c0d0f }), fx2, 0.087, 0.06, mx);
+      var cap = pkMover(mx, fx2, 0.095, 0.06); box(0.05, 0.022, 0.03, pkPnStd({ color: i === 7 ? 0xb8362b : 0xd8d8d0, roughness: 0.5 }), 0, 0, 0, cap);
+      var vu = []; for (var v = 0; v < 6; v++) { var m = pkThGlow(v > 4 ? 0xff3b30 : v > 3 ? 0xf0c04a : 0x5fd38d, 0.0); box(0.03, 0.004, 0.012, m, fx2, 0.087, -0.11 - v * 0.018, mx); vu.push(m); }
+      return { cap: cap, vu: vu, v: 0 };
+    });
+    // the PA microphone on its gooseneck at the desk's end: E makes an announcement to the house
+    var mic = new THREE.Group(); mic.position.set(1.75, BF + 0.75, BZ0 + 0.27); g.add(mic);
+    pkRoundCyl(0.08, 0.03, pkPnStd({ color: 0x1b1d20, roughness: 0.5 }), 0, 0.015, 0, mic, 14);
+    pkRod(0, 0.03, 0, 0.02, 0.32, -0.1, 0.008, MAT.chrome, mic, 6);
+    pkRoundCyl(0.025, 0.09, pkPnStd({ color: 0x111111, roughness: 0.7 }), 0.02, 0.36, -0.12, mic, 10);
+    FX.micLed = pkThGlow(0xff3b30, 0.0); box(0.02, 0.006, 0.02, FX.micLed, 0.04, 0.035, 0.04, mic);
+    hitBox(0.2, 0.45, 0.2, 0, 0.2, 0, { prompt: function () { return 'PA microphone: make an announcement to the house'; }, use: function () { pkArAnnounce(a); } }, mic);
+    pkArStable(a);
+  }
+
+  // the PA: a chime and what the stage manager would say at this point in the show's day
+  function pkArAnnounce(a) {
+    var C = pkCtl(a), X = a.extra;
+    if (!a.open) { sfx('bad'); toast('No power - the breaker is off', 'bad'); return; }
+    X.fx.micT = 4; sfx('chime');
+    var msg = a.state === 'running' ? 'Ladies and gentlemen, please stay seated until the riders have left the arena.'
+      : a.state === 'boarding' || a.state === 'ready' ? 'Ladies and gentlemen, the show is about to begin. Please take your seats in your rider\'s colours.'
+      : a.state === 'unloading' ? 'Thank you for visiting Lindenburg. Please mind the steps on your way out.'
+      : 'Welcome to the Lindenburg Arena. The next performance of The Five Riders of Lindenburg starts soon.';
+    toast('PA: ' + msg, '');
+    a.seats.forEach(function (st) { if (st.guest && st.guest.g && Math.random() < 0.15) say(st.guest.g, pick(['Ooh!', 'Here we go!', 'Shh!'])); });
+  }
+  // between shows the horses stand in their stalls, saddled, riderless
+  function pkArStable(a) {
+    var X = a.extra, cast = X.cast; if (!cast || !X.fx || !X.fx.stalls) return;
+    PK_TH_RIDERS.forEach(function (r, i) {
+      var A = cast[r[0]]; if (!A || A.on || !A.horse) return;
+      var s = X.fx.stalls[i]; A.stall = new THREE.Vector3(s.x, 0.05, s.z - 0.5); A.root.visible = true; A.g.visible = false; A.root.position.copy(A.stall); A.root.rotation.y = 0;   // looking out over the half door
+    });
+  }
+
+  // ── The effects, fired by the script ─────────────────────────────
+  function pkArFx(a, kind, secs, opt) {
+    var FX = a.extra.fx; if (!FX) return;
+    FX[kind] = Math.max(FX[kind] || 0, secs);
+    if (kind === 'cannon') pkArSfx('pkArWhoosh');
+    if (kind === 'water') pkArSfx('pkArSplash');
+    if (kind === 'earth') pkArSfx('pkArRumble');
+    if (kind === 'blast') { a.extra.flash = Math.max(a.extra.flash || 0, 0.5); pkArSfx('thunder'); }
+    if (opt && opt.rider !== undefined) FX.rider = opt.rider;
+  }
+  // the extra cues part 33's script takes: the music, the effects of the gifts, the lights' moods and the fireworks
+  function pkArenaPlusCues(cues, c, each, line) {
+    var fx = function (t, kind, secs, opt) { return { t: t, fn: function (a) { pkArFx(a, kind, secs, opt); } }; };
+    var mus = function (t, k) { return { t: t, fn: function () { pkArSfx(k); } }; };
+    var mood = function (t, m) { return { t: t, fn: function (a) { a.extra.fx.mood = m; } }; };
+    var follow = function (t, who) { return { t: t, fn: function (a) { a.extra.fx.follow = who; } }; };
+    cues.push(
+      mood(2, 'keeper'), mus(26, 'pkArGate'), mood(27, 'gate'), fx(27, 'water', 4), fx(29, 'cannon', 1.2),
+      mood(72, 'sweep'), fx(85, 'water', 3), mood(98, 'storm'), mus(102, 'pkArDread'), fx(102, 'wind', 6),
+      mood(128, 'chase'), mus(150, 'pkArDrums'), fx(152, 'cannon', 2.5), fx(158, 'cannon', 1.5), mood(152, 'hydra'),
+      mus(183, 'pkArHeroic'), mood(183, 'gifts'),
+      // the five gifts, one after the other: wind, fire, water, earth, light
+      { t: 184, fn: line('fenna', 'Wind!') }, fx(184, 'wind', 3.5, { rider: 0 }),
+      { t: 186.5, fn: line('bas', 'Fire!') }, fx(186.5, 'cannon', 2.2, { rider: 1 }),
+      { t: 189, fn: line('jet', 'Water!') }, fx(189, 'water', 3, { rider: 2 }),
+      { t: 191.5, fn: line('wout', 'Earth!') }, fx(191.5, 'earth', 9, { rider: 3 }),
+      { t: 194, fn: line('isa', 'Light!') }, fx(194, 'blast', 2.5, { rider: 4 }),
+      fx(205, 'water', 3), mood(205, 'gifts'), mood(219, 'joy'), mus(222, 'pkArGate'), fx(224, 'cannon', 1.0), fx(226, 'water', 4),
+      fx(256, 'works', 10), mus(256, 'pkArHeroic'), mood(256, 'joy'), mood(276, 'off'),
+      follow(7, 'keeper'), follow(28, 'fenna'), follow(44, 'fenna'), follow(46.5, 'bas'), follow(49, 'jet'), follow(51.5, 'wout'), follow(54, 'isa'),
+      follow(66, 'keeper'), follow(72, 'fenna'), follow(102, 'count'), follow(115, 'keeper'), follow(121, 'count'), follow(135, 'guard1'), follow(141, 'bas'),
+      follow(146, 'count'), follow(152, null), follow(166, 'wout'), follow(171, 'fenna'), follow(177, 'keeper'),
+      follow(184, 'fenna'), follow(186.5, 'bas'), follow(189, 'jet'), follow(191.5, 'wout'), follow(194, 'isa'), follow(199, null),
+      follow(205, 'count'), follow(213, null), follow(222, 'keeper'), follow(226, 'isa'), follow(262, 'keeper'), follow(270, null)
+    );
+  }
+  function pkArenaPlusTidy(a) {
+    var FX = a.extra.fx; if (!FX) return;
+    FX.cannon = FX.water = FX.wind = FX.earth = FX.blast = FX.works = 0; FX.mood = 'off'; FX.rider = -1; FX.follow = null;
+    pkArStable(a);
+  }
+
+  // ── The tick: the effects, the heads, the rams, the faders, the cue lights ──
+  var PK_AR_V = new THREE.Vector3(), PK_AR_D = new THREE.Vector3(), PK_AR_Q = new THREE.Quaternion(), PK_AR_DOWN = new THREE.Vector3(0, -1, 0), PK_AR_C = new THREE.Color();
+  var PK_AR_RCOL = [0x9fd0ff, 0xff6a2a, 0x3f8fff, 0x6fd04a, 0xfff2b0];
+  function pkArenaPlusTick(a, dt) {
+    var X = a.extra, FX = X.fx; if (!FX) return;
+    var CX = PK_TH.CX, CZ = PK_TH.CZ, run = a.state === 'running', near = pkArNear(110), t = X.fxT = (X.fxT || 0) + dt, i;
+    ['cannon', 'water', 'wind', 'blast', 'works'].forEach(function (k) { if (FX[k] > 0) FX[k] -= dt; });
+    if (FX.earth > 0) FX.earth -= dt;
+    if (FX.micT > 0) FX.micT -= dt;
+    FX.micLed.emissiveIntensity = FX.micT > 0 ? 2 : 0.05;
+    // fire cannons: a roaring column and sparks; the braziers' own fire light (part 33) carries the glow
+    var fire = FX.cannon > 0;
+    FX.cannons.forEach(function (cn, k) {
+      var want = fire ? 0.85 + 0.25 * Math.sin(t * 23 + k * 2) : 0.001;
+      cn.g.scale.y += (want - cn.g.scale.y) * Math.min(1, dt * 14); cn.g.visible = cn.g.scale.y > 0.02;
+      cn.m.emissiveIntensity = fire ? 2.6 : 0;
+      if (fire && near && Math.random() < dt * 14) pkArSpark(CX + cn.x, 3.6, CZ + cn.z, pick([0xff8a2a, 0xffc040, 0xff5a10]), 10, { speed: 3, cone: 0.6, grav: -1, life: 0.7, size: 0.22 });
+    });
+    if (fire) X.fire = Math.max(X.fire || 0, 0.2);
+    // water jets: columns that dance, spray at their tops
+    var jet = FX.water > 0;
+    FX.jets.forEach(function (j) {
+      var want = jet ? 3.5 + Math.sin(t * 3 + j.ph) * 1.8 : 0.001;
+      j.g.scale.y += (want - j.g.scale.y) * Math.min(1, dt * 5); j.g.visible = j.g.scale.y > 0.05;
+      if (jet && near && Math.random() < dt * 6) pkArSpark(CX + j.x, 0.2 + j.g.scale.y, CZ + j.z, 0xcfeaff, 8, { speed: 1.6, grav: 6, life: 0.9, size: 0.12 });
+    });
+    // wind and fog: smoke from the vents drifting east, leaves on the wind
+    if (FX.wind > 0 && near && Math.random() < dt * 8) {
+      var v = FX.vents[Math.floor(Math.random() * FX.vents.length)];
+      burst(CX + v.x, 0.2, CZ + v.z, 0xe8ecef, 16, 'smoke');
+      pkArSpark(CX + v.x, 0.6, CZ + v.z, pick([0x6fae3a, 0xa8c84a, 0xd8b04a]), 6, { speed: 2.5, cone: 0.9, grav: 0.6, life: 2.2, wx: 3.5, size: 0.14 });
+    }
+    // the earth rocks: up out of the sand, a shake of dust, then back down
+    FX.rocks.forEach(function (r) {
+      var want = FX.earth > 0 ? r.r * 0.55 : -2.2, was = r.y;
+      r.y += (want - r.y) * Math.min(1, dt * (FX.earth > 0 ? 2.2 : 0.8));
+      r.g.position.y = r.y; r.g.rotation.y += FX.earth > 0 ? dt * 0.2 : 0;
+      if (FX.earth > 0 && near && was < r.r * 0.4 && Math.random() < dt * 10) burst(CX + r.x, 0.2, CZ + r.z, 0xc2a575, 14, 'smoke');
+    });
+    // fireworks: shells from behind the city wall, bursting over it
+    if (FX.works > 0 && near) {
+      FX.shellT = (FX.shellT || 0) - dt;
+      if (FX.shellT <= 0) {
+        FX.shellT = randf(0.35, 0.8); pkArSfx('pkArShell');
+        var sx = randf(-18, 18), sy = randf(17, 25), sz = randf(-26, -20), col = pick(PK_AR_RCOL.concat([0xffffff, 0xff3b6a]));
+        pkArSpark(CX + sx, 6, CZ + sz, 0xffd27a, 4, { speed: 1, cone: 0.1, grav: -6, life: 0.6, size: 0.1 });
+        (function (x, y, z, c2) { setTimeout(function () { pkArSpark(CX + x, y, CZ + z, c2, 70, { speed: 7, grav: 2.5, drag: 1.2, life: 1.8, size: 0.28 }); pkArSpark(CX + x, y, CZ + z, 0xffffff, 20, { speed: 3, grav: 1, life: 0.8, size: 0.2 }); }, 650); })(sx, sy, sz, col);
+      }
+    }
+    // the moving heads follow the cast. Each head has its own rider (head k takes rider k mod 5) and keeps its beam on them
+    // wherever they ride; with a rider off stage it falls back to the scene's focus. The mood says how they light: the Keeper
+    // alone, the riders in their colours, a storm's flicker, the hydra's heads, every beam on the rider whose gift it is.
+    var mood = run ? (FX.mood || 'off') : 'off', heads = FX.heads, cast = X.cast || {};
+    var actorAt = function (A, out) { if (!A || !A.on) return false; out.set(A.x, (A.y || 0) + (A.horse ? 2.0 : 1.2), A.z); return true; };
+    var focusOf = function (out) { var f = FX.follow && cast[FX.follow]; if (actorAt(f, out)) return true; out.set(X.spotAt.x, X.spotAt.y, X.spotAt.z); return false; };
+    heads.forEach(function (H, k) {
+      var col = 0xffffff, aim = H.aim, on = 1, rider = cast[PK_TH_RIDERS[k % 5][0]];
+      if (mood === 'off') { on = 0; aim.set(H.x * 0.6, 0, 0); }
+      else if (mood === 'keeper') { focusOf(aim); col = 0xfff2d0; on = k === 2 || k === 3 ? 1 : 0; }
+      else if (mood === 'hydra') {
+        // half the rig on the hydra's heads, the rest keeping the riders lit
+        if (k % 2 === 0) { var hd = X.hydra && X.hydra.necks[k % 5].head; if (hd) { hd.getWorldPosition(PK_AR_V); aim.set(PK_AR_V.x - CX, PK_AR_V.y, PK_AR_V.z - CZ); } col = 0x9aff6a; }
+        else if (!actorAt(rider, aim)) focusOf(aim); else col = PK_AR_RCOL[k % 5];
+      }
+      else if (mood === 'gifts') {
+        var giver = FX.rider >= 0 ? cast[PK_TH_RIDERS[FX.rider][0]] : null;
+        if (!actorAt(giver, aim) && !actorAt(rider, aim)) focusOf(aim);
+        col = FX.rider >= 0 ? PK_AR_RCOL[FX.rider] : PK_AR_RCOL[k % 5];
+        if (FX.blast > 0) { col = 0xffffff; on = 1.6; }
+      }
+      else {
+        // gate, sweep, chase, storm, joy: on their riders; whoever is not out lights the scene's focus
+        if (actorAt(rider, aim)) col = mood === 'chase' && k % 2 ? 0xff4a3a : PK_AR_RCOL[k % 5];
+        else { focusOf(aim); col = 0xffe9c0; }
+        if (mood === 'storm') { col = 0x8fa8ff; on = Math.random() < 0.6 ? 0.9 : 0.15; }
+        if (mood === 'sweep') on = 0.75;
+      }
+      // a fast follow: the head leads its rider a little so a galloping horse stays in the pool
+      if (rider && rider.on && rider.path && rider.path.length && mood !== 'keeper' && mood !== 'hydra') { var nx = rider.path[0]; PK_AR_D.set(nx.x - rider.x, 0, nx.z - rider.z); if (PK_AR_D.lengthSq() > 1e-4) aim.addScaledVector(PK_AR_D.normalize(), 0.5); }
+      H.cur.lerp(aim, Math.min(1, dt * 6));
+      // turn the head so its beam (local -y) runs from the fixture to the aim point
+      H.yoke.getWorldPosition(PK_AR_V); PK_AR_D.set(CX + H.cur.x, H.cur.y, CZ + H.cur.z).sub(PK_AR_V).normalize();
+      PK_AR_Q.setFromUnitVectors(PK_AR_DOWN, PK_AR_D); H.head.quaternion.copy(PK_AR_Q);
+      H.k += ((a.open ? on : 0) - H.k) * Math.min(1, dt * 6);
+      PK_AR_C.setHex(col); H.col.lerp(PK_AR_C, Math.min(1, dt * 4));
+      H.lens.emissive.copy(H.col); H.lens.emissiveIntensity = H.k * 2.5;
+      H.beam.color.copy(H.col); H.beam.opacity = H.k * 0.09;
+    });
+    // the follow spot (part 33's real light) tracks the scene's focus too, whenever the script names one
+    if (run && FX.follow && actorAt(cast[FX.follow], PK_AR_V)) { X.spotAt.x = PK_AR_V.x; X.spotAt.y = PK_AR_V.y - 1; X.spotAt.z = PK_AR_V.z; }
+    // the hydra's rams follow its body; the beacon turns while it moves
+    var Hy = X.hydra, hy = Hy ? Hy.y : -11, moving = Hy && Math.abs((X.hydraUp ? 0 : -11) - Hy.y) > 0.05;
+    FX.rams.forEach(function (rd) { rd.position.y = hy + 4.2 - 2.6; });
+    FX.beacon.emissiveIntensity = moving ? (Math.sin(t * 12) > 0 ? 2.5 : 0.1) : 0.05;
+    // the stage manager's cue lights: red standing by, green go
+    var nx = pkThNextOp(a);
+    FX.cueRed.emissiveIntensity = nx && !nx.go ? 2 : 0.05; FX.cueGreen.emissiveIntensity = nx && nx.go ? (Math.sin(t * 10) > 0 ? 2 : 0.4) : 0.05;
+    // the desk's faders ride the show's levels; the meters dance with what is playing
+    var lw = X.lightWant, lev = [lw.house / 1.4, lw.wash / 2.2, lw.spot / 3, lw.city / 1.1, fire ? 1 : 0, jet ? 1 : 0, FX.wind > 0 ? 1 : 0, a.open ? 0.85 : 0];
+    FX.faders.forEach(function (f, k) {
+      f.v += (clamp(lev[k], 0, 1) - f.v) * Math.min(1, dt * 4); f.cap.position.z = 0.17 - f.v * 0.22;
+      var sig = run ? clamp(f.v * (0.55 + 0.45 * Math.abs(Math.sin(t * (4 + k) + k))), 0, 1) : 0;
+      f.vu.forEach(function (m, q) { m.emissiveIntensity = sig > (q + 0.5) / 6 ? 1.8 : 0.05; });
+    });
+  }
+
+  // after a load, the horses are in their stalls
+  hook('boot', function () { var a = PK.attrById && PK.attrById.theater; if (a) pkArStable(a); });
   // A narrow-gauge steam railway rings the park outside its fence: four stations, a depot siding north of the park and three level
   // crossings. The route is a rounded rectangle (clockwise on the map, north is -z). Everything on it is built from the headless
   // map of the world: W = -128 keeps the west run clear of the tree belt, E = 170 and S = 112 clear the Mountain King and the town.
@@ -20292,6 +22057,751 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     if (t.pumpOn && TR._pumpT <= 0) { TR._pumpT = 0.8; trTone('sine', 62, 0.14, 0.18, hp.x, hp.z, { f1: 45 }); sNoiseSafe(0.12, 0.05, 'lowpass', 500, hp); }
     if (t.priming && Math.abs(t.v) > 0.3) { var ch = trWorldOf(lo, lo.chimney); burst(ch.x, 3.9, ch.z, 0xf4f8fb, 3, 'up'); }
   }
+
+  // ── Where things may go ──────────────────────────────────────────
+  var PK_XP = { built: false, dyn: [], rng: null, mats: {} };
+  // the signed distance from the railway's centre line: a rounded rectangle (part 40), negative inside it
+  function pkXpRingD(x, z) {
+    var W = -128, E = 170, N = -134, S = 112, R = 24, cx0 = W + R, cx1 = E - R, cz0 = N + R, cz1 = S - R;
+    var qx = Math.max(cx0 - x, 0, x - cx1), qz = Math.max(cz0 - z, 0, z - cz1);
+    if (qx > 0 && qz > 0) return Math.hypot(qx, qz) - R;
+    if (qx > 0 || qz > 0) return Math.max(qx, qz) - R;
+    return -Math.min(x - W, E - x, z - N, S - z);
+  }
+  var PK_XP_STATIONS = [[-128, 34], [-62, -134], [170, -2], [95, 112]];
+  // a spot outside the ring that keeps clear of the line, its stations, the depot, the crossings' roads and footpath
+  function pkXpFree(x, z, m) {
+    m = m || 0;
+    var d = pkXpRingD(x, z);
+    if (d < 8 + m) return false;
+    if (Math.abs(z - 76) < 7 + m) return false;
+    for (var i = 0; i < PK_XP_STATIONS.length; i++) { var s = PK_XP_STATIONS[i]; if (Math.abs(x - s[0]) < 36 + m && Math.abs(z - s[1]) < 36 + m) return false; }
+    if (x > 8 - m && x < 112 + m && z > -172 - m && z < -120) return false;           // the depot and its siding
+    if (Math.abs(x + 17) < 6 + m && z < -120 && z > -158) return false;              // Windmill Halt's footpath out to the viewing platform
+    return true;
+  }
+  // the expansion site: a band 10 to 50 m outside the line, wherever it is free
+  function pkXpBand(x, z) { var d = pkXpRingD(x, z); return d > 10 && d < 50 && pkXpFree(x, z, 0); }
+  // the town, the farms, the lake: their own ground, no forest on it
+  function pkXpTown(x, z) { return x < -186 && x > -460 && z > 14 && z < 176; }
+  function pkXpFarm(x, z) { return x > 222 && x < 500 && z > -330 && z < 330 && Math.abs(z - 76) > 6; }
+  function pkXpLake(x, z) { return Math.hypot((x - 95) / 70, (z - 236) / 44) < 1.08; }
+  // the viaduct's line across the park (north to south), and how near a spot is to it
+  var PK_XP_VIA = [[-67, -178], [-67, 34], [-74, 52], [-90, 70], [-108, 86], [-112, 100], [-112, 152]];
+  function pkXpViaNear(x, z, w) {
+    for (var i = 0; i < PK_XP_VIA.length - 1; i++) { var A = PK_XP_VIA[i], B = PK_XP_VIA[i + 1]; if (pkSegDist(x, z, A[0], A[1], B[0], B[1]) < w) return true; }
+    return false;
+  }
+  // what the forest keeps clear of (part 12 asks this): the site is felled, the viaduct's line is cleared, the town, the
+  // farms and the lake stand on open ground
+  function pkXpClear(x, z) { return pkXpBand(x, z) || pkXpViaNear(x, z, 6) || pkXpTown(x, z) || pkXpFarm(x, z) || pkXpLake(x, z); }
+  // a point a given distance outside the line, by its distance round it (t, 0..1), and the way round there
+  function pkXpRingPt(t, off) {
+    var W = -128, E = 170, N = -134, S = 112, R = 24, r = R + off, L1 = E - W - 2 * R, L2 = S - N - 2 * R, q = Math.PI / 2 * r, P = 2 * (L1 + L2) + 4 * q;
+    var s = ((t % 1) + 1) % 1 * P, segs = [
+      function (u) { return [W + R + u, N - off, 1, 0]; }, L1,
+      function (u) { var a = -Math.PI / 2 + u / r; return [E - R + Math.cos(a) * r, N + R + Math.sin(a) * r, -Math.sin(a), Math.cos(a)]; }, q,
+      function (u) { return [E + off, N + R + u, 0, 1]; }, L2,
+      function (u) { var a = u / r; return [E - R + Math.cos(a) * r, S - R + Math.sin(a) * r, -Math.sin(a), Math.cos(a)]; }, q,
+      function (u) { return [E - R - u, S + off, -1, 0]; }, L1,
+      function (u) { var a = Math.PI / 2 + u / r; return [W + R + Math.cos(a) * r, S - R + Math.sin(a) * r, -Math.sin(a), Math.cos(a)]; }, q,
+      function (u) { return [W - off, S - R - u, 0, -1]; }, L2,
+      function (u) { var a = Math.PI + u / r; return [W + R + Math.cos(a) * r, N + R + Math.sin(a) * r, -Math.sin(a), Math.cos(a)]; }, q
+    ];
+    for (var k = 0; k < segs.length; k += 2) { if (s <= segs[k + 1]) return segs[k](s); s -= segs[k + 1]; }
+    return segs[0](0);
+  }
+  function pkXpPerim(off) { var R = 24 + off; return 2 * (298 - 48 + 246 - 48) + 2 * Math.PI * R; }
+
+  // ── Materials and small kit ──────────────────────────────────────
+  function XM(def) { var k = JSON.stringify(def); return PK_XP.mats[k] || (PK_XP.mats[k] = std(def)); }
+  function pkXpM() {
+    if (PK_XP.M) return PK_XP.M;
+    var K = pkMats();
+    var dirtT = tex(256, 256, function (c, W, H) { c.fillStyle = '#7a5f42'; c.fillRect(0, 0, W, H); for (var i = 0; i < 2600; i++) { c.fillStyle = 'rgba(' + (Math.random() < 0.5 ? '40,28,16' : '160,130,96') + ',' + randf(0.08, 0.3) + ')'; c.fillRect(Math.random() * W, Math.random() * H, randf(1, 5), randf(1, 4)); } for (var t = 0; t < 14; t++) { c.strokeStyle = 'rgba(50,34,20,0.35)'; c.lineWidth = randf(3, 7); var y = Math.random() * H; c.beginPath(); c.moveTo(0, y); c.bezierCurveTo(W * 0.3, y + randf(-20, 20), W * 0.7, y + randf(-20, 20), W, y + randf(-10, 10)); c.stroke(); } }, 6, 6);
+    var meshT = tex(64, 64, function (c, W, H) { c.clearRect(0, 0, W, H); c.strokeStyle = 'rgba(200,205,210,0.95)'; c.lineWidth = 2; for (var i = 0; i <= W; i += 8) { c.beginPath(); c.moveTo(i, 0); c.lineTo(i, H); c.stroke(); c.beginPath(); c.moveTo(0, i); c.lineTo(W, i); c.stroke(); } }, 1, 1);
+    var netT = tex(128, 128, function (c, W, H) { c.clearRect(0, 0, W, H); c.fillStyle = 'rgba(46,122,70,0.62)'; c.fillRect(0, 0, W, H); c.globalCompositeOperation = 'destination-out'; c.fillStyle = 'rgba(0,0,0,0.75)'; for (var y = 1; y < H; y += 4) for (var x = 1; x < W; x += 4) c.fillRect(x, y, 2, 2); c.globalCompositeOperation = 'source-over'; c.fillStyle = 'rgba(30,90,50,0.8)'; c.fillRect(0, 0, W, 3); c.fillRect(0, 0, 3, H); }, 1, 1);
+    var bannerT = tex(1024, 256, function (c, W, H) { c.fillStyle = '#1b232c'; c.fillRect(0, 0, W, H); c.fillStyle = '#f5b53d'; c.fillRect(0, 0, W, 18); c.fillRect(0, H - 18, W, 18); c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = 'bold 86px Bahnschrift, Arial, sans-serif'; c.fillText('PARK CO IS GROWING', W / 2, 96); c.fillStyle = '#e8e4d8'; c.font = '600 44px Bahnschrift, Arial, sans-serif'; c.fillText('A NEW LAND  ·  A NEW LINE  ·  OPENING SOON', W / 2, 180); });
+    var cropT = function (a, b) { return std({ roughness: 1, map: tex(128, 128, function (c, W, H) { c.fillStyle = a; c.fillRect(0, 0, W, H); c.fillStyle = b; for (var y = 0; y < H; y += 8) c.fillRect(0, y, W, 3); for (var i = 0; i < 400; i++) { c.fillStyle = 'rgba(0,0,0,0.08)'; c.fillRect(Math.random() * W, Math.random() * H, 2, 2); } }, 30, 30) }); };
+    PK_XP.M = {
+      dirt: std({ map: dirtT, color: 0xffffff, roughness: 1, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
+      dirtDark: std({ map: dirtT, color: 0xb09078, roughness: 1, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
+      spoil: std({ map: dirtT, color: 0xc8a888, roughness: 1 }), gravel: std({ color: 0x8a8580, roughness: 1 }),
+      heras: std({ map: meshT, color: 0xffffff, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, roughness: 0.5, metalness: 0.6 }),
+      herasFoot: std({ color: 0x6a6f74, roughness: 0.7 }), net: std({ map: netT, transparent: true, side: THREE.DoubleSide, roughness: 0.9, depthWrite: false }),
+      banner: std({ map: bannerT, roughness: 0.8, side: THREE.DoubleSide }),
+      concrete: std({ map: TEX.plaster, color: 0xb8b4ac, roughness: 0.95 }), concreteDark: std({ map: TEX.plaster, color: 0x8f8b84, roughness: 0.95 }),
+      tube: std({ color: 0xa8b0b6, roughness: 0.4, metalness: 0.8 }), plank: std({ color: 0xb08a50, roughness: 0.85 }),
+      yellow: std({ color: 0xf0b41e, roughness: 0.45, metalness: 0.2 }), yellowDark: std({ color: 0xa87a10, roughness: 0.6 }),
+      orange: std({ color: 0xe0702a, roughness: 0.5 }), red: std({ color: 0xb8362b, roughness: 0.5 }), white: std({ color: 0xeceae4, roughness: 0.6 }),
+      black: std({ color: 0x1b1d20, roughness: 0.7 }), steel: std({ color: 0x5a6068, roughness: 0.45, metalness: 0.7 }), rust: std({ color: 0x8a4a2a, roughness: 0.8, metalness: 0.3 }),
+      glass: std({ color: 0x223344, roughness: 0.1, metalness: 0.5 }), cabin: std({ color: 0xe8e4d8, roughness: 0.6 }), cabinBlue: std({ color: 0x2f5f9e, roughness: 0.6 }),
+      bark: K.treeBark || std({ color: 0x6a4a30, roughness: 0.95 }), wood: std({ color: 0xc8a070, roughness: 0.85 }), woodEnd: std({ color: 0xdcb880, roughness: 0.8 }),
+      brush: std({ color: 0x5a6a30, roughness: 1 }), hivis: std({ color: 0xd8ef2a, roughness: 0.6, emissive: 0x1a1f00, emissiveIntensity: 0.3 }),
+      lamp: glowMat(0xfff0c8, 1.4), beacon: pkThGlow(0xff9020, 0.0),
+      asphalt: pkAsphalt(), line: MAT.whiteLine,
+      roofRed: std({ color: 0x9a3a2a, roughness: 0.8 }), roofSlate: std({ color: 0x4a4f58, roughness: 0.8 }), brick: pkMatBrick(), cream: std({ map: TEX.plaster, color: 0xefe3c8, roughness: 0.9 }),
+      plaster: std({ map: TEX.plaster, color: 0xf4f1e8, roughness: 0.9 }), win: std({ color: 0x2a3440, roughness: 0.2, metalness: 0.4, emissive: 0xffc46a, emissiveIntensity: 0.0 }),
+      door: std({ color: 0x3a5a3a, roughness: 0.7 }), green: std({ color: 0x2f6a3a, roughness: 0.7 }),
+      field: [cropT('#c8b050', '#b09840'), cropT('#6a9a3a', '#5a8a30'), cropT('#8a6a3a', '#7a5a30'), cropT('#a8c060', '#98b050'), cropT('#d8c890', '#c8b878')],
+      hedge: std({ color: 0x3a6a30, roughness: 1 }), hill: std({ color: 0x5a7a54, roughness: 1 }), hillFar: std({ color: 0x6f8aa0, roughness: 1 }),
+      water: K.water, reed: std({ color: 0x8a9a4a, roughness: 1 })
+    };
+    return PK_XP.M;
+  }
+  function pkXpDyn(parent) { var g = new THREE.Group(); g.userData.dynamic = true; (parent || scene).add(g); return g; }
+  function pkXpGroup(x, z, ry) { var g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry || 0; scene.add(g); return g; }
+  // a footprint (w, d) at (x, z) turned ry: is every corner and the middle free?
+  function pkXpFits(x, z, w, d, ry, test) {
+    var c = Math.cos(ry || 0), s = Math.sin(ry || 0), pts = [[0, 0], [-w / 2, -d / 2], [w / 2, -d / 2], [-w / 2, d / 2], [w / 2, d / 2]];
+    for (var i = 0; i < pts.length; i++) { var px = x + pts[i][0] * c + pts[i][1] * s, pz = z - pts[i][0] * s + pts[i][1] * c; if (!(test || pkXpBand)(px, pz) || (!test && pkXpViaNear(px, pz, 9))) return false; }
+    return true;
+  }
+
+  // ── The site's kit ───────────────────────────────────────────────
+  // a run of site fencing (Heras panels on their concrete feet), solid to walk into, with a banner now and then
+  function pkXpFenceRun(pts, solidIt, bannerEvery) {
+    var M = pkXpM(), run = null;
+    for (var i = 0; i < pts.length - 1; i++) {
+      var A = pts[i], B = pts[i + 1], L = Math.hypot(B[0] - A[0], B[1] - A[1]); if (L < 0.5) continue;
+      var ang = Math.atan2(B[1] - A[1], B[0] - A[0]), mx = (A[0] + B[0]) / 2, mz = (A[1] + B[1]) / 2;
+      var g = pkXpGroup(mx, mz, -ang);
+      box(L, 1.95, 0.03, M.heras, 0, 1.08, 0, g);
+      box(L, 0.04, 0.04, M.tube, 0, 2.06, 0, g); box(L, 0.04, 0.04, M.tube, 0, 0.12, 0, g);
+      box(0.04, 2.0, 0.04, M.tube, -L / 2, 1.06, 0, g);
+      box(0.6, 0.12, 0.22, M.herasFoot, -L / 2, 0.06, 0, g);
+      if (bannerEvery && i % bannerEvery === 0 && L > 3) box(L - 0.2, 0.9, 0.012, M.banner, 0, 1.3, 0.03, g);
+      if (solidIt) {
+        var x0 = Math.min(A[0], B[0]), x1 = Math.max(A[0], B[0]), z0 = Math.min(A[1], B[1]), z1 = Math.max(A[1], B[1]), axis = (x1 - x0) < 0.3 ? 'z' : (z1 - z0) < 0.3 ? 'x' : '';
+        if (run && axis && run.axis === axis && Math.abs((axis === 'z' ? x0 : z0) - run.at) < 0.3) { run.x0 = Math.min(run.x0, x0); run.x1 = Math.max(run.x1, x1); run.z0 = Math.min(run.z0, z0); run.z1 = Math.max(run.z1, z1); }
+        else { flush(); run = { axis: axis, at: axis === 'z' ? x0 : z0, x0: x0, x1: x1, z0: z0, z1: z1 }; if (!axis) flush(); }
+      }
+    }
+    flush();
+    function flush() { if (run) solid(run.x0 - 0.12, run.x1 + 0.12, run.z0 - 0.12, run.z1 + 0.12, 0, 2.1); run = null; }
+  }
+  // a tree's stump, cut level, with its rings showing
+  function pkXpStump(x, z, s) { var M = pkXpM(), g = pkXpGroup(x, z, Math.random() * 6); pkRoundCyl(0.32 * s, 0.45 * s, M.bark, 0, 0.22 * s, 0, g, 9); pkRoundCyl(0.3 * s, 0.02, M.woodEnd, 0, 0.455 * s, 0, g, 9); return g; }
+  // a stack of felled trunks on their bearers
+  function pkXpLogs(x, z, ry, n) {
+    var M = pkXpM(), g = pkXpGroup(x, z, ry); n = n || 9;
+    [-2.2, 2.2].forEach(function (b) { box(0.2, 0.2, 2.6, M.wood, b, 0.1, 0, g); });
+    var row = 0, k = 0;
+    while (k < n) { var inRow = Math.max(1, 4 - row); for (var q = 0; q < inRow && k < n; q++, k++) { var lz = (q - (inRow - 1) / 2) * 0.62, ly = 0.5 + row * 0.53; var lg = pkRoundCyl(0.3, 6.2, M.bark, 0, ly, lz, g, 10); lg.rotation.z = Math.PI / 2; [-1, 1].forEach(function (e) { var en = pkRoundCyl(0.29, 0.02, M.woodEnd, e * 3.11, ly, lz, g, 10); en.rotation.z = Math.PI / 2; }); } row++; }
+    return g;
+  }
+  function pkXpBrush(x, z, s) {
+    var M = pkXpM(), g = pkXpGroup(x, z, Math.random() * 6), dead = XM({ color: 0x7a7a3a, roughness: 1 });
+    for (var b = 0; b < 22; b++) {
+      var L = randf(1.6, 3.4) * s, br = pkRoundCyl(randf(0.04, 0.09) * s, L, M.bark, randf(-1.2, 1.2) * s, randf(0.15, 1.0) * s, randf(-0.9, 0.9) * s, g, 5);
+      br.rotation.set(randf(-0.6, 0.6), randf(0, 6.28), Math.PI / 2 + randf(-0.5, 0.5));
+      if (b % 3 === 0) { var tw = pkRoundCyl(0.025 * s, L * 0.4, M.bark, br.position.x, br.position.y + 0.2 * s, br.position.z, g, 4); tw.rotation.set(randf(-1, 1), 0, randf(-1, 1)); }
+    }
+    for (var l = 0; l < 7; l++) { var lf = new THREE.Mesh(new THREE.IcosahedronGeometry(randf(0.25, 0.5) * s, 0), l % 2 ? dead : M.brush); lf.position.set(randf(-1.1, 1.1) * s, randf(0.4, 1.1) * s, randf(-0.8, 0.8) * s); lf.scale.y = 0.6; g.add(lf); }
+    return g;
+  }
+  function pkXpSpoil(x, z, r, h) {
+    var M = pkXpM(), geo = new THREE.IcosahedronGeometry(1, 2), p = geo.attributes.position, seed = Math.abs(Math.round(x * 7 + z * 13));
+    for (var i = 0; i < p.count; i++) { var vx = p.getX(i), vy = p.getY(i), vz = p.getZ(i), n = 1 + 0.16 * Math.sin(vx * 5.1 + seed) * Math.cos(vz * 4.3 + seed * 0.7) + 0.08 * Math.sin(vy * 9 + vx * 3); if (vy < 0) vy = 0; p.setXYZ(i, vx * n, vy * n, vz * n); }
+    geo.computeVertexNormals();
+    var m = new THREE.Mesh(geo, M.spoil); m.scale.set(r, h, r * randf(0.7, 1.15)); m.position.set(x, -0.05, z); m.rotation.y = seed; m.castShadow = true; scene.add(m);
+    for (var k = 0; k < 5; k++) { var a = k * 1.3 + seed, cl = new THREE.Mesh(new THREE.DodecahedronGeometry(randf(0.2, 0.45), 0), M.spoil); cl.position.set(x + Math.cos(a) * r * 1.05, 0.1, z + Math.sin(a) * r * 1.05); scene.add(cl); }
+    return m;
+  }
+  // a site cabin, stackable, with its window and door, and a sign
+  function pkXpCabin(x, z, ry, y0, label, blue) {
+    var M = pkXpM(), g = pkXpGroup(x, z, ry); g.position.y = y0 || 0;
+    pkBevelBox(6.0, 2.6, 2.4, blue ? M.cabinBlue : M.cabin, 0, 1.3, 0, g, 0.04);
+    box(6.1, 0.1, 2.5, M.steel, 0, 2.65, 0, g);
+    box(0.9, 2.0, 0.05, M.door, -2.0, 1.05, 1.22, g);
+    [0.2, 1.6].forEach(function (wx) { box(1.0, 0.8, 0.05, M.win, wx, 1.7, 1.22, g); });
+    if (label) sign([label], 1.7, 0.34, 1.0, 2.35, 1.24, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
+    return g;
+  }
+  function pkXpCabinStair(x, z, ry) {
+    var M = pkXpM(), g = pkXpGroup(x, z, ry), stl = XM({ color: 0x5a6068, roughness: 0.5, metalness: 0.6 });
+    for (var i = 0; i < 12; i++) box(1.0, 0.05, 0.3, stl, 3.6 + i * 0.25 * 0, 0.22 * (i + 1), 1.2 + 1.3 - i * 0.22 + 0.0, g);
+    [-0.5, 0.5].forEach(function (o) { pkRod(3.6 + o, 0, 2.5, 3.6 + o, 2.7, -0.2, 0.04, stl, g, 4); pkRod(3.6 + o, 1.0, 2.5, 3.6 + o, 3.7, -0.2, 0.025, stl, g, 4); });
+    box(1.2, 0.06, 1.6, stl, 3.6, 2.7, -0.6, g);
+    [[3.05, -1.4], [4.15, -1.4], [3.05, 0.2], [4.15, 0.2]].forEach(function (c) { pkRoundCyl(0.03, 2.7, stl, c[0], 1.35, c[1], g, 5); });
+    box(0.04, 0.04, 1.6, stl, 4.18, 3.7, -0.6, g); box(1.2, 0.04, 0.04, stl, 3.6, 3.7, -1.4, g);
+    return g;
+  }
+  function pkXpContainer(x, z, ry, col) { var M = pkXpM(), g = pkXpGroup(x, z, ry), m = XM({ color: col, roughness: 0.6, metalness: 0.3 }); pkBevelBox(6.06, 2.59, 2.44, m, 0, 1.3, 0, g, 0.03); for (var r = -2.6; r <= 2.6; r += 0.35) box(0.06, 2.3, 2.5, m, r, 1.3, 0, g); return g; }
+  // a builder's skip: a steel floor, trapezoid sides, sloped ends, a rim, the chain lugs, and a heap of earth in it
+  function pkXpSkip(x, z, ry) {
+    var M = pkXpM(), g = pkXpGroup(x, z, ry), L0 = 2.3, L1 = 3.5, H = 1.25, Wd = 1.7, y0 = 0.12;
+    box(L0, 0.08, Wd, M.yellow, 0, y0, 0, g);
+    [-1, 1].forEach(function (s) { box(0.12, 0.12, Wd - 0.1, M.black, s * (L0 / 2 - 0.3), 0.06, 0, g); });
+    var tz = new THREE.Shape(); tz.moveTo(-L0 / 2, 0); tz.lineTo(L0 / 2, 0); tz.lineTo(L1 / 2, H); tz.lineTo(-L1 / 2, H); tz.closePath();
+    var side = new THREE.ExtrudeGeometry(tz, { depth: 0.06, bevelEnabled: false });
+    [-1, 1].forEach(function (s) { var m = new THREE.Mesh(side, M.yellow); m.position.set(0, y0, s * Wd / 2 - (s > 0 ? 0.06 : 0)); m.castShadow = true; g.add(m); });
+    var slant = Math.atan2((L1 - L0) / 2, H), endL = Math.hypot((L1 - L0) / 2, H);
+    [-1, 1].forEach(function (s) { var e = box(0.06, endL, Wd, M.yellow, s * (L0 + L1) / 4, y0 + H / 2, 0, g); e.rotation.z = -s * slant; });
+    [-1, 1].forEach(function (s) { box(L1 + 0.04, 0.08, 0.1, M.yellowDark, 0, y0 + H, s * Wd / 2, g); box(0.1, 0.08, Wd, M.yellowDark, s * L1 / 2, y0 + H, 0, g); });
+    [-1, 1].forEach(function (sx) { [-1, 1].forEach(function (sz) { var lug = pkRoundCyl(0.08, 0.12, M.steel, sx * (L0 / 2 + 0.25), y0 + H * 0.55, sz * (Wd / 2 + 0.06), g, 10); lug.rotation.x = Math.PI / 2; }); });
+    box(0.5, 0.25, 0.02, M.black, 0, y0 + H * 0.55, Wd / 2 + 0.035, g); box(0.5, 0.25, 0.02, M.black, 0, y0 + H * 0.55, -Wd / 2 - 0.035, g);
+    box(L0 + 0.6, 0.6, Wd - 0.14, M.spoil, 0, y0 + H - 0.42, 0, g);
+    var heap = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), M.spoil); heap.scale.set(1.45, 0.55, 0.75); heap.position.set(0.15, y0 + H - 0.12, 0); heap.castShadow = true; g.add(heap);
+    return g;
+  }
+  function pkXpToilet(x, z, ry) {
+    var M = pkXpM(), g = pkXpGroup(x, z, ry), blue = XM({ color: 0x2f7fbf, roughness: 0.5 });
+    pkBevelBox(1.15, 0.12, 1.15, M.black, 0, 0.06, 0, g, 0.03);
+    pkBevelBox(1.1, 2.15, 1.1, blue, 0, 1.2, 0, g, 0.05);
+    var roof = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.62, 0.18, 4, 1), M.white); roof.rotation.y = Math.PI / 4; roof.position.y = 2.36; g.add(roof);
+    box(0.84, 1.9, 0.04, XM({ color: 0x276ba5, roughness: 0.5 }), 0, 1.15, 0.56, g);
+    [-0.38, 0.38].forEach(function (hx) { box(0.04, 1.8, 0.03, M.white, hx, 1.15, 0.58, g); });
+    box(0.12, 0.06, 0.04, M.steel, 0.3, 1.1, 0.6, g); box(0.16, 0.05, 0.02, XM({ color: 0xc8362b }), 0.3, 1.25, 0.59, g);
+    pkRoundCyl(0.05, 0.5, M.black, -0.42, 2.5, -0.42, g, 6);
+    for (var v = 0; v < 3; v++) box(0.5, 0.03, 0.02, M.white, 0, 2.0 - v * 0.06, 0.56, g);
+    return g;
+  }
+  function pkXpPipes(x, z, ry) { var M = pkXpM(), g = pkXpGroup(x, z, ry); for (var r = 0; r < 3; r++) for (var c = 0; c < 4 - r; c++) { var p = pkRoundCyl(0.45, 5, XM({ color: 0x8a8f94, roughness: 0.8 }), 0, 0.45 + r * 0.8, (c - (3 - r) / 2) * 0.92, g, 14); p.rotation.z = Math.PI / 2; } return g; }
+  function pkXpBeams(x, z, ry) { var M = pkXpM(), g = pkXpGroup(x, z, ry); for (var r = 0; r < 4; r++) for (var c = 0; c < 3; c++) { var y = 0.2 + r * 0.32, zz = (c - 1) * 0.5; box(7, 0.04, 0.3, M.rust, 0, y + 0.14, zz, g); box(7, 0.04, 0.3, M.rust, 0, y - 0.14, zz, g); box(7, 0.28, 0.03, M.rust, 0, y, zz, g); } [-2.5, 2.5].forEach(function (b) { box(0.2, 0.15, 1.8, M.wood, b, 0.05, 0, g); }); return g; }
+  function pkXpPallets(x, z, ry) { var M = pkXpM(), g = pkXpGroup(x, z, ry); for (var i = 0; i < 4; i++) { box(1.2, 0.14, 1.0, M.wood, (i % 2) * 1.3, 0.07 + Math.floor(i / 2) * 1.1, 0, g); box(1.1, 0.9, 0.9, XM({ color: [0xc8c0b0, 0xa83a2a, 0xd8d0c0][i % 3], roughness: 0.9 }), (i % 2) * 1.3, 0.6 + Math.floor(i / 2) * 1.1, 0, g); } return g; }
+  // a floodlight tower: a mast, a lamp bar that glows at night
+  function pkXpFlood(x, z, ry) { var M = pkXpM(), g = pkXpGroup(x, z, ry); pkBevelBox(1.4, 0.6, 2.2, M.yellow, 0, 0.3, 0, g, 0.05); pkRoundCyl(0.1, 8, M.steel, 0, 4.3, 0, g, 8); for (var i = 0; i < 4; i++) { box(0.5, 0.4, 0.2, M.black, -0.75 + i * 0.5, 8.3, 0.1, g); box(0.42, 0.32, 0.02, M.lamp, -0.75 + i * 0.5, 8.3, 0.21, g); } return g; }
+  // a worker in hard hat and hi-vis; some stand and look, some walk a beat
+  function pkXpWorker(x, z, ry, beat) {
+    var M = pkXpM(), hat = XM({ color: [0xf0c04a, 0xffffff, 0xe0702a][Math.floor(Math.random() * 3)], roughness: 0.4 });
+    var g = makeHuman({ key: 'site:' + Math.round(x) + ',' + Math.round(z), shirt: std({ map: TEX.cloth, color: 0x2a3a5a, roughness: 0.9 }), pants: std({ map: TEX.cloth, color: 0x2a2d33, roughness: 0.9 }), vest: M.hivis, hardhat: hat, noBeard: Math.random() < 0.6 });
+    g.userData.dynamic = true; g.position.set(x, 0, z); g.rotation.y = ry; scene.add(g);
+    PK_XP.dyn.push({ kind: 'worker', g: g, a: [x, z], b: beat ? [x + beat[0], z + beat[1]] : null, t: Math.random(), dir: 1 });
+    return g;
+  }
+
+  // ── The machines ─────────────────────────────────────────────────
+  // an excavator: tracks, a turning house with its cab, the boom, the stick and the bucket that dig and swing
+  function pkXpExcavator(x, z, ry) {
+    var M = pkXpM(), g = pkXpGroup(x, z, ry);
+    [-1.1, 1.1].forEach(function (s) { pkBevelBox(0.7, 0.8, 4.0, M.black, s, 0.4, 0, g, 0.25); });
+    pkRoundCyl(0.8, 0.3, M.steel, 0, 0.95, 0, g, 16);
+    var house = pkXpDyn(g); house.position.y = 1.1;
+    pkBevelBox(2.6, 1.3, 3.0, M.yellow, 0, 0.65, -0.3, house, 0.08);
+    pkBevelBox(1.0, 1.5, 1.2, M.yellow, 0.75, 1.9, 0.6, house, 0.06); box(0.9, 1.0, 1.0, M.glass, 0.75, 2.0, 0.62, house);
+    box(2.4, 0.9, 0.8, M.yellowDark, 0, 0.6, -1.9, house);
+    var boom = new THREE.Group(); boom.position.set(-0.3, 1.1, 1.1); house.add(boom);
+    pkBevelBox(0.45, 0.5, 3.6, M.yellow, 0, 0, 1.8, boom, 0.06);
+    var stick = new THREE.Group(); stick.position.set(0, 0, 3.6); boom.add(stick);
+    pkBevelBox(0.35, 0.4, 2.6, M.yellow, 0, 0, 1.3, stick, 0.05);
+    var bucket = new THREE.Group(); bucket.position.set(0, 0, 2.6); stick.add(bucket);
+    pkBevelBox(0.9, 0.6, 0.7, M.steel, 0, -0.2, 0.2, bucket, 0.08);
+    PK_XP.dyn.push({ kind: 'dig', house: house, boom: boom, stick: stick, bucket: bucket, t: Math.random() * 10, x: x, z: z });
+  }
+  // a dump truck that runs a haul road between two points, loaded one way and empty back
+  function pkXpTruck(ax, az, bx, bz) {
+    var M = pkXpM(), g = pkXpDyn();
+    [[-0.9, 1.6], [0.9, 1.6], [-0.9, -0.6], [0.9, -0.6], [-0.9, -1.8], [0.9, -1.8]].forEach(function (w) { var wh = pkRoundCyl(0.55, 0.45, M.black, w[0], 0.55, w[1], g, 12); wh.rotation.z = Math.PI / 2; });
+    pkBevelBox(2.2, 0.4, 5.2, M.steel, 0, 0.9, 0, g, 0.05);
+    pkBevelBox(2.2, 1.6, 1.6, M.orange, 0, 1.9, 2.0, g, 0.1); box(2.0, 0.7, 0.05, M.glass, 0, 2.2, 2.82, g);
+    var bed = new THREE.Group(); bed.position.set(0, 1.2, -1.9); g.add(bed);
+    pkBevelBox(2.4, 1.3, 3.4, M.orange, 0, 0.65, 1.5, bed, 0.06);
+    var load = box(2.1, 0.5, 3.0, M.spoil, 0, 1.25, 1.5, bed);
+    PK_XP.dyn.push({ kind: 'truck', g: g, bed: bed, load: load, a: [ax, az], b: [bx, bz], t: Math.random(), dir: 1, wait: 0 });
+  }
+  function pkXpDozer(x, z, ry) { var M = pkXpM(), g = pkXpGroup(x, z, ry); [-1, 1].forEach(function (s) { pkBevelBox(0.6, 0.9, 3.4, M.black, s * 1.1, 0.45, 0, g, 0.25); }); pkBevelBox(2.0, 1.2, 2.6, M.yellow, 0, 1.35, -0.2, g, 0.08); pkBevelBox(1.4, 1.2, 1.3, M.yellow, 0, 2.5, -0.6, g, 0.06); box(1.3, 0.9, 1.2, M.glass, 0, 2.6, -0.6, g); var bl = box(3.4, 1.2, 0.2, M.steel, 0, 0.7, 2.1, g); bl.rotation.x = -0.2; }
+  function pkXpRoller(x, z, ry) {
+    var M = pkXpM(), g = pkXpGroup(x, z, ry);
+    var d = pkRoundCyl(0.75, 1.9, M.steel, 0, 0.75, 1.5, g, 18); d.rotation.z = Math.PI / 2;
+    box(2.1, 0.3, 0.4, M.yellow, 0, 1.55, 1.5, g); [-1, 1].forEach(function (s2) { box(0.12, 1.2, 1.6, M.yellow, s2 * 1.02, 1.0, 1.5, g); });
+    pkBevelBox(1.8, 1.0, 2.2, M.yellow, 0, 1.0, -0.7, g, 0.08);
+    [-1, 1].forEach(function (s2) { var w = pkRoundCyl(0.6, 0.45, M.black, s2 * 0.75, 0.6, -1.2, g, 14); w.rotation.z = Math.PI / 2; });
+    box(0.5, 0.12, 0.5, M.black, 0, 1.6, -0.5, g); box(0.5, 0.5, 0.1, M.black, 0, 1.85, -0.75, g);
+    pkRod(0, 1.5, 0.05, 0, 1.95, -0.1, 0.03, M.black, g, 5); var wh = pkRoundCyl(0.18, 0.03, M.black, 0, 1.97, -0.12, g, 12); wh.rotation.x = 0.6;
+    [[-0.8, 0.2], [0.8, 0.2], [-0.8, -1.6], [0.8, -1.6]].forEach(function (c) { box(0.06, 1.5, 0.06, M.black, c[0], 2.25, c[1], g); });
+    pkBevelBox(1.9, 0.1, 2.1, M.yellow, 0, 3.0, -0.7, g, 0.04);
+    var bc = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), M.beacon); bc.position.set(0.6, 3.12, -1.5); g.add(bc);
+  }
+  function pkXpMixer(x, z, ry) { var M = pkXpM(), g = pkXpGroup(x, z, ry); pkBevelBox(2.3, 0.4, 7, M.steel, 0, 0.9, 0, g, 0.05); pkBevelBox(2.3, 1.8, 1.8, M.white, 0, 2.0, 2.6, g, 0.1); var dr = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 0.7, 4.0, 14), M.red); dr.rotation.x = Math.PI / 2 + 0.25; dr.position.set(0, 2.5, -0.9); g.add(dr); for (var w = -2.6; w <= 2.6; w += 2.6) [-1, 1].forEach(function (s) { var wh = pkRoundCyl(0.5, 0.4, M.black, s * 1.0, 0.5, w, g, 12); wh.rotation.z = Math.PI / 2; }); }
+  // the forestry harvester: a long boom with the felling head, a log in its grip
+  function pkXpHarvester(x, z, ry) { var M = pkXpM(), g = pkXpGroup(x, z, ry); for (var w = -1.6; w <= 1.6; w += 1.6) [-1, 1].forEach(function (s) { var wh = pkRoundCyl(0.65, 0.6, M.black, s * 1.2, 0.65, w, g, 14); wh.rotation.z = Math.PI / 2; }); pkBevelBox(2.2, 1.2, 4.6, XM({ color: 0x3a7a3a, roughness: 0.5 }), 0, 1.4, 0, g, 0.1); pkBevelBox(1.6, 1.4, 1.5, XM({ color: 0x3a7a3a, roughness: 0.5 }), 0, 2.6, 1.2, g, 0.08); box(1.5, 1.0, 1.4, M.glass, 0, 2.7, 1.25, g); pkRod(0, 2.2, 0.4, 0.6, 3.8, 4.6, 0.18, M.yellow, g, 8); pkRod(0.6, 3.8, 4.6, 0.8, 1.8, 7.2, 0.14, M.yellow, g, 8); pkBevelBox(0.8, 0.9, 0.8, M.orange, 0.8, 1.4, 7.4, g, 0.08); var lg = pkRoundCyl(0.28, 5, M.bark, 0.8, 1.0, 7.4, g, 10); lg.rotation.z = Math.PI / 2; }
+  // a tower crane: base, mast, the turning jib with its counterweight, the trolley and a load that goes up and down
+  function pkXpCrane(x, z, h, jib) {
+    var M = pkXpM(), g = pkXpGroup(x, z, 0); h = h || 34; jib = jib || 32;
+    box(4, 1, 4, M.concrete, 0, 0.5, 0, g);
+    for (var y = 1; y < h; y += 2.4) { [[-0.9, -0.9], [0.9, -0.9], [-0.9, 0.9], [0.9, 0.9]].forEach(function (c) { box(0.12, 2.4, 0.12, M.yellow, c[0], y + 1.2, c[1], g); }); pkRod(-0.9, y, -0.9, 0.9, y + 2.4, -0.9, 0.04, M.yellow, g, 4); pkRod(0.9, y, 0.9, -0.9, y + 2.4, 0.9, 0.04, M.yellow, g, 4); pkRod(-0.9, y, 0.9, -0.9, y + 2.4, -0.9, 0.04, M.yellow, g, 4); pkRod(0.9, y, -0.9, 0.9, y + 2.4, 0.9, 0.04, M.yellow, g, 4); }
+    var slew = pkXpDyn(g); slew.position.y = h;
+    pkBevelBox(2.4, 2.2, 2.4, M.yellow, 0, 1.1, 0, slew, 0.05); box(1.6, 1.4, 1.4, M.glass, 1.4, 1.0, 0.8, slew);
+    box(jib, 0.15, 1.2, M.yellow, jib / 2, 2.4, 0, slew); box(jib, 0.15, 0.15, M.yellow, jib / 2, 3.4, 0, slew);
+    for (var j = 0; j < jib; j += 2) pkRod(j, 2.4, 0.55, j + 2, 3.4, 0, 0.04, M.yellow, slew, 4);
+    box(12, 0.5, 1.0, M.yellow, -6, 2.4, 0, slew); box(2.4, 2.2, 1.6, M.concrete, -10.5, 1.4, 0, slew);
+    pkRoundCyl(0.12, 6, M.yellow, 0, 6, 0, slew, 6); pkRod(0, 9, 0, jib * 0.7, 3.4, 0, 0.03, M.steel, slew, 4); pkRod(0, 9, 0, -11, 2.6, 0, 0.03, M.steel, slew, 4);
+    var trolley = new THREE.Group(); trolley.position.set(jib * 0.6, 2.25, 0); slew.add(trolley); box(1.2, 0.4, 1.0, M.steel, 0, 0, 0, trolley);
+    var hookG = new THREE.Group(); trolley.add(hookG);
+    var cable = box(0.04, 1, 0.04, M.black, 0, -0.5, 0, hookG);
+    var load = new THREE.Group(); hookG.add(load); box(0.4, 0.4, 0.4, M.red, 0, 0, 0, load); pkXpBeamLoad(load);
+    var lamp = new THREE.Mesh(new THREE.SphereGeometry(0.25, 10, 8), M.beacon); lamp.position.set(jib, 3.7, 0); slew.add(lamp);
+    PK_XP.dyn.push({ kind: 'crane', slew: slew, trolley: trolley, cable: cable, load: load, h: h, jib: jib, t: Math.random() * 40, a0: Math.random() * 6, drop: 10 });
+  }
+  function pkXpBeamLoad(load) { var M = pkXpM(); for (var i = 0; i < 3; i++) box(6, 0.3, 0.3, M.rust, 0, -1.2 - i * 0.32, 0, load); pkRod(-2.5, -1.0, 0, 0, 0, 0, 0.02, M.black, load, 4); pkRod(2.5, -1.0, 0, 0, 0, 0, 0.02, M.black, load, 4); }
+  // a crawler crane: tracks, a cab, a long lattice boom raised to a pier, a girder hanging off it
+  function pkXpCrawler(x, z, ry, tx, tz, ty) {
+    var M = pkXpM(), g = pkXpGroup(x, z, 0), all = new THREE.Group(); all.userData.pkXpVia = true; scene.add(all); scene.remove(g); all.add(g);
+    var bodyG = new THREE.Group(); bodyG.rotation.y = Math.atan2(tx - x, tz - z); g.add(bodyG);   // the cab and the boom's foot face the girder it is lifting
+    [-1.8, 1.8].forEach(function (s) { pkBevelBox(1.1, 1.2, 7, M.black, s, 0.6, 0, bodyG, 0.35); });
+    pkBevelBox(4.4, 2.0, 5.5, XM({ color: 0xc8362b, roughness: 0.5 }), 0, 2.2, -0.5, bodyG, 0.1); box(1.4, 1.6, 1.6, M.glass, 1.6, 2.8, 2.0, bodyG);
+    box(4.2, 1.6, 1.4, M.concrete, 0, 2.0, -3.6, bodyG);
+    // the boom from the body to over the target
+    var bx = x, by = 3.2, bz = z, dx = tx - bx, dz = tz - bz, dh = Math.hypot(dx, dz), top = new THREE.Vector3(tx - dx / dh * 1.2, ty + 6, tz - dz / dh * 1.2);
+    for (var k = 0; k < 4; k++) { var ox = (k % 2 ? 0.6 : -0.6), oz = (k < 2 ? 0.6 : -0.6), px = -dz / dh * ox, pz = dx / dh * ox; pkRod(bx + px, by + oz * 0.5, bz + pz, top.x + px * 0.4, top.y + oz * 0.2, top.z + pz * 0.4, 0.07, XM({ color: 0xc8362b, roughness: 0.5 }), all, 5); }
+    var n = 12; for (var q = 0; q < n; q++) { var f0 = q / n, f1 = (q + 1) / n; pkRod(bx + (top.x - bx) * f0, by + (top.y - by) * f0 + 0.3, bz + (top.z - bz) * f0, bx + (top.x - bx) * f1, by + (top.y - by) * f1 - 0.3, bz + (top.z - bz) * f1, 0.035, XM({ color: 0xc8362b, roughness: 0.5 }), all, 4); }
+    pkRod(top.x, top.y, top.z, tx, ty + 1.6, tz, 0.03, M.black, all, 4);
+    var gir = pkXpGroup(tx, tz, Math.atan2(dx, dz) + Math.PI / 2); gir.position.y = ty + 0.8; scene.remove(gir); all.add(gir);
+    box(10, 1.2, 0.5, M.rust, 0, 0, 0, gir); box(10, 0.1, 1.2, M.rust, 0, 0.55, 0, gir); box(10, 0.1, 1.2, M.rust, 0, -0.55, 0, gir);
+    pkRod(-4, 0.6, 0, 0, 0.8 + 0.8, 0, 0.02, M.black, gir, 4); pkRod(4, 0.6, 0, 0, 0.8 + 0.8, 0, 0.02, M.black, gir, 4);
+  }
+  // scaffolding round a box (x0..x1, z0..z1) up to h: standards, ledgers, boards at every lift, the green net on some faces
+  function pkXpScaffold(x0, x1, z0, z1, h, nets) {
+    var M = pkXpM(), lift = 2.0;
+    var face = function (ax, az, bx, bz, net) {
+      var L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(L / 2.4));
+      for (var i = 0; i <= n; i++) { var px = ax + (bx - ax) * i / n, pz = az + (bz - az) * i / n; pkRoundCyl(0.035, h, M.tube, px, h / 2, pz, scene, 5); }
+      for (var y = lift; y <= h + 0.01; y += lift) { pkRod(ax, y, az, bx, y, bz, 0.03, M.tube, scene, 4); pkRod(ax, y + 1.0, az, bx, y + 1.0, bz, 0.025, M.tube, scene, 4); }
+      for (var j = 0; j < n; j += 2) pkRod(ax + (bx - ax) * j / n, 0, az + (bz - az) * j / n, ax + (bx - ax) * (j + 1) / n, Math.min(h, lift * 2), az + (bz - az) * (j + 1) / n, 0.025, M.tube, scene, 4);
+      if (net) { var ng = new THREE.PlaneGeometry(L, h), nuv = ng.attributes.uv; for (var q = 0; q < nuv.count; q++) nuv.setXY(q, nuv.getX(q) * L / 1.2, nuv.getY(q) * h / 1.2); var m = new THREE.Mesh(ng, M.net); m.position.set((ax + bx) / 2, h / 2, (az + bz) / 2); m.rotation.y = -Math.atan2(bz - az, bx - ax); scene.add(m); }
+    };
+    var o = 1.1; face(x0 - o, z0 - o, x1 + o, z0 - o, nets & 1); face(x1 + o, z0 - o, x1 + o, z1 + o, nets & 2); face(x1 + o, z1 + o, x0 - o, z1 + o, nets & 4); face(x0 - o, z1 + o, x0 - o, z0 - o, nets & 8);
+    for (var y = lift; y <= h + 0.01; y += lift) { box(x1 - x0 + 2 * o, 0.05, 0.6, M.plank, (x0 + x1) / 2, y, z0 - o + 0.35); box(x1 - x0 + 2 * o, 0.05, 0.6, M.plank, (x0 + x1) / 2, y, z1 + o - 0.35); }
+  }
+  // a building shell going up: columns, floor slabs, a stair core, the top storey still only columns and rebar
+  function pkXpShell(x, z, w, d, floors, ry, nets) {
+    var M = pkXpM(), g = pkXpGroup(x, z, ry), fh = 3.6;
+    box(w + 1, 0.4, d + 1, M.concrete, 0, 0.2, 0, g);
+    for (var f = 0; f < floors; f++) {
+      var y0 = 0.4 + f * fh, last = f === floors - 1;
+      for (var cx = -w / 2; cx <= w / 2 + 0.01; cx += w / Math.round(w / 6)) for (var cz = -d / 2; cz <= d / 2 + 0.01; cz += d / Math.round(d / 6)) {
+        box(0.5, last ? fh * 0.6 : fh, 0.5, M.concrete, cx, y0 + (last ? fh * 0.3 : fh / 2), cz, g);
+        if (last) for (var r = 0; r < 4; r++) box(0.03, 1.2, 0.03, M.rust, cx + (r % 2 ? 0.15 : -0.15), y0 + fh * 0.6 + 0.6, cz + (r < 2 ? 0.15 : -0.15), g);
+      }
+      if (!last) box(w + 0.5, 0.3, d + 0.5, M.concreteDark, 0, y0 + fh, 0, g);
+    }
+    box(3, floors * fh, 3, M.concreteDark, w / 2 - 2, floors * fh / 2 + 0.4, d / 2 - 2, g);
+    if (!ry) pkXpScaffold(x - w / 2, x + w / 2, z - d / 2, z + d / 2, (floors - 1) * fh + 1, nets);
+    return g;
+  }
+  // a new ride's steel going up: the lift hill's supports in a row, rising, and the first track pieces on the low ones
+  function pkXpRideSteel(x, z, ry, n) {
+    var M = pkXpM(), g = pkXpGroup(x, z, ry), blue = XM({ color: 0x2f6fb3, roughness: 0.4, metalness: 0.5 }), white = M.white, laid = Math.min(n - 3, 8);
+    for (var i = 0; i < n; i++) {
+      var h = 2.5 + i * 2.0, px = i * 4;
+      box(1.8, 0.4, 3.4, M.concrete, px, 0.2, 0.8, g);
+      [-0.4, 2.0].forEach(function (cz) { pkRoundCyl(0.24, h, blue, px, 0.4 + h / 2, cz, g, 10); });
+      for (var b = 0.4 + 2.5; b < h; b += 3) { pkRod(px, b - 2.4, -0.4, px, b, 2.0, 0.07, blue, g, 5); box(0.12, 0.12, 2.4, blue, px, b, 0.8, g); }
+      box(0.7, 0.5, 3.0, blue, px, 0.4 + h + 0.25, 0.8, g);
+      if (i >= laid) { pkXpScaffoldTower(g, px - 1.6, Math.min(h, 12)); }
+    }
+    // the track on the bents already done: two running rails on their spine, the chain between them
+    for (var k = 0; k < laid - 1; k++) {
+      var x0 = k * 4, h0 = 0.4 + 2.5 + k * 2.0 + 0.75, h1 = h0 + 2.0;
+      [-0.1, 1.7].forEach(function (s2) { pkRod(x0, h0 + 0.2, s2, x0 + 4, h1 + 0.2, s2, 0.08, white, g, 6); });
+      pkRod(x0, h0 - 0.05, 0.8, x0 + 4, h1 - 0.05, 0.8, 0.16, blue, g, 8);
+      pkRod(x0, h0 + 0.1, 0.8, x0 + 4, h1 + 0.1, 0.8, 0.04, M.black, g, 4);
+      for (var t = 0; t < 4; t++) box(0.1, 0.1, 2.0, blue, x0 + t + 0.5, h0 + (h1 - h0) * (t + 0.5) / 4, 0.8, g);
+    }
+    // the next pieces waiting on their dunnage beside the bents
+    for (var q = 0; q < 3; q++) { var tg = new THREE.Group(); tg.position.set(laid * 4 + q * 1.5, 0.25 + q * 0.55, 5.2); g.add(tg); box(0.3, 0.15, 6, M.wood, 0, -0.2, 0, tg); [-0.9, 0.9].forEach(function (s2) { pkRod(-2.8, 0.1, s2, 2.8, 0.1, s2, 0.08, white, tg, 6); }); pkRod(-2.8, 0, 0, 2.8, 0, 0, 0.15, blue, tg, 8); tg.rotation.y = Math.PI / 2; }
+    return g;
+  }
+  function pkXpScaffoldTower(g, px, h) { var M = pkXpM(); [[-0.8, -0.4], [0.8, -0.4], [-0.8, 2.0], [0.8, 2.0]].forEach(function (c) { pkRoundCyl(0.035, h, M.tube, px + c[0], h / 2, c[1], g, 5); }); for (var y = 2; y < h; y += 2) { box(1.8, 0.05, 2.6, M.plank, px, y, 0.8, g); } }
+
+  // ── The expansion site, all the way round ────────────────────────
+  function pkXpSite() {
+    var M = pkXpM(), rng = PK_XP.rng = pkRng(46046), i, t, p;
+    // the stripped ground: earth over the band where it is free, on an 8 m grid, two shades
+    for (var gx = -190; gx <= 232; gx += 8) for (var gz = -196; gz <= 176; gz += 8) {
+      var cx = gx + 4, cz = gz + 4, d = pkXpRingD(cx, cz);
+      if (d < 12 || d > 50) continue;
+      if (!pkXpBand(cx, cz)) continue;   // the centre is enough: every keep-out's margin is wider than half a tile
+      pkPaved(8.2, 8.2, rng() < 0.7 ? M.dirt : M.dirtDark, cx, 0.012 + rng() * 0.002, cz, 8);
+    }
+    // the fences: the site's inner edge (toward the line) and outer edge (toward the forest), panel by panel where the band is
+    [[12, 4, true], [50, 3, false]].forEach(function (f) {
+      var off = f[0], P = pkXpPerim(off), n = Math.round(P / 3.4), run = [];
+      for (var k = 0; k <= n; k++) {
+        var q = pkXpRingPt(k / n, off);
+        if (pkXpFree(q[0], q[1], 0)) run.push([q[0], q[1]]);
+        else { if (run.length > 1) pkXpFenceRun(run, f[2], f[1]); run = []; }
+      }
+      if (run.length > 1) pkXpFenceRun(run, f[2], f[1]);
+    });
+    // where the band meets a keep-out (a road, a station, the depot), the fence closes across it
+    // the felled forest: stumps all over, log stacks and brush heaps by the outer fence, a harvester still at it
+    for (i = 0; i < 900; i++) { t = rng(); var off = 14 + rng() * 34; p = pkXpRingPt(t, off); if (pkXpBand(p[0], p[1])) pkXpStump(p[0] + randf(-1, 1), p[1] + randf(-1, 1), 0.8 + rng() * 0.6); }
+    var placed = [];
+    var put = function (w, d, offMin, offMax, tries, fn, gap) {
+      for (var k = 0; k < tries; k++) {
+        var tt = rng(), oo = offMin + rng() * (offMax - offMin), q = pkXpRingPt(tt, oo), ry = Math.atan2(q[2], q[3]);
+        if (!pkXpFits(q[0], q[1], w, d, ry)) continue;
+        var ok = true; for (var j = 0; j < placed.length; j++) if (Math.hypot(placed[j][0] - q[0], placed[j][1] - q[1]) < placed[j][2] + Math.max(w, d) / 2 + (gap || 2)) { ok = false; break; }
+        if (!ok) continue;
+        placed.push([q[0], q[1], Math.max(w, d) / 2]); fn(q[0], q[1], ry, q); return true;
+      }
+      return false;
+    };
+    var many = function (n, w, d, o0, o1, fn, gap) { for (var k = 0; k < n; k++) put(w, d, o0, o1, 30, fn, gap); };
+    // the big pieces first: building shells, the ride steel, the cranes beside them, the site villages
+    many(7, 22, 16, 22, 34, function (x, z, ry) { pkXpShell(x, z, 20, 14, 3 + Math.floor(rng() * 2), 0, [5, 3, 10, 12][Math.floor(rng() * 4)]); var cx = x + 15 * Math.sign(rng() - 0.5), cz = z; if (pkXpFits(cx, cz, 5, 5, 0)) pkXpCrane(cx, cz, 30 + rng() * 10, 30); }, 8);
+    many(3, 44, 6, 26, 36, function (x, z, ry) { pkXpRideSteel(x - Math.cos(ry) * 20, z + Math.sin(ry) * 20, ry, 11); }, 6);
+    many(3, 16, 12, 30, 44, function (x, z, ry) {
+      pkXpCabin(x - 3.2, z - 1.6, ry, 0, 'SITE OFFICE', false); pkXpCabin(x - 3.2, z - 1.6, ry, 2.7, 'PLANNING', true);
+      pkXpCabinStair(x - 3.2, z - 1.6, ry);
+      pkXpCabin(x + 3.4, z + 2.2, ry, 0, 'CANTEEN', true); pkXpToilet(x + 7.5, z - 2, ry); pkXpToilet(x + 9, z - 2, ry);
+      pkXpContainer(x - 4, z + 5.5, ry, 0x2f7f6f); pkXpWorker(x + 1, z + 4, ry, [3, 0]); pkXpWorker(x - 6, z + 2, ry + 1, null);
+    }, 6);
+    // the earthworks: diggers at the spoil heaps, a dozer, a roller on the new car park's base, trucks on their haul roads
+    many(12, 6, 6, 18, 44, function (x, z, ry) { pkXpExcavator(x, z, ry + Math.PI / 2); var sx = x + Math.cos(ry) * 6, sz = z - Math.sin(ry) * 6; if (pkXpBand(sx, sz)) pkXpSpoil(sx, sz, 3 + rng() * 2, 2.2 + rng() * 1.5); pkXpWorker(x + 3, z + 3, ry, null); }, 6);
+    many(22, 7, 7, 16, 46, function (x, z) { pkXpSpoil(x, z, 2.5 + rng() * 3, 1.6 + rng() * 2); }, 3);
+    many(6, 6, 6, 16, 44, function (x, z, ry) { pkXpDozer(x, z, ry); });
+    many(4, 6, 6, 16, 44, function (x, z, ry) { pkXpRoller(x, z, ry); });
+    many(4, 8, 4, 16, 44, function (x, z, ry) { pkXpMixer(x, z, ry); });
+    for (var tr = 0; tr < 9; tr++) {
+      for (var k2 = 0; k2 < 40; k2++) { var t0 = rng(), q0 = pkXpRingPt(t0, 30), q1 = pkXpRingPt(t0 + 60 / pkXpPerim(30), 30), mid = [(q0[0] + q1[0]) / 2, (q0[1] + q1[1]) / 2]; if (pkXpBand(q0[0], q0[1]) && pkXpBand(q1[0], q1[1]) && pkXpBand(mid[0], mid[1])) { pkXpTruck(q0[0], q0[1], q1[0], q1[1]); pkPaved(Math.hypot(q1[0] - q0[0], q1[1] - q0[1]) + 6, 6, M.gravel, mid[0], 0.016, mid[1], 3, null, -Math.atan2(q1[1] - q0[1], q1[0] - q0[0])); break; } }
+    }
+    // the forestry: log stacks and brush by the outer fence, harvesters at the forest's edge
+    many(24, 7, 3, 40, 47, function (x, z, ry) { pkXpLogs(x, z, ry, 6 + Math.floor(rng() * 6)); }, 2);
+    many(18, 4, 4, 38, 47, function (x, z) { pkXpBrush(x, z, 0.9 + rng() * 0.6); }, 2);
+    many(5, 6, 8, 42, 47, function (x, z, ry) { pkXpHarvester(x, z, ry); pkXpWorker(x + 4, z, ry, [0, 4]); });
+    // materials: pipes, steel, pallets, skips, containers; floodlights round it all; a few more hands
+    many(10, 6, 4, 16, 44, function (x, z, ry) { pkXpPipes(x, z, ry); });
+    many(10, 8, 3, 16, 44, function (x, z, ry) { pkXpBeams(x, z, ry); });
+    many(14, 3, 2, 16, 44, function (x, z, ry) { pkXpPallets(x, z, ry); });
+    many(10, 4, 3, 16, 44, function (x, z, ry) { pkXpSkip(x, z, ry); });
+    many(9, 7, 3, 16, 44, function (x, z, ry) { pkXpContainer(x, z, ry, [0xb8362b, 0x2f5f9e, 0x3a7a3a, 0xd8a030][Math.floor(rng() * 4)]); });
+    many(18, 3, 3, 14, 48, function (x, z, ry) { pkXpFlood(x, z, ry + Math.PI); });
+    many(18, 2, 2, 16, 44, function (x, z, ry) { pkXpWorker(x, z, ry, rng() < 0.5 ? [randf(-4, 4), randf(-4, 4)] : null); });
+    // the viewing platform at the end of Windmill Halt's footpath: steps up, a rail, a board about the works
+    var vx = -17, vz = -160, vg = pkXpGroup(vx, vz, 0);
+    box(6, 2.2, 4, M.wood, 0, 1.1, -1, vg); for (var st = 0; st < 6; st++) box(1.4, 0.36 * (st + 1), 0.4, M.wood, 0, 0.18 * (st + 1), 2.8 - st * 0.4, vg);
+    [[-3, -3], [3, -3], [-3, 1], [3, 1]].forEach(function (c) { pkRoundCyl(0.05, 1.0, M.steel, c[0], 2.7, c[1] - 1, vg, 6); });
+    box(6, 0.06, 0.06, M.steel, 0, 3.2, -4, vg); box(0.06, 0.06, 4, M.steel, -3, 3.2, -2, vg); box(0.06, 0.06, 4, M.steel, 3, 3.2, -2, vg);
+    sign(['VIEWING PLATFORM', 'THE NEW LAND AND THE NEW LINE'], 3.4, 0.7, 0, 3.6, -4.1, 0, { bg: '#1b232c', fg: '#f5b53d' }, vg);
+    solid(vx - 3.2, vx + 3.2, vz - 3.2, vz - 0.6, 0, 3.4);
+  }
+
+  // ── The new railway: a viaduct across the park ───────────────────
+  // Piers every 24 m or so, each one placed where it is clear: never on a path, a plot's paving, a solid, the line or the
+  // road. The spans are in every stage of building, north to south: track laid, deck poured, girders up, piers only with a
+  // crawler crane lifting the next girder, piers still in their formwork, and finished deck again over the road and the line.
+  var PK_XP_DECK = 15;
+  function pkXpPierOK(x, z) {
+    if (Math.abs(pkXpRingD(x, z)) < 9) return false;                                   // the Lindenburg Railway
+    if (Math.abs(z - 76) < 7.5 && x > -150 && x < 110) return false;                    // the road
+    for (var i = 0; i < PK_XP_STATIONS.length; i++) if (Math.hypot(x - PK_XP_STATIONS[i][0], z - PK_XP_STATIONS[i][1]) < (pkXpRingD(x, z) < 0 ? 34 : 14)) return false;
+    for (var r = 0; r < PK_ROUTES.length; r++) { var R = PK_ROUTES[r], hw = R[4] / 2 + 2.2; if (x > Math.min(R[0], R[2]) - hw && x < Math.max(R[0], R[2]) + hw && z > Math.min(R[1], R[3]) - hw && z < Math.max(R[1], R[3]) + hw) return false; }
+    for (var k = 0; k < solids.length; k++) { var s = solids[k]; if (x > s.x0 - 2.2 && x < s.x1 + 2.2 && z > s.z0 - 2.2 && z < s.z1 + 2.2) return false; }
+    if (typeof PK_KEEP !== 'undefined') for (var q = 0; q < PK_KEEP.length; q++) if (PK_KEEP[q][2] < 12 && Math.hypot(x - PK_KEEP[q][0], z - PK_KEEP[q][1]) < PK_KEEP[q][2]) return false;
+    // and whatever stands there that is not a solid: bunting, hedges, lamps, signs (read off the scene along the line)
+    var O = PK_XP.near || [];
+    for (var b = 0; b < O.length; b++) { var o = O[b]; if (x > o[0] - 1.9 && x < o[1] + 1.9 && z > o[2] - 1.9 && z < o[3] + 1.9) return false; }
+    return true;
+  }
+  // everything that stands within 14 m of the viaduct's line, as boxes: what the piers keep clear of. Trees do not count
+  // (part 01 and part 12 fell the ones in the way) and nor does the flat ground
+  function pkXpNearScan() {
+    var K = pkMats(), leafs = [K.treeBark], bb = new THREE.Box3(), out = [];
+    (K.treeLeaves || []).concat(K.conifer || []).forEach(function (a) { leafs = leafs.concat(Array.isArray(a) ? a : [a]); });
+    scene.updateMatrixWorld(true);
+    scene.traverse(function (o) {
+      if (!o.isMesh || !o.geometry || o.isInstancedMesh || o.userData.baked || leafs.indexOf(o.material) >= 0) return;
+      bb.setFromObject(o);
+      if (bb.max.y < 0.4 || bb.min.y > 12 || bb.max.x - bb.min.x > 90 || bb.max.z - bb.min.z > 90) return;
+      var cx = (bb.min.x + bb.max.x) / 2, cz = (bb.min.z + bb.max.z) / 2;
+      if (!pkXpViaNear(cx, cz, 14 + Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) / 2)) return;
+      out.push([bb.min.x, bb.max.x, bb.min.z, bb.max.z]);
+    });
+    PK_XP.near = out;
+  }
+  function pkXpViaduct() {
+    pkXpNearScan();
+    var M = pkXpM(), pts = PK_XP_VIA, line = [], total = 0, i;
+    for (i = 0; i < pts.length - 1; i++) { var A = pts[i], B = pts[i + 1], L = Math.hypot(B[0] - A[0], B[1] - A[1]); line.push({ a: A, b: B, s0: total, L: L }); total += L; }
+    var at = function (s) { for (var k = 0; k < line.length; k++) { var g = line[k]; if (s <= g.s0 + g.L || k === line.length - 1) { var f = clamp((s - g.s0) / g.L, 0, 1); return { x: g.a[0] + (g.b[0] - g.a[0]) * f, z: g.a[1] + (g.b[1] - g.a[1]) * f, yaw: Math.atan2(g.b[0] - g.a[0], g.b[1] - g.a[1]) }; } } };
+    // the piers: the nominal spot every 24 m, slid along the line up to 9 m either way to the nearest clear one
+    var piers = [], s = 0;
+    while (s <= total + 0.1) {
+      var found = null;
+      for (var dd = 0; dd <= 9 && !found; dd += 1) [dd, -dd].forEach(function (o) { if (found) return; var q = at(clamp(s + o, 0, total)); if (pkXpPierOK(q.x, q.z)) found = { s: clamp(s + o, 0, total), p: q }; });
+      if (found && (!piers.length || found.s - piers[piers.length - 1].s > 12)) piers.push(found);
+      s = (found ? found.s : s) + 24;
+    }
+    var stage = function (f) { return f < 0.24 ? 'track' : f < 0.36 ? 'deck' : f < 0.5 ? 'girder' : f < 0.6 ? 'crane' : f < 0.7 ? 'girder' : f < 0.78 ? 'form' : 'deck'; };
+    var concrete = M.concrete, D = PK_XP_DECK;
+    piers.forEach(function (P, k) {
+      var f = P.s / total, st = stage(f), q = P.p, g = pkXpGroup(q.x, q.z, q.yaw); g.userData.pkXpVia = true;
+      // the pile cap, the column, the hammerhead
+      box(4.6, 0.8, 4.6, M.concreteDark, 0, 0.4, 0, g);
+      var colH = st === 'form' ? (k % 2 ? D * 0.45 : D * 0.7) : D - 1.6;
+      box(1.8, colH, 2.4, concrete, 0, 0.8 + colH / 2, 0, g);
+      if (st === 'form') {
+        // the column still rising: rebar out of the top, the climbing formwork and its platform round it
+        for (var rb = 0; rb < 10; rb++) box(0.04, 1.8, 0.04, M.rust, -0.7 + (rb % 5) * 0.35, 0.8 + colH + 0.9, rb < 5 ? -1 : 1, g);
+        box(2.8, 2.2, 3.4, XM({ color: 0xd88a2a, roughness: 0.8 }), 0, 0.8 + colH - 1.0, 0, g);
+        box(4.4, 0.1, 5.0, M.plank, 0, 0.8 + colH - 2.2, 0, g);
+        pkXpScaffoldTower(g, -0.0, 0.8 + colH - 2.2);
+      } else {
+        box(5.6, 1.4, 2.8, concrete, 0, D - 1.6 + 0.7, 0, g);
+        box(5.8, 0.1, 3.0, M.concreteDark, 0, D - 0.15, 0, g);
+        if (st === 'crane') pkXpScaffold(q.x - 1.2, q.x + 1.2, q.z - 1.5, q.z + 1.5, D - 2, 0);
+      }
+      solid(q.x - 1.4, q.x + 1.4, q.z - 1.4, q.z + 1.4, 0, D);
+      // inside the park every pier stands in its own fenced compound, with its number on the fence
+      if (pkXpRingD(q.x, q.z) < 0) {
+        var c = 3.6, corners = [[-c, -c], [c, -c], [c, c], [-c, c], [-c, -c]].map(function (o) { var cs = Math.cos(q.yaw), sn = Math.sin(q.yaw); return [q.x + o[0] * cs + o[1] * sn, q.z - o[0] * sn + o[1] * cs]; });
+        pkXpFenceRun(corners, true, 0);
+        sign(['VIADUCT PIER ' + (k + 1), 'NEW LINE WORKS'], 1.6, 0.5, 0, 1.4, c + 0.06, 0, { bg: '#f0c04a', fg: '#1b1b1b' }, g);
+        pkXpStump(q.x + 2.2, q.z - 2.4, 0.9);
+      }
+      P.st = st;
+    });
+    // the spans between piers: what each stage has to show
+    for (i = 0; i < piers.length - 1; i++) {
+      var A2 = piers[i], B2 = piers[i + 1], fm = (A2.s + B2.s) / 2 / total, st2 = stage(fm);
+      if (A2.st === 'form' || B2.st === 'form') st2 = 'none';
+      var ax = A2.p.x, az = A2.p.z, bx = B2.p.x, bz = B2.p.z, L2 = Math.hypot(bx - ax, bz - az), yaw = Math.atan2(bx - ax, bz - az), mx = (ax + bx) / 2, mz = (az + bz) / 2;
+      var sg = pkXpGroup(mx, mz, yaw); sg.userData.pkXpVia = true; sg.userData.span = [ax, az, bx, bz, st2];
+      if (st2 === 'none') continue;
+      if (st2 === 'crane') {
+        // the gap: a crawler crane beside it, swinging the girder in
+        var side = [-9, 9].find(function (o) { var cx = mx + Math.cos(yaw) * o, cz = mz - Math.sin(yaw) * o; return pkXpPierOK(cx, cz) && pkXpPierOK(cx + 3, cz + 3) && pkXpPierOK(cx - 3, cz - 3); });
+        if (side !== undefined) pkXpCrawler(mx + Math.cos(yaw) * side, mz - Math.sin(yaw) * side, -yaw, mx, mz, D - 2);
+        continue;
+      }
+      // two steel box girders from cap to cap
+      [-1.2, 1.2].forEach(function (o) { box(0.7, 1.4, L2, M.rust, o, D - 1.6 - 0.7 + 1.4, 0, sg); });
+      if (st2 === 'girder') { for (var cb = -L2 / 2 + 3; cb < L2 / 2; cb += 4) box(2.4, 0.3, 0.2, M.rust, 0, D - 0.9, cb, sg); continue; }
+      // the deck slab and its parapets
+      box(5.4, 0.45, L2, M.concrete, 0, D - 0.25, 0, sg);
+      [-2.55, 2.55].forEach(function (o) { box(0.3, 1.0, L2, M.concrete, o, D + 0.45, 0, sg); });
+      if (st2 === 'deck') { // the rails and sleepers stacked on the deck, waiting to be laid
+        box(1.2, 0.5, 3.0, M.wood, -0.9, D + 0.2, -L2 / 4, sg); for (var rl = 0; rl < 4; rl++) box(0.1, 0.12, Math.min(18, L2 - 4), MAT.chrome, 0.6 + rl * 0.15, D + 0.05 + (rl > 1 ? 0.12 : 0), 0, sg);
+        continue;
+      }
+      // the track itself: ballast, sleepers, the two rails
+      box(3.2, 0.25, L2, XM({ color: 0x5a5750, roughness: 1 }), 0, D + 0.1, 0, sg);
+      for (var sl = -L2 / 2 + 0.3; sl < L2 / 2; sl += 0.65) box(2.2, 0.12, 0.22, XM({ color: 0x4b3a2a, roughness: 0.95 }), 0, D + 0.28, sl, sg);
+      [-0.5, 0.5].forEach(function (o) { box(0.08, 0.12, L2, MAT.chrome, o, D + 0.4, 0, sg); });
+    }
+    // the ends: a buffer stop on the deck at each, so the new line ends where it ends, and the site's spoil ramp under it
+    [piers[0], piers[piers.length - 1]].forEach(function (P, e) {
+      if (!P) return;
+      var g = pkXpGroup(P.p.x, P.p.z, P.p.yaw + (e ? 0 : Math.PI)); g.userData.pkXpVia = true;
+      box(3.4, 1.2, 0.6, M.red, 0, D + 1.0, 2.2, g); box(3.4, 0.2, 0.62, M.white, 0, D + 1.3, 2.2, g);
+      sign(['END OF THE NEW LINE', 'WORKS CONTINUE'], 2.6, 0.6, 0, D + 2.2, 2.6, 0, { bg: '#b8362b', fg: '#ffffff' }, g);
+    });
+    PK_XP.viaduct = { piers: piers, total: total };
+  }
+  // the new line on the ground in the site: laid from the viaduct's ends along the band, then stopping at a buffer, the
+  // rails and sleepers for the rest stacked beside it. It never comes nearer the Lindenburg Railway than 20 m.
+  function pkXpGroundLine() {
+    var M = pkXpM(), runs = [[[-67, -178], [-30, -178], [4, -178]], [[-112, 152], [-60, 152], [-10, 152]]];
+    runs.forEach(function (R, ri) {
+      for (var i = 0; i < R.length - 1; i++) {
+        var A = R[i], B = R[i + 1], L = Math.hypot(B[0] - A[0], B[1] - A[1]), yaw = Math.atan2(B[0] - A[0], B[1] - A[1]), mx = (A[0] + B[0]) / 2, mz = (A[1] + B[1]) / 2;
+        if (!pkXpFree(mx, mz, 0) || pkXpRingD(mx, mz) < 20) continue;
+        var g = pkXpGroup(mx, mz, yaw), laid = i === 0;
+        box(4.2, 0.35, L, M.gravel, 0, 0.17, 0, g);
+        var sl = laid ? L : L * 0.45;
+        for (var s = -L / 2 + 0.3; s < -L / 2 + sl; s += 0.65) box(2.2, 0.12, 0.22, XM({ color: 0x4b3a2a, roughness: 0.95 }), 0, 0.41, s, g);
+        if (laid) [-0.5, 0.5].forEach(function (o) { box(0.08, 0.12, L, MAT.chrome, o, 0.53, 0, g); });
+        else { for (var st = 0; st < 3; st++) box(2.4, 0.5, 1.4, M.wood, 3.6, 0.25 + st * 0.5, L * 0.2, g); for (var rl = 0; rl < 6; rl++) box(0.1, 0.12, 12, MAT.chrome, -3.4 + rl * 0.2, 0.06, L * 0.1, g); box(3.4, 1.2, 0.6, M.red, 0, 1.0, -L / 2 + sl + 0.6, g); }
+      }
+    });
+  }
+
+  // ── Beyond the site: the town, the farms, the lake, the forest, the hills ──
+  // a house: a box with its windows, a door, a pitched roof (some with a stepped Dutch gable), a chimney
+  function pkXpHouse(x, z, ry, w, d, h, wallM, roofM, dutch) {
+    var M = pkXpM(), g = pkXpGroup(x, z, ry);
+    box(w, h, d, wallM, 0, h / 2, 0, g);
+    var cols = Math.max(2, Math.floor(w / 2.2)), floors = Math.max(1, Math.floor(h / 3));
+    for (var f = 0; f < floors; f++) for (var c = 0; c < cols; c++) { var wx = -w / 2 + (c + 0.5) * w / cols, wy = 1.6 + f * 2.9; if (f === 0 && c === Math.floor(cols / 2)) continue; box(0.9, 1.3, 0.06, M.win, wx, wy, d / 2 + 0.02, g); box(1.05, 0.1, 0.12, M.white, wx, wy - 0.7, d / 2 + 0.05, g); }
+    box(1.0, 2.1, 0.06, M.door, -w / 2 + (Math.floor(cols / 2) + 0.5) * w / cols, 1.05, d / 2 + 0.02, g);
+    for (var f2 = 0; f2 < floors; f2++) {
+      for (var c2 = 0; c2 < cols; c2++) box(0.9, 1.3, 0.06, M.win, -w / 2 + (c2 + 0.5) * w / cols, 1.6 + f2 * 2.9, -d / 2 - 0.02, g);
+      var sc = Math.max(1, Math.floor(d / 3.2));
+      for (var c3 = 0; c3 < sc; c3++) [-1, 1].forEach(function (sx) { box(0.06, 1.2, 0.8, M.win, sx * (w / 2 + 0.02), 1.6 + f2 * 2.9, -d / 2 + (c3 + 0.5) * d / sc, g); });
+    }
+    box(0.9, 2.0, 0.06, M.door, w / 4, 1.0, -d / 2 - 0.02, g);
+    if (dutch) {
+      for (var k = 0; k < 4; k++) { var sw = w * (1 - (k + 1) / 5); box(sw, 0.9, d, wallM, 0, h + 0.45 + k * 0.9, 0, g); box(sw + 0.12, 0.12, d + 0.1, M.white, 0, h + 0.9 + k * 0.9, 0, g); }
+    } else {
+      var rise = Math.min(d * 0.5, 3.4), rl = Math.hypot(rise, d / 2 + 0.3), sl = Math.atan2(rise, d / 2 + 0.3);
+      [-1, 1].forEach(function (s) { var r = box(w + 0.5, 0.18, rl, roofM, 0, h + rise / 2, s * (d / 4 + 0.15), g); r.rotation.x = s * sl; });
+      var gab = new THREE.Shape(); gab.moveTo(-d / 2, 0); gab.lineTo(d / 2, 0); gab.lineTo(0, rise); gab.closePath();
+      [-1, 1].forEach(function (s) { var m = new THREE.Mesh(new THREE.ShapeGeometry(gab), wallM); m.position.set(s * w / 2, h, 0); m.rotation.y = Math.PI / 2; g.add(m); });
+    }
+    box(0.6, 1.6, 0.6, M.brick, w / 2 - 1.0, h + 1.6, -d / 4, g);
+    PK_XP.windows = PK_XP.windows || 0; PK_XP.windows++;
+    return g;
+  }
+  function pkXpRoad(x0, z0, x1, z1, w) {
+    var M = pkXpM(), L = Math.hypot(x1 - x0, z1 - z0), ang = Math.atan2(z1 - z0, x1 - x0), mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
+    var g = pkXpGroup(mx, mz, -ang);
+    var m = new THREE.Mesh(new THREE.PlaneGeometry(L, w), M.asphalt); m.rotation.x = -Math.PI / 2; m.position.y = 0.009; m.receiveShadow = true; g.add(m);
+    box(L, 0.012, 0.14, M.line, 0, 0.016, 0, g);
+    return g;
+  }
+  function pkXpTownBuild() {
+    var M = pkXpM(), rng = pkRng(77046), walls = [M.brick, M.cream, M.plaster, XM({ map: TEX.plaster, color: 0xe6c8b0, roughness: 0.9 }), XM({ map: TEX.plaster, color: 0xc9d6dc, roughness: 0.9 })];
+    var roofs = [M.roofRed, M.roofSlate, XM({ color: 0x7a3a2a, roughness: 0.8 })];
+    // the streets: the main road through it (part 01's road, carried on), two parallel streets and the cross streets
+    pkXpRoad(-560, 76, -140, 76, 8);
+    pkXpRoad(-450, 28, -196, 28, 6); pkXpRoad(-450, 124, -196, 124, 6);
+    [-220, -280, -340, -400].forEach(function (x) { pkXpRoad(x, 20, x, 172, 6); });
+    // the houses along each street, set back, both sides
+    var street = function (z, x0, x1, faceN) {
+      for (var x = x0; x < x1;) {
+        var w = 6 + rng() * 5, d = 8 + rng() * 2, h = 5.5 + rng() * 4;
+        var cx = x + w / 2; x += w + 0.6 + rng() * 1.2;
+        if ([-220, -280, -340, -400].some(function (cs) { return Math.abs(cx - cs) < w / 2 + 5; })) continue;
+        [-1, 1].forEach(function (s) { if (faceN === s) return; pkXpHouse(cx, z + s * (d / 2 + 6.5), s > 0 ? Math.PI : 0, w, d, h, walls[Math.floor(rng() * walls.length)], roofs[Math.floor(rng() * roofs.length)], rng() < 0.3); });
+      }
+    };
+    street(76, -440, -200, 0); street(28, -440, -200, 0); street(124, -440, -200, 0);
+    // the church on the square, its spire seen from the park, and the town hall facing it
+    var cg = pkXpGroup(-310, 100, 0);
+    box(10, 11, 22, M.brick, 0, 5.5, 0, cg); [-1, 1].forEach(function (sd) { var rs = box(7.6, 0.3, 23, M.roofSlate, sd * 2.7, 13.6, 0, cg); rs.rotation.z = -sd * 0.72; }); var cgab = new THREE.Shape(); cgab.moveTo(-5, 0); cgab.lineTo(5, 0); cgab.lineTo(0, 5); cgab.closePath(); [-11, 11].forEach(function (gz) { var gm = new THREE.Mesh(new THREE.ShapeGeometry(cgab), M.brick); gm.position.set(0, 11, gz); cg.add(gm); });
+    box(6, 26, 6, M.brick, 0, 13, -12, cg); box(6.4, 0.5, 6.4, M.white, 0, 26.2, -12, cg);
+    var sp = new THREE.Mesh(new THREE.ConeGeometry(4.2, 18, 8), M.roofSlate); sp.position.set(0, 35.5, -12); sp.castShadow = true; cg.add(sp);
+    pkRoundCyl(0.12, 3, pkMats().gold, 0, 46, -12, cg, 6);
+    for (var cw = -8; cw <= 8; cw += 4) [-1, 1].forEach(function (s) { box(0.06, 4, 1.4, M.win, s * 5.02, 6, cw, cg); });
+    pkXpHouse(-280, 100, -Math.PI / 2, 16, 10, 10, M.cream, M.roofSlate, true);
+    pkPaved(40, 30, pkMats().paversWarm || M.gravel, -295, 0.011, 100, 2.4);
+    // a windmill on the town's edge, sails turning
+    var mg = pkXpGroup(-470, 140, 0.5);
+    pkRoundCyl(3.2, 12, M.brick, 0, 6, 0, mg, 10); var cap = new THREE.Mesh(new THREE.ConeGeometry(3.4, 4, 10), M.roofSlate); cap.position.y = 14; mg.add(cap);
+    var sails = pkXpDyn(mg); sails.position.set(0, 13, 3.4);
+    for (var s4 = 0; s4 < 4; s4++) { var arm = new THREE.Group(); arm.rotation.z = s4 * Math.PI / 2; sails.add(arm); box(0.25, 11, 0.12, M.wood, 0, 5.5, 0, arm); box(1.6, 9, 0.05, M.white, 0.9, 6, 0, arm); }
+    PK_XP.dyn.push({ kind: 'spin', g: sails, v: 0.45, axis: 'z' });
+    // the road's traffic out here, its own: cars along the main road beyond the line both ways, never onto a crossing
+    pkXpTraffic([[-560, -146, 74.5, 1], [-560, -146, 77.5, -1], [184, 560, 74.5, 1], [184, 560, 77.5, -1]]);
+    pkXpRoad(182, 76, 560, 76, 8);
+  }
+  // the engine's car runs along its own x: heading 0 drives +x, PI drives -x (as the engine's traffic sets it)
+  function pkXpTraffic(lanes) {
+    lanes.forEach(function (L) {
+      for (var i = 0; i < 4; i++) { var g = carMesh(); g.userData.dynamic = true; scene.add(g); var x = L[0] + Math.random() * (L[1] - L[0]); g.position.set(x, 0, L[2]); g.rotation.y = L[3] > 0 ? 0 : Math.PI; PK_XP.dyn.push({ kind: 'car', g: g, x0: L[0], x1: L[1], dir: L[3], v: randf(9, 14) }); }
+    });
+  }
+  function pkXpFarms() {
+    var M = pkXpM(), rng = pkRng(88046);
+    pkXpRoad(320, -540, 320, 540, 7);
+    // a patchwork of fields with hedges between them
+    for (var fx = 232; fx < 500; fx += 54) for (var fz = -320; fz < 320; fz += 46) {
+      var cx = fx + 25, cz = fz + 21; if (Math.abs(cz - 76) < 26 || Math.abs(cx - 320) < 30) continue;
+      var fm = M.field[Math.floor(rng() * M.field.length)], m = new THREE.Mesh(new THREE.PlaneGeometry(50, 42), fm); m.rotation.x = -Math.PI / 2; m.rotation.z = rng() < 0.5 ? 0 : Math.PI / 2; m.position.set(cx, 0.01, cz); m.receiveShadow = true; scene.add(m);
+      box(50, 1.2, 1.0, M.hedge, cx, 0.6, cz + 21.5); box(1.0, 1.2, 42, M.hedge, cx + 25.5, 0.6, cz);
+    }
+    // the farmsteads: a house, a big barn, a silo
+    [[290, -60], [350, 150], [290, 240], [356, -220]].forEach(function (f, i) {
+      pkXpHouse(f[0], f[1], i % 2 ? Math.PI / 2 : -Math.PI / 2, 10, 9, 6, M.brick, M.roofRed, false);
+      var bg = pkXpGroup(f[0] + (i % 2 ? -22 : 22), f[1] + 8, 0); box(16, 7, 24, XM({ color: 0x8a2a22, roughness: 0.8 }), 0, 3.5, 0, bg); [-1, 1].forEach(function (s) { var r = box(9.8, 0.2, 25, M.roofSlate, s * 4.0, 9.4, 0, bg); r.rotation.z = -s * 0.6; }); box(4, 5, 0.1, M.white, 0, 2.5, 12.06, bg);
+      pkRoundCyl(3, 16, XM({ color: 0xb8bcc0, roughness: 0.4, metalness: 0.6 }), f[0] + (i % 2 ? -36 : 36), 8, f[1] - 6, null, 16);
+    });
+    // wind turbines on the far side, turning slowly
+    [[440, -200], [460, -60], [470, 90], [450, 230], [-120, -420], [40, -440], [200, -430]].forEach(function (p) {
+      var g = pkXpGroup(p[0], p[1], Math.atan2(-p[0], -p[1]));
+      pkRoundCyl(1.6, 2, M.concrete, 0, 1, 0, g, 16); var tw = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 2.0, 70, 14), M.white); tw.position.y = 36; g.add(tw);
+      pkBevelBox(2.6, 3, 8, M.white, 0, 72, 1, g, 0.4);
+      var rot = pkXpDyn(g); rot.position.set(0, 72, 5.4); pkRoundCyl(1.2, 2, M.white, 0, 0, 0, rot, 12).rotation.x = Math.PI / 2;
+      for (var b = 0; b < 3; b++) { var arm = new THREE.Group(); arm.rotation.z = b * Math.PI * 2 / 3; rot.add(arm); var bl = box(1.6, 30, 0.4, M.white, 0, 16, 0, arm); bl.scale.x = 0.8; }
+      PK_XP.dyn.push({ kind: 'spin', g: rot, v: 0.55 + Math.random() * 0.2, axis: 'z' });
+    });
+  }
+  function pkXpLakeBuild() {
+    var M = pkXpM(), m = new THREE.Mesh(new THREE.CircleGeometry(1, 48), M.water); m.scale.set(70, 44, 1); m.rotation.x = -Math.PI / 2; m.position.set(95, 0.03, 236); scene.add(m);
+    var rim = new THREE.Mesh(new THREE.RingGeometry(0.98, 1.06, 48), XM({ color: 0xb8a888, roughness: 1 })); rim.scale.set(70, 44, 1); rim.rotation.x = -Math.PI / 2; rim.position.set(95, 0.025, 236); scene.add(rim);
+    for (var i = 0; i < 70; i++) { var a = Math.random() * 6.28, r = 1.02 + Math.random() * 0.05; var reed = new THREE.Mesh(new THREE.ConeGeometry(0.4, 1.6, 5), M.reed); reed.position.set(95 + Math.cos(a) * 70 * r, 0.8, 236 + Math.sin(a) * 44 * r); scene.add(reed); }
+    // a jetty and two rowing boats
+    box(2, 0.2, 14, M.wood, 95, 0.4, 199); for (var p = 0; p < 5; p++) [-0.9, 0.9].forEach(function (s) { pkRoundCyl(0.1, 1.2, M.wood, 95 + s, 0.0, 193 + p * 3, null, 6); });
+    [[88, 214], [104, 222]].forEach(function (b, i) { var g = pkXpGroup(b[0], b[1], i * 1.2); var hull = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 4, 12, 1, true, 0, Math.PI), XM({ color: i ? 0x2f5f9e : 0xb8362b, roughness: 0.6, side: THREE.DoubleSide })); hull.rotation.set(Math.PI / 2, 0, Math.PI); hull.position.y = 0.6; g.add(hull); PK_XP.dyn.push({ kind: 'bob', g: g, t: i * 2 }); });
+  }
+  // the far forest: instanced, two kinds of tree, out to the edge of the world wherever nothing else stands
+  function pkXpForest() {
+    var M = pkXpM(), K = pkMats(), rng = pkRng(99046), pos = [];
+    for (var x = -540; x <= 540; x += 11) for (var z = -540; z <= 540; z += 11) {
+      var jx = x + (rng() - 0.5) * 8, jz = z + (rng() - 0.5) * 8, th = rng(), sc = 0.9 + rng() * 1.1;
+      if (Math.abs(jx) < 212 && Math.abs(jz) < 212) continue;              // the woods part 01 plants already
+      if (th < 0.25 || pkXpClear(jx, jz) || Math.abs(jz - 76) < 8 || Math.abs(jx - 320) < 6) continue;
+      pos.push([jx, jz, sc, rng()]);
+    }
+    var crown = new THREE.IcosahedronGeometry(1, 1), cone = new THREE.ConeGeometry(1, 2.6, 8), trunk = new THREE.CylinderGeometry(0.12, 0.18, 1, 6);
+    var leaves = [XM({ color: 0x3f6a32, roughness: 1 }), XM({ color: 0x4f7a3a, roughness: 1 }), XM({ color: 0x2f5a3a, roughness: 1 })];
+    var groups = [[], [], [], []];
+    pos.forEach(function (p) { groups[p[3] < 0.3 ? 3 : Math.floor(p[3] * 3) % 3].push(p); });
+    var m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sv = new THREE.Vector3(), pv = new THREE.Vector3();
+    var inst = function (geo, mat, list, place) { if (!list.length) return; var im = new THREE.InstancedMesh(geo, mat, list.length); list.forEach(function (p, i) { place(p, pv, sv); m4.compose(pv, q, sv); im.setMatrixAt(i, m4); }); im.instanceMatrix.needsUpdate = true; im.castShadow = false; im.receiveShadow = false; im.frustumCulled = false; im.userData.noBake = true; scene.add(im); };
+    [0, 1, 2].forEach(function (k) { inst(crown, leaves[k], groups[k], function (p, P, Sv) { P.set(p[0], 3.4 * p[2], p[1]); Sv.set(2.4 * p[2], 2.1 * p[2], 2.4 * p[2]); }); });
+    inst(cone, leaves[2], groups[3], function (p, P, Sv) { P.set(p[0], 3.0 * p[2], p[1]); Sv.set(1.8 * p[2], 2.0 * p[2], 1.8 * p[2]); });
+    inst(trunk, M.bark, pos, function (p, P, Sv) { P.set(p[0], 1.0 * p[2], p[1]); Sv.set(p[2], 2.2 * p[2], p[2]); });
+    PK_XP.trees = pos.length;
+    // low hills on the horizon, hazy with distance
+    for (var h = 0; h < 22; h++) { var a = h / 22 * Math.PI * 2 + rng() * 0.2, r = 580 + rng() * 80, hm = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), h % 3 ? M.hillFar : M.hill); hm.scale.set(90 + rng() * 120, 22 + rng() * 34, 70 + rng() * 60); hm.position.set(Math.cos(a) * r, -2, Math.sin(a) * r); hm.rotation.y = -a; hm.userData.noBake = true; scene.add(hm); }
+    // a line of pylons across the far east, wires slung between them
+    var py = []; for (var pz = -520; pz <= 520; pz += 80) py.push([400, pz]);
+    py.forEach(function (p, i) {
+      var g = pkXpGroup(p[0], p[1], 0); [[-2, -2], [2, -2], [-2, 2], [2, 2]].forEach(function (c) { pkRod(c[0], 0, c[1], c[0] * 0.25, 30, c[1] * 0.25, 0.12, M.steel, g, 4); }); [18, 24].forEach(function (y) { box(14, 0.3, 0.3, M.steel, 0, y, 0, g); });
+      if (i) [-6.5, 6.5].forEach(function (o) { [18, 24].forEach(function (y) { pkRod(400 + o, y - 0.8, py[i - 1][1], 400 + o, y - 0.8, p[1], 0.03, M.black, scene, 3); }); });
+    });
+  }
+
+  // ── The life of it: cranes, diggers, trucks, workers, sails, cars ──
+  function pkXpTick(dt) {
+    if (!PK_XP.built) return;
+    var night = typeof S !== 'undefined' && S && (S.time < 7 || S.time > 19.5), M = pkXpM();
+    M.beacon.emissiveIntensity = Math.sin(PK_XP.T = (PK_XP.T || 0) + dt * 3) > 0 ? 2.2 : 0.1;
+    M.lamp.emissiveIntensity = night ? 1.8 : 0.15;
+    M.win.emissiveIntensity = night ? 0.9 : 0.0;
+    var px = typeof player !== 'undefined' && player ? player.x : 0, pz = typeof player !== 'undefined' && player ? player.z : 0;
+    for (var i = 0; i < PK_XP.dyn.length; i++) {
+      var D = PK_XP.dyn[i];
+      if (D.kind === 'spin') { D.g.rotation[D.axis] += dt * D.v; continue; }
+      if (D.kind === 'car') { var ws = D.g.userData.wheels; if (ws) for (var w = 0; w < ws.length; w++) ws[w].rotation.z -= D.dir * D.v * dt / 0.3; D.g.position.x += D.dir * D.v * dt; if (D.g.position.x > D.x1) D.g.position.x = D.x0; if (D.g.position.x < D.x0) D.g.position.x = D.x1; continue; }
+      if (D.kind === 'bob') { D.t += dt; D.g.position.y = Math.sin(D.t * 1.3) * 0.06; D.g.rotation.z = Math.sin(D.t) * 0.04; continue; }
+      if (D.kind === 'crane') {
+        // swing to a new heading, run the trolley out, lower, pause, raise, and again
+        D.t += dt; var ph = D.t % 40;
+        D.slew.rotation.y = D.a0 + Math.sin(D.t * 0.05) * 1.6;
+        D.trolley.position.x = D.jib * (0.45 + 0.35 * Math.sin(D.t * 0.07));
+        var drop = 6 + (ph < 20 ? ph : 40 - ph) * 0.9;
+        D.cable.scale.y = drop; D.cable.position.y = -drop / 2; D.load.position.y = -drop;
+        continue;
+      }
+      if (D.kind === 'dig') {
+        D.t += dt; var k = D.t % 12;
+        D.house.rotation.y = k < 6 ? Math.sin(k / 6 * Math.PI) * 1.3 : 0;
+        D.boom.rotation.x = -0.35 + Math.sin(D.t * 0.9) * 0.25; D.stick.rotation.x = 0.8 + Math.sin(D.t * 0.9 + 1) * 0.4; D.bucket.rotation.x = 0.6 + Math.sin(D.t * 0.9 + 2) * 0.5;
+        continue;
+      }
+      if (D.kind === 'truck') {
+        if (D.wait > 0) { D.wait -= dt; D.bed.rotation.x = D.dir < 0 && D.wait > 2 ? -0.6 * Math.sin((D.wait - 2) / 4 * Math.PI) : 0; continue; }
+        D.t += D.dir * dt * 0.05; if (D.t > 1 || D.t < 0) { D.t = clamp(D.t, 0, 1); D.dir *= -1; D.wait = 6; D.load.visible = D.dir < 0; }
+        var x = D.a[0] + (D.b[0] - D.a[0]) * D.t, z = D.a[1] + (D.b[1] - D.a[1]) * D.t;
+        D.g.position.set(x, 0, z); D.g.rotation.y = Math.atan2((D.b[0] - D.a[0]) * D.dir, (D.b[1] - D.a[1]) * D.dir);
+        continue;
+      }
+      if (D.kind === 'worker') {
+        if ((D.g.position.x - px) * (D.g.position.x - px) + (D.g.position.z - pz) * (D.g.position.z - pz) > 160 * 160) continue;
+        var moving = false;
+        if (D.b) { D.t += D.dir * dt * 0.12; if (D.t > 1 || D.t < 0) { D.t = clamp(D.t, 0, 1); D.dir *= -1; } var wx = D.a[0] + (D.b[0] - D.a[0]) * D.t, wz = D.a[1] + (D.b[1] - D.a[1]) * D.t; D.g.position.set(wx, 0, wz); D.g.rotation.y = Math.atan2((D.b[0] - D.a[0]) * D.dir, (D.b[1] - D.a[1]) * D.dir); moving = true; }
+        animateHuman(D.g, dt, moving ? 'walk' : 'idle', moving ? 1.1 : 0, null, false);
+      }
+    }
+  }
+  animate(pkXpTick);
+
+  // ── Building it ──────────────────────────────────────────────────
+  function pkXpBuild() {
+    if (PK_XP.built) return;
+    var tries = [['viaduct', pkXpViaduct], ['site', pkXpSite], ['ground line', pkXpGroundLine], ['town', pkXpTownBuild], ['farms', pkXpFarms], ['lake', pkXpLakeBuild], ['forest', pkXpForest]];
+    tries.forEach(function (t) { try { t[1](); } catch (e) { if (window.console) console.error('world: ' + t[0] + ' failed', e); } });
+    PK_XP.built = true;
+  }
+  var _pkXpPrevBuildWorld = GAME.buildWorld;
+  GAME.buildWorld = function (loaded) { var r = _pkXpPrevBuildWorld ? _pkXpPrevBuildWorld(loaded) : undefined; pkXpBuild(); return r; };
+  var _pkXpPrevT = GAME.T;
+  GAME.T = function () { var o = _pkXpPrevT(); o.pkXpKit = { stump: pkXpStump, logs: pkXpLogs, brush: pkXpBrush, spoil: pkXpSpoil, cabin: pkXpCabin, container: pkXpContainer, skip: pkXpSkip, toilet: pkXpToilet, pipes: pkXpPipes, beams: pkXpBeams, pallets: pkXpPallets, flood: pkXpFlood, worker: pkXpWorker, excavator: pkXpExcavator, truck: pkXpTruck, dozer: pkXpDozer, roller: pkXpRoller, mixer: pkXpMixer, harvester: pkXpHarvester, crane: pkXpCrane, crawler: pkXpCrawler, shell: pkXpShell, ride: pkXpRideSteel, fence: pkXpFenceRun, house: pkXpHouse }; o.PK_XP = PK_XP; o.pkXpRingD = pkXpRingD; o.pkXpFree = pkXpFree; o.pkXpBand = pkXpBand; return o; };
   (function () {
     var canvasId = 'co-canvas';
     var KEY = 'pk-use-button';            // 'lmb' or 'e'
