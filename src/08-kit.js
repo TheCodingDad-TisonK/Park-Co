@@ -353,11 +353,11 @@
       pkRoundCyl(0.07, 0.42, M.iron, l[0], 0.21, l[2], g, 8);
     });
     [-0.18, 0, 0.18].forEach(function (sy) {
-      pkBevelBox(1.8, 0.05, 0.42, M.wood, 0, 0.45, sy, g, 0.02);
+      pkBevelBox(1.8, 0.05, 0.42, pkMatWoodRich(), 0, 0.45, sy, g, 0.02);
     });
     pkBevelBox(1.9, 0.06, 0.5, M.iron, 0, 0.42, 0, g, 0.02);
     [-0.18, 0, 0.18].forEach(function (sy) {
-      pkBevelBox(1.8, 0.32, 0.05, M.wood, 0, 0.78, sy - 0.2, g, 0.02);
+      pkBevelBox(1.8, 0.32, 0.05, pkMatWoodRich(), 0, 0.78, sy - 0.2, g, 0.02);
     });
     pkBevelBox(1.9, 0.34, 0.12, M.iron, 0, 0.78, -0.22, g, 0.02);
     [[-0.95, 0.55, 0], [0.95, 0.55, 0]].forEach(function (a) {

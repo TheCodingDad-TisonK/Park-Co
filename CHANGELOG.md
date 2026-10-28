@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.4.0 (2026-10-28): The Booths, Arena and World Update
+
+Every ride gets its own control desk, the Lindenburg Arena is rebuilt from the gate to the backstage, and the world now reaches far beyond the park.
+
+## New
+
+### A control desk for every ride
+- All 18 ride booths, kids' rides included, have a desk designed for that ride, with its own colours, crest and Lindenburg Ride Works maker's plate.
+- Each desk has a live display of its ride: coaster and flume track with the cars moving and block lamps turning red, the carousel and teacup seats turning and lighting up when taken, the Ferris wheel going round, the dodgems on the floor, The Drop's carriage, and the Haunted Manor's rooms lighting up as the party goes through.
+- Live readings such as speed, height, G-force, rpm and wind. Aim at the display to see them.
+- Ready lamps for key, gates, bars and riders, plus a READY lamp that lights when the ride can go.
+- A sound button for each ride (band organ, foghorn, a roar and more), and a VOICE switch that plays it on every dispatch.
+- Kids' desks have a toy look, chunky buttons and a big green GO! button.
+
+### The world beyond the park
+- The world now reaches about 620 m in every direction, and you can see much further.
+- A construction site surrounds the park outside the railway: forest being cleared, earthworks with diggers and dump trucks, buildings going up under tower cranes, and the steel of a new ride. A viewing platform at the end of Windmill Halt's footpath looks out over the works.
+- A new railway viaduct is being built across the park, in every stage from formwork to laid track. It bridges over the Lindenburg Railway and never joins it.
+- The town of Lindenburg to the west, with a church spire you can see from the park, farms to the east, wind turbines, a lake south of Lakeside Halt, forest and hills on the horizon.
+
+## Improved
+
+### The Coaster
+- New operator desk with a display of the train and station: every seat, every restraint bar, each platform gate and the air system.
+- The wall track display is redrawn in twice the detail, with track blocks, the moving lift chain, a speed trail behind the train, live numbers and this lap's speed traced over the height profile.
+
+### The Lindenburg Arena
+- Guests now enter through a stair hall and climb to the top of the stand, so nobody sees the city before the show starts. The queue has moved to the new gates.
+- A castle front with towers, banners and the arena's name in gold, and seating in the five riders' colours.
+- Moving lights that follow the riders, and an effect for each of the five gifts: fire cannons, water jets in the moat, wind and fog, rocks rising from the sand, and a blinding light. Fireworks over the city at the finale.
+- New music cues through the show.
+- The hydra is remodelled: scaled body, claws gripping the city wall, wings, five necks with horned heads and glowing eyes. It now rises higher and leans out toward the audience.
+- A full backstage area: stables with saddled horses, the hydra's lift pit and power unit, cast and wardrobe cabins, the fire-effects gas store and the moat's pump house.
+- The control room has restyled desks, a running order of the 13 scenes, a lighting and sound mixer whose faders follow the show, and a PA microphone for your own announcements.
+
 ## 1.3.0 (2026-10-28): The Footplate Update
 
 The Lindenburg No. 1 is now a real steam engine. The cab has been rebuilt from the ground up as a proper footplate, and you have to drive and fire her like the real thing.

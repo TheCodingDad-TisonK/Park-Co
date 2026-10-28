@@ -37,6 +37,7 @@
   }
   // true where something else (a tree) must not stand: the routes, the hub, the coaster's footprint
   function pkThemeKeepClear(x, z) {
+    if (typeof pkXpClear === 'function' && pkXpClear(x, z)) return true;   // part 46: the expansion site, the new viaduct's line, the town and the farms
     for (var i = 0; i < PK_ROUTES.length; i++) {
       var r = PK_ROUTES[i], hw = r[4] / 2 + 2.5;
       if (x > Math.min(r[0], r[2]) - hw && x < Math.max(r[0], r[2]) + hw && z > Math.min(r[1], r[3]) - hw && z < Math.max(r[1], r[3]) + hw) return true;
@@ -126,6 +127,7 @@
           var pa = at(ta + (rng() - 0.5) * 2, sd * (w / 2 + 3.3 + rng() * 1.2));
           if (pkNearRide(pa[0], pa[1], 3) || pkNearRoute(pa[0], pa[1], i, 3.2)) return;
           if (pkNearTrack(pa[0], pa[1], 4.5)) return;
+          if (typeof pkXpViaNear === 'function' && pkXpViaNear(pa[0], pa[1], 5)) return;   // part 46: felled for the new viaduct
           var seed = Math.abs(Math.round(pa[0] * 13 + pa[1] * 7)), sc = 0.9 + rng() * 0.5;
           if (seed % 6 === 0) pkConifer(pa[0], pa[1], sc, null, seed); else pkTree(pa[0], pa[1], sc, null, seed);
         });

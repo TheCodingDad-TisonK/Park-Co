@@ -455,41 +455,126 @@
   }
 
   // ── The track mimic board ─────────────────────────────────────────
-  // the circuit drawn from above on a lit panel: the station, the lift, the blocks, and the train going round it live. Each
-  // block is a lamp: red while the train is in it, green when it is clear.
+  // The control room's big display: the circuit from above on a lit panel, eight blocks that go red while the train is in
+  // them, the six named sections the desk's status bank shows, the lift with its chain, the train car by car with every seat,
+  // and a trail behind it coloured by its speed. Down the side the live numbers: speed, height, the load the riders feel,
+  // the lap clock and the last lap. Along the foot the lap's height profile, with this lap's speed traced over it and the
+  // last lap's beside it in grey, so a slow trim or a stuck brake shows as a dip on the trace.
   var PK_MIMIC = null;
   function pkOpMimic(x, z) {
     var g = new THREE.Group(); g.position.set(x, 1.95, z); g.rotation.y = -Math.PI / 2; scene.add(g);
     pkBevelBox(1.5, 0.92, 0.06, MAT.steelDark, 0, 0, -0.03, g, 0.015);
-    var N = 240, P = [], xs = [], zs = [];
-    for (var i = 0; i < N; i++) { var p = PK.curve.getPointAt(i / N); P.push(p); xs.push(p.x); zs.push(p.z); }
-    var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs), z0 = Math.min.apply(null, zs), z1 = Math.max.apply(null, zs);
-    var BL = 8;   // blocks round the lap
-    var sc = touchScreen({ w: 420, h: 256, pw: 1.4, ph: 0.85, x: 0, y: 0, z: 0.006, parent: g, title: 'The track mimic',
+    pkBevelBox(1.54, 0.03, 0.08, pkMats().brass || MAT.chrome, 0, 0.475, -0.02, g, 0.008);
+    var N = 360, P = [], xs = [], zs = [], ys = [];
+    for (var i = 0; i < N; i++) { var p = PK.curve.getPointAt(((PK.stationU + i / N) % 1)); P.push(p); xs.push(p.x); zs.push(p.z); ys.push(p.y); }
+    var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs), z0 = Math.min.apply(null, zs), z1 = Math.max.apply(null, zs), y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ys);
+    var BL = 8, BINS = 180, trace = new Array(BINS).fill(0), last = null, trail = [], trailT = 0, prevD = 0, prevPos = null, gLoad = 1, prevVel = new THREE.Vector3(), vNow = new THREE.Vector3(), topV = 0;
+    var lift = [((PK.liftU[0] - PK.stationU) % 1 + 1) % 1, ((PK.liftU[1] - PK.stationU) % 1 + 1) % 1];
+    var W = 900, H = 546, PLAN = { x: 18, y: 48, w: 600, h: 330 }, SIDE = { x: 636, y: 48, w: 248, h: 330 }, PROF = { x: 18, y: 398, w: 866, h: 128 };
+    var k = Math.min((PLAN.w - 40) / (x1 - x0), (PLAN.h - 40) / (z1 - z0)), ox = PLAN.x + (PLAN.w - (x1 - x0) * k) / 2, oz = PLAN.y + (PLAN.h - (z1 - z0) * k) / 2;
+    function X(p) { return ox + (p.x - x0) * k; } function Z(p) { return oz + (p.z - z0) * k; }
+    function PX(f) { return PROF.x + 40 + f * (PROF.w - 56); } function PY(y) { return PROF.y + PROF.h - 22 - (y - y0) / Math.max(1, y1 - y0) * (PROF.h - 44); }
+    function VY(v) { return PROF.y + PROF.h - 22 - clamp(v / 30, 0, 1) * (PROF.h - 44); }
+    function lapOf(u) { return ((u - PK.stationU) % 1 + 1) % 1; }
+    var font = SCREEN_THEME.font, bg = null;
+    // the parts that never move, drawn once: the panel, the grid, the plan's casing, the profile and its scales
+    function background() {
+      var cv = document.createElement('canvas'); cv.width = W; cv.height = H; var c = cv.getContext('2d');
+      var gr = c.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#0d1620'); gr.addColorStop(1, '#070b10'); c.fillStyle = gr; c.fillRect(0, 0, W, H);
+      [PLAN, SIDE, PROF].forEach(function (b) { c.fillStyle = 'rgba(0,0,0,0.35)'; c.fillRect(b.x, b.y, b.w, b.h); c.strokeStyle = 'rgba(201,162,39,0.45)'; c.lineWidth = 1.5; c.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1); });
+      c.strokeStyle = 'rgba(143,195,255,0.06)'; c.lineWidth = 1;
+      for (var gx = PLAN.x; gx < PLAN.x + PLAN.w; gx += 20) { c.beginPath(); c.moveTo(gx, PLAN.y); c.lineTo(gx, PLAN.y + PLAN.h); c.stroke(); }
+      for (var gy = PLAN.y; gy < PLAN.y + PLAN.h; gy += 20) { c.beginPath(); c.moveTo(PLAN.x, gy); c.lineTo(PLAN.x + PLAN.w, gy); c.stroke(); }
+      // a scale bar and the north arrow
+      c.fillStyle = '#7d8a96'; c.font = '11px ' + font; c.textAlign = 'left';
+      c.fillRect(PLAN.x + 14, PLAN.y + PLAN.h - 16, 10 * k, 3); c.fillText('10 m', PLAN.x + 18 + 10 * k, PLAN.y + PLAN.h - 11);
+      c.beginPath(); c.moveTo(PLAN.x + PLAN.w - 22, PLAN.y + 12); c.lineTo(PLAN.x + PLAN.w - 28, PLAN.y + 28); c.lineTo(PLAN.x + PLAN.w - 16, PLAN.y + 28); c.closePath(); c.fill(); c.fillText('N', PLAN.x + PLAN.w - 26, PLAN.y + 42);
+      // the track's casing under the live block colours
+      c.lineCap = 'round'; c.lineJoin = 'round'; c.strokeStyle = 'rgba(0,0,0,0.7)'; c.lineWidth = 12; c.beginPath(); P.forEach(function (q, n) { if (n) c.lineTo(X(q), Z(q)); else c.moveTo(X(q), Z(q)); }); c.closePath(); c.stroke();
+      // the profile: height over the lap, five-metre lines, the lift picked out
+      c.strokeStyle = 'rgba(143,195,255,0.12)'; c.fillStyle = '#7d8a96'; c.font = '10px ' + font; c.textAlign = 'right';
+      for (var hm = 0; hm <= y1 - y0 + 0.1; hm += 5) { var yy = PY(y0 + hm); c.beginPath(); c.moveTo(PX(0), yy); c.lineTo(PX(1), yy); c.stroke(); c.fillText(hm + ' m', PX(0) - 4, yy + 3); }
+      c.beginPath(); c.moveTo(PX(0), PY(y0)); P.forEach(function (q, n) { c.lineTo(PX(n / N), PY(q.y)); }); c.lineTo(PX(1), PY(y0)); c.closePath();
+      var fg = c.createLinearGradient(0, PROF.y, 0, PROF.y + PROF.h); fg.addColorStop(0, 'rgba(143,195,255,0.28)'); fg.addColorStop(1, 'rgba(143,195,255,0.04)'); c.fillStyle = fg; c.fill();
+      c.strokeStyle = '#8fc3ff'; c.lineWidth = 1.5; c.beginPath(); P.forEach(function (q, n) { if (n) c.lineTo(PX(n / N), PY(q.y)); else c.moveTo(PX(0), PY(q.y)); }); c.stroke();
+      c.strokeStyle = '#ffcf5a'; c.lineWidth = 3; c.beginPath(); for (var n = Math.floor(lift[0] * N); n <= Math.ceil(lift[1] * N) && n < N; n++) { if (n === Math.floor(lift[0] * N)) c.moveTo(PX(n / N), PY(P[n].y)); else c.lineTo(PX(n / N), PY(P[n].y)); } c.stroke();
+      c.textAlign = 'left'; c.fillStyle = '#c9a227'; c.font = 'bold 11px ' + font; c.fillText('PROFILE  ·  HEIGHT AND SPEED OVER THE LAP', PROF.x + 10, PROF.y + 14);
+      c.fillStyle = '#7d8a96'; c.font = '10px ' + font; c.textAlign = 'right'; c.fillText('SPEED 0 - 108 KM/H', PROF.x + PROF.w - 10, PROF.y + 14);
+      // the section names along the profile's foot
+      var SEC = PK.coasterSections || [];
+      c.textAlign = 'left'; c.font = '10px ' + font;
+      for (var s2 = 0; s2 < SEC.length - 1; s2++) { var fx = PX(SEC[s2][1]); c.fillStyle = 'rgba(143,195,255,0.3)'; c.fillRect(fx, PROF.y + 20, 1, PROF.h - 40); c.fillStyle = '#9fb2c0'; c.fillText(SEC[s2][0].replace(/\n/g, ' ').replace('- ', ''), fx + 3, PROF.y + PROF.h - (s2 % 2 ? 22 : 8)); }
+      bg = cv;
+    }
+    var sc = touchScreen({ w: W, h: H, pw: 1.4, ph: 0.85, x: 0, y: 0, z: 0.006, parent: g, title: 'The track mimic',
       draw: function (c, s) {
-        c.fillStyle = '#10161b'; c.fillRect(0, 0, s.w, s.h);
-        c.fillStyle = '#c9a227'; c.font = 'bold 14px ' + SCREEN_THEME.font; c.textAlign = 'left'; c.fillText('THE COASTER  ·  TRACK MIMIC', 12, 20);
-        c.fillStyle = '#7d8a96'; c.font = '11px ' + SCREEN_THEME.font; c.fillText('BLOCKS ' + BL + '   LAP ' + Math.round(PK.len) + ' m', 12, 36);
-        var m = 30, kx = (s.w - m * 2) / (x1 - x0), kz = (s.h - 60 - m) / (z1 - z0), k = Math.min(kx, kz), ox = (s.w - (x1 - x0) * k) / 2, oz = 48;
-        function X(p) { return ox + (p.x - x0) * k; } function Z(p) { return oz + (p.z - z0) * k; }
-        var R = PK.ride, tb = Math.floor((((R.u - PK.stationU) % 1 + 1) % 1) * BL);
+        if (!bg) background();
+        c.drawImage(bg, 0, 0, s.w, s.h);
+        var R = PK.ride, d = lapOf(R.u), tb = Math.floor(d * BL), run = R.state === 'running' || R.state === 'dispatch' || R.state === 'arrive';
+        c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+        c.fillStyle = '#ffcf5a'; c.font = 'bold 20px ' + font; c.fillText('THE COASTER  ·  TRACK MIMIC', 18, 30);
+        c.fillStyle = R.fault ? '#ff6b5e' : '#d6dee3'; c.font = 'bold 15px ' + font; c.textAlign = 'right';
+        c.fillText((R.fault ? 'STOPPED  ' : '') + pkRideWord().toUpperCase() + '   ' + fmtTime(S.time), W - 18, 30);
+        // the blocks: green clear, red occupied, the block behind the train amber while it clears
+        c.lineCap = 'round'; c.lineJoin = 'round';
         for (var b = 0; b < BL; b++) {
-          c.strokeStyle = b === tb ? '#ff4a3a' : '#3f8f5f'; c.lineWidth = 6; c.lineCap = 'round'; c.beginPath();
-          for (var j = 0; j <= N / BL; j++) { var q = P[(Math.floor(PK.stationU * N) + b * N / BL + j) % N]; if (j === 0) c.moveTo(X(q), Z(q)); else c.lineTo(X(q), Z(q)); }
+          var occ = b === tb, behind = run && b === (tb + BL - 1) % BL;
+          c.strokeStyle = occ ? '#ff4a3a' : behind ? '#f0c04a' : '#3f9f6a'; c.lineWidth = 6; c.beginPath();
+          for (var j = 0; j <= N / BL; j++) { var q = P[(b * N / BL + j) % N]; if (j === 0) c.moveTo(X(q), Z(q)); else c.lineTo(X(q), Z(q)); }
           c.stroke();
+          var mid = P[Math.floor((b + 0.5) * N / BL) % N]; c.fillStyle = 'rgba(214,222,227,0.55)'; c.font = '10px ' + font; c.textAlign = 'center'; c.fillText('B' + (b + 1), X(mid), Z(mid) - 9);
         }
-        // the lift and the station, marked
-        c.fillStyle = '#9fb2c0'; c.font = '10px ' + SCREEN_THEME.font; c.textAlign = 'center';
-        var ps = PK.curve.getPointAt(PK.stationU), pl = PK.curve.getPointAt((PK.liftU[0] + PK.liftU[1]) / 2);
-        c.fillText('STATION', X(ps), Z(ps) + 18); c.fillText('LIFT', X(pl) + 18, Z(pl));
-        // the train: three cars, the lead one brighter
-        for (var t = 0; t < 3; t++) { var u = ((R.u - t * PK.carGap / PK.len) % 1 + 1) % 1, pt = PK.curve.getPointAt(u); c.fillStyle = t ? '#ffd27a' : '#ffffff'; c.beginPath(); c.arc(X(pt), Z(pt), t ? 4 : 5, 0, 6.283); c.fill(); }
-        c.textAlign = 'left'; c.fillStyle = R.fault ? '#ff6b5e' : '#d6dee3'; c.font = 'bold 12px ' + SCREEN_THEME.font;
-        c.fillText((R.fault ? 'STOP  ' : '') + 'BLOCK ' + (tb + 1) + '   ' + (R.v || 0).toFixed(1) + ' m/s', 12, s.h - 10);
+        // the lift's chain, ticking along while it runs
+        c.strokeStyle = 'rgba(0,0,0,0.75)'; c.lineWidth = 2; c.setLineDash([4, 4]); c.lineDashOffset = -PK_BK_T * (run ? 20 : 0); c.beginPath();
+        for (var n = Math.floor(lift[0] * N); n <= Math.ceil(lift[1] * N) && n < N; n++) { if (n === Math.floor(lift[0] * N)) c.moveTo(X(P[n]), Z(P[n])); else c.lineTo(X(P[n]), Z(P[n])); }
+        c.stroke(); c.setLineDash([]);
+        // the station and the named sections
+        var ps = P[0], pl = P[Math.floor((lift[0] + lift[1]) / 2 * N)];
+        c.fillStyle = '#ffcf5a'; c.fillRect(X(ps) - 7, Z(ps) - 7, 14, 14);
+        c.fillStyle = '#9fb2c0'; c.font = 'bold 11px ' + font; c.textAlign = 'center'; c.fillText('STATION', X(ps), Z(ps) + 22); c.fillText('LIFT', X(pl) + 22, Z(pl) + 4);
+        var top = P[ys.indexOf(y1)]; c.fillStyle = '#d6dee3'; c.font = '10px ' + font; c.fillText('^ ' + (y1 - y0).toFixed(1) + ' m', X(top), Z(top) - 12);
+        // the trail: where the train has been the last few seconds, coloured by its speed
+        for (var t = 1; t < trail.length; t++) { var A = trail[t - 1], B2 = trail[t], f = clamp(B2.v / 25, 0, 1); c.strokeStyle = 'rgba(' + Math.round(120 + 135 * f) + ',' + Math.round(220 - 150 * f) + ',' + Math.round(255 - 200 * f) + ',' + (t / trail.length).toFixed(2) + ')'; c.lineWidth = 4; c.beginPath(); c.moveTo(X(A.p), Z(A.p)); c.lineTo(X(B2.p), Z(B2.p)); c.stroke(); }
+        // the train: each car along the track, its seats lit for the riders in it
+        for (var ci = 0; ci < PK.cars.length; ci++) {
+          var u = ((R.u - ci * PK.carGap / PK.len) % 1 + 1) % 1, pt = PK.curve.getPointAt(u), tg = PK.curve.getTangentAt(u), an = Math.atan2(tg.z * k, tg.x * k);
+          c.save(); c.translate(X(pt), Z(pt)); c.rotate(an);
+          c.fillStyle = ci ? '#d8b04a' : '#ffffff'; c.strokeStyle = '#000'; c.lineWidth = 1.5; roundRect(c, -11, -7, 22, 14, 4); c.fill(); c.stroke();
+          for (var st = 0; st < 4; st++) { var seat = PK.seats[ci * 4 + st]; c.fillStyle = seat && seat.guest ? '#1b6fd0' : 'rgba(0,0,0,0.25)'; c.beginPath(); c.arc(-5 + (st >> 1) * 10, -3 + (st & 1) * 6, 2.4, 0, 6.283); c.fill(); }
+          c.restore();
+        }
+        // the side column: the live numbers
+        var sx = SIDE.x + 14, sy = SIDE.y + 26, v = (R.v || 0) * 3.6;
+        c.textAlign = 'left'; c.fillStyle = '#7d8a96'; c.font = 'bold 11px ' + font; c.fillText('SPEED', sx, sy);
+        c.fillStyle = '#ffcf5a'; c.font = 'bold 46px ' + font; c.fillText(v.toFixed(0), sx, sy + 46); var vw = c.measureText(v.toFixed(0)).width; c.font = 'bold 14px ' + font; c.fillStyle = '#c9a227'; c.fillText('KM/H', sx + vw + 8, sy + 46);
+        c.fillStyle = 'rgba(255,207,90,0.15)'; c.fillRect(sx, sy + 56, SIDE.w - 28, 8); c.fillStyle = '#ffcf5a'; c.fillRect(sx, sy + 56, (SIDE.w - 28) * clamp(v / 108, 0, 1), 8);
+        var rows = [['HEIGHT', (PK.cars[0] ? Math.max(0, PK.cars[0].position.y - y0) : 0).toFixed(1) + ' m'], ['LOAD', gLoad.toFixed(2) + ' g'], ['TOP SPEED', (topV * 3.6).toFixed(0) + ' km/h'],
+          ['BLOCK', 'B' + (tb + 1) + ' of ' + BL], ['LAP CLOCK', (PK.lapT || 0).toFixed(1) + ' s'], ['LAST LAP', PK.lastLap ? PK.lastLap.toFixed(1) + ' s' : '--'], ['ABOARD', R.riders + ' / ' + PK.seats.length], ['CYCLES', String(S.cycles || 0)]];
+        rows.forEach(function (rw, i2) { var yy = sy + 92 + i2 * 26; c.fillStyle = '#7d8a96'; c.font = 'bold 11px ' + font; c.textAlign = 'left'; c.fillText(rw[0], sx, yy); c.fillStyle = '#e8eef2'; c.font = 'bold 15px ' + font; c.textAlign = 'right'; c.fillText(rw[1], SIDE.x + SIDE.w - 14, yy); });
+        // the foot: this lap's speed over the profile, the last lap's in grey, the train's cursor
+        var drawTrace = function (arr, col, w) { c.strokeStyle = col; c.lineWidth = w; c.beginPath(); var on = false; for (var bi = 0; bi < BINS; bi++) { if (!arr[bi]) { on = false; continue; } var xx = PX(bi / BINS), yy = VY(arr[bi]); if (on) c.lineTo(xx, yy); else { c.moveTo(xx, yy); on = true; } } c.stroke(); };
+        if (last) drawTrace(last, 'rgba(200,210,220,0.35)', 1.5);
+        drawTrace(trace, '#ff9d6b', 2);
+        var cy = PY(P[Math.min(N - 1, Math.floor(d * N))].y); c.fillStyle = '#ffffff'; c.beginPath(); c.arc(PX(d), cy, 5, 0, 6.283); c.fill();
+        c.fillStyle = 'rgba(255,255,255,0.25)'; c.fillRect(PX(d), PROF.y + 20, 1, PROF.h - 40);
       } });
+    // the board keeps the trace and the trail whether or not anyone is looking, so it is right when you look up
+    pkCtlLive({ tick: function (dt) {
+      var R = PK.ride, d = lapOf(R.u), car = PK.cars[0];
+      if (d + 0.5 < prevD) { if (trace.some(function (v) { return v > 0; })) last = trace.slice(); trace = new Array(BINS).fill(0); }
+      prevD = d;
+      if (R.state === 'running' || R.state === 'arrive') { var bi = Math.min(BINS - 1, Math.floor(d * BINS)); trace[bi] = Math.max(0.01, R.v || 0); topV = Math.max(topV, R.v || 0); }
+      trailT -= dt;
+      if (trailT <= 0) { trailT = 0.12; trail.push({ p: PK.curve.getPointAt(R.u).clone(), v: R.v || 0 }); if (trail.length > 30) trail.shift(); }
+      if (car && dt > 0) {
+        if (prevPos) { vNow.copy(car.position).sub(prevPos).divideScalar(dt); var acc = vNow.clone().sub(prevVel).divideScalar(dt); prevVel.copy(vNow); var gl = Math.sqrt(acc.x * acc.x + (acc.y + 9.81) * (acc.y + 9.81) + acc.z * acc.z) / 9.81; if (!isFinite(gl) || gl > 7 || R.state !== 'running') gl = 1; gLoad += (gl - gLoad) * Math.min(1, dt * 2.5); }
+        else prevPos = new THREE.Vector3();
+        prevPos.copy(car.position);
+      }
+    } });
     pkPowerScreen(sc, pkCoasterOpen);
-    PK_BK_LIVE.push({ sc: sc, g: g, every: 0.25 });
-    PK_MIMIC = sc;
+    PK_BK_LIVE.push({ sc: sc, g: g, every: 0.2 });
+    PK_MIMIC = sc; sc.board = g;
   }
   // two CCTV monitors on their stands on the station desk, turned to the operator: the queue lane and the platform
   function pkOpMonitors(x, z, ry) {
@@ -544,7 +629,7 @@
     box(3.4, 0.5, 0.06, MAT.wood, 0, 0.25, -1.73, g);
     for (var sb = 0; sb < 5; sb++) box(0.07, 2.2, 0.05, MAT.trim, -1.45 + sb * 0.725, 1.75, -1.74, g);
     box(0.85, 2.0, 0.07, MAT.wood, 0.75, 1.0, -1.74, g);
-    sphere(0.035, MAT.gold, 1.05, 1.0, -1.79, g);
+    sphere(0.035, pkMats().gold, 1.05, 1.0, -1.79, g);
     box(0.06, 0.5, 3.4, MAT.wood, -1.73, 0.25, 0, g);
     box(0.06, 0.5, 3.4, MAT.wood, 1.73, 0.25, 0, g);
     for (var sw = 0; sw < 4; sw++) {

@@ -179,11 +179,11 @@
     // material for the ground alone, and repeat it at 2.8 m a tile, so the blades read as turf underfoot.
     var lawnMap = TEX.grass.clone();
     lawnMap.wrapS = lawnMap.wrapT = THREE.RepeatWrapping;
-    lawnMap.repeat.set(150, 150);   // 420 m plane / 150 = a 2.8 m tile
+    lawnMap.repeat.set(443, 443);   // 1240 m plane / 443 = a 2.8 m tile (part 46 carries the world out past the railway)
     lawnMap.needsUpdate = true;
     var lawnMat = MAT.grass.clone();
     lawnMat.map = lawnMap;
-    plane(420, 420, lawnMat, 0, -0.03, 0, -Math.PI / 2);
+    plane(1240, 1240, lawnMat, 0, -0.03, 0, -Math.PI / 2);
     pkSlab(34, 18, 0, 44, 0.012, M.paversWarm);      // the forecourt, where the guests arrive
     pkSlab(28, 10, 0, 33, 0.014, M.paversWarm);      // the plaza under the gate
     pkSlab(3.2, 5.0, -18.0, 42.5, 0.013, M.paversWarm);   // out of the HQ's door onto the forecourt
@@ -359,6 +359,7 @@
         var jx = (rng2() - 0.5) * 4, jz = (rng2() - 0.5) * 4, thin = rng2(), sc = 0.95 + rng2() * 1.2;
         if (thin < 0.28) continue;                                  // thin the ring a little
         var qx = fx + jx, qz = fz + jz, qseed = Math.abs(Math.round(qx * 13 + qz * 7));
+        if (typeof pkXpClear === 'function' && pkXpClear(qx, qz)) continue;   // part 46: felled for the expansion site and the viaduct
         if (qseed % 4 === 0) pkConifer(qx, qz, sc, null, qseed); else pkTree(qx, qz, sc, null, qseed);
       }
     }
@@ -615,4 +616,4 @@
     var night = S.time >= 18 || S.time < 7;
     pkLightsApply(!!power, !!PK.rideLights && night);
   });
-  CO.setup({ canvas: 'co-canvas', save: 'park-co', game: GAME, spawn: { x: 0, z: 42, yaw: 0 }, sun: { box: 120, far: 320, mapSize: 2048, target: [0, 0, 0] }, lightBudget: 10, fog: { color: 0x9dbbd8, near: 210, far: 520 } });
+  CO.setup({ canvas: 'co-canvas', save: 'park-co', game: GAME, spawn: { x: 0, z: 42, yaw: 0 }, sun: { box: 120, far: 320, mapSize: 2048, target: [0, 0, 0] }, lightBudget: 10, far: 720, fog: { color: 0x9dbbd8, near: 300, far: 700 } });

@@ -498,8 +498,8 @@ module.exports = `
   T.openMenu(); ok(T.ui.menuOpen, 'the pause menu opens');
   T.menuAct('guide'); ok(/Park Co/.test(document.getElementById('dc-menu-body').innerHTML) && /AUTO/.test(document.getElementById('dc-menu-body').innerHTML), 'the guide comes from the game');
   T.closeMenu(); ok(!T.ui.menuOpen, 'resume');
-  // the player: the operator desk carries no buttons now, and the ramp
-  { T.player.x = 12.75; T.player.z = -0.98; T.player.y = 0; T.lookAt(11.67, 1.37, -0.98); ok(/Press|BARS/.test(T.focusText()), 'the coaster desk stands under the window, facing it, its buttons in reach: ' + (T.focusText() || 'nothing')); }
+  // the player: the coaster desk's BARS UP button, aimed at from under the window, and the ramp
+  { T.player.x = 12.75; T.player.z = -0.98; T.player.y = 0; T.lookAt(11.71, 1.43, -1.05); ok(/Press|BARS/.test(T.focusText()), 'the coaster desk stands under the window, facing it, its buttons in reach: ' + (T.focusText() || 'nothing')); }
   { T.player.x = 0; T.player.z = 3; T.player.y = 0; T.player.yaw = 0; T.player.keys.KeyW = true; for (let i = 0; i < 25; i++) T.updatePlayer(0.05); T.player.keys.KeyW = false; ok(T.player.z < -0.6 && T.player.y > 0.5, 'W walks up the ramp onto the platform: z ' + T.player.z.toFixed(2) + ', y ' + T.player.y.toFixed(2)); }
   { const desk = T.collides(11.6, -0.85), station = T.collides(14.3, -3.5), floor = T.collides(14.3, -1.6), midway = T.collides(0, 5);
     ok(desk === true && station === true && floor === false && midway === false, 'the coaster desk and the station desk are solid and the room floor stays walkable (' + desk + ', ' + station + ', ' + floor + ', ' + midway + ')'); }
