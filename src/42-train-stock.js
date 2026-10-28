@@ -18,34 +18,6 @@
     var hub = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.1, 10), rimMat); hub.rotation.x = Math.PI / 2; w.add(hub);
     return w;
   }
-  function trGauge(parent, x, y, z, ry, label, key, rad) {   // a brass dial with a needle that the update turns
-    var M = trMats(), R = rad || 0.15, g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; parent.add(g);
-    var cv = document.createElement('canvas'); cv.width = cv.height = 192; var c = cv.getContext('2d');
-    var cx = 96, cr = 90, a0 = -Math.PI / 2 - 1.1, a1 = -Math.PI / 2 + 1.1;
-    if (c) {
-      c.fillStyle = '#f6f0df'; c.beginPath(); c.arc(cx, cx, cr, 0, 7); c.fill();
-      c.strokeStyle = '#b9ad8c'; c.lineWidth = 4; c.beginPath(); c.arc(cx, cx, cr - 3, 0, 7); c.stroke();
-      // a red band over the top quarter of the scale, so a full boiler reads at a glance
-      c.strokeStyle = '#a2321f'; c.lineWidth = 8; c.beginPath(); c.arc(cx, cx, cr - 13, a0 + (a1 - a0) * 0.78, a1); c.stroke();
-      for (var i = 0; i <= 10; i++) {
-        var a = a0 + (a1 - a0) * i / 10, big = i % 2 === 0;
-        c.strokeStyle = '#22231f'; c.lineWidth = big ? 3.2 : 1.8;
-        c.beginPath(); c.moveTo(cx + Math.cos(a) * (cr - 20), cx + Math.sin(a) * (cr - 20));
-        c.lineTo(cx + Math.cos(a) * (cr - (big ? 30 : 26)), cx + Math.sin(a) * (cr - (big ? 30 : 26))); c.stroke();
-        if (big) { c.fillStyle = '#22231f'; c.font = 'bold 15px Arial'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(i), cx + Math.cos(a) * (cr - 42), cx + Math.sin(a) * (cr - 42)); }
-      }
-      c.fillStyle = '#22231f'; c.font = 'bold 19px Bahnschrift, Arial, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(label, cx, cx + 36);
-      c.strokeStyle = 'rgba(255,255,255,0.7)'; c.lineWidth = 6; c.beginPath(); c.arc(cx, cx, cr - 14, Math.PI * 1.08, Math.PI * 1.34); c.stroke();
-    }
-    var back = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.014, R + 0.014, 0.03, 24), M.iron); back.rotation.x = Math.PI / 2; back.position.z = -0.018; g.add(back);
-    var face = new THREE.Mesh(new THREE.CircleGeometry(R, 24), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv) })); face.position.z = 0.012; g.add(face);
-    var ring = new THREE.Mesh(new THREE.TorusGeometry(R + 0.005, R * 0.1, 6, 26), M.brass); ring.position.z = 0.016; g.add(ring);
-    for (var sc = 0; sc < 4; sc++) { var sa = Math.PI / 4 + sc * Math.PI / 2; sphere(R * 0.045, M.brass, Math.cos(sa) * R * 0.86, Math.sin(sa) * R * 0.86, 0.018, g); }
-    var needle = new THREE.Group(); needle.position.z = 0.022; g.add(needle);
-    box(R * 0.055, R * 0.9, 0.004, M.black, 0, R * 0.42, 0, needle);
-    sphere(R * 0.07, M.brass, 0, 0, 0.004, needle);
-    TR.gauges = TR.gauges || {}; TR.gauges[key] = needle; return g;
-  }
   // ── The locomotive ────────────────────────────────────────────────
   // A wheel for the engine and its tender: tyre, open spokes, a brass hub and, on the drivers (o.pin set), a counterweight
   // and a crank pin. o.pin is the crank angle in the wheel's own frame - the valve gear in the update follows it.
@@ -191,6 +163,7 @@
     [-1, 1].forEach(function (s) { box(0.7, 0.06, 0.5, M.iron, -2.9, 0.75, s * 1.35, g); box(0.7, 0.06, 0.5, M.iron, -2.9, 1.02, s * 1.25, g); });
     hitBox(1.2, 1.6, 1.0, -2.9, 1.9, 1.6, { prompt: function () { return trCanBoard() ? 'Climb into the cab' : ''; }, use: function () { trEnterCab(); } }, g);
     hitBox(1.2, 1.6, 1.0, -2.9, 1.9, -1.6, { prompt: function () { return trCanBoard() ? 'Climb into the cab' : ''; }, use: function () { trEnterCab(); } }, g);
+
     TR.units.push(u); return u;
   }
 
@@ -202,7 +175,6 @@
     var wain = pkPaint(0x6b4a2e, 0.85, 0.05);          // warm wood wainscot
     var seatMat = pkPaint(0x7a3b2e, 0.82, 0.05);       // oxblood seats
     var seatEdge = pkPaint(0x4a241c, 0.86, 0.05);
-    var ironPanel = pkPaint(0x17221d, 0.5, 0.45);      // dark firebox backhead
 
     // --- finished floor: warm planks with a brass threshold ---
     pkBevelBox(3.0, 0.06, 2.15, pkPaint(0x6b4a2e, 0.9, 0.02), -2.65, 1.33, 0, g, 0.02);
@@ -224,111 +196,8 @@
       box(2.95, 0.028, 0.07, brass, -2.65, 2.37, wz, g);
     });
 
-    // --- the backhead: a proud iron firebox end with the name plate up top ---
-    pkBevelBox(0.18, 1.04, 1.7, ironPanel, X - 0.03, 1.9, 0, g, 0.05);
-    box(0.02, 0.94, 0.035, brass, X - 0.11, 1.9, -0.82, g); box(0.02, 0.94, 0.035, brass, X - 0.11, 1.9, 0.82, g);
-    box(0.02, 0.03, 1.62, brass, X - 0.11, 2.4, 0, g); box(0.02, 0.03, 1.62, brass, X - 0.11, 1.4, 0, g);
-    sign(['LINDENBURG', 'No. 1'], 0.46, 0.15, X - 0.13, 2.31, 0, -Math.PI / 2, { w: 224, h: 72, bg: '#102a1c', fg: '#f3d36a' }, g);
-
-    // --- four dials in one row across the top of the backhead, evenly spaced ---
-    var gp = new THREE.Group(); gp.position.set(X - 0.16, 2.06, 0); g.add(gp);
-    trGauge(gp, 0, 0, -0.52, -Math.PI / 2, 'STEAM', 'press', 0.13);
-    trGauge(gp, 0, 0, -0.173, -Math.PI / 2, 'km/h', 'speed', 0.13);
-    trGauge(gp, 0, 0, 0.173, -Math.PI / 2, 'COAL', 'fuel', 0.13);
-    trGauge(gp, 0, 0, 0.52, -Math.PI / 2, 'BRAKE', 'brake', 0.13);
-
-    // --- the firebox door: big, centred, the heart of the cab ---
-    var fbGlow = new THREE.Mesh(new THREE.CircleGeometry(0.15, 24), new THREE.MeshBasicMaterial({ color: 0xff7a24 })); fbGlow.rotation.y = -Math.PI / 2; fbGlow.position.set(X - 0.14, 1.62, 0); fbGlow.userData.noBake = true; g.add(fbGlow);
-    var fbRing = new THREE.Mesh(new THREE.TorusGeometry(0.155, 0.03, 6, 24), brass); fbRing.rotation.y = -Math.PI / 2; fbRing.position.set(X - 0.13, 1.62, 0); g.add(fbRing);
-    var fbDoor = new THREE.Group(); fbDoor.position.set(X - 0.18, 1.62, -0.14); g.add(fbDoor);
-    var fbPlate = new THREE.Mesh(new THREE.CircleGeometry(0.14, 24), pkPaint(0x2a1a12, 0.7, 0.3)); fbPlate.rotation.y = -Math.PI / 2; fbPlate.position.z = 0.14; fbDoor.add(fbPlate);
-    var fbEdge = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.02, 5, 18), brass); fbEdge.rotation.y = -Math.PI / 2; fbEdge.position.z = 0.14; fbDoor.add(fbEdge);
-    box(0.03, 0.12, 0.03, brass, 0, 0.1, 0.27, fbDoor);
-    var fbLever = new THREE.Group(); fbLever.position.set(-1.4, 2.28, 0.985); g.add(fbLever);   // damper: on the right wall between the backhead and the displays
-    pkBevelBox(0.12, 0.14, 0.02, brass, -1.4, 2.25, 0.995, g, 0.01);
-    pkRoundCyl(0.04, 0.03, brass, 0, 0, 0.015, fbLever, 10).rotation.x = Math.PI / 2;
-    pkRod(0, 0, -0.02, 0, -0.22, -0.02, 0.02, iron, fbLever, 5); sphere(0.04, brass, 0, -0.23, -0.02, fbLever);
-    sign(['DAMPER'], 0.2, 0.055, -1.4, 1.98, 0.995, Math.PI, { w: 168, h: 44, bg: '#151a1e', fg: '#f5f2e8' }, g);
-    hitBox(0.22, 0.42, 0.24, -1.4, 2.1, 0.9, { prompt: function () { return TR.t && TR.t.driving ? (TR.fireOpen ? 'Damper: shut the firebox door (V)' : 'Damper: open the firebox door (V)') : ''; }, use: function () { sfx('click'); TR.fireOpen = !TR.fireOpen; } }, g);
-    var fireLight = new THREE.PointLight(0xff7a2a, 0, 3, 2); fireLight.position.set(X - 0.45, 1.7, 0); g.add(fireLight);
-    hitBox(0.3, 0.45, 0.36, X - 0.2, 1.65, 0, { prompt: function () { return TR.t && TR.t.driving ? (TR.fireOpen ? 'Shut the firebox door' : 'Open the firebox door') : ''; }, use: function () { sfx('click'); TR.fireOpen = !TR.fireOpen; } }, g);
-    u.fbLever = fbLever; u.fbDoor = fbDoor; u.fbGlow = fbGlow; u.fireLight = fireLight;
-    
-    // --- water gauge: on the backhead, left of the firebox door, where the driver can see it ---
-    var wgX = X - 0.135, wgZ = -0.62;   // the backhead's face is at X - 0.12: plates sit just proud of it
-    pkBevelBox(0.03, 0.44, 0.26, pkPaint(0xd8d2bc, 0.65, 0.05), wgX, 1.63, wgZ, g, 0.015);
-    box(0.012, 0.3, 0.14, pkPaint(0x2a3a30, 0.7, 0.15), wgX - 0.02, 1.59, wgZ, g);
-    var gl = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.28, 8), M.glass); gl.position.set(wgX - 0.035, 1.59, wgZ); g.add(gl);
-    var wl = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.28, 0.03), new THREE.MeshBasicMaterial({ color: 0x54b4ff })); wl.geometry.translate(0, 0.14, 0); wl.position.set(wgX - 0.035, 1.45, wgZ); g.add(wl); TR.waterGlass = wl;
-    box(0.08, 0.04, 0.08, brass, wgX - 0.035, 1.74, wgZ, g); box(0.08, 0.04, 0.08, brass, wgX - 0.035, 1.44, wgZ, g);
-    sign(['WATER'], 0.22, 0.055, wgX - 0.02, 1.795, wgZ, -Math.PI / 2, { w: 168, h: 44, bg: '#151a1e', fg: '#f5f2e8' }, g);
-
-    // --- the control desk: one low console in front of the backhead. Levers on the left, horn + passenger-info controls to the right.
-    // Everything on it is labelled on the front face, in one row, at one height. It stays 0.04 clear of the firebox door's swing.
-    var deskX = -1.77, deskTop = 1.58, labelX = -1.88, labelY = 1.41;
-    pkBevelBox(0.2, 0.24, 1.9, pkPaint(0x20262b, 0.55, 0.4), deskX, 1.46, 0, g, 0.03);
-    box(0.02, 0.025, 1.9, brass, deskX - 0.095, deskTop + 0.005, 0, g);
-    function label(txt, z, w) { sign([txt], w || 0.22, 0.06, labelX, labelY, z, -Math.PI / 2, { w: 168, h: 44, bg: '#151a1e', fg: '#f5f2e8' }, g); }
-    function lever(key, z, col, txt, prompt, use) {
-      var pv = new THREE.Group(); pv.position.set(deskX, deskTop + 0.02, z); g.add(pv);
-      pkBevelBox(0.12, 0.04, 0.2, brass, 0, 0, 0, pv, 0.01);
-      pkRoundCyl(0.04, 0.07, iron, 0, 0.05, 0, pv, 8);
-      var st = new THREE.Group(); pv.add(st); pkRod(0, 0.03, 0, 0, 0.4, 0, 0.02, iron, st, 6); sphere(0.045, col, 0, 0.44, 0, st);
-      label(txt, z);
-      hitBox(0.22, 0.5, 0.14, deskX, deskTop + 0.24, z, { prompt: function () { return TR.t && TR.t.driving ? prompt() : ''; }, use: use }, g);
-      u[key] = st; return st;
-    }
-    lever('gasLever', -0.8, M.red, 'GAS', function () { return 'Gas: ' + Math.round(TR.t.throttle * 100) + '% (W / S)'; }, function () { TR.t.throttle = TR.t.throttle >= 0.99 ? 0 : Math.min(1, TR.t.throttle + 0.25); });
-    lever('brakeLever', -0.56, pkPaint(0x2a5fd0, 0.4, 0.3), 'BRAKE', function () { return 'Brake: ' + Math.round(TR.t.brake * 100) + '% (Space)'; }, function () { TR.t.brake = TR.t.brake >= 0.99 ? 0 : Math.min(1, TR.t.brake + 0.5); });
-    lever('revLever', -0.32, brass, 'REVERSE', function () { return 'Reverser: ' + (TR.t.dir > 0 ? 'FORWARD' : 'REVERSE') + ' (R)'; }, function () { trToggleDir(); });
-
-    // push buttons sit in the desk's front face (the update sinks the horn button 0.03 when it is pressed)
-    function pushBtn(z, r, mat, txt, hit) {
-      var b = pkRoundCyl(r, 0.06, mat, labelX + 0.0, 1.5, z, g, 14); b.rotation.z = Math.PI / 2; b.position.x = deskX - 0.1 - 0.03;
-      var ring = new THREE.Mesh(new THREE.TorusGeometry(r + 0.015, 0.012, 6, 20), brass); ring.rotation.y = Math.PI / 2; ring.position.set(deskX - 0.1 - 0.005, 1.5, z); g.add(ring);
-      label(txt, z); hitBox(0.2, 0.2, 0.2, deskX - 0.11, 1.5, z, hit, g); return b;
-    }
-    var hb = pushBtn(0.12, 0.055, M.red, 'HORN', { prompt: function () { return TR.t && TR.t.driving ? 'Horn (H - hold)' : ''; }, use: function () { trBlast('horn', 0.9); } });
-    u.hornBtn = hb; hb.userData.rest = hb.position.x;
-    pushBtn(0.72, 0.045, pkPaint(0xe8e0c8, 0.5, 0.1), 'REPEAT', { prompt: function () { return TR.t && TR.t.driving ? 'Repeat passenger announcement' : ''; }, use: function () { trRepeatPassengerInfo(); } });
-    // page lever for the passenger display: a small lever on the desk (the display tick swings it about z)
-    var pageLever = new THREE.Group(); pageLever.position.set(deskX, deskTop + 0.015, 0.42); g.add(pageLever);
-    pkRoundCyl(0.035, 0.04, brass, 0, 0.01, 0, pageLever, 10);
-    pkRod(0, 0, 0, 0, 0.17, 0, 0.014, iron, pageLever, 5); sphere(0.032, M.brass, 0, 0.18, 0, pageLever);
-    label('PAGE', 0.42);
-    hitBox(0.22, 0.3, 0.22, deskX, deskTop + 0.17, 0.42, { prompt: function () { return TR.t && TR.t.driving ? 'Passenger display: change page' : ''; }, use: function () { trTogglePassengerPage(); } }, g);
-    u.pageLeverRef = pageLever;
-
-    // --- the switch panel: a plate bolted ON the right half of the backhead (it used to be buried inside it) ---
-    var swX = X - 0.135;
-    pkBevelBox(0.03, 0.46, 0.48, pkPaint(0x1c2a24, 0.5, 0.42), swX, 1.63, 0.55, g, 0.02);
-    box(0.012, 0.012, 0.48, brass, swX - 0.018, 1.865, 0.55, g); box(0.012, 0.012, 0.48, brass, swX - 0.018, 1.395, 0.55, g);
-    box(0.012, 0.46, 0.012, brass, swX - 0.018, 1.63, 0.31, g); box(0.012, 0.46, 0.012, brass, swX - 0.018, 1.63, 0.79, g);
-    function sw(key, z, txt, prompt, use) {
-      var pv = new THREE.Group(); pv.position.set(swX - 0.04, 1.65, z); g.add(pv);
-      pkRoundCyl(0.05, 0.04, brass, 0, 0, 0, pv, 12).rotation.z = Math.PI / 2;
-      var lv = new THREE.Group(); pv.add(lv); pkRod(0, 0, 0, 0, 0.13, 0, 0.016, iron, lv, 6); sphere(0.03, M.red, 0, 0.14, 0, lv); u[key] = lv;
-      var led = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), M.ledOff); led.position.set(-0.01, -0.1, 0); pv.add(led); led.userData.noBake = true; u[key + 'Led'] = led;
-      sign([txt], 0.2, 0.055, swX - 0.02, 1.455, z, -Math.PI / 2, { w: 168, h: 44, bg: '#151a1e', fg: '#f5f2e8' }, g);
-      hitBox(0.14, 0.48, 0.22, swX - 0.06, 1.65, z, { prompt: function () { return TR.t && TR.t.driving ? prompt() : ''; }, use: use }, g);
-    }
-    sw('engSw', 0.43, 'ENGINE', function () { return 'Engine ' + (TR.t.engine ? 'ON' : 'off') + ' (I)'; }, function () { trToggleEngine(); });
-    sw('doorSw', 0.67, 'DOORS', function () { return 'Wagon doors ' + (TR.t.doorsOpen ? 'open' : 'shut') + ' (U)'; }, function () { trToggleDoors(); });
-
-    // --- steam vent: a brass handwheel next to the STEAM dial. Each click opens it another quarter turn; it opens the roof vent pipe ---
-    var vx = X - 0.14, vz = -0.74, vy = 2.06;
-    pkRoundCyl(0.025, 0.05, M.iron, X - 0.125, vy, vz, g, 8).rotation.z = Math.PI / 2;               // stub on the panel
-    var ventWheel = new THREE.Group(); ventWheel.position.set(vx, vy, vz); g.add(ventWheel);
-    var vrim = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.011, 6, 20), brass); vrim.rotation.y = Math.PI / 2; ventWheel.add(vrim);
-    for (var vs = 0; vs < 4; vs++) { var sp2 = box(0.01, 0.11, 0.01, brass, 0, 0, 0, ventWheel); sp2.rotation.x = vs * Math.PI / 4; }
-    sphere(0.02, M.gold, -0.005, 0, 0, ventWheel);
-    sign(['VENT'], 0.15, 0.045, X - 0.15, vy - 0.115, vz, -Math.PI / 2, { w: 120, h: 40, bg: '#151a1e', fg: '#f5f2e8' }, g);
-    hitBox(0.2, 0.2, 0.2, X - 0.2, vy, vz, { prompt: function () { return TR.t && TR.t.driving ? 'Steam vent: ' + Math.round((TR.vent || 0) * 100) + '% (click to turn)' : ''; }, use: function () { sfx('click'); TR.vent = (TR.vent || 0) >= 0.99 ? 0 : Math.min(1, (TR.vent || 0) + 0.25); } }, g);
-    u.ventWheel = ventWheel;
-    // the vent pipe on the cab roof, front right
-    pkRoundCyl(0.06, 0.05, brass, -1.55, 3.78, 0.8, g, 10); pkRoundCyl(0.035, 0.34, iron, -1.55, 3.93, 0.8, g, 8);
-    var vnoz = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.015, 6, 12), brass); vnoz.rotation.x = Math.PI / 2; vnoz.position.set(-1.55, 4.1, 0.8); g.add(vnoz);
-    u.ventPos = new THREE.Vector3(-1.55, 4.15, 0.8);
+    // --- the footplate: backhead, firehole, glasses, regulator, manifold, gauges, reverser, brake valve, shovel, electrics (part 45) ---
+    trBuildFootplate(g, u, X);
 
     // --- whistle cord: hangs from the front-right of the roof, out of the line of sight and clear of every lever ---
     var cord = new THREE.Group(); cord.position.set(-1.8, 3.55, 0.8); g.add(cord); u.cord = cord; pkRod(0, 0, 0, 0, -1.2, 0, 0.012, M.black, cord, 4); sphere(0.055, brass, 0, -1.25, 0, cord);
@@ -375,7 +244,7 @@
       var frame = new THREE.Group(); frame.position.set(x, y, z); frame.rotation.y = ry; g.add(frame);
       pkBevelBox(w + 0.14, h + 0.14, 0.04, brass, 0, 0, 0.015, frame, 0.012);        // brass border, seated on the wall
       pkBevelBox(w + 0.08, h + 0.08, 0.02, M.black, 0, 0, 0.04, frame, 0.01);         // black bezel
-      var cv = document.createElement('canvas'); cv.width = 512; cv.height = 300;
+      var cv = document.createElement('canvas'); cv.width = 1024; cv.height = 600;   // drawn at 2x (the tick scales the 512 x 300 layout) so the text stays sharp
       var tex = new THREE.CanvasTexture(cv);
       var screen = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
       screen.position.z = 0.052; screen.userData.noBake = true; frame.add(screen);
@@ -391,7 +260,7 @@
       pkRoundCyl(0.04, 0.02, brass, r[0], 3.49, r[1], g, 10);
     });
     TR.cabDisplays.pageLever = u.pageLeverRef;   // the display tick swings this lever
-    sign(['STOP'], 0.2, 0.05, -1.528, 2.77, 0.692, -3 * Math.PI / 4, { w: 128, h: 36, bg: '#151a1e', fg: '#f5f2e8' }, g);   // little captions under each screen
+    sign(['STOP'], 0.2, 0.05, -1.542, 2.825, 0.678, -3 * Math.PI / 4, { w: 128, h: 36, bg: '#151a1e', fg: '#f5f2e8' }, g);   // little captions under each screen
     sign(['PASSENGERS'], 0.3, 0.05, -2.0, 2.0, 0.96, Math.PI, { w: 192, h: 36, bg: '#151a1e', fg: '#f5f2e8' }, g);
 
     // --- rear bulkhead, open in the middle ---
@@ -429,46 +298,54 @@
     var distance = next ? Math.max(0, Math.round(trFwdDist(t, trTargetS(t.nextSt, t.mode)))) : 0;
     if (D.pageLever) D.pageLever.rotation.z = t.passengerRoutePage ? -0.45 : 0.45;
 
-    var a = D.alignment, c = a.canvas.getContext('2d');
+    var a = D.alignment, c = a.canvas.getContext('2d'), p = D.passenger, pc = p.canvas.getContext('2d');
+    if (!(t.dynamo && t.press > 0.12)) {   // no steam on the turbo-generator: the screens are dark
+      if (!D.dark) { D.dark = true; [[c, a], [pc, p]].forEach(function (q) { if (q[0]) { q[0].setTransform(1, 0, 0, 1, 0, 0); q[0].fillStyle = '#050807'; q[0].fillRect(0, 0, 1024, 600); q[1].tex.needsUpdate = true; } }); }
+      return;
+    }
+    D.dark = false;
     if (c) {
+      c.setTransform(2, 0, 0, 2, 0, 0);
       c.fillStyle = '#10211b'; c.fillRect(0, 0, 512, 300); c.strokeStyle = '#c9a45e'; c.lineWidth = 4; c.strokeRect(7, 7, 498, 286);
       c.textAlign = 'left'; c.fillStyle = '#f2d48c'; c.font = 'bold 25px Consolas, monospace'; c.fillText('PLATFORM ALIGNMENT', 24, 43);
       c.fillStyle = '#dbe8d7'; c.font = '20px Consolas, monospace'; c.fillText(st ? st.name : 'ROUTE UNKNOWN', 24, 88);
       c.fillStyle = t.at >= 0 && t.v < 0.25 ? '#83e5a3' : '#f2c75c'; c.font = 'bold 25px Consolas, monospace';
-      c.fillText(t.at >= 0 && t.v < 0.25 ? 'STOP POSITION: ALIGNED' : 'STOP IN: ' + distance + ' m', 24, 139);
+      c.fillText(t.at >= 0 && t.v < 0.25 ? 'STOP POSITION: ALIGNED' : 'STOP IN: ' + distance + ' m', 24, 128);
       c.fillStyle = '#dbe8d7'; c.font = '20px Consolas, monospace';
-      c.fillText('SPEED: ' + Math.round(t.v * 3.6) + ' km/h', 24, 192);
-      c.fillText('PLATFORM GATES: ' + (st && st.gatesAmt > 0.5 ? 'OPEN' : 'CLOSED'), 24, 230);
-      c.fillText('WAGON DOORS: ' + (t.doorsOpen ? 'OPEN' : 'SHUT'), 24, 268);
-      // alignment bar: wagon door vs platform gate
-      var barX = 24, barY = 150, barW = 460, barH = 16;
+      c.fillText('SPEED: ' + Math.round(t.v * 3.6) + ' km/h', 24, 206);
+      c.fillText('PLATFORM GATES: ' + (st && st.gatesAmt > 0.5 ? 'OPEN' : 'CLOSED'), 24, 238);
+      c.fillText('WAGON DOORS: ' + (t.doorsOpen ? 'OPEN' : 'SHUT'), 24, 270);
+      // alignment bar: approach progress to the stop point
+      var barX = 24, barY = 162, barW = 460, barH = 14;
       c.fillStyle = '#0a1410'; c.fillRect(barX, barY, barW, barH);
       c.strokeStyle = '#c9a45e'; c.lineWidth = 1; c.strokeRect(barX, barY, barW, barH);
-      // platform gate marker (centre)
-      c.fillStyle = '#5fd38d'; c.fillRect(barX + barW / 2 - 2, barY - 4, 4, barH + 8);
-      // wagon door marker, offset by remaining distance (clamped)
-      var off = clamp(distance, -50, 50) / 50 * (barW / 2);
-      c.fillStyle = '#f2c75c'; c.fillRect(barX + barW / 2 + off - 3, barY - 6, 6, barH + 12);
-      c.fillStyle = '#dbe8d7'; c.font = '14px Consolas, monospace'; c.fillText('gate', barX + barW / 2 - 12, barY - 8);
-      c.fillText('door', barX + barW / 2 + off - 12, barY + barH + 14);
+      var prog = clamp(1 - distance / 60, 0, 1);
+      c.fillStyle = (distance < 2) ? '#5fd38d' : '#f2c75c';
+      c.fillRect(barX, barY, barW * prog, barH);
+      c.fillStyle = '#dbe8d7'; c.font = '14px Consolas, monospace';
+      c.fillText('APPROACH', barX, barY - 6);
+      c.textAlign = 'right'; c.fillText(distance.toFixed(1) + ' m', barX + barW, barY - 6); c.textAlign = 'left';
       a.tex.needsUpdate = true;
     }
 
-    var p = D.passenger, pc = p.canvas.getContext('2d');
     if (pc) {
+      pc.setTransform(2, 0, 0, 2, 0, 0);
       pc.fillStyle = '#10211b'; pc.fillRect(0, 0, 512, 300); pc.strokeStyle = '#c9a45e'; pc.lineWidth = 4; pc.strokeRect(7, 7, 498, 286);
-      pc.textAlign = 'left'; pc.fillStyle = '#f2d48c'; pc.font = 'bold 23px Consolas, monospace'; pc.fillText('LINDENBURG RAILWAY', 24, 42);
+      pc.textAlign = 'left'; pc.fillStyle = '#f2d48c'; pc.font = 'bold 26px Consolas, monospace'; pc.fillText('LINDENBURG RAILWAY', 24, 44);
       if (!t.passengerRoutePage) {
-        pc.fillStyle = '#83e5a3'; pc.font = 'bold 21px Consolas, monospace'; pc.fillText(t.at >= 0 ? 'NOW AT' : 'NEXT STOP', 24, 93);
-        pc.fillStyle = '#ffffff'; pc.font = 'bold 28px Arial, sans-serif'; pc.fillText(st ? st.name : 'PLEASE WAIT', 24, 143);
-        pc.fillStyle = '#dbe8d7'; pc.font = '17px Arial, sans-serif'; pc.fillText(t.at >= 0 ? 'Please remain seated until the train stops.' : 'Please remain seated until your stop.', 24, 197);
-        pc.fillText('Thank you for travelling with us.', 24, 231);
+        // big type so it reads from the driver's seat: the station name shrinks only if it would not fit
+        pc.fillStyle = '#83e5a3'; pc.font = 'bold 26px Consolas, monospace'; pc.fillText(t.at >= 0 ? 'NOW AT' : 'NEXT STOP', 24, 98);
+        var nm = st ? st.name : 'PLEASE WAIT', fs = 46; pc.font = 'bold ' + fs + 'px Arial, sans-serif';
+        while (fs > 26 && pc.measureText(nm).width > 464) { fs -= 2; pc.font = 'bold ' + fs + 'px Arial, sans-serif'; }
+        pc.fillStyle = '#ffffff'; pc.fillText(nm, 24, 156);
+        pc.fillStyle = '#dbe8d7'; pc.font = '25px Arial, sans-serif';
+        pc.fillText('Please remain seated', 24, 214); pc.fillText(t.at >= 0 ? 'until the train stops.' : 'until your stop.', 24, 248);
       } else {
-        pc.fillStyle = '#83e5a3'; pc.font = 'bold 21px Consolas, monospace'; pc.fillText('ROUTE', 24, 80);
-        pc.font = '19px Arial, sans-serif';
+        pc.fillStyle = '#83e5a3'; pc.font = 'bold 24px Consolas, monospace'; pc.fillText('ROUTE', 24, 86);
+        pc.font = 'bold 26px Arial, sans-serif';
         TR.st.forEach(function (station, i) {
           pc.fillStyle = i === stopIndex ? '#f2d48c' : '#dbe8d7';
-          pc.fillText((i === stopIndex ? '> ' : '  ') + station.name, 28, 116 + i * 31);
+          pc.fillText((i === stopIndex ? '> ' : '  ') + station.name, 28, 128 + i * 40);
         });
       }
       p.tex.needsUpdate = true;

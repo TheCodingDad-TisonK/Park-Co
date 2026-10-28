@@ -1,5 +1,73 @@
 # Changelog
 
+## 1.3.0 (2026-10-28): The Footplate Update
+
+The Lindenburg No. 1 is now a real steam engine. The cab has been rebuilt from the ground up as a proper footplate, and you have to drive and fire her like the real thing.
+
+The new footplate
+- Rebuilt the whole cab around a real riveted boiler backhead with a brass builder's plate
+- Added a firehole with sliding butterfly doors, and the fire glows brighter or darker depending on how she is burning
+- Added two gauge glasses that show the water level in the boiler (the stripes behind the glass bend where the water is)
+- Added a regulator handle on a toothed quadrant that swings up as you open it
+- Added a steam manifold with valves for the two injectors, the blower and the air pump
+- Added real gauges: boiler pressure (red line at 12 bar), steam chest, speed, and a two-needle air brake gauge
+- Added a reverser bar on a notched quadrant next to the driver's seat
+- Added an air brake valve with release, running, service and full positions
+- Added cylinder drain cocks, a sander, an ashpan damper and a lubricator
+- Added copper pipework around the backhead
+- Added a shovel that swings from the floor into the firehole when you fire
+- Moved the dynamo, doors, light, horn and passenger display controls to an electrics box on the right-hand wall
+- Removed the old desk with the gas, brake and reverse levers and the four-dial panel
+
+Driving a real steam engine
+- Steam now comes from the coal you fire: open the firehole doors and fire a shovel at a time
+- The blower and the exhaust draw the fire, and the damper sets how much air it gets
+- Fresh coal smokes dark for a while, and too heavy a fire steams poorly until it burns through
+- The injectors feed the boiler from the tender, but they only pick up above 3.5 bar
+- Let the gauge glass run dry and the fusible plug melts: the fire goes out and she needs a service in the depot
+- The safety valves lift and blow off steam when the pressure goes over the red line
+- The engine will not move in mid gear: notch the reverser forward or back first
+- Notching the reverser up at speed saves steam
+- Cold cylinders fill with water: open the drain cocks until she is warm, or she knocks and wears
+- Opening the regulator too hard from a standstill makes the wheels slip, and sanding the rail fixes it
+- The air brake follows the handle with a short delay, and it cannot release without air in the reservoir
+- The air pump runs on steam and thumps away while it fills the reservoir
+- The cab light, headlamp and screens run off the dynamo and go dark without steam
+- She starts in steam, standing in mid gear with the brake on
+- Press N to let your fireman do the firing and the injectors for you
+- On AUTO the hired crew now fires her, works the injectors and drain cocks, and notches up as she gets going
+
+New keys on the footplate
+- W / S regulator
+- R / Shift + R reverser forward / back
+- A / D brake valve
+- G fire a shovel of coal
+- V firehole doors
+- J / Shift + J driver's / fireman's injector
+- B blower
+- K drain cocks
+- X sand (hold)
+- I light or drop the fire
+- Y dynamo
+- N fireman
+- L cab light
+- Every control can also be clicked
+
+Cab fixes
+- Moved the train HUD to the top left, so it no longer covers the controls
+- The HUD now shows the regulator, cut-off, brake, boiler pressure, gauge glass, fire and tender
+- The light switch now actually moves, and has its own lamp
+- The first press of the light switch at night now turns the light off instead of doing nothing
+- The STOP sign under the alignment screen is now fixed to the screen frame instead of floating
+- The passenger screen text is bigger and sharper, so you can read it from the driver's seat
+- The approach bar on the alignment screen no longer runs through the STOP POSITION text
+- The alignment screen now shows an approach bar with the distance to the stop
+
+Other train changes
+- The brake now glides on and off with A and D
+- Trains now wait 30 seconds at a station instead of 2 minutes
+- Moved the train's stopping point at the stations
+
 ## 1.2.0 (2026-10-27): World/NPC Update
 
 - Removed "Build Mode" from the game

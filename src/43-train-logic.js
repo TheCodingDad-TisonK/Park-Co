@@ -7,15 +7,15 @@
     TR_STATIONS.forEach(function (d, i) { trBuildStation(d, i); });
     TR_GAPS.forEach(function (g) { trPortal(g.axis === 'z' ? g.x : g.x, g.axis === 'z' ? g.z : g.z, g.axis); });
     trBuildDepot(); trBuildTrain();
-    TR.t = { s: 0, mode: 'M', v: 0, dir: 1, throttle: 0, brake: 1, engine: false, press: 0, doorsOpen: false, doorAmt: 0, driving: false, seat: null, look: { yaw: 0, pitch: 0 },
-      at: 0, departFrom: -1, nextSt: 1, dwell: 0, announced: false, belled: false, atb: '', washT: 0, chuff: 0, idleT: 0, hornOn: false, whistleOn: false, serviceT: 0, msgT: 0, hudT: 0, lapSeen: 0, riders: 0, passengerRoutePage: false, cabDisplayT: 0 };
+    TR.t = { s: 0, mode: 'M', v: 0, dir: 1, throttle: 0, brake: 1, engine: true, press: 0.78, fire: 0.38, glass: 0.62, cutoff: 0, cocks: true, cylCold: 1, damper: 0.5, blower: 0, injL: false, injR: false, dynamo: true, mr: 1, bc: 1, sand: false, sandT: 0, slip: 0, safety: false, priming: false, greenT: 0, fireman: false, lowT: 0, knockT: 0, draught: 0, doorsOpen: false, doorAmt: 0, driving: false, seat: null, look: { yaw: 0, pitch: 0 }, brakeKey: false, autoAlign: false, hornKey: false, whistleKey: false, thirdPerson: false, camDist: 5.5, hornOn: false, whistleOn: false, hornAuto: 0, whistleAuto: 0, msgT: 0, at: -1, nextSt: 0, dwell: 0, departFrom: -1, atb: '', cabDisplayT: 0 };
+
     R.auto = !!R.auto && pkOpCount() > 0;
     trResetToStation(0);
     trBuildHud();
     TR.built = true;
   }
   function trResetToStation(i) {
-    var t = TR.t, st = TR.st[i]; t.mode = 'M'; t.s = st.s + 28; t.v = 0; t.at = i; t.nextSt = (i + 1) % TR.st.length; t.dwell = 0; t.brake = 1; t.throttle = 0;
+    var t = TR.t, st = TR.st[i]; t.mode = 'M'; t.s = st.s + 47; t.v = 0; t.at = i; t.nextSt = (i + 1) % TR.st.length; t.dwell = 0; t.brake = 1; t.throttle = 0;
     trPlaceUnits();
   }
   var _trPrevBuildWorld = GAME.buildWorld;
@@ -27,7 +27,7 @@
   var _trPrevGuide = pkGuide;
   pkGuide = function () {
     return _trPrevGuide() + '<p><b>The Lindenburg Railway.</b> A steam train rings the park outside its fence: Central Station by the car park, Windmill Halt, Dragon Gate and Lakeside Halt, and the depot behind the park. At every station a locked cabinet holds the controls: AUTO (the same everywhere; it needs a hired operator), the platform gates, the lights, ANNOUNCE and the BELL. ' +
-      'Climb into the cab from the platform. <b>W/S</b> gas, <b>Space</b> brake, <b>H</b> horn, <b>F</b> whistle, <b>I</b> engine, <b>U</b> wagon doors, <b>R</b> reverser, <b>E</b> out. The train waits two minutes at every station and will not leave with the doors open. ' +
+      'Climb onto the footplate from the platform. She is a real steam engine: <b>W/S</b> the regulator, <b>R</b> / <b>Shift+R</b> notch the reverser forward or back (she will not move in mid gear), <b>A/D</b> the brake valve. Keep her fed: <b>V</b> opens the firehole doors, <b>G</b> fires a shovel of coal, <b>B</b> the blower draws the fire when she stands. Watch the gauge glass: <b>J</b> and <b>Shift+J</b> work the injectors, which only pick up above 3.5 bar. Let the glass run dry and the fusible plug melts: that is a trip to the depot. Open the drain cocks (<b>K</b>) until the cylinders are warm, sand the rail (<b>X</b>) if she slips, <b>I</b> lights or drops the fire, <b>Y</b> the dynamo, <b>N</b> lets your fireman do the firing. <b>H</b> horn, <b>F</b> whistle, <b>U</b> wagon doors, <b>E</b> off. The train waits at every station and will not leave with the doors open. ' +
       'Throw the points near the north run to send it through the depot shed, where you can fuel, service and wash it.</p>';
   };
 
@@ -129,15 +129,23 @@
   }
   function trToggleEngine() {
     var t = TR.t, R = trState();
-    if (!t.engine) { if (R.fuel <= 0 || R.water <= 0) { sfx('bad'); toast('No ' + (R.fuel <= 0 ? 'coal' : 'water') + ' to light the boiler', 'bad'); return; } if (R.wear >= 100) { toast('The engine needs a service first', 'bad'); return; } t.engine = true; toast('Engine on: the boiler is coming up to pressure', ''); }
-    else { t.engine = false; toast('Engine off', ''); }
+    if (!t.engine) {
+      if (R.fuel <= 1) { sfx('bad'); toast('No coal in the tender to light up with', 'bad'); return; }
+      if (R.wear >= 100) { toast('She needs the depot first: a service puts in a new fusible plug', 'bad'); return; }
+      if (t.glass < 0.1) { sfx('bad'); toast('No water in the glass: never light up on an empty boiler', 'bad'); return; }
+      t.engine = true; t.fire = Math.max(t.fire, 0.15); R.fuel -= 1; sfx('click');
+      if (!R.auto) toast('The fire is lit. Put the blower on (B) to draw it up, and fire her (G) as she comes round', '');
+    }
+    else { t.engine = false; t.fire = 0; toast('Fire dropped: the boiler will cool', ''); }
   }
   function trToggleDoors(want) {
     var t = TR.t, open = want === undefined ? !t.doorsOpen : want;
     if (open && t.v > 0.3) { sfx('bad'); toast('Doors are locked while the train moves', 'bad'); return; }
     t.doorsOpen = open; sfx('click');
   }
-  function trToggleDir() { var t = TR.t; if (t.v > 0.2) { toast('Stop first to change direction', 'bad'); return; } t.dir = -t.dir; }
+  // the cab lamp follows the clock (on at night) until the driver throws the LIGHT switch; from then on it stays where it was put
+  function trCabLightLit() { return TR.cabLightOn === undefined ? (S.time < 7 || S.time > 18.5) : TR.cabLightOn; }
+  function trToggleCabLight() { TR.cabLightOn = !trCabLightLit(); sfx('click'); toast('Cab light ' + (TR.cabLightOn ? 'on' : 'off'), ''); }
   function trPointsLocked() { return TR.t.mode === 'D'; }
   function trThrowPoints() { var R = trState(); if (trPointsLocked()) { toast('The points are locked: the train is on them', 'bad'); return; } R.points = R.points === 'depot' ? 'main' : 'depot'; toast('Points set to ' + (R.points === 'depot' ? 'the depot' : 'the main line'), ''); }
   function trInDepot() {
@@ -151,7 +159,7 @@
   function trQuickFill() { var R = trState(); R.fuel = 100; R.water = 100; sfx('ok'); toast('Coal and water topped up', 'good'); }
   window.trRefill = trQuickFill;
   function trDoFill() { var R = trState(); if (!trInDepot()) return; var c = Math.round((100 - R.fuel) * 1.5 + (100 - R.water) * 0.2); if (c < 1) { toast('The tender is already full', ''); return; } if (!trPaid(c, 'Railway fuel')) return; R.fuel = 100; R.water = 100; sfx('ok'); toast('Coal and water filled', 'good'); logEvent('The train is fuelled', 'good'); }
-  function trDoService() { var R = trState(); if (!trInDepot()) return; var c = Math.round(40 + R.wear * 2.5); if (!trPaid(c, 'Railway service')) return; R.wear = 0; sfx('ok'); toast('The train is serviced', 'good'); logEvent('The train is serviced', 'good'); }
+  function trDoService() { var R = trState(); if (!trInDepot()) return; var c = Math.round(40 + R.wear * 2.5); if (!trPaid(c, 'Railway service')) return; R.wear = 0; TR.t.glass = Math.max(TR.t.glass, 0.65); sfx('ok'); toast('The train is serviced', 'good'); logEvent('The train is serviced', 'good'); }
   function trDoWash() { var R = trState(), t = TR.t; if (!trInDepot() || t.washT > 0) return; if (!trPaid(30, 'Railway wash')) return; t.washT = 10; toast('Washing the train', ''); }
 
   // ── Player: the cab and the seats ─────────────────────────────────
@@ -163,7 +171,7 @@
   function trEnterCab() { 
     var t = TR.t; if (!trCanBoard()) return; 
     t.driving = true; t.look.yaw = 0; t.look.pitch = -0.18; 
-    toast('In the cab: W/S gas, Space brake, H horn, F whistle, I engine, U doors, R reverser, T refill, E to get out. C for 3rd person, scroll to zoom.', ''); sfx('click'); 
+    toast('On the footplate: W/S regulator, R / Shift+R reverser, A/D brake, G fire a shovel, V firehole doors, J / Shift+J injectors, B blower, K drain cocks, X sand, F whistle, N fireman, E to get off. The guide has the rest.', ''); sfx('click'); 
   }
   
   function trSit(u, seat) { 
@@ -189,12 +197,19 @@
     if (TR.built && t && (t.driving || t.seat) && !e.repeat) {
       if (e.code === 'KeyE') { if (t.driving && focusText) return false; return trLeave(); }
       if (e.code === 'KeyC') { t.thirdPerson = !t.thirdPerson; if (!t.camDist) t.camDist = 5.5; sfx('click'); toast(t.thirdPerson ? '3rd person view. Scroll to zoom.' : '1st person view.', ''); return true; }
+      if (e.code === 'KeyL') { trToggleCabLight(); return true; }
       if (t.driving) {
         if (e.code === 'KeyI') { trToggleEngine(); return true; }
         if (e.code === 'KeyU') { trToggleDoors(); return true; }
         if (e.code === 'KeyT') { trQuickFill(); return true; }
-        if (e.code === 'KeyV') { sfx('click'); TR.fireOpen = !TR.fireOpen; return true; }   // the damper: opens and shuts the firebox door
-        if (e.code === 'KeyR') { trToggleDir(); return true; }
+        if (e.code === 'KeyV') { trFireDoors(); return true; }
+        if (e.code === 'KeyR') { trNotch(e.shiftKey ? -1 : 1); return true; }
+        if (e.code === 'KeyG') { trScoop(false); return true; }
+        if (e.code === 'KeyJ') { trInjector(e.shiftKey ? 'R' : 'L'); return true; }
+        if (e.code === 'KeyB') { trBlower(); return true; }
+        if (e.code === 'KeyK') { trCocks(); return true; }
+        if (e.code === 'KeyY') { trDynamo(); return true; }
+        if (e.code === 'KeyN') { t.fireman = !t.fireman; sfx('click'); toast(t.fireman ? 'Your fireman takes the shovel and the injectors' : 'You fire her yourself', ''); return true; }
       }
     }
     return _trPrevKey ? _trPrevKey(e) : false;
@@ -267,33 +282,35 @@
     var a = trPos(s, mode, _trA), y0 = a.yaw, b = trPos(s + 8, mode, _trB), d = Math.abs(b.yaw - y0); if (d > Math.PI) d = 2 * Math.PI - d; return d / 8 > 0.012 ? 6.5 : 9;
   }
   function trFwdDist(t, target) { var L = trLoopLen(t.mode), d = ((target - t.s) % L + L) % L; return d; }
-  function trTargetS(i, mode) { var s = TR.st[i].s + 28; if (mode === 'D' && s > TR.sJ2) s += TR.dL; return s; }
+  function trTargetS(i, mode) { var s = TR.st[i].s + 47; if (mode === 'D' && s > TR.sJ2) s += TR.dL; return s; }
   function trTick(dt) {
     var t = TR.t, R = trState(), i, k;
     dt = Math.min(dt, 0.1);
     // staff: the boiler comes up to pressure, or falls
-    if (t.engine && R.fuel > 0 && R.water > 0 && R.wear < 100) t.press = Math.min(1, t.press + dt / 25); else t.press = Math.max(0, t.press - dt / (t.engine ? 12 : 90));
-    if (t.engine && (R.fuel <= 0 || R.water <= 0)) { t.engine = false; toast('Out of ' + (R.fuel <= 0 ? 'coal' : 'water') + ': the fire goes out', 'bad'); }
+    trBoilerTick(dt);
     if (R.auto && pkOpCount() < 1) { R.auto = false; toast('AUTO off: there is no operator', 'bad'); }
     // the player's hands
     var keys = player.keys || {};
     if (t.driving) {
       if (keys.KeyW) t.throttle = Math.min(1, t.throttle + dt * 0.5); if (keys.KeyS) t.throttle = Math.max(0, t.throttle - dt * 0.6);
-      t.brakeKey = !!keys.Space;
+      if (keys.KeyA) t.brake = Math.min(1, t.brake + dt * 0.6); if (keys.KeyD) t.brake = Math.max(0, t.brake - dt * 0.5);
+      t.brakeKey = false; t.sand = !!keys.KeyX;
+
       if (keys.KeyH !== !!t.hornKey) { t.hornKey = !!keys.KeyH; trVoice('horn', t.hornKey || t.hornAutoT > 0); }
       if (keys.KeyF !== !!t.whistleKey) { t.whistleKey = !!keys.KeyF; trVoice('whistle', t.whistleKey || t.whistleAutoT > 0); }
-    } else { t.brakeKey = false; if (t.hornKey) { t.hornKey = false; trVoice('horn', false); } if (t.whistleKey) { t.whistleKey = false; trVoice('whistle', false); } }
+    } else { t.brakeKey = false; t.sand = false; if (t.hornKey) { t.hornKey = false; trVoice('horn', false); } if (t.whistleKey) { t.whistleKey = false; trVoice('whistle', false); } }
     ['horn', 'whistle'].forEach(function (kd) { var key = kd + 'Auto'; if (t[key] > 0) { t[key] -= dt; if (t[key] <= 0 && !(kd === 'horn' ? t.hornKey : t.whistleKey)) { trVoice(kd, false); t[kd === 'horn' ? 'hornOn' : 'whistleOn'] = false; } } });
     if (R.auto) trAuto(dt);
     // the speed limit and the safety system (ATB)
-    var lim = trCurveLimit(t.s, t.mode), want = t.brakeKey ? 1 : t.brake, thr = t.throttle; t.atb = '';
+    if (t.v < 0.2) { if (t.cutoff > 0.01) t.dir = 1; else if (t.cutoff < -0.01) t.dir = -1; }   // the reverser sets which way she goes
+    var lim = trCurveLimit(t.s, t.mode), want = trBrakeTick(dt), thr = t.throttle; t.atb = '';
     if (R.wear > 80) lim = Math.min(lim, 5);
     if (t.mode === 'D') lim = Math.min(lim, 4);
     if (t.at >= 0 && t.mode === 'M' && (t.dwell > 0 || t.doorsOpen)) { if (thr > 0.01 && t.v < 0.3) { t.atb = 'DEPARTURE LOCKED'; if (t.msgT <= 0) { t.msgT = 4; toast(t.doorsOpen ? 'Departure locked: the doors are open' : 'Departure locked: ' + Math.ceil(t.dwell) + ' s of waiting left', 'bad'); } } thr = 0; want = 1; }
     if (t.v > lim + 0.8) { want = 1; thr = 0; t.atb = 'ATB: OVERSPEED'; }
     t.msgT -= dt;
     // physics
-    var thrust = (t.engine && t.press > 0.35) ? thr * 1.1 * Math.min(1, t.press) * (1 - R.wear / 220) : 0;
+    var thrust = trTractive(thr, dt);
     var drag = 0.012 * t.v + (t.v > 0.02 ? 0.05 : 0);
     var a = thrust - drag - want * 3.0 * (t.v > 0.02 ? 1 : 0);
     t.v = Math.max(0, Math.min(11, t.v + a * dt)); if (want >= 0.99 && thrust < 0.05 && t.v < 0.08) t.v = 0;
@@ -305,13 +322,12 @@
     if (t.mode === 'D' && ds < 0 && t.s < TR.sJ1) { t.mode = 'M'; }
     // fuel, water, wear, dirt
     var run = Math.abs(ds);
-    if (t.engine) { R.fuel = Math.max(0, R.fuel - (0.006 + 0.035 * thrust * (t.v > 0.2 ? 1 : 0)) * dt); R.water = Math.max(0, R.water - (0.008 + 0.045 * thrust * (t.v > 0.2 ? 1 : 0)) * dt); }
     R.wear = Math.min(100, R.wear + run * 0.004); R.dirt = Math.min(100, R.dirt + run * 0.006);
-    if (R.wear >= 100 && t.engine) { t.engine = false; toast('The engine has broken down: it needs a service in the depot', 'bad'); }
+    if (R.wear >= 100 && t.engine) { t.engine = false; t.fire = 0; toast('The engine has broken down: it needs a service in the depot', 'bad'); }
     // stations: stopped on a stop line
     var atNow = -1;
-    if (t.mode === 'M') for (i = 0; i < TR.st.length; i++) { var dd = Math.abs(trFwdDist(t, TR.st[i].s + 28)); dd = Math.min(dd, trLoopLen('M') - dd); if (i === t.departFrom) { if (dd > 5) t.departFrom = -1; continue; } if (dd < 1.6 && t.v < 0.25) atNow = i; }
-    if (atNow >= 0 && t.at !== atNow) { t.at = atNow; t.nextSt = (atNow + 1) % TR.st.length; t.dwell = 120; t.announced = false; t.belled = false; if (!R.auto) toast('Arrived at ' + TR.st[atNow].name + '. Wait time: 2 minutes', ''); }
+    if (t.mode === 'M') for (i = 0; i < TR.st.length; i++) { var dd = Math.abs(trFwdDist(t, TR.st[i].s + 47)); dd = Math.min(dd, trLoopLen('M') - dd); if (i === t.departFrom) { if (dd > 5) t.departFrom = -1; continue; } if (dd < 1.6 && t.v < 0.25) atNow = i; }
+    if (atNow >= 0 && t.at !== atNow) { t.at = atNow; t.nextSt = (atNow + 1) % TR.st.length; t.dwell = 30; t.announced = false; t.belled = false; if (!R.auto) toast('Arrived at ' + TR.st[atNow].name + '. Wait time: 30 seconds', ''); }
     if (t.at >= 0 && atNow < 0 && t.v > 0.6) { t.at = -1; }
     if (t.at >= 0 && t.v < 0.25) t.dwell = Math.max(0, t.dwell - dt);
     trServicesTick(dt);
@@ -332,15 +348,15 @@
     var needs = R.fuel < 18 || R.water < 18 || R.wear > 85 || R.dirt > 92;
     if (t.mode === 'D' && t.v < 0.25 && trInDepot()) {   // in the shed: the hired staff do the work, then she goes on
       t.throttle = 0; t.brake = 1; t.serviceT += dt;
-      if (t.serviceT > 22) { t.serviceT = 0; var c = Math.round((100 - R.fuel) * 1.5 + (100 - R.water) * 0.2 + (R.wear > 0 ? 40 + R.wear * 2.5 : 0) + 30); if (S.bank >= c) { pay(-c, 'Railway depot'); R.fuel = 100; R.water = 100; R.wear = 0; t.washT = 10; R.dirt = 0; toast('The depot crew serviced the train ($' + c + ')', 'good'); } else { toast('The depot crew cannot work: not enough money', 'bad'); return; } }
+      if (t.serviceT > 22) { t.serviceT = 0; var c = Math.round((100 - R.fuel) * 1.5 + (100 - R.water) * 0.2 + (R.wear > 0 ? 40 + R.wear * 2.5 : 0) + 30); if (S.bank >= c) { pay(-c, 'Railway depot'); R.fuel = 100; R.water = 100; R.wear = 0; t.glass = Math.max(t.glass, 0.65); t.washT = 10; R.dirt = 0; toast('The depot crew serviced the train ($' + c + ')', 'good'); } else { toast('The depot crew cannot work: not enough money', 'bad'); return; } }
       if (R.fuel < 99 || R.wear > 0) return; if (t.washT > 0) return;
     }
     if (t.at >= 0) {   // standing at a platform
       st = TR.st[t.at]; t.throttle = 0; t.brake = 1;
       if (t.dwell > 0) {
         st.gatesWant = true; if (!t.doorsOpen) trToggleDoors(true); st.cabOpen = true;
-        if (t.dwell <= 30 && !t.announced) { t.announced = true; trAnnounce(st); }
-        if (t.dwell <= 10 && !t.belled) { t.belled = true; trBell(st); }
+        if (t.dwell <= 20 && !t.announced) { t.announced = true; trAnnounce(st); }
+        if (t.dwell <= 5 && !t.belled) { t.belled = true; trBell(st); }
       } else {
         if (t.doorsOpen) trToggleDoors(false); st.gatesWant = false; trState().st[st.id].gates = false;
         if (t.doorAmt < 0.03 && st.gatesAmt < 0.03) { st.cabOpen = false; t.brake = 0; t.departFrom = t.at; t.at = -1; t.dwell = 0; }
@@ -401,54 +417,12 @@
     });
     // chuffs and smoke
     var cw = TR.units[0].g, ch = trWorldOf(lo, lo.chimney);
-    if (t.engine && t.press > 0.3) {
-      t.chuff += run; var step = 0.97;
-      if (run > 0 && t.chuff > step) { t.chuff = 0; burst(ch.x, 3.9, ch.z, 0xdadde0, 3 + Math.round(t.throttle * 5), 'smoke'); trTone('triangle', 90, 0.12, 0.2, ch.x, ch.z, { f1: 55 }); if (trOk()) sNoise(AC.currentTime, 0.1, trVol(ch.x, ch.z) * 0.09, { type: 'lowpass', freq: 500, fade: true }); }
-      else if (t.v < 0.3) { t.idleT -= dt; if (t.idleT <= 0) { t.idleT = 2.6; burst(ch.x, 3.9, ch.z, 0xe9ecee, 2, 'smoke'); } }
-    }
-    lo.lamp.material.color.setHex(t.engine && (S.time < 7 || S.time > 18.5) ? 0xfff0b0 : 0x55503a);
-    // the cab
-    lo.gasLever.rotation.z = 0.5 - t.throttle; lo.brakeLever.rotation.z = 0.5 - (t.brakeKey ? 1 : t.brake); lo.revLever.rotation.z = t.dir > 0 ? -0.5 : 0.5;
-    // The toggle handles pivot in the panel face. Positive X sends the handle clockwise as seen from the cab.
-    lo.engSw.rotation.z = 0; lo.doorSw.rotation.z = 0;
-    lo.engSw.rotation.x = t.engine ? 0.6 : -0.6; lo.doorSw.rotation.x = t.doorsOpen ? 0.6 : -0.6;
-    lo.engSwLed.material = t.engine ? trMats().ledGreen : trMats().ledOff; lo.doorSwLed.material = t.doorsOpen ? trMats().ledAmber : trMats().ledOff;
-    lo.hornBtn.position.x = lo.hornBtn.userData.rest + ((t.hornKey || t.hornAuto > 0) ? 0.03 : 0); lo.cord.position.y = 3.55 - ((t.whistleKey || t.whistleAuto > 0) ? 0.12 : 0);
-    // the firebox: the door swings, the fire flickers and the glow follows the state of the boiler
-    var fireOn = !!(t.engine && R.fuel > 0);
-    if (lo.fbDoor) lo.fbDoor.rotation.y += ((TR.fireOpen ? -1.0 : 0) - lo.fbDoor.rotation.y) * Math.min(1, dt * 8);
-    if (lo.fbLever) lo.fbLever.rotation.x = TR.fireOpen ? 0.55 : 0;   // on the right wall: pulls toward the cab
-    // the steam vent: the handwheel turns, and the roof pipe blows more and more steam the further it is open
-    var vent = TR.vent || 0;
-    if (lo.ventWheel) lo.ventWheel.rotation.x += (vent * Math.PI * 3 - lo.ventWheel.rotation.x) * Math.min(1, dt * 6);
-    TR.ventT = (TR.ventT || 0) - dt;
-    if (vent > 0.01 && t.engine && t.press > 0.1 && lo.ventPos && TR.ventT <= 0) {
-      TR.ventT = 0.2 - 0.14 * vent;
-      var vp = trWorldOf(lo, lo.ventPos);
-      burst(vp.x, 4.15, vp.z, 0xffffff, 1 + Math.round(vent * 5), 'smoke');
-      if (trOk()) sNoise(AC.currentTime, 0.22, trVol(vp.x, vp.z) * 0.06 * (0.4 + vent), { type: 'bandpass', freq: 3200, fade: true });
-    }
-    if (lo.fireLight) {
-      var fl = 0.9 + Math.sin(performance.now() / 95) * 0.16 + Math.sin(performance.now() / 41) * 0.07;
-      lo.fireLight.intensity = fireOn ? fl * (TR.fireOpen ? 1.5 : 0.55) : 0;
-    }
-    if (lo.fbGlow) {
-      lo.fbGlow.visible = fireOn;
-      lo.fbGlow.material.color.setHex(Math.sin(performance.now() / 83) > 0 ? 0xff8a30 : 0xff5a14);
-      lo.fbGlow.scale.setScalar(TR.fireOpen ? 1.12 : 0.92);
-    }
-    // the cab lamp lights itself at night; the clock runs off the park's time
-    var cabNight = S.time < 7 || S.time > 18.5;
-    if (lo.cabLight) lo.cabLight.intensity = cabNight ? 2.1 : 0;
-    if (lo.cabBulb && lo.cabBulbOn) lo.cabBulb.material = cabNight ? lo.cabBulbOn : lo.cabBulbOff;
-    if (lo.clockH) { var hr12 = S.time % 12; lo.clockH.rotation.z = -hr12 / 12 * Math.PI * 2; lo.clockM.rotation.z = -(S.time % 1) * Math.PI * 2; }
-    var G = TR.gauges; if (G) {
-      if (G.press) G.press.rotation.z = 1.1 - t.press * 2.2;
-      if (G.speed) G.speed.rotation.z = 1.1 - Math.min(1, t.v * 3.6 / 40) * 2.2;
-      if (G.fuel) G.fuel.rotation.z = 1.1 - R.fuel / 100 * 2.2;
-      if (G.brake) G.brake.rotation.z = 1.1 - (t.brakeKey ? 1 : t.brake) * 2.2;
-    }
-    if (TR.waterGlass) TR.waterGlass.scale.y = Math.max(0.02, R.water / 100);
+    var smokeCol = t.greenT > 0 ? 0x4a4b4d : 0xdadde0, beat = t.throttle * Math.abs(t.cutoff) / 0.75;
+    if (t.press > 0.12 && t.throttle > 0.03 && Math.abs(t.cutoff) > 0.01) {
+      t.chuff += run + (t.slip > 0.3 ? dt * 9 * t.slip : 0); var step = 0.97;
+      if ((run > 0 || t.slip > 0.3) && t.chuff > step) { t.chuff = 0; burst(ch.x, 3.9, ch.z, smokeCol, 3 + Math.round(beat * 6), 'smoke'); trTone('triangle', 90, 0.12, 0.2, ch.x, ch.z, { f1: 55 }); if (trOk()) sNoise(AC.currentTime, 0.1, trVol(ch.x, ch.z) * 0.09, { type: 'lowpass', freq: 500, fade: true }); }
+    } else if (t.engine && t.v < 0.3) { t.idleT -= dt; if (t.idleT <= 0) { t.idleT = t.blower > 0 ? 0.9 : 2.6; burst(ch.x, 3.9, ch.z, smokeCol, t.blower > 0 ? 3 : 2, 'smoke'); } }
+    trFootplateAnim(dt, lo, run);
   }
   // ── The crossings ─────────────────────────────────────────────────
   function trCrossingsTick(dt) {
@@ -490,15 +464,16 @@
   // ── The driver's head-up line ─────────────────────────────────────
   function trBuildHud() {
     var el = document.createElement('div'); el.id = 'tr-hud'; el.hidden = true;
-    el.style.cssText = 'position:fixed;left:50%;bottom:14px;transform:translateX(-50%);background:rgba(5,8,12,0.78);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:8px 14px;color:#eef1f5;font:13px/1.45 Consolas,monospace;pointer-events:none;z-index:20;text-align:center;white-space:pre';
+    el.style.cssText = 'position:fixed;left:12px;top:56px;background:rgba(5,8,12,0.78);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:8px 14px;color:#eef1f5;font:13px/1.45 Consolas,monospace;pointer-events:none;z-index:20;text-align:left;white-space:pre';
     document.body.appendChild(el); TR.hud = el;
   }
   function trHud(dt) {
     var t = TR.t, R = trState(); if (!TR.hud) return; t.hudT -= dt; if (t.hudT > 0) return; t.hudT = 0.12;
     if (!(t.driving || t.seat)) { if (!TR.hud.hidden) TR.hud.hidden = true; return; }
     var st = TR.st[t.nextSt], dist = Math.round(trFwdDist(t, trTargetS(t.nextSt, t.mode)));
-    var l1 = (t.driving ? 'GAS ' + Math.round(t.throttle * 100) + '%   BRAKE ' + Math.round((t.brakeKey ? 1 : t.brake) * 100) + '%   ' : '') + Math.round(t.v * 3.6) + ' km/h   ' + (t.dir > 0 ? 'FWD' : 'REV') + (t.atb ? '   [' + t.atb + ']' : '');
-    var l2 = 'STEAM ' + Math.round(t.press * 100) + '%   COAL ' + Math.round(R.fuel) + '%   WATER ' + Math.round(R.water) + '%   WEAR ' + Math.round(R.wear) + '%   DIRT ' + Math.round(R.dirt) + '%';
+    var l1 = (t.driving ? 'REG ' + Math.round(t.throttle * 100) + '%   ' + trCutoffTxt() + '   BRAKE ' + trBrakePos() + '   ' : '') + Math.round(t.v * 3.6) + ' km/h' + (t.atb ? '   [' + t.atb + ']' : '');
+    var l2 = (t.driving ? 'BOILER ' + (t.press * 14).toFixed(1) + ' bar   GLASS ' + Math.round(t.glass * 100) + '%   FIRE ' + (t.engine ? Math.round(t.fire * 100) + '%' : 'OUT') + (t.injL || t.injR ? '   INJ ' + (t.injL ? 'L' : '') + (t.injR ? 'R' : '') : '') + (t.blower > 0 ? '   BLOWER' : '') + (t.cocks ? '   COCKS OPEN' : '') + (t.fireman ? '   FIREMAN' : '') + (t.slip > 0.3 ? '   SLIPPING' : '') + (t.safety ? '   BLOWING OFF' : '') + '\n' : '') +
+      'TENDER  coal ' + Math.round(R.fuel) + '%  water ' + Math.round(R.water) + '%   WEAR ' + Math.round(R.wear) + '%   DIRT ' + Math.round(R.dirt) + '%';
     var l3 = (t.at >= 0 ? 'AT ' + TR.st[t.at].name + (t.dwell > 0 ? '   DEPARTS IN ' + Math.ceil(t.dwell) + ' s' : '   READY') : 'NEXT ' + st.name + '   ' + dist + ' m') + '   DOORS ' + (t.doorsOpen ? 'OPEN' : 'SHUT') + (R.auto ? '   AUTO' : '') + (t.mode === 'D' ? '   DEPOT LINE' : '');
     TR.hud.textContent = l1 + '\n' + l2 + '\n' + l3; TR.hud.hidden = false;
   }
