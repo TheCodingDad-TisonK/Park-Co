@@ -56,6 +56,13 @@
     if (a.state === 'boarding') a.boarding = pkAttrWalkers(a);
     return true;
   }
+  // applause from a seat: the hands up in front, meeting and parting (drawn over the sit pose, so it runs after animateHuman)
+  function pkGuestClap(g) {
+    var u = g.userData; if (!u.arms) return;
+    var la = u.arms[0], ra = u.arms[1], k = Math.max(0, Math.sin(worldTime * 13 + (u.phase || 0) * 7));
+    la.rotation.x = ra.rotation.x = -1.2; la.userData.elbow.rotation.x = ra.userData.elbow.rotation.x = -1.15;
+    la.rotation.z = 0.3 + k * 0.24; ra.rotation.z = -0.3 - k * 0.24;
+  }
   function pkAttrSeat(a, gu, si) {
     var seat = a.seats[si]; if (!seat) return false;
     return pkAttrSit(a, gu, seat);
@@ -64,7 +71,16 @@
     var n = 0;
     for (var i = 0; i < a.seats.length; i++) {
       var seat = a.seats[i]; if (!seat.guest) continue;
-      var gu = seat.guest; seat.guest = null; gu.seat = null;
+      var gu = seat.guest; seat.guest = null; gu.seat = null; gu.clap = false;
+      if (a.walkOut) {
+        // a show lets out: everyone stands up where they sat and walks out the way they came in (a.walkOut gives the path)
+        var sp = pkAttrSeatWorld(seat), sy = pkFloor(sp.x, sp.z);
+        scene.add(gu.g); gu.g.position.set(sp.x, sy, sp.z); gu.g.rotation.set(0, 0, 0); gu.g.userData.baseY = sy;
+        var bl = pkBlobOf(gu.g); if (bl) bl.visible = true;
+        gu.rec.x = sp.x; gu.rec.z = sp.z; gu.rec.path = a.walkOut({ x: sp.x, z: sp.z });
+        gu.state = 'off'; gu.rides = (gu.rides || 0) + 1; gu.mood = 'happy';
+        n++; continue;
+      }
       var ex = a.exit[0] + randf(-0.5, 0.5), ez = a.exit[1] + randf(-0.4, 0.4), fy = pkFloor(ex, ez);
       scene.add(gu.g);
       gu.g.position.set(ex, fy, ez);
@@ -103,7 +119,7 @@
       a.queue.shift();
       gu.seat = seat; seat.guest = gu; gu.slot = -1; gu.state = 'walkSeat';
       var w = pkAttrSeatWorld(seat);
-      gu.rec.path = route({ x: gu.rec.x, z: gu.rec.z }, { x: w.x, z: w.z });
+      gu.rec.path = a.seatPath ? a.seatPath({ x: gu.rec.x, z: gu.rec.z }, w) : route({ x: gu.rec.x, z: gu.rec.z }, { x: w.x, z: w.z });   // a ride with stairs gives its own way up
       if (!gu.rec.path.length) pkAttrSit(a, gu, seat);   // already at the seat
       n++;
     }
@@ -127,11 +143,14 @@
     }
     return n;
   }
+  // raise the bars for boarding or getting off. A ride whose 'bars' are a show curtain (a.curtain: the Arena) is left alone:
+  // opening the gates or ending the show must not open the curtain, only the show and the STAGE desk move it
+  function pkAttrBarsUp(a, C) { if (!a.curtain) (C || pkCtl(a)).barsWant = 0; }
   function pkAttrBegin(a) {
     if (a.state !== 'idle' && a.state !== 'unloading') return;
     var C = pkCtl(a);
     if (C.maint || !C.key) return;       // locked out at the cabinet, or the operator key off: nobody boards
-    a.state = 'boarding'; a.t = 0; C.gates = true; C.barsWant = 0;
+    a.state = 'boarding'; a.t = 0; C.gates = true; pkAttrBarsUp(a, C);
     pkAttrReslot(a);
     a.boarding = 0;
     pkAttrFill(a);
@@ -154,7 +173,8 @@
     a.state = 'unloading'; a.t = 0;
     a.cycles++;
     sfx('chime');
-    if (pkCtlAuto(a)) { C.barsWant = 0; C.gates = true; pkAttrLetOff(a); }
+    if (a.curtain) { if (pkCtlAuto(a)) C.gates = true; pkAttrLetOff(a); }   // the house empties; the curtain stays as the show left it
+    else if (pkCtlAuto(a)) { C.barsWant = 0; C.gates = true; pkAttrLetOff(a); }
     else { a.awaitBars = a.riders > 0; if (!a.awaitBars) C.barsWant = 0; }
     screenDirtyAll(); hudDirty = true;
   }
@@ -192,8 +212,10 @@
         // close up when the ride is full, or when boarding time is up and the line has emptied into the seats, or (a line
         // that is not moving) a few seconds past it; then go once the bars are down and nobody is still walking to a seat.
         // Whoever is left in the line waits for the next cycle: a line longer than the ride never holds it at the gate.
-        var full = !pkAttrHasSeat(a), walkers = a.boarding;
-        if (a.riders > 0 && !walkers && C.barsWant < 1 && (full || (a.t >= a.board - 1.4 && !a.queue.length) || a.t >= a.board + 6)) {
+        // (a show's 'bars' are its curtain, which stays closed through boarding: there it is the gates still open that says
+        // the house has not been closed up yet)
+        var full = !pkAttrHasSeat(a), walkers = a.boarding, notClosed = a.curtain ? C.gates : C.barsWant < 1;
+        if (a.riders > 0 && !walkers && notClosed && (full || (a.t >= (a.boardMin || a.board - 1.4) && !a.queue.length) || a.t >= a.board + 6)) {   // a.boardMin: a ride with a long boarding can go sooner once its line has emptied
           C.gates = false; C.barsWant = 1; a.t = Math.max(a.t, a.board - 1.4);
         }
         if (a.t >= a.board && C.barsWant >= 1 && !C.gates && a.riders > 0 && !walkers) pkAttrStart(a);
@@ -204,7 +226,7 @@
       if (a.t >= a.run) pkAttrEnd(a);
     } else if (a.state === 'unloading') {
       if (a.awaitBars) {                          // stopped with riders aboard: they get off when the bars come up
-        if (auto || PK.closed) C.barsWant = 0;   // (at closing nobody is left sitting in a stopped ride)
+        if (auto || PK.closed) pkAttrBarsUp(a, C);   // (at closing nobody is left sitting in a stopped ride)
         if (C.barsWant < 0.5) pkAttrLetOff(a); else return;
       }
       if (a.t >= a.unload) {
@@ -747,6 +769,10 @@
       bt.g.rotation.order = 'YXZ'; bt.g.rotation.y = Math.atan2(dx, dz); bt.g.rotation.x = -Math.atan2(dy, Math.sqrt(dx * dx + dz * dz));
     }
     boats.forEach(function (bt) { placeBoat(bt, bt.u); });
+    // the dock's edge: a station gate at each boat's berth (hung once the ride has its controls, below) and a rail between
+    var dockX = lane * 1.5, gw = 1.8, berths = boats.map(function (bt) { return clamp(bt.g.position.z, 2.8, 11.2); }).sort(function (q1, q2) { return q1 - q2; });
+    var railFrom = 1.8;
+    berths.concat([12.2 + gw / 2 + 0.06]).forEach(function (gzz) { var z1 = gzz - gw / 2 - 0.06; if (z1 - railFrom > 0.3) pkRailRun(p.x + dockX, p.z + railFrom, p.x + dockX, p.z + z1, { solid: true }); railFrom = gzz + gw / 2 + 0.06; });
     var dropU = (lens[0] + lens[1] + lens[2] + lens[3] * 0.98) / total;
     var a = pkAttr({ id: 'flume', name: 'Log flume', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats, board: 10, run: 30, unload: 5,
       tickRun: function (at, dt) {
@@ -763,6 +789,7 @@
       } });
     a.extra.boats = boats;
     pkCtl(a).barObjs.push(function (bv) { for (var s = 0; s < boats.length; s++) boats[s].bar.rotation.x = -1.3 * (1 - bv); });
+    berths.forEach(function (gzz) { pkStationGatePair(g, dockX, gzz, -lane, 0, gw, pkCtl(a), 0x2f6b4a); });   // swinging toward the boats
     return a;
   }
   // ── The haunted house ────────────────────────────────────────────

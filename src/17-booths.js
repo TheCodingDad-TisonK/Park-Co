@@ -239,7 +239,7 @@
       if (a.boothLights) a.boothLights.setPower(on);
       if (!on) {
         var C = a.ctl;
-        if (C) { C.gates = false; C.barsWant = 0; C.bkTest = false; }
+        if (C) { C.gates = false; pkAttrBarsUp(a, C); C.bkTest = false; }
         a.manualStart = false;
         if (PK.duty && PK.duty.id === id) pkClockOut();
       }

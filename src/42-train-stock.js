@@ -38,6 +38,7 @@
     }
     return w;
   }
+  var TR_CAB_SEAT = 1.99;   // the top of the driver's cushion, above the rail
   function trBuildLoco() {
     var M = trMats(), P = pkMats(), g = trDyn(), u = { kind: 'loco', g: g, len: 8.4, d: 4.2, bf: 2.6, br: 2.6, wheels: [], drivers: [], rods: [] };
     g.userData.unit = u;
@@ -156,6 +157,15 @@
     pkBevelBox(2.0, 0.16, 1.0, M.greenD, -2.65, 3.86, 0, g, 0.05); box(2.1, 0.03, 1.1, brass, -2.65, 3.77, 0, g); box(2.06, 0.03, 1.06, brass, -2.65, 3.95, 0, g);
     [[-4.2, -1.3], [-4.2, 1.3], [-1.1, -1.3], [-1.1, 1.3]].forEach(function (c) { sphere(0.07, gold, c[0], 3.7, c[1], g); });
     
+    // the driver's seat: a padded leather seat on a pillar and a bracket off the cab side, set high enough for the eye to
+    // clear the spectacle glass (the camera sits 0.72 above its cushion; trSeatTop/playerOverride in part 43 use the same)
+    var leather = pkPaint(0x4a2a1c, 0.7, 0.05);
+    pkBevelBox(0.44, 0.08, 0.42, leather, -2.55, TR_CAB_SEAT - 0.04, -0.68, g, 0.03);
+    pkBevelBox(0.46, 0.04, 0.44, M.black, -2.55, TR_CAB_SEAT - 0.1, -0.68, g, 0.01);
+    pkBevelBox(0.08, 0.36, 0.38, leather, -2.8, TR_CAB_SEAT + 0.16, -0.68, g, 0.03);
+    pkRoundCyl(0.035, TR_CAB_SEAT - 0.12 - 1.35, M.black, -2.55, (TR_CAB_SEAT - 0.12 + 1.35) / 2, -0.68, g, 8);
+    pkRoundCyl(0.12, 0.03, M.black, -2.55, 1.365, -0.68, g, 12);
+    pkRod(-2.55, TR_CAB_SEAT - 0.12, -0.68, -2.55, TR_CAB_SEAT - 0.3, -1.06, 0.025, M.black, g, 6);
     // the backhead: dials, levers, switches
     trBuildCabControls(g, u);
     
@@ -309,6 +319,8 @@
       c.fillStyle = '#10211b'; c.fillRect(0, 0, 512, 300); c.strokeStyle = '#c9a45e'; c.lineWidth = 4; c.strokeRect(7, 7, 498, 286);
       c.textAlign = 'left'; c.fillStyle = '#f2d48c'; c.font = 'bold 25px Consolas, monospace'; c.fillText('PLATFORM ALIGNMENT', 24, 43);
       c.fillStyle = '#dbe8d7'; c.font = '20px Consolas, monospace'; c.fillText(st ? st.name : 'ROUTE UNKNOWN', 24, 88);
+      // the stop assist: offered within reach of the platform, lit while the driver holds Space
+      if (t.assist || (t.driving && trAssistDist(t) >= 0)) { c.textAlign = 'right'; c.fillStyle = t.assist ? '#83e5a3' : '#f2c75c'; c.font = 'bold 17px Consolas, monospace'; c.fillText(t.assist ? 'STOP ASSIST ON' : 'HOLD SPACE: STOP ASSIST', 488, 88); c.textAlign = 'left'; }
       c.fillStyle = t.at >= 0 && t.v < 0.25 ? '#83e5a3' : '#f2c75c'; c.font = 'bold 25px Consolas, monospace';
       c.fillText(t.at >= 0 && t.v < 0.25 ? 'STOP POSITION: ALIGNED' : 'STOP IN: ' + distance + ' m', 24, 128);
       c.fillStyle = '#dbe8d7'; c.font = '20px Consolas, monospace';
@@ -390,35 +402,135 @@
   }
 
   // ── A wagon: four seats, doors at the sides, a fairy-tale roof ────
+  // ── The carriages ─────────────────────────────────────────────────
+  // Each carriage tells one of the park's tales: its colours, its name on a scroll board, its crest painted on the sides
+  // and ends, and its roof (trWagonRoof). The body is a heritage summer coach: a steel underframe on leaf springs, beaded
+  // waist panels lined in gold, turned corner posts, glazed windows under a scalloped valance and an arched roof with a
+  // painted ceiling inside; two buttoned benches face each other across the doorway.
+  function trCrestTex(kind, body, trim) {
+    var hex = function (c) { return '#' + ('000000' + c.toString(16)).slice(-6); };
+    return tex(256, 256, function (c) {
+      var circ = function (x, y, r, col) { c.fillStyle = col; c.beginPath(); c.arc(x, y, r, 0, 6.283); c.fill(); };
+      var star = function (x, y, r, col) { c.fillStyle = col; c.beginPath(); for (var q = 0; q < 10; q++) { var rr = q % 2 ? r * 0.42 : r, aa = q / 10 * 6.283 - 1.571; c.lineTo(x + Math.cos(aa) * rr, y + Math.sin(aa) * rr); } c.fill(); };
+      circ(128, 128, 126, hex(trim)); circ(128, 128, 112, '#f6efdc');
+      c.strokeStyle = hex(body); c.lineWidth = 6; c.beginPath(); c.arc(128, 128, 100, 0, 6.283); c.stroke();
+      c.lineCap = 'round'; c.lineJoin = 'round';
+      if (kind === 'spires') {            // a briar rose
+        c.strokeStyle = '#2f6b34'; c.lineWidth = 7; c.beginPath(); c.moveTo(128, 205); c.bezierCurveTo(110, 170, 150, 150, 128, 120); c.stroke();
+        [[96, 165, -0.6], [160, 150, 0.6]].forEach(function (l) { c.save(); c.translate(l[0], l[1]); c.rotate(l[2]); c.fillStyle = '#3f8a44'; c.beginPath(); c.ellipse(0, 0, 22, 10, 0, 0, 6.283); c.fill(); c.restore(); });
+        for (var i = 0; i < 6; i++) { var a = i / 6 * 6.283; circ(128 + Math.cos(a) * 22, 95 + Math.sin(a) * 22, 22, '#c8324e'); }
+        circ(128, 95, 20, '#e0566f'); circ(128, 95, 9, '#f3d36a');
+      } else if (kind === 'mushroom') {   // a toadstool
+        c.fillStyle = '#efe6cf'; c.fillRect(110, 120, 36, 70); c.strokeStyle = '#a89c80'; c.lineWidth = 3; c.strokeRect(110, 120, 36, 70);
+        c.fillStyle = '#c4262b'; c.beginPath(); c.moveTo(48, 130); c.quadraticCurveTo(128, 20, 208, 130); c.closePath(); c.fill();
+        [[90, 100, 12], [130, 75, 14], [168, 104, 11], [110, 120, 8], [150, 124, 8]].forEach(function (d) { circ(d[0], d[1], d[2], '#ffffff'); });
+        c.fillStyle = '#5a8a3c'; c.fillRect(60, 188, 136, 10);
+      } else if (kind === 'gingerbread') { // a gingerbread man
+        var gb = '#a8662e'; circ(128, 72, 28, gb); c.fillStyle = gb; c.beginPath(); c.ellipse(128, 140, 38, 46, 0, 0, 6.283); c.fill();
+        c.strokeStyle = gb; c.lineWidth = 24; c.beginPath(); c.moveTo(92, 118); c.lineTo(62, 140); c.moveTo(164, 118); c.lineTo(194, 140); c.moveTo(108, 178); c.lineTo(94, 210); c.moveTo(148, 178); c.lineTo(162, 210); c.stroke();
+        circ(118, 66, 4, '#2a1a10'); circ(138, 66, 4, '#2a1a10'); [124, 146, 168].forEach(function (y) { circ(128, y - 20, 5, '#ffffff'); });
+        c.strokeStyle = '#ffffff'; c.lineWidth = 3; c.beginPath(); c.arc(128, 78, 10, 0.2, 2.9); c.stroke();
+      } else if (kind === 'crown') {      // the frog king's crown
+        c.fillStyle = '#d9a93a'; c.beginPath(); c.moveTo(60, 170); c.lineTo(60, 92); c.lineTo(94, 130); c.lineTo(128, 74); c.lineTo(162, 130); c.lineTo(196, 92); c.lineTo(196, 170); c.closePath(); c.fill();
+        c.fillStyle = '#b8862a'; c.fillRect(60, 160, 136, 22); [94, 128, 162].forEach(function (x) { circ(x, 171, 7, '#c8324e'); }); [60, 128, 196].forEach(function (x, i) { circ(x, i === 1 ? 70 : 88, 9, '#f3d36a'); });
+      } else if (kind === 'onion') {      // Fata Morgana's dome and a star
+        c.fillStyle = '#d9a93a'; c.beginPath(); c.moveTo(128, 50); c.bezierCurveTo(176, 110, 190, 130, 160, 160); c.lineTo(96, 160); c.bezierCurveTo(66, 130, 80, 110, 128, 50); c.fill();
+        c.fillStyle = '#1fa9a3'; c.fillRect(92, 160, 72, 40); c.fillStyle = '#16807b'; c.beginPath(); c.arc(128, 200, 14, Math.PI, 0); c.fill();
+        star(190, 70, 14, '#f3d36a');
+      } else if (kind === 'tree') {       // the fairytale tree, with its face
+        c.fillStyle = '#6b4a2e'; c.fillRect(110, 120, 36, 82);
+        [[128, 92, 52], [88, 112, 34], [168, 112, 34]].forEach(function (t2) { circ(t2[0], t2[1], t2[2], '#4f8a3a'); });
+        circ(118, 150, 5, '#1b1208'); circ(138, 150, 5, '#1b1208'); c.strokeStyle = '#1b1208'; c.lineWidth = 3; c.beginPath(); c.arc(128, 168, 9, 0.3, 2.8); c.stroke();
+      } else if (kind === 'tent') {       // a carnival mask
+        c.fillStyle = '#d94f4f'; c.beginPath(); c.moveTo(60, 110); c.quadraticCurveTo(128, 70, 196, 110); c.quadraticCurveTo(190, 168, 128, 150); c.quadraticCurveTo(66, 168, 60, 110); c.fill();
+        c.fillStyle = '#f6efdc'; c.beginPath(); c.ellipse(100, 118, 18, 11, -0.2, 0, 6.283); c.fill(); c.beginPath(); c.ellipse(156, 118, 18, 11, 0.2, 0, 6.283); c.fill();
+        c.strokeStyle = '#f3d36a'; c.lineWidth = 5; c.beginPath(); c.moveTo(150, 150); c.quadraticCurveTo(170, 200, 140, 214); c.stroke(); circ(140, 214, 7, '#f3d36a');
+      } else {                            // the dream flight's moon and stars
+        circ(118, 128, 62, '#f3d36a'); circ(146, 112, 56, '#f6efdc');
+        [[176, 74, 10], [190, 156, 7], [154, 186, 6]].forEach(function (st) { star(st[0], st[1], st[2], '#d9a93a'); });
+      }
+    });
+  }
+  // a row of scallops hanging from the eaves, cut from one flat shape
+  function trValance(len, h, n) {
+    var sh = new THREE.Shape(), w = len / n; sh.moveTo(-len / 2, 0); sh.lineTo(len / 2, 0); sh.lineTo(len / 2, -h * 0.45);
+    for (var i = n - 1; i >= 0; i--) { var x0 = -len / 2 + i * w; sh.quadraticCurveTo(x0 + w / 2, -h * 1.6, x0, -h * 0.45); }
+    sh.closePath(); return new THREE.ExtrudeGeometry(sh, { depth: 0.03, bevelEnabled: false });
+  }
   function trBuildWagon(k) {
     var M = trMats(), P = pkMats(), T = TR_WAGONS[k], g = trDyn(), u = { kind: 'wagon', g: g, idx: k, len: 4.6, d: 15.7 + 5.1 * k, bf: 1.5, br: 1.5, wheels: [], rods: [], drivers: [], doors: [], seats: [] };
-    var body = pkPaint(T.body, 0.45, 0.2), trim = pkPaint(T.trim, 0.4, 0.4);
+    var body = pkPaint(T.body, 0.42, 0.18), trim = pkPaint(T.trim, 0.38, 0.4), gold = M.gold || pkPaint(0xd9a93a, 0.3, 0.8), dark = pkPaint(new THREE.Color(T.body).multiplyScalar(0.55).getHex(), 0.5, 0.15);
+    var red = pkPaint(0x8e2a22, 0.5, 0.2), wood = M.woodD, steel = M.black;
+    // the underframe: solebars and headstocks, the floor, and a step board under each doorway
+    [-1, 1].forEach(function (s) { box(4.7, 0.22, 0.1, steel, 0, 0.8, s * 0.98, g); box(1.5, 0.05, 0.3, wood, 0, 0.6, s * 1.32, g); [-0.6, 0.6].forEach(function (bx) { box(0.05, 0.25, 0.05, steel, bx, 0.72, s * 1.2, g); }); });
+    [-1, 1].forEach(function (e) { box(0.14, 0.28, 2.3, red, e * 2.38, 0.86, 0, g); });
     pkBevelBox(4.6, 0.16, 2.3, M.black, 0, 0.86, 0, g, 0.02); pkBevelBox(4.5, 0.06, 2.2, M.wood, 0, 0.93, 0, g, 0.01);
-    // the half walls, with a gap at the door, and the doors themselves
+    box(2.6, 0.012, 0.86, dark, 0, 0.967, 0, g);   // the aisle's runner
+    // the running gear: four wheelsets in axleboxes on leaf springs
+    [-1, 1].forEach(function (s) { [-1.5, -0.6, 0.6, 1.5].forEach(function (x) { var w = trWheel(0.32, M.black, M.black, g, x, 0.58, s * 0.72, 6); u.wheels.push({ w: w, r: 0.32 });
+      pkBevelBox(0.2, 0.2, 0.14, steel, x, 0.58, s * 0.88, g, 0.02);
+      for (var lf = 0; lf < 3; lf++) box(0.66 - lf * 0.16, 0.035, 0.1, steel, x, 0.72 + lf * 0.035, s * 0.88, g);
+    }); });
+    [-1.5, -0.6, 0.6, 1.5].forEach(function (ax) { var axle = pkRoundCyl(0.045, 1.65, M.iron, ax, 0.58, 0, g, 8); axle.rotation.x = Math.PI / 2; });
+    [-1, 1].forEach(function (e) { [-0.6, 0.6].forEach(function (z) { var bf = pkRoundCyl(0.09, 0.2, M.iron, e * 2.5, 0.9, z, g, 8); bf.rotation.z = Math.PI / 2; pkRoundCyl(0.16, 0.04, M.iron, e * 2.6, 0.9, z, g, 10).rotation.z = Math.PI / 2; }); });
+    box(0.6, 0.08, 0.1, M.iron, -2.65, 0.9, 0, g);
+    // the sides: beaded waist panels lined in gold, the name on a scroll board, the tale's crest, and the doors
+    var crestMat = std({ map: trCrestTex(T.roof, T.body, T.trim), roughness: 0.5, metalness: 0.1 });
     [-1, 1].forEach(function (s) {
-      [-1.4, 1.4].forEach(function (x) { pkBevelBox(1.8, 0.62, 0.08, body, x, 1.27, s * 1.12, g, 0.02); box(1.8, 0.05, 0.1, trim, x, 1.6, s * 1.12, g); });
-      sign([T.n], 1.6, 0.2, -1.4, 1.27, s * 1.165, s > 0 ? 0 : Math.PI, { w: 384, h: 48, bg: '#' + ('000000' + T.body.toString(16)).slice(-6), fg: '#' + ('000000' + T.trim.toString(16)).slice(-6), plate: false }, g);
+      var zo = s * 1.12, zf = s * 1.165;
+      [-1.4, 1.4].forEach(function (x) {
+        pkBevelBox(1.8, 0.62, 0.08, body, x, 1.27, zo, g, 0.02);
+        [[1.56, 0.03, 0, 0.2], [1.56, 0.03, 0, -0.2], [0.03, 0.43, -0.765, 0], [0.03, 0.43, 0.765, 0]].forEach(function (b) { box(b[0], b[1], 0.03, trim, x + b[2], 1.27 + b[3], zf, g); });
+        box(1.62, 0.012, 0.01, gold, x, 1.05, zf + s * 0.01, g);
+      });
+      pkBevelBox(4.7, 0.07, 0.16, trim, 0, 1.62, zo, g, 0.02);                    // the waist rail
+      // the name, on a gilt-edged scroll on one panel; the crest in a gilt ring on the other
+      var nx = s > 0 ? -1.4 : 1.4, cx = -nx;
+      box(1.34, 0.26, 0.02, gold, nx, 1.27, zf + s * 0.012, g);
+      sign([T.n], 1.26, 0.2, nx, 1.27, zf + s * 0.025, s > 0 ? 0 : Math.PI, { w: 384, h: 60, bg: '#' + ('000000' + T.body.toString(16)).slice(-6), fg: '#' + ('000000' + T.trim.toString(16)).slice(-6), plate: false }, g);
+      [-1, 1].forEach(function (e) { pkRoundCyl(0.05, 0.3, gold, nx + e * 0.68, 1.27, zf + s * 0.02, g, 8); });
+      var crest = new THREE.Mesh(new THREE.CircleGeometry(0.22, 28), crestMat); crest.position.set(cx, 1.27, zf + s * 0.03); crest.rotation.y = s > 0 ? 0 : Math.PI; g.add(crest);
+      var cring = new THREE.Mesh(new THREE.TorusGeometry(0.225, 0.02, 6, 28), gold); cring.position.copy(crest.position); cring.rotation.y = crest.rotation.y; g.add(cring);
+      // the doors: panelled leaves on their hinges, beaded, with a brass handle
       [-1, 1].forEach(function (h) {
-        var pv = new THREE.Group(); pv.position.set(h * 0.5, 1.27, s * 1.12); dyn_add(g, pv);
-        pkBevelBox(0.5, 0.62, 0.05, body, -h * 0.25, 0, 0, pv, 0.01); box(0.5, 0.05, 0.07, trim, -h * 0.25, 0.33, 0, pv); sphere(0.03, M.brass, -h * 0.4, 0.05, s * 0.04, pv);
+        var pv = new THREE.Group(); pv.position.set(h * 0.5, 1.27, zo); dyn_add(g, pv);
+        pkBevelBox(0.5, 0.62, 0.05, body, -h * 0.25, 0, 0, pv, 0.01); box(0.5, 0.05, 0.07, trim, -h * 0.25, 0.33, 0, pv);
+        [[0.36, 0.025, 0, 0.18], [0.36, 0.025, 0, -0.18], [0.025, 0.36, -0.18, 0], [0.025, 0.36, 0.18, 0]].forEach(function (b) { box(b[0], b[1], 0.02, trim, -h * 0.25 + b[2], b[3], s * 0.035, pv); });
+        sphere(0.03, M.brass, -h * 0.4, 0.05, s * 0.04, pv);
         u.doors.push({ pv: pv, side: s, h: h });
       });
-      // Proper framed passenger windows rather than an open-sided shell.
+      // glazed windows above the waist, each in its frame with a glazing bar
       [-1.4, 1.4].forEach(function (wx) {
         pkBevelBox(1.58, 0.84, 0.055, trim, wx, 2.0, s * 1.125, g, 0.015);
         box(1.38, 0.64, 0.016, M.glass, wx, 2.0, s * 1.16, g);
         box(0.045, 0.69, 0.026, trim, wx, 2.0, s * 1.17, g);
-        box(1.44, 0.035, 0.026, trim, wx, 2.0, s * 1.17, g);
       });
-      [-0.62, 0.62].forEach(function (dx) { pkRoundCyl(0.022, 0.56, M.brass, dx, 1.63, s * 1.17, g, 6); });
+      // brass grab rails either side of the doorway
+      [-0.62, 0.62].forEach(function (dx) { pkRoundCyl(0.022, 0.9, M.brass, dx, 1.95, s * 1.17, g, 6); });
+      // the cornice, and a scalloped valance along the eaves
+      box(4.95, 0.08, 0.1, trim, 0, 2.52, s * 1.32, g);
+      var val = new THREE.Mesh(trValance(4.9, 0.16, 14), trim); val.position.set(0, 2.48, s * 1.33 - (s > 0 ? 0 : 0.03)); g.add(val);
     });
-    // corner posts, roof beams and lanterns
-    [[-2.2, -1.1], [2.2, -1.1], [-2.2, 1.1], [2.2, 1.1]].forEach(function (p) { pkRoundCyl(0.06, 1.6, trim, p[0], 1.75, p[1], g, 8); sphere(0.1, M.brass, p[0], 2.58, p[1], g); });
+    // turned corner posts with brass caps, and slim posts each side of the doorway
+    var postGeo = [[0, 0], [0.075, 0], [0.075, 0.1], [0.05, 0.16], [0.05, 0.62], [0.07, 0.68], [0.045, 0.76], [0.045, 1.5], [0.07, 1.56], [0.07, 1.6], [0, 1.6]];
+    [[-2.25, -1.1], [2.25, -1.1], [-2.25, 1.1], [2.25, 1.1]].forEach(function (p) { pkLathe(postGeo, trim, p[0], 0.96, p[1], g, 10); sphere(0.08, M.brass, p[0], 2.6, p[1], g); });
     [-1.1, 1.1].forEach(function (z) { [-0.7, 0.7].forEach(function (x) { pkRoundCyl(0.04, 1.6, trim, x, 1.75, z * 0.98, g, 6); }); });
-    pkBevelBox(4.9, 0.12, 2.7, body, 0, 2.56, 0, g, 0.03); box(4.95, 0.06, 2.75, trim, 0, 2.5, 0, g);
-    for (var sc = -2.3; sc <= 2.3; sc += 0.46) { var s1 = trCone(0.16, 0.26, trim, sc, 2.38, 1.34, g, 4); s1.rotation.x = Math.PI; var s2 = trCone(0.16, 0.26, trim, sc, 2.38, -1.34, g, 4); s2.rotation.x = Math.PI; }
-    var lamp = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), M.lampOn); lamp.position.set(0, 2.38, 0); lamp.userData.noBake = true; g.add(lamp); u.lamp = lamp;
-    // Interior luggage racks and reading lamps make every carriage feel occupied and usable.
+    // the ends: a panel below the waist with the crest, and an end rail
+    [-1, 1].forEach(function (e) {
+      pkBevelBox(0.08, 0.62, 2.16, body, e * 2.25, 1.27, 0, g, 0.02); box(0.1, 0.07, 2.3, trim, e * 2.25, 1.62, 0, g);
+      var ec = new THREE.Mesh(new THREE.CircleGeometry(0.2, 28), crestMat); ec.position.set(e * 2.3, 1.27, 0); ec.rotation.y = e * Math.PI / 2; g.add(ec);
+    });
+    // the arched roof (a shallow barrel, 0.17 high in the middle), its painted ceiling, and the end boards
+    var R0 = 5.78, half = Math.asin(1.38 / R0), y0 = 2.56 + 0.17 - R0;
+    var barrel = function (r, len, mat, dy) { var geo = new THREE.CylinderGeometry(r, r, len, 28, 1, true, -half, half * 2); geo.rotateZ(Math.PI / 2); geo.rotateX(-Math.PI / 2); var m = new THREE.Mesh(geo, mat); m.position.set(0, y0 + (dy || 0), 0); g.add(m); return m; };
+    barrel(R0, 4.9, std({ color: T.body, roughness: 0.55, metalness: 0.15, side: THREE.FrontSide })).castShadow = true;
+    // the ceiling hangs 0.1 under the roof, below the foot of every roof topper (trWagonRoof starts them at 2.64)
+    barrel(R0 - 0.05, 4.86, std({ color: new THREE.Color(T.trim).lerp(new THREE.Color(0xf6efdc), 0.6).getHex(), roughness: 0.8, side: THREE.BackSide }), -0.1);
+    [-1, 1].forEach(function (e) { var fas = new THREE.Shape(); fas.moveTo(-1.38, 0); fas.quadraticCurveTo(0, 0.34, 1.38, 0); fas.lineTo(1.38, -0.08); fas.quadraticCurveTo(0, 0.26, -1.38, -0.08); fas.closePath();
+      var fm = new THREE.Mesh(new THREE.ExtrudeGeometry(fas, { depth: 0.05, bevelEnabled: false }), trim); fm.rotation.y = Math.PI / 2; fm.position.set(e * 2.47, 2.58, 0); g.add(fm); });
+    // the ceiling lamp in its brass rose, the reading lamps and the luggage racks
+    var lamp = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), M.lampOn); lamp.position.set(0, 2.42, 0); lamp.userData.noBake = true; g.add(lamp); u.lamp = lamp;
+    pkRoundCyl(0.16, 0.05, M.brass, 0, 2.555, 0, g, 12);
     var caseCols = [0x7b2530, 0x254a78, 0x6a4b2d, 0x40552b];
     [-1, 1].forEach(function (side) {
       [-1.4, 1.4].forEach(function (rx, ri) {
@@ -432,23 +544,53 @@
       });
       [-1.4, 1.4].forEach(function (lx) { var rl = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), M.lampOn); rl.position.set(lx, 2.34, side * 0.99); rl.userData.noBake = true; g.add(rl); });
     });
-    // two benches, face to face, two seats each: the aisle between them is the door
+    // two benches, face to face, two seats each: buttoned cushions, a raked back, wooden ends with armrests
     [-1, 1].forEach(function (b) {
       var bx = b * 1.6, cush = pkPaint(0x7a1f2a, 0.8, 0.05);
-      pkBevelBox(0.62, 0.14, 2.0, cush, bx, 1.2, 0, g, 0.04); pkBevelBox(0.14, 0.7, 2.0, cush, bx + b * 0.34, 1.6, 0, g, 0.05); box(0.6, 0.22, 2.0, M.woodD, bx, 1.04, 0, g);
-      box(0.05, 0.06, 0.04, trim, bx, 1.21, 0, g);
+      pkBevelBox(0.62, 0.14, 2.0, cush, bx, 1.2, 0, g, 0.04); box(0.6, 0.22, 2.0, M.woodD, bx, 1.04, 0, g);
+      var back = pkBevelBox(0.14, 0.7, 2.0, cush, bx + b * 0.34, 1.6, 0, g, 0.05); back.rotation.z = -b * 0.08;
+      for (var bt = -0.75; bt <= 0.76; bt += 0.5) sphere(0.022, dark, bx + b * 0.26, 1.7, bt, g);
+      [-1.04, 1.04].forEach(function (ez) { pkBevelBox(0.66, 0.56, 0.06, M.woodD, bx, 1.24, ez, g, 0.02); pkBevelBox(0.5, 0.05, 0.1, M.woodD, bx - b * 0.02, 1.53, ez, g, 0.02); });
       [-0.5, 0.5].forEach(function (zz) { var seat = { x: bx - b * 0.05, y: 1.2, z: zz, face: b > 0 ? Math.PI : 0, taken: false }; u.seats.push(seat);
         hitBox(0.8, 0.9, 0.9, bx, 1.5, zz, { prompt: function () { return trCanSit(u) ? 'Sit down' : (trSeatedIn() ? '' : (TR.t.v < 0.3 ? 'The doors are shut' : '')); }, use: function () { trSit(u, seat); } }, g); });
     });
     trWagonRoof(g, T.roof, k, u);
-    // wheels and couplings
-    [-1, 1].forEach(function (s) { [-1.5, -0.6, 0.6, 1.5].forEach(function (x) { var w = trWheel(0.32, M.black, M.black, g, x, 0.58, s * 0.72, 6); u.wheels.push({ w: w, r: 0.32 }); }); });
-    [-1.5, -0.6, 0.6, 1.5].forEach(function (ax) { var axle = pkRoundCyl(0.045, 1.65, M.iron, ax, 0.58, 0, g, 8); axle.rotation.x = Math.PI / 2; });
-    [-1.05, 1.05].forEach(function (bx) { pkBevelBox(1.15, 0.12, 1.52, M.iron, bx, 0.72, 0, g, 0.02); });
-    [-1, 1].forEach(function (e) { [-0.6, 0.6].forEach(function (z) { var bf = pkRoundCyl(0.09, 0.2, M.iron, e * 2.4, 0.9, z, g, 8); bf.rotation.z = Math.PI / 2; pkRoundCyl(0.16, 0.04, M.iron, e * 2.5, 0.9, z, g, 10).rotation.z = Math.PI / 2; }); });
-    box(0.6, 0.08, 0.1, M.iron, -2.55, 0.9, 0, g);
     sign([String(k + 1)], 0.26, 0.26, 0, 2.05, 1.38, 0, { w: 96, h: 96, bg: '#1b232c', fg: '#f3d36a' }, g); sign([String(k + 1)], 0.26, 0.26, 0, 2.05, -1.38, Math.PI, { w: 96, h: 96, bg: '#1b232c', fg: '#f3d36a' }, g);
+    trMergeStatic(g, [u.lamp, u.flag].concat(u.doors.map(function (d) { return d.pv; }), u.wheels.map(function (w) { return w.w; })));
     TR.units.push(u); return u;
+  }
+  // A carriage is a moving group, so the park's bake leaves it alone and every little part of it was a draw of its own.
+  // This merges every part that never moves or changes into one mesh per look (colour, finish, texture), in the
+  // carriage's own frame. Doors, wheels, lamps, the flag, glass, the ceiling and whatever the player aims at stay apart.
+  function trMergeStatic(g, keep) {
+    g.updateMatrixWorld(true);
+    var inv = new THREE.Matrix4().copy(g.matrixWorld).invert(), rel = new THREE.Matrix4(), groups = {};
+    var kept = function (o) { for (var p = o; p && p !== g; p = p.parent) if (keep.indexOf(p) >= 0) return true; return false; };
+    g.traverse(function (o) {
+      if (o === g || !o.isMesh || o.isInstancedMesh || kept(o)) return;
+      var m = o.material;
+      if (!m || Array.isArray(m) || m.transparent || m.visible === false || m.side === THREE.BackSide || (m.userData && (m.userData.noBake || m.userData.glow)) || o.userData.it || o.userData.noBake) return;
+      if (!o.geometry || !o.geometry.attributes.position) return;
+      var key = [m.type, m.color ? m.color.getHex() : 0, m.roughness, m.metalness, m.map ? m.map.uuid : '', m.side, m.emissive ? m.emissive.getHex() : 0, m.emissiveIntensity, o.castShadow ? 1 : 0].join('|');
+      (groups[key] = groups[key] || { mat: m, items: [] }).items.push(o);
+    });
+    Object.keys(groups).forEach(function (key) {
+      var grp = groups[key]; if (grp.items.length < 2) return;
+      var pos = [], nor = [], uv = [];
+      grp.items.forEach(function (o) {
+        var geo = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+        rel.multiplyMatrices(inv, o.matrixWorld); geo.applyMatrix4(rel);
+        var pa = geo.attributes.position.array, na = geo.attributes.normal ? geo.attributes.normal.array : null, ua = geo.attributes.uv ? geo.attributes.uv.array : null, n = pa.length / 3;
+        for (var i = 0; i < pa.length; i++) pos.push(pa[i]);
+        for (var j = 0; j < n * 3; j++) nor.push(na ? na[j] : 0);
+        for (var q = 0; q < n * 2; q++) uv.push(ua ? ua[q] : 0);
+        geo.dispose(); o.parent.remove(o);
+      });
+      var merged = new THREE.BufferGeometry();
+      merged.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); merged.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); merged.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      merged.computeBoundingSphere();
+      var mm = new THREE.Mesh(merged, grp.mat); mm.castShadow = grp.items[0].castShadow; mm.receiveShadow = true; g.add(mm);
+    });
   }
   function dyn_add(g, o) { g.add(o); return o; }
   function trWagonRoof(g, kind, k, u) {
@@ -491,6 +633,13 @@
   // ── Putting the whole train on the line ───────────────────────────
   function trBuildTrain() {
     TR.units = []; trBuildLoco(); trBuildTender(); for (var k = 0; k < 8; k++) trBuildWagon(k);
+    // every wheel (tyre, disc, spokes, hub, a driver's counterweight) turns as one piece, and each door leaf swings as one:
+    // merged inside themselves, so the whole train costs a fraction of the draws it did
+    TR.units.forEach(function (u) {
+      u.wheels.forEach(function (w) { trMergeStatic(w.w, []); });
+      if (u.doors) u.doors.forEach(function (d) { trMergeStatic(d.pv, []); });
+      if (u.kind === 'tender') trMergeStatic(u.g, u.wheels.map(function (w) { return w.w; }));
+    });
     var last = TR.units[TR.units.length - 1]; TR.len = last.d + last.len / 2;
   }
   var _trA = {}, _trB = {};

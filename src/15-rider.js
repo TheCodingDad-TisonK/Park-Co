@@ -55,7 +55,7 @@
     PK.playerRide = { kind: 'attr', a: a, seat: seat, started: a.state === 'running', yaw0: player.yaw, pitch0: player.pitch, eye: 1.30, face: Math.PI + (seat.ry || 0) };
     if (a.state === 'idle') {
       var C = pkCtl(a);
-      a.state = 'boarding'; a.t = 0; C.gates = true; C.barsWant = 0; a.boarding = 0;
+      a.state = 'boarding'; a.t = 0; C.gates = true; pkAttrBarsUp(a, C); a.boarding = 0;
     }
     sfx('unlock'); toast('Riding ' + a.name + ' - look around with the mouse', 'good');
     hudDirty = true; screenDirtyAll();

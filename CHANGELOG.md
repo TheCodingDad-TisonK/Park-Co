@@ -1,5 +1,49 @@
 # Changelog
 
+## 1.4.1 (2026-10-29): Improvement Update
+
+A smoother park, a new set of carriages for the Lindenburg Railway, proper station gates at every ride, and a tidier way into the Lindenburg Arena.
+
+## New
+- **Stop assist on the railway:** when you drive the train into a station, hold Space and she brakes in and stops with every carriage door at its platform gate. The platform alignment screen in the cab offers it as you approach and shows when it is on.
+- **New carriages:** all eight carriages of the Lindenburg Railway are rebuilt as proper heritage coaches, each telling its own tale. They have panelled sides lined in gold, a painted crest and a name scroll for the story they carry, turned corner posts, an arched roof with a painted ceiling inside, buttoned benches with armrests, leaf springs under the frame, and steps at the doors.
+- **Station gates at every ride:** the Carousel, Teacups, Ferris wheel, Dodgems, Drop tower, Little Roundabout and Wobbly Pots now have proper railed gates at their entrance and exit, in the ride's own colours. The Log flume has a gate at each boat's berth along the dock. The gates stand open while the ride is waiting and close while it runs.
+
+## Improved
+- **Performance:** the park now draws about a third of the triangles it did. Rounded parts such as booth desks, buttons, trims and railings were built from far more geometry than they needed, which slowed every view of the park. They look the same and cost much less.
+- **Performance:** the train is now a fraction of the work to draw. Each carriage, its wheels and its doors are built as a few solid pieces instead of hundreds of small ones.
+- **Sitting on the train:** the driver now has a proper seat in the cab, and in 3rd person you see yourself sitting on it. In the carriages you sit properly on the bench, and the 3rd person camera stays under the roof instead of ending up inside it.
+
+## Fixed
+### The Lindenburg Railway
+- The train now stops at the right place in every station. It used to stop about 19 metres too far, with the engine past the end of the platform and the carriage doors nowhere near the gates, both on AUTO and when you drove her yourself.
+
+### The Lindenburg Arena
+- AUTO now really runs the show by itself. With the key on, it opens the gates when guests are waiting, closes up once the line is in and seated (after at least half a minute) and starts the show. Before, it never closed the gates, so you had to open them and start every show yourself.
+- The stair hall is now closed in at the top of the stair. You no longer see the sky through a gap between the hall and the stand's roof.
+- The stone base along the front of the hall no longer runs across the doorway, so the red carpet leads straight in to the gates.
+- The entrance's floating gold arch is replaced by a gilt door frame with a keystone, set properly round the doorway.
+- The entrance gates are now proper railed iron gates instead of solid black panels.
+- The cluttered model in front of the store door under the landing is gone, so the door stands clear.
+- A velvet curtain now hangs in the way through from the stair hall onto the stand. It draws shut when the show starts and opens again when it ends.
+- The stand's side walls now reach all the way up to its roof, so you can no longer see out over the stair hall's roof or into the stand from outside.
+- Opening the gates no longer opens the curtain. The curtain now moves only with the show and the CURTAIN switch on the STAGE desk, so the city stays hidden while the audience comes in.
+- The hydra now really grips the city: as it reaches the top, its forelegs come down on the gatehouse's battlements either side of the spire and its claws hook over the front edge. Before, its feet were buried inside the towers.
+- The stage lights are gentler. The moving heads' beams are soft shafts instead of solid white cones, faint by day and stronger after dark, and the follow spot no longer burns out whoever it is on.
+- Guests now really climb the stair to the stand. Before, they walked through the steps at ground level.
+- At the end of the show the audience applauds through the bow while the curtain closes. Then everyone stands up and walks out along the stand, down the stairs and out through the gates, instead of appearing at the exit.
+
+### The Mountain King
+- A proper way in: the line now passes under the castle's own barbican, a stone archway with a crowned keystone, battlements topped by the king's gold crown, the name carved on a timber board, the king's blue and gold banners, and torches. It replaces the plain park gateway that stood there.
+- The castle door's leaves no longer stick out into the passage. They stand folded back inside, and real iron lanterns hang either side of the door.
+- The control cabin now stands level with the platform, on a stone base, with the step between them paved over.
+
+### Around the park
+- Guests now walk up and down stairs and raised floors everywhere, instead of staying at ground level.
+- The giant teapot beside the Teacups booth is gone.
+- The glowing white blobs in the Haunted Manor's graveyard are gone.
+- The crawler crane on the viaduct works no longer hangs its girder over the kids' rides. It now works out on the construction site past the railway.
+
 ## 1.4.0 (2026-10-28): The Booths, Arena and World Update
 
 Every ride gets its own control desk, the Lindenburg Arena is rebuilt from the gate to the backstage, and the world now reaches far beyond the park.
