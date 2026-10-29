@@ -133,7 +133,7 @@ function pkBoothGates(a) {
   }
   if (PK.closed && !a.riders) return pkBoothRefuse('The park is closed');
   if (a.state === 'idle' || a.state === 'unloading' || a.state === 'ready') { a.state = 'boarding'; a.t = 0; a.boarding = 0; a.manualStart = true; }
-  C.gates = true; C.barsWant = 0;
+  C.gates = true; pkAttrBarsUp(a, C);
   pkAttrReslot(a); pkAttrFill(a);
   sfx('ok'); toast(a.name + ': gates open', 'good');
   screenDirtyAll();
@@ -177,7 +177,7 @@ function pkBoothStop(a) {
       a.t = Math.max(a.t, a.run - 3);
       if (a.tickRun) a.tickRun(a, 0, 0);
     }
-    else if (a.state === 'idle') { C.gates = false; C.barsWant = 0; }
+    else if (a.state === 'idle') { C.gates = false; pkAttrBarsUp(a, C); }
     sfx('ok'); toast(a.name + ' reset', 'good');
     logEvent(a.name + ' reset after E-stop', '');
   } else {

@@ -37,7 +37,7 @@
         pkDressItem('bunting', function (g) { pkBunting(p.x - p.r - 1.2, p.z - p.r - 1.2, p.x - p.r - 1.2, p.z + p.r + 1.2, th, g); });
       }
       // the gateway over the queue, facing the midway
-      pkDressItem('ride gateway', function (g) { pkGatewayBetter(p.q[0], p.q[1], th.name, th, side, g); });   // centred on the switchbacks, its posts just outside them
+      pkDressItem('ride gateway', function (g) { if (th.portal) th.portal(p, side, g); else pkGatewayBetter(p.q[0], p.q[1], th.name, th, side, g); });   // centred on the switchbacks, its posts just outside them (a theme may bring its own portal)
       // the line itself: a fenced lane behind the arch with a boarding gate. It stays with the ride (the guests walk its slots)
       pkQueueLaneBetter(a, th, dg);
       // the ride's own station round it: the fence, the entrance porch and the exit
@@ -140,8 +140,10 @@
     pkBevelBox(0.075, 0.06, lw - 0.04, pkMats().gold, 0, 0.98, lw / 2, leafL, 0.01);
     pkBevelBox(0.075, 0.06, lw - 0.04, pkMats().gold, 0, 0.98, -lw / 2, leafR, 0.01);
     C.gateObjs.push(function (t) { leafL.rotation.y = -t * 1.42; leafR.rotation.y = t * 1.42; });
-    // the entry at the end of the last row: two posts, a header and the sign facing out
+    // the entry at the end of the last row: two posts, a header and the sign facing out (a ride with its own portal over
+    // the line has its way in there already, so it gets neither these nor the plate)
     var zE = zRow(L.rows - 1), xE = xF;
+    if (!th.portal) {
     [-1, 1].forEach(function (k) {
       pkRoundCyl(0.085, 2.30, MAT.steelDark, xE, 1.15, zE + k * (P / 2 + 0.04), parent, 8);
       sphere(0.09, pkMats().gold, xE, 2.33, zE + k * (P / 2 + 0.04), parent);
@@ -152,6 +154,7 @@
     var zPlate = zE + sz * (P / 2 + 0.5);
     pkRoundCyl(0.045, 1.55, MAT.steelDark, xE + dir * 0.30, 0.77, zPlate, parent, 8);
     pkSign3D(['QUEUE FROM HERE'], 1.25, 0.20, xE + dir * 0.30, 1.62, zPlate, dir > 0 ? Math.PI / 2 : -Math.PI / 2, { bg: '#1b232c', fg: '#eef1f5' }, parent);
+    }
     // the player's way in: press E at the entry to ride
     hitBox(2.0, 2.2, 2.0, xE + dir * 0.4, 1.1, zE, {
       prompt: function () {
@@ -186,6 +189,28 @@
   // the entrance and leave by the exit. The radius keeps clear of everything the ride swings round. The flume (its own
   // channel) and the haunted manor (its porch) have their stations already.
   // the fence radius, and 'arch' where something overhead (a ride's own canopy, the arena's eaves) leaves no room for a roof
+  // A ride's station gate: a pair of railed steel leaves on capped posts, a gilt top rail and a hazard-striped meeting edge,
+  // in the ride's colour. (x, z) is the middle of the opening, (ix, iz) the way the leaves swing (into the station for an
+  // entrance, out of it for an exit), w the opening's width. They follow the ride's station-gate circuit (C.sgT): open
+  // while the ride stands, shut while it runs.
+  function pkStationGatePair(parent, x, z, ix, iz, w, C, col) {
+    var g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = Math.atan2(ix, iz); parent.add(g);
+    var steel = std({ color: 0x2b3238, roughness: 0.45, metalness: 0.55 }), paint = std({ color: col, roughness: 0.5, metalness: 0.2 }), gold = pkMats().gold, H = 1.05;
+    [-1, 1].forEach(function (s) {
+      pkRoundCyl(0.06, H + 0.15, steel, s * (w / 2 + 0.04), (H + 0.15) / 2, 0, g, 8); sphere(0.075, gold, s * (w / 2 + 0.04), H + 0.2, 0, g);
+      pkRoundCyl(0.12, 0.06, steel, s * (w / 2 + 0.04), 0.03, 0, g, 10);
+      var piv = new THREE.Group(); piv.position.set(s * w / 2, 0, 0); g.add(piv);
+      var lw = w / 2 - 0.04, dx = -s;                      // each leaf runs from its hinge toward the middle
+      box(lw, 0.06, 0.05, gold, dx * lw / 2, H, 0, piv, { r: 0.015 });
+      box(lw, 0.05, 0.04, steel, dx * lw / 2, 0.2, 0, piv);
+      box(lw, 0.18, 0.025, paint, dx * lw / 2, 0.62, 0, piv);
+      [0.03, lw - 0.03].forEach(function (o) { box(0.05, H - 0.15, 0.05, steel, dx * o, (H + 0.15) / 2, 0, piv); });
+      for (var b = 0.14; b < lw - 0.08; b += 0.12) box(0.02, H - 0.2, 0.02, steel, dx * b, (H + 0.2) / 2, 0, piv);
+      box(0.04, H - 0.15, 0.06, MAT.hazard, dx * (lw - 0.005), (H + 0.15) / 2, 0, piv);
+      C.stationGateObjs.push(function (t) { piv.rotation.y = -dx * t * 1.45; });
+    });
+    return g;
+  }
   var PK_FLAT_STATIONS = { kround: [5.0, 'arch'], kpots: [5.3, 'arch'], carousel: [8.6], teacups: [7.4], ferris: [10.2], dodgems: [10.0, 'arch'], droptower: [6.2] };
   function pkFlatStation(a, th) {
     var S = PK_FLAT_STATIONS[a.id]; if (!S) return;
@@ -247,11 +272,8 @@
       pkSign3D([th.name.toUpperCase()], 2.6, 0.36, 0, -0.32, 0.98, 0, { bg: '#151a20', fg: '#f5d38a' }, porch);
     }
     [-1, 1].forEach(function (s) { pkRoundCyl(0.11, 0.24, glowMat(0xfff2c0, 1.0), s * 1.3, -0.3, arch ? 0.15 : 0.9, porch, 10); });
-    var gatePiv = new THREE.Group(); gatePiv.position.set(ex, 0.95, ez); gatePiv.rotation.y = Math.atan2(out[0], out[1]); parent.add(gatePiv);
-    var gateLeaf = new THREE.Group(); gatePiv.add(gateLeaf);
-    box(1.15, 0.09, 0.05, iron, 0.575, 0, 0, gateLeaf, { r: 0.02 });
-    box(1.15, 0.09, 0.05, iron, 0.575, -0.55, 0, gateLeaf, { r: 0.02 });
-    a.stationGate = gateLeaf;
+    // the station gates in the fence's opening, swinging in toward the ride
+    pkStationGatePair(parent, ex, ez, -out[0], -out[1], 2.3, pkCtl(a), th.a);
     });
     // the exit: two posts, an EXIT board facing out, and the riders come off just outside it
     var xx = cx + Math.cos(aOut) * R, xz = cz + Math.sin(aOut) * R, o2 = [Math.cos(aOut), Math.sin(aOut)], t2 = [-Math.sin(aOut), Math.cos(aOut)];
@@ -261,6 +283,7 @@
       pkRoundCyl(0.07, 2.2, postMat, px, 1.1, pz, parent, 8); sphere(0.09, gold, px, 2.24, pz, parent);
       solid(px - 0.1, px + 0.1, pz - 0.1, pz + 0.1, 0, 2.2);
     });
+    pkStationGatePair(parent, xx, xz, o2[0], o2[1], 1.9, pkCtl(a), th.a);   // the exit's own gates, swinging out
     var exitSign = new THREE.Group(); exitSign.position.set(xx, 2.05, xz); exitSign.rotation.y = Math.atan2(o2[0], o2[1]); parent.add(exitSign);
     box(2.3, 0.1, 0.1, postMat, 0, 0.12, 0, exitSign);
     pkSign3D(['EXIT'], 1.2, 0.34, 0, -0.14, 0.07, 0, { bg: '#1d5c3a', fg: '#ffffff' }, exitSign);
@@ -288,12 +311,6 @@
       pkFlowerBed(-43.4, 17.3, 1.8, 1.1, null, true);   // in the world, so the editor can move them
       pkFlowerBed(-43.4, 25.2, 1.8, 1.1, null, true);
     } else if (a.id === 'teacups') {
-      var pot = new THREE.Mesh(new THREE.SphereGeometry(1.55, 16, 12), std({ color: 0xf0a6c0, roughness: 0.5 }));
-      pot.position.set(p.x + p.r + 3.2, 1.8, p.z - 3.4); pot.scale.y = 0.85; parent.add(pot);
-      cyl(0.5, 0.35, std({ color: 0xf0a6c0, roughness: 0.5 }), p.x + p.r + 3.2, 3.1, p.z - 3.4, g, 12);
-      var sp = cyl(0.17, 1.2, std({ color: 0xf0a6c0, roughness: 0.5 }), p.x + p.r + 4.7, 1.8, p.z - 3.4, g, 8); sp.rotation.z = -0.9;
-      var hd = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.11, 6, 14), std({ color: 0xf0a6c0, roughness: 0.5 }));
-      hd.position.set(p.x + p.r + 1.7, 1.9, p.z - 3.4); parent.add(hd);
       // the tea garden: clipped hedges and topiary balls on the far sides, a table set
       // on the south-west pad, cup lamps flanking the approach and a trellis arch over
       // the walk in from the midway
@@ -331,7 +348,6 @@
         cyl(0.12, randf(2.6, 4.4), std({ color: 0x3a332c, roughness: 1 }), dx, 2.0, dz, g, 6);
         box(0.9, 0.09, 0.09, std({ color: 0x3a332c, roughness: 1 }), dx, 3.1, dz, g);
       }
-      for (var f = 0; f < 6; f++) sphere(randf(0.7, 1.4), glowMat(0x8fb0d4, 0.3), p.x + randf(-7, 7), randf(0.5, 1.8), p.z + randf(6, 11), g);
     }
   }
   // ── Free pieces ──────────────────────────────────────────────────

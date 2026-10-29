@@ -10,7 +10,7 @@
   // closest, the helix's turns over each other), inside its ground, the station dead level, the portals where the track
   // crosses the wall (the lift at x 116, 9.2 m up; the return at x 102, 5.3 m up).
   var PK_MK = { x0: 86, x1: 120.5, z0: 40, z1: 69, H: 13, liftPortal: [114.4, 117.6, 6.8, 12.4], lowPortal: [100.2, 103.8, 3.6, 8.6],
-    king: [98, 51], door: [65.2, 68.0], trim: [[102, 29], [102, 37], 7], park: [109.5, 64] };
+    king: [98, 51], door: [63.2, 66.0], trim: [[102, 29], [102, 37], 7], park: [109.5, 64] };
   var PK_MK_PTS = [
     [98, 0.6, 64], [99.2, 0.6, 64], [100.4, 0.6, 64], [101.6, 0.6, 64], [102.8, 0.6, 64], [104, 0.6, 64],
     [105.2, 0.6, 64], [106.4, 0.6, 64], [107.6, 0.6, 64], [108.81, 0.6, 64], [110, 0.6, 64], [111.21, 0.6, 63.99],
@@ -53,17 +53,18 @@
   ];
   // ── The plot, the walk, the ground ───────────────────────────────
   (function () {
-    PK_PLOTS.push({ id: 'mountain', name: 'The Mountain King', x: 103, z: 54, r: 17, q: [83.2, 66.6], qdx: -1, level: 21, pad: 0.02 });
-    PK_THEME.mountain = { a: 0x4a5a86, b: 0xd8b04a, ground: 0x8a8a96, name: 'The Mountain King', noBunting: true, noDecor: true };
-    PK_ROUTES.push([76, -6, 72.5, -6, 3.2, 'coaster'], [72.5, -6, 72.5, 66.6, 3.2, 'coaster'], [72.5, 66.6, 76.4, 66.6, 3.2, 'coaster']);
+    PK_PLOTS.push({ id: 'mountain', name: 'The Mountain King', x: 103, z: 54, r: 17, q: [83.2, 64.6], qdx: -1, level: 21, pad: 0.02 });
+    PK_THEME.mountain = { a: 0x4a5a86, b: 0xd8b04a, ground: 0x8a8a96, name: 'The Mountain King', noBunting: true, noDecor: true, portal: function (p, side, g) { pkMkPortal(p, side, g); } };
+    PK_ROUTES.push([76, -6, 72.5, -6, 3.2, 'coaster'], [72.5, -6, 72.5, 64.6, 3.2, 'coaster'], [72.5, 64.6, 76.4, 64.6, 3.2, 'coaster']);
   })();
 
   // ── The hall ─────────────────────────────────────────────────────
   // a castle: rubble-stone walls with a darker plinth, the portals cut where the track runs through, a pitched slate roof, round
   // towers with spires at the corners, a stepped gable over the west door, battlements along the north wall where the lift
   // bursts out, and the name. Inside: a flagstone floor, a dark ceiling, the king on his throne in the helix, crystals.
-  function pkMkWall(g, mat, x0, z0, x1, z1, H, holes) {
-    // a wall along x (z0 === z1) or along z (x0 === x1), with rectangular holes [a0, a1, y0, y1] along its length
+  function pkMkWall(g, mat, x0, z0, x1, z1, H, holes, inMat, inSign) {
+    // a wall along x (z0 === z1) or along z (x0 === x1), with rectangular holes [a0, a1, y0, y1] along its length. inMat, if
+    // given, is a thin inside face on the inSign side (the hall's interior), so the outside stone does not light the inside
     var alongX = z0 === z1, a0 = alongX ? Math.min(x0, x1) : Math.min(z0, z1), a1 = alongX ? Math.max(x0, x1) : Math.max(z0, z1), T = 0.7;
     var cuts = [[a0, a0]].concat((holes || []).slice().sort(function (p, q) { return p[0] - q[0]; })).concat([[a1, a1]]);
     var piece = function (b0, b1, y0, y1) {
@@ -71,6 +72,7 @@
       var m = (b0 + b1) / 2, L = b1 - b0;
       if (alongX) { box(L, y1 - y0, T, mat, m, (y0 + y1) / 2, z0, g); solid(b0, b1, z0 - T / 2, z0 + T / 2, y0, y1); }
       else { box(T, y1 - y0, L, mat, x0, (y0 + y1) / 2, m, g); solid(x0 - T / 2, x0 + T / 2, b0, b1, y0, y1); }
+      if (inMat) { if (alongX) box(L, y1 - y0, 0.04, inMat, m, (y0 + y1) / 2, z0 + inSign * (T / 2 + 0.02), g); else box(0.04, y1 - y0, L, inMat, x0 + inSign * (T / 2 + 0.02), (y0 + y1) / 2, m, g); }
     };
     for (var i = 0; i < cuts.length - 1; i++) {
       piece(cuts[i][1], cuts[i + 1][0], 0, H);                          // the full-height run between holes
@@ -81,10 +83,11 @@
     var K = PK_MK, M = pkFtM(), H = K.H, cx = (K.x0 + K.x1) / 2, cz = (K.z0 + K.z1) / 2, W = K.x1 - K.x0, D = K.z1 - K.z0;
     var stone = std({ color: 0x8f8a80, roughness: 0.95, map: pkMats().stone.map }), dark = std({ color: 0x5f5a54, roughness: 0.95 });
     // walls: the lift's portal and the low portal in the north wall, the west door, a blank south and east
-    pkMkWall(g, stone, K.x0, K.z0, K.x1, K.z0, H, [K.liftPortal, K.lowPortal]);
-    pkMkWall(g, stone, K.x0, K.z1, K.x1, K.z1, H, []);
-    pkMkWall(g, stone, K.x1, K.z0, K.x1, K.z1, H, []);
-    pkMkWall(g, stone, K.x0, K.z0, K.x0, K.z1, H, [[K.door[0], K.door[1], 0, 3.1]]);
+    var inner = std({ color: 0x34302c, roughness: 0.97, map: pkMats().stone.map });
+    pkMkWall(g, stone, K.x0, K.z0, K.x1, K.z0, H, [K.liftPortal, K.lowPortal], inner, 1);
+    pkMkWall(g, stone, K.x0, K.z1, K.x1, K.z1, H, [], inner, -1);
+    pkMkWall(g, stone, K.x1, K.z0, K.x1, K.z1, H, [], inner, -1);
+    pkMkWall(g, stone, K.x0, K.z0, K.x0, K.z1, H, [[K.door[0], K.door[1], 0, 3.1]], inner, 1);
     // a darker plinth band and a string course outside
     [[cx, K.z0 - 0.4, W + 0.2, 0.1], [cx, K.z1 + 0.4, W + 0.2, 0.1]].forEach(function (b) { box(b[2], 1.0, b[3], dark, b[0], 0.5, b[1], g); box(b[2], 0.25, b[3] + 0.06, dark, b[0], 7.5, b[1], g); });
     [[K.x0 - 0.4, cz], [K.x1 + 0.4, cz]].forEach(function (b) { box(0.1, 1.0, D + 0.2, dark, b[0], 0.5, b[1], g); box(0.16, 0.25, D + 0.2, dark, b[0], 7.5, b[1], g); });
@@ -110,20 +113,29 @@
     var gg = new THREE.Group(); gg.position.set(K.x0 - 0.05, H, (K.door[0] + K.door[1]) / 2 - 4); gg.rotation.y = -Math.PI / 2; g.add(gg);
     [[11, 1.4], [8.4, 1.4], [5.8, 1.4], [3.2, 1.3]].reduce(function (y, s) { box(s[0], s[1], 0.7, stone, 0, y + s[1] / 2, 0, gg); box(s[0] + 0.3, 0.14, 0.86, dark, 0, y + s[1], 0, gg); return y + s[1]; }, 0);
     var ro = pkRoundCyl(1.0, 0.2, M.glass, 0, 2.6, -0.38, gg, 24); ro.rotation.x = Math.PI / 2;
-    pkSign3D(['THE MOUNTAIN KING'], 7.2, 1.0, K.x0 - 0.45, 9.6, (K.door[0] + K.door[1]) / 2 - 4, -Math.PI / 2, { bg: '#21402e', fg: '#f6e2a6' }, g);
     // the door: a stone arch, iron-studded doors stood open, two lanterns
     var dz = (K.door[0] + K.door[1]) / 2, dw = K.door[1] - K.door[0];
     box(1.0, 0.6, dw + 1.2, dark, K.x0 - 0.1, 3.4, dz, g);
+    var iron = std({ color: 0x23272b, roughness: 0.5, metalness: 0.5 });
     [K.door[0] - 0.35, K.door[1] + 0.35].forEach(function (z, k) {
+      var s = k ? 1 : -1;
       box(1.0, 3.4, 0.6, dark, K.x0 - 0.1, 1.7, z, g);
-      var leaf = box(0.1, 3.0, dw / 2, M.wood, K.x0 - 0.9, 1.5, z + (k ? -1 : 1) * 0.6, g); leaf.rotation.y = (k ? -1 : 1) * 1.2;
-      pkBevelBox(0.3, 0.42, 0.3, M.glass, K.x0 - 0.6, 3.2, z + (k ? 0.5 : -0.5), g, 0.03);
+      // the door leaf, folded back flat against the inside of the wall beside the opening: iron-studded oak in iron straps
+      var lz = z + s * (0.3 + dw / 4);
+      box(0.1, 3.0, dw / 2, M.wood, K.x0 + 0.42, 1.5, lz, g);
+      [0.5, 1.5, 2.5].forEach(function (y) { box(0.04, 0.12, dw / 2, iron, K.x0 + 0.49, y, lz, g); });
+      // a lantern on an iron bracket each side of the door, facing out
+      pkRod(K.x0 - 0.6, 2.85, z, K.x0 - 1.0, 2.85, z, 0.03, iron, g, 6);
+      box(0.3, 0.06, 0.3, iron, K.x0 - 1.0, 2.8, z, g);
+      var lg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.34, 0.22), std({ color: 0xe8cf98, roughness: 0.25, emissive: 0xffc070, emissiveIntensity: 1.1 })); lg.position.set(K.x0 - 1.0, 2.6, z); g.add(lg);
+      var cap = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.22, 4), iron); cap.rotation.y = Math.PI / 4; cap.position.set(K.x0 - 1.0, 2.88, z); g.add(cap);
+      box(0.28, 0.04, 0.28, iron, K.x0 - 1.0, 2.42, z, g);
     });
   }
   // inside: the floor, the ceiling, the king in the helix, crystals along the walls, low light
   function pkMkInside(g) {
     var K = PK_MK, cx = (K.x0 + K.x1) / 2, cz = (K.z0 + K.z1) / 2, W = K.x1 - K.x0, D = K.z1 - K.z0;
-    pkPaved(W - 0.7, D - 0.7, std({ color: 0x5a564f, roughness: 0.95, map: pkMats().stone.map }), cx, 0.03, cz, 1.6, g);
+    pkPaved(W - 0.7, D - 0.7, std({ color: 0x3e3a35, roughness: 0.95, map: pkMats().stone.map }), cx, 0.03, cz, 1.6, g);
     var ceil = box(W - 0.7, 0.12, D - 0.7, std({ color: 0x1c1d26, roughness: 0.95 }), cx, K.H - 0.06, cz, g); ceil.castShadow = false;
     // the king: a throne on a rock, a robed figure, a gold crown, a glowing staff. Inside the helix (rail at 5 m round him)
     var kx = K.king[0], kz = K.king[1], rock = std({ color: 0x4a4650, roughness: 0.95 }), robe = std({ color: 0x5a2a6a, roughness: 0.8 }), gold = pkFtM().gold;
@@ -153,6 +165,84 @@
     [100, 105, 110].forEach(function (x) { var l = new THREE.PointLight(0xffe3b0, 0.8, 10, 2); l.position.set(x, 3.2, 66); g.add(l); });
   }
 
+  // ── The way in: the castle's barbican over the head of the line ───────────────────────────────────────────────
+  // Two stone piers on dark plinths, a true round arch in dressed voussoirs with a keystone carrying the crown, a
+  // crenellated parapet with the king's crown on it, the name carved on a timber board under the parapet, a banner of the
+  // king hung either side, and iron torch brackets on the piers. It stands where the stock gateway stood, the lane passing
+  // under it, facing the midway.
+  function pkMkBanner() {
+    return tex(128, 256, function (c, W, H) {
+      c.fillStyle = '#2c3f6e'; c.fillRect(0, 0, W, H - 30);
+      c.beginPath(); c.moveTo(0, H - 30); c.lineTo(W / 2, H); c.lineTo(W, H - 30); c.fill();
+      c.strokeStyle = '#d8b04a'; c.lineWidth = 6; c.strokeRect(8, 8, W - 16, H - 52);
+      c.fillStyle = '#d8b04a'; c.beginPath(); c.moveTo(28, 150); c.lineTo(28, 96); c.lineTo(46, 122); c.lineTo(64, 86); c.lineTo(82, 122); c.lineTo(100, 96); c.lineTo(100, 150); c.closePath(); c.fill();
+      c.fillRect(28, 150, 72, 14); [46, 64, 82].forEach(function (x) { c.fillStyle = '#b8323a'; c.beginPath(); c.arc(x, 157, 4, 0, 6.283); c.fill(); });
+    });
+  }
+  function pkMkPortal(p, side, parent) {
+    var M = pkFtM(), g = new THREE.Group(); g.position.set(p.q[0], 0, p.q[1]); g.rotation.y = side > 0 ? Math.PI / 2 : -Math.PI / 2; parent.add(g);
+    var stone = std({ color: 0x8f8a80, roughness: 0.95, map: pkMats().stone.map }), dark = std({ color: 0x5f5a54, roughness: 0.95 }), gold = pkMats().gold;
+    var iron = std({ color: 0x23272b, roughness: 0.5, metalness: 0.5 }), oak = std({ color: 0x3a2617, roughness: 0.8 });
+    var R = 2.0, PH = 3.6, D = 1.2;                  // the arch's radius, the height it springs from, the piers' depth
+    // the piers: a plinth, the shaft, a moulded impost where the arch springs
+    [-1, 1].forEach(function (s) {
+      var px = s * (R + 0.6);
+      pkBevelBox(1.5, 0.9, D + 0.3, dark, px, 0.45, 0, g, 0.04);
+      pkBevelBox(1.2, PH - 0.9, D, stone, px, 0.9 + (PH - 0.9) / 2, 0, g, 0.03);
+      pkBevelBox(1.4, 0.25, D + 0.2, dark, px, PH, 0, g, 0.03);
+      // a torch on an iron bracket, facing out to the midway
+      pkRod(px - s * 0.0, 2.5, D / 2, px, 2.75, D / 2 + 0.4, 0.03, iron, g, 6);
+      pkRoundCyl(0.09, 0.3, iron, px, 2.85, D / 2 + 0.42, g, 8);
+      pkRoundCyl(0.16, 0.12, iron, px, 3.04, D / 2 + 0.42, g, 10);   // the torch's iron cup
+      // the flame is fire, not a lamp: it burns by day too (a glow lamp goes black when the park's lights are off)
+      var fl = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.6, 10), new THREE.MeshBasicMaterial({ color: 0xff8a2a })); fl.position.set(px, 3.4, D / 2 + 0.42); fl.userData.noBake = true; g.add(fl);
+      var fl2 = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.4, 8), new THREE.MeshBasicMaterial({ color: 0xffe08a })); fl2.position.set(px, 3.3, D / 2 + 0.47); fl2.userData.noBake = true; g.add(fl2);
+    });
+    // the arch: a band of voussoirs (cut from one shape, a half ring) and the wall over it up to the parapet
+    var ring = new THREE.Shape(); ring.absarc(0, 0, R + 0.55, 0, Math.PI, false); ring.lineTo(-R, 0); ring.absarc(0, 0, R, Math.PI, 0, true); ring.closePath();
+    var arch = new THREE.Mesh(new THREE.ExtrudeGeometry(ring, { depth: D, bevelEnabled: false, curveSegments: 20 }), stone); arch.position.set(0, PH, -D / 2); arch.castShadow = true; g.add(arch);
+    for (var v = 1; v < 9; v++) { var va = v / 9 * Math.PI, jx = Math.cos(va), jy = Math.sin(va); var jt = box(0.04, 0.58, D + 0.02, dark, jx * (R + 0.27), PH + jy * (R + 0.27), 0, g); jt.rotation.z = va - Math.PI / 2; }
+    var spandrel = new THREE.Shape(); spandrel.moveTo(-(R + 1.2), 0); spandrel.lineTo(-(R + 1.2), R + 1.2); spandrel.lineTo(R + 1.2, R + 1.2); spandrel.lineTo(R + 1.2, 0); spandrel.lineTo(R + 0.55, 0); spandrel.absarc(0, 0, R + 0.55, 0, Math.PI, false); spandrel.closePath();
+    var sp = new THREE.Mesh(new THREE.ExtrudeGeometry(spandrel, { depth: D - 0.1, bevelEnabled: false, curveSegments: 20 }), stone); sp.position.set(0, PH, -(D - 0.1) / 2); sp.castShadow = true; g.add(sp);
+    // the keystone with the crown on it
+    pkBevelBox(0.6, 0.8, D + 0.12, dark, 0, PH + R + 0.3, 0, g, 0.04);
+    var kc = new THREE.Shape(); kc.moveTo(-0.22, 0); kc.lineTo(-0.22, 0.22); kc.lineTo(-0.11, 0.12); kc.lineTo(0, 0.28); kc.lineTo(0.11, 0.12); kc.lineTo(0.22, 0.22); kc.lineTo(0.22, 0); kc.closePath();
+    var kcm = new THREE.Mesh(new THREE.ExtrudeGeometry(kc, { depth: 0.05, bevelEnabled: false }), gold); kcm.position.set(0, PH + R + 0.2, D / 2 + 0.07); g.add(kcm);
+    // the string course, the parapet and its merlons, the king's crown standing on it
+    var top = PH + R + 1.2;
+    pkBevelBox(2 * (R + 1.2) + 0.3, 0.22, D + 0.25, dark, 0, top + 0.11, 0, g, 0.03);
+    pkBevelBox(2 * (R + 1.2), 0.5, D, stone, 0, top + 0.47, 0, g, 0.02);
+    for (var m = -2; m <= 2; m++) pkBevelBox(0.7, 0.6, D, stone, m * 1.3, top + 1.0, 0, g, 0.03);
+    var crown = new THREE.Group(); crown.position.set(0, top + 1.32, 0); g.add(crown);
+    pkRoundCyl(0.55, 0.28, gold, 0, 0.14, 0, crown, 16);
+    for (var cp = 0; cp < 5; cp++) { var ca = cp / 5 * Math.PI * 2; var pt = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.42, 6), gold); pt.position.set(Math.cos(ca) * 0.45, 0.48, Math.sin(ca) * 0.45); crown.add(pt); sphere(0.06, std({ color: 0xb8323a, roughness: 0.3, metalness: 0.2 }), Math.cos(ca) * 0.45, 0.72, Math.sin(ca) * 0.45, crown); }
+    // the name, carved into a timber board under the string course, gilt-edged
+    pkBevelBox(4.4, 0.78, 0.12, oak, 0, top - 0.55, D / 2 + 0.06, g, 0.03);
+    box(4.5, 0.05, 0.14, gold, 0, top - 0.14, D / 2 + 0.06, g); box(4.5, 0.05, 0.14, gold, 0, top - 0.96, D / 2 + 0.06, g);
+    pkSign3D(['THE MOUNTAIN KING'], 4.1, 0.56, 0, top - 0.55, D / 2 + 0.13, 0, { bg: '#2a1d14', fg: '#f0c04a' }, g);
+    // the king's banners, hung from iron poles off the parapet either side of the arch
+    var bmat = std({ map: pkMkBanner(), roughness: 0.85, side: THREE.DoubleSide });
+    [-1, 1].forEach(function (s) {
+      var bx = s * (R + 0.6);
+      pkRod(bx, top + 0.3, D / 2 - 0.1, bx, top + 0.3, D / 2 + 0.55, 0.035, iron, g, 6);
+      var ban = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 1.9), bmat); ban.position.set(bx, top - 0.68, D / 2 + 0.56); g.add(ban);
+      sphere(0.06, gold, bx, top + 0.3, D / 2 + 0.58, g);
+    });
+    // the passage back to the castle: the barbican's side walls run back to the hall's west wall, under a ceiling and a
+    // slate roof, so it reads as the castle's gatehouse rather than an arch stood in front of it
+    var back = Math.abs(PK_MK.x0 - 0.35 - p.q[0]) - D / 2, bz = -(D / 2 + back / 2);
+    if (back > 0.2) {
+      [-1, 1].forEach(function (s) { box(1.2, top, back + 0.05, stone, s * (R + 0.6), top / 2, bz, g); box(1.5, 0.9, back + 0.05, dark, s * (R + 0.6), 0.45, bz, g); });
+      box(2 * R + 0.1, 0.25, back + 0.1, dark, 0, PH + R + 0.12, bz, g);                    // the passage's ceiling
+      box(2 * R + 1.2, 0.04, back + D + 0.1, pkMats().pavers, 0, 0.022, -back / 2, g);        // and its floor, paved through to the door
+      box(2 * (R + 1.2), top - (PH + R + 0.25), back + 0.05, stone, 0, (top + PH + R + 0.25) / 2, bz, g);
+      pkGableRoof(2 * (R + 1.2) + 0.2, back + 0.3, 1.2, M.slate, stone, 0, top + 0.72, bz, g, 0.2);
+    }
+    // the piers stop the player, as the stock gateway's posts did
+    g.updateMatrixWorld(true);
+    [-1, 1].forEach(function (s) { var w = g.localToWorld(new THREE.Vector3(s * (R + 0.6), 0, 0)); solid(w.x - 0.75, w.x + 0.75, w.z - 0.75, w.z + 0.75, 0, PH); });
+    return g;
+  }
   // ── The coaster ──────────────────────────────────────────────────
   function pkBuildMountain(p) {
     var K = PK_MK, th = PK_THEME.mountain, i;
@@ -175,7 +265,7 @@
     });
     pkCoPlan(E, opt);
     // the platform south of the station track, the gates, the canopy lamps
-    pkCoPlatform(g, 96.4, 111.4, 64.75, 67.6, th, 0.6);
+    pkCoPlatform(g, 96.4, 111.4, 64.75, 67.6, th, 0.6, [true, false]);   // the east end leads to the cabin: kept clear
     var a = pkAttr({
       id: 'mountain', name: 'The Mountain King', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], qdx: -1, g: g, seats: seats,
       board: 11, run: E.run, unload: 6, exit: [97.2, 67.2],
@@ -188,7 +278,10 @@
     E.cars.forEach(function (c) { C.barObjs.push(function (b) { c.bar.rotation.x = -1.35 * (1 - b); }); });
     pkCoPlace(E, E.uPark);
     // the control cabin at the platform's east end, its long window over the station turn
-    pkCabinBuild(g, a, { s: 1, AX: 0, K: { u0: 112.2, u1: 117.8, z0: 65.0, z1: 68.4, door: [65.9, 66.95] }, trim: 0x3a3a44, band: 0x4a5a86, name: 'The Mountain King', sign: '#f6e2a6', H: 2.9 });
+    // the cabin stands level with the platform (0.6), on a stone base, and the step between them is filled in level
+    pkCabinBuild(g, a, { s: 1, AX: 0, K: { u0: 112.2, u1: 117.8, z0: 65.0, z1: 68.4, door: [65.9, 66.95] }, trim: 0x3a3a44, band: 0x4a5a86, name: 'The Mountain King', sign: '#f6e2a6', H: 2.9, y: 0.48 });
+    box(0.9, 0.6, 2.85, pkMats().kerb, 111.8, 0.3, 66.175, g); box(0.86, 0.04, 2.8, pkMats().pavers, 111.8, 0.6, 66.175, g);
+    PK_FLOOR_RECTS.push({ axis: 'z', x0: 111.3, x1: 112.3, z0: 64.75, z1: 67.6, y: 0.6 });
     return a;
   }
   var _pkBuildAttractionsMK = pkBuildAttractions;

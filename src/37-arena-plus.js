@@ -142,8 +142,14 @@
     [[HZ0, GZ0], [GZ1, HZ1]].forEach(function (k) { box(0.3, HH, k[1] - k[0], wallM, HX1, HH / 2, (k[0] + k[1]) / 2, g); S_(HX1 - 0.15, HX1 + 0.15, k[0], k[1], 0, HH); });
     box(0.3, HH - GTOP, GZ1 - GZ0, wallM, HX1, GTOP + (HH - GTOP) / 2, (GZ0 + GZ1) / 2, g);
     box(HX1 - HX0 + 0.3, HH, 0.3, wallM, (HX0 + HX1) / 2, HH / 2, HZ1 - 0.15, g); S_(HX0, HX1 + 0.15, HZ1 - 0.3, HZ1, 0, HH);
-    // a stone base course and a cornice all round, and the slate roof on its ridge
-    [[HX1 + 0.02, hmz, 0.36, HZ1 - HZ0 + 0.1], [(HX0 + HX1) / 2, HZ0 - 0.02, HX1 - HX0 + 0.4, 0.36], [(HX0 + HX1) / 2, HZ1 - 0.13, HX1 - HX0 + 0.4, 0.36]].forEach(function (k) { box(k[2], 1.0, k[3], trimM, k[0], 0.5, k[1], g); box(k[2] + 0.1, 0.22, k[3] + 0.1, trimM, k[0], HH + 0.11, k[1], g); });
+    // the west face, over the stand's own wall (4.4 m) and over the way through onto the stand, up to the eaves: without it
+    // the hall stood open to the stand's roof and the sky
+    box(0.3, HH - 4.4, HL.s1 - HZ0, wallM, HX0 + 0.15, (HH + 4.4) / 2, (HZ0 + HL.s1) / 2, g);
+    box(0.3, HH - top - 2.55, HZ1 - HL.s1, wallM, HX0 + 0.15, (HH + top + 2.55) / 2, (HL.s1 + HZ1) / 2, g);
+    // a stone base course round the outside (broken for the gates, so nobody walks into it) and a cornice all round
+    [[HZ0 - 0.05, GZ0 - 0.35], [GZ1 + 0.35, HZ1 + 0.05]].forEach(function (k) { box(0.36, 1.0, k[1] - k[0], trimM, HX1 + 0.02, 0.5, (k[0] + k[1]) / 2, g); });
+    [[(HX0 + HX1) / 2, HZ0 - 0.02, HX1 - HX0 + 0.4, 0.36], [(HX0 + HX1) / 2, HZ1 - 0.13, HX1 - HX0 + 0.4, 0.36]].forEach(function (k) { box(k[2], 1.0, k[3], trimM, k[0], 0.5, k[1], g); });
+    [[HX1 + 0.02, hmz, 0.36, HZ1 - HZ0 + 0.1], [HX0 + 0.15, hmz, 0.36, HZ1 - HZ0 + 0.1], [(HX0 + HX1) / 2, HZ0 - 0.02, HX1 - HX0 + 0.4, 0.36], [(HX0 + HX1) / 2, HZ1 - 0.13, HX1 - HX0 + 0.4, 0.36]].forEach(function (k) { box(k[2] + 0.1, 0.22, k[3] + 0.1, trimM, k[0], HH + 0.11, k[1], g); });
     var rhw = (HX1 - HX0) / 2 + 0.25, rise = 1.5, slope = Math.atan2(rise, rhw), rlen = Math.hypot(rise, rhw), rmx = (HX0 + HX1) / 2;
     [-1, 1].forEach(function (s) { var r = box(rlen, 0.16, HZ1 - HZ0 + 0.5, M.slate, rmx + s * rhw / 2, HH + 0.22 + rise / 2, hmz, g); r.rotation.z = -s * slope; });
     var gab = new THREE.Shape(); gab.moveTo(-rhw + 0.25, 0); gab.lineTo(rhw - 0.25, 0); gab.lineTo(0, rise - 0.1); gab.closePath();
@@ -153,7 +159,11 @@
     [15.0, 16.8, 18.6, 20.2].forEach(function (z) { box(0.06, 1.6, 0.8, M.win, HX1 + 0.16, 3.6, z, g); var ar = mesh(new THREE.CircleGeometry(0.4, 12, 0, Math.PI), M.win, HX1 + 0.16, 4.4, z); ar.rotation.y = Math.PI / 2; ar.castShadow = false; box(0.2, 0.12, 1.0, trimM, HX1 + 0.18, 2.75, z, g); });
     // the entrance: an arched portal round the gates, pilasters with spires, a frontispiece with the show's name and the crest
     var pmz = (GZ0 + GZ1) / 2, px = HX1 + 0.2;
-    var arc2 = mesh(new THREE.TorusGeometry((GZ1 - GZ0) / 2 + 0.05, 0.16, 8, 24, Math.PI), gold, px, GTOP - (GZ1 - GZ0) / 2 + 0.1, pmz); arc2.rotation.y = Math.PI / 2; arc2.castShadow = false;
+    // a gilt architrave round the doorway, jambs and a head with a keystone, inside the pilasters
+    [GZ0 - 0.06, GZ1 + 0.06].forEach(function (z) { box(0.14, GTOP + 0.06, 0.12, gold, px - 0.08, (GTOP + 0.06) / 2, z, g); });
+    box(0.16, 0.22, GZ1 - GZ0 + 0.24, gold, px - 0.07, GTOP + 0.11, pmz, g);
+    box(0.2, 0.42, 0.34, gold, px - 0.05, GTOP + 0.12, pmz, g);
+    box(0.12, 0.18, GZ1 - GZ0, trimM, HX1 - 0.2, GTOP + 0.09, pmz, g);   // the plain head inside
     [GZ0 - 0.35, GZ1 + 0.35].forEach(function (z) { pkBevelBox(0.55, 6.4, 0.55, trimM, px + 0.1, 3.2, z, g, 0.03); pkFtSpire(g, px + 0.1, 6.4, z, 0.4, 1.6, M.slate, 4); S_(px - 0.2, px + 0.4, z - 0.28, z + 0.28, 0, 6.4); });
     pkBevelBox(0.35, 2.6, GZ1 - GZ0 + 0.5, wallM, px, HH + 1.1, pmz, g, 0.03);
     for (var cm = GZ0 - 0.1; cm <= GZ1 + 0.11; cm += 0.75) box(0.35, 0.45, 0.4, trimM, px, HH + 2.6, cm, g);
@@ -168,8 +178,11 @@
     // the gates: the ride's own, two iron leaves that swing in to the lobby, clear of the queue (shut, they stop you too)
     [[GZ0, 1], [GZ1, -1]].forEach(function (h) {
       var hinge = pkMover(g, HX1 + 0.18, 0, h[0]), w = (GZ1 - GZ0) / 2 - 0.04;
-      box(0.08, 1.9, w, iron, 0, 1.0, h[1] * w / 2, hinge);
-      for (var v = 0.15; v < w; v += 0.22) box(0.06, 1.8, 0.04, iron, 0, 0.95, h[1] * v, hinge);
+      // a railed leaf: a kick plate, a lower and a middle rail, the stiles and the bars between, so the gate reads as iron work
+      box(0.06, 0.4, w, iron, 0, 0.25, h[1] * w / 2, hinge);
+      [0.47, 1.25].forEach(function (ry) { box(0.07, 0.07, w, iron, 0, ry, h[1] * w / 2, hinge); });
+      [0.03, w - 0.03].forEach(function (sz) { box(0.08, 1.9, 0.06, iron, 0, 1.0, h[1] * sz, hinge); });
+      for (var v = 0.15; v < w; v += 0.16) box(0.03, 1.45, 0.03, iron, 0, 1.2, h[1] * v, hinge);
       box(0.1, 0.12, w, gold, 0, 1.95, h[1] * w / 2, hinge);
       pkCtl(a).gateObjs.push(function (t) { hinge.rotation.y = -h[1] * t * 1.45; });
     });
@@ -191,20 +204,34 @@
     // the way through onto the stand, framed, with the riders' sections signed
     box(0.35, 0.4, HZ1 - HL.s1 - 0.4, trimM, G.x + 0.15, top + 2.35, (HL.s1 + HZ1) / 2, g);
     sign(['TO YOUR SEATS', 'FIND YOUR RIDER\'S COLOUR'], 2.4, 0.5, G.x + 0.33, top + 2.8, (HL.s1 + HZ1) / 2, Math.PI / 2, { bg: '#2a1a12', fg: '#f0c04a' }, g);
-    // the lobby: the five riders' banners, a model of Lindenburg on its plinth, a sign up the stair, lamps
+    // a velvet curtain in the way through, on the stand's side: drawn across while the show runs, so the hall sees nothing of
+    // it, and gathered to the jambs the rest of the time for the audience to come in and go out (the tick draws it)
+    var dcZ0 = HL.s1 + 0.05, dcZ1 = G.back - 0.05, dcW = (dcZ1 - dcZ0) / 2, dcTop = top + 1.9, dcX = G.x - 0.08;
+    var velvet = std({ color: 0x6a1420, roughness: 0.92 }), dcHalves = [];
+    [[dcZ0, 1], [dcZ1, -1]].forEach(function (h) {
+      var piv = pkMover(g, dcX, top + 0.02, h[0]);
+      for (var f = 0; f < 10; f++) box(0.05, dcTop - top - 0.02, dcW / 10 + 0.03, velvet, (f % 2) * 0.06, (dcTop - top - 0.02) / 2, h[1] * (f + 0.5) * dcW / 10, piv);
+      piv.scale.z = 0.12; dcHalves.push(piv);
+    });
+    box(0.14, 0.4, dcZ1 - dcZ0 + 0.3, velvet, dcX - 0.06, dcTop + 0.2, (dcZ0 + dcZ1) / 2, g);
+    box(0.15, 0.06, dcZ1 - dcZ0 + 0.3, gold, dcX - 0.06, dcTop + 0.02, (dcZ0 + dcZ1) / 2, g);
+    FX.doorCur = { halves: dcHalves, k: 0 };
+    // the stand's side walls carried on up to the roof, both sides: the stand was open above them, so from the seats you
+    // looked out over the hall's roof and from the hall into the stand. The roof falls toward the back; the walls follow it.
+    var roofUnder = function (z) { return 7.35 - 0.09 - (z - 15.5) * Math.sin(Math.atan2(0.6, 13)) + 0.06; };
+    [-1, 1].forEach(function (s) {
+      var lo = s > 0 ? [[9.5, 4.4], [HL.s1, 4.4], [HL.s1, top + 2.3], [G.back, top + 2.3]] : [[9.5, 4.4], [G.back, 4.4]];
+      var sh = new THREE.Shape(); sh.moveTo(lo[0][0], lo[0][1]); lo.slice(1).forEach(function (p) { sh.lineTo(p[0], p[1]); });
+      sh.lineTo(G.back, roofUnder(G.back)); sh.lineTo(9.5, roofUnder(9.5)); sh.closePath();
+      var swg = new THREE.ExtrudeGeometry(sh, { depth: 0.3, bevelEnabled: false }), uv = swg.attributes.uv;
+      for (var ui = 0; ui < uv.count; ui++) uv.setXY(ui, uv.getX(ui) / (G.back - 9.5), uv.getY(ui) / 4.4);   // the stone as the wall below wears it
+      var sw = mesh(swg, M.stone, s > 0 ? G.x + 0.3 : -G.x, 0, 0);
+      sw.rotation.y = -Math.PI / 2; sw.receiveShadow = true;
+    });
+    // the lobby: the five riders' banners, a sign up the stair, lamps
     sign(['THE STANDS', 'UP THE STAIR'], 1.6, 0.45, swm, 2.3, HZ0 + 0.17, 0, { bg: '#2a1a12', fg: '#f0c04a' }, g);
     [14.6, 16.4].forEach(function (z, i) { pkArHang(g, [1, 3][i], HX1 - 0.17, 4.6, z, -Math.PI / 2, 0.8, 1.8); });   // clear of the gates' opening (z 10.6 to 13.6) and over head height
     pkArHang(g, 0, 16.2, 4.6, HZ0 + 0.17, 0, 0.8, 1.6); pkArHang(g, 2, 19.2, 4.6, HZ0 + 0.17, 0, 0.8, 1.6);
-    (function () {
-      var mx0 = 19.0, mz0 = 15.6, s = 0.12;
-      pkBevelBox(1.4, 0.9, 1.2, M.timber, mx0, 0.45, mz0, g, 0.03); box(1.3, 0.04, 1.1, M.sand, mx0, 0.92, mz0, g);
-      box(1.2, 0.3, 0.12, M.brick, mx0, 1.09, mz0 - 0.4, g); box(0.3, 0.5, 0.18, M.cream, mx0, 1.19, mz0 - 0.4, g);
-      [-0.45, 0.45].forEach(function (d) { pkRoundCyl(0.07, 0.6, M.cream, mx0 + d, 1.24, mz0 - 0.35, g, 10); pkFtSpire(g, mx0 + d, 1.54, mz0 - 0.35, 0.1, 0.25, M.slate, 8); });
-      for (var r = 0; r < 5; r++) sphere(0.035, std({ color: PK_TH_RIDERS[r][3], roughness: 0.6 }), mx0 - 0.3 + r * 0.15, 0.98, mz0 + 0.2, g);
-      box(1.2, 0.02, 0.5, std({ color: 0x6f9f96, roughness: 0.2 }), mx0 + 0.3, 0.95, mz0 - 0.15, g);
-      sign(['LINDENBURG', 'A MODEL OF THE CITY'], 0.9, 0.22, mx0, 0.6, mz0 + 0.61, 0, { bg: '#2a1a12', fg: '#f0c04a' }, g);
-      S_(mx0 - 0.75, mx0 + 0.75, mz0 - 0.65, mz0 + 0.65, 0, 1.3);
-    })();
     [[16.3, 11.2], [19.0, 11.2], [19.0, 14.0], [16.3, 18.6], [19.0, 19.6]].forEach(function (p) { var y = p[1] >= HL.s1 ? top + 2.7 : HH - 0.4; box(0.3, 0.06, 0.3, M.iron, p[0], y + 0.1, p[1], g); mesh(new THREE.SphereGeometry(0.14, 10, 8), M.lampGlow, p[0], y, p[1]); });
     box(2.4, 0.02, 2.2, std({ color: 0x5a1a22, roughness: 0.95 }), 19.0, 0.03, 11.6, g);
 
@@ -229,7 +256,7 @@
       var head = new THREE.Group(); head.position.y = -0.36; yoke.add(head);
       box(0.3, 0.42, 0.3, pkPnStd({ color: 0x1d1f22, roughness: 0.5, metalness: 0.5 }), 0, -0.1, 0, head);
       var lensM = pkThGlow(0xffffff, 0.0), lens = new THREE.Mesh(new THREE.CircleGeometry(0.11, 16), lensM); lens.rotation.x = Math.PI / 2; lens.position.y = -0.32; head.add(lens);
-      var beamM = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+      var beamM = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.FrontSide });   // one face: both faces added every beam twice
       beamM.userData.noBake = true;
       var beam = new THREE.Mesh(beamGeo, beamM); beam.position.y = -0.32; beam.castShadow = false; head.add(beam);
       FX.heads.push({ yoke: yoke, head: head, lens: lensM, beam: beamM, i: i, x: hx, aim: new THREE.Vector3(0, 0, -2), cur: new THREE.Vector3(0, 0, -2), col: new THREE.Color(0xffffff), k: 0 });
@@ -454,6 +481,9 @@
     if (FX.earth > 0) FX.earth -= dt;
     if (FX.micT > 0) FX.micT -= dt;
     FX.micLed.emissiveIntensity = FX.micT > 0 ? 2 : 0.05;
+    // the curtain in the way through: drawn across in about two seconds when the show starts, gathered again when it ends
+    var DC = FX.doorCur;
+    if (DC) { DC.k += clamp((run ? 1 : 0) - DC.k, -dt * 0.5, dt * 0.5); var dcs = 0.12 + 0.88 * DC.k * DC.k * (3 - 2 * DC.k); DC.halves[0].scale.z = DC.halves[1].scale.z = dcs; }
     // fire cannons: a roaring column and sparks; the braziers' own fire light (part 33) carries the glow
     var fire = FX.cannon > 0;
     FX.cannons.forEach(function (cn, k) {
@@ -530,7 +560,8 @@
       H.k += ((a.open ? on : 0) - H.k) * Math.min(1, dt * 6);
       PK_AR_C.setHex(col); H.col.lerp(PK_AR_C, Math.min(1, dt * 4));
       H.lens.emissive.copy(H.col); H.lens.emissiveIntensity = H.k * 2.5;
-      H.beam.color.copy(H.col); H.beam.opacity = H.k * 0.09;
+      // the beam is haze lit by the head: a faint shaft by day, a stronger one after dark (it was a solid white cone)
+      H.beam.color.copy(H.col); H.beam.opacity = H.k * (S.time > 7.5 && S.time < 19 ? 0.022 : 0.055);
     });
     // the follow spot (part 33's real light) tracks the scene's focus too, whenever the script names one
     if (run && FX.follow && actorAt(cast[FX.follow], PK_AR_V)) { X.spotAt.x = PK_AR_V.x; X.spotAt.y = PK_AR_V.y - 1; X.spotAt.z = PK_AR_V.z; }

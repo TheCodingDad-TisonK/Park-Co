@@ -927,14 +927,28 @@
     var body = add(new THREE.SphereGeometry(3.2, 28, 18), Q.skin, 0, 4.2, 0); body.scale.set(1.25, 0.9, 1.0);
     var belly = add(new THREE.SphereGeometry(3.05, 24, 14, 0, Math.PI * 2, Math.PI * 0.35, Math.PI * 0.5), Q.belly, 0, 4.1, 0.25); belly.scale.set(1.0, 0.92, 1.0);
     for (var sp = 0; sp < 9; sp++) { var a = -0.9 + sp * 0.225, sk = add(new THREE.ConeGeometry(0.28, 1.3 - Math.abs(a) * 0.5, 6), Q.horn, Math.sin(a) * 3.3, 4.2 + Math.cos(a) * 2.75, -0.9); sk.rotation.z = -a; sk.rotation.x = -0.35; }
-    // the forelegs: shoulder, upper and fore limb, a foot of four claws that comes to rest on the wall's top
-    [-1, 1].forEach(function (s) {
-      var sh = new THREE.Vector3(s * 2.9, 4.6, 1.6), el = new THREE.Vector3(s * 5.2, 7.1, 3.2), ft = new THREE.Vector3(s * 7.6, 8.05, 5.4);
+    // the forelegs: shoulder, an upper limb that reaches up over the city wall, a fore limb laid along the gatehouse's
+    // battlements, and a foot whose four claws hook over the gatehouse's front edge. The feet sit in the crenel gaps either
+    // side of the spire (x 4.03), the one stretch of the city's skyline the whole stand sees: the wall itself is behind the
+    // houses, and the towers flank the gatehouse. (Risen, the root is at y 0, z -22.5: the gatehouse top is 9.6 high and
+    // its front 9.1 ahead of the root; the wall's merlons top out at 8.15, 5.5 ahead.)
+    // Each foreleg hangs on a pivot at its shoulder: held up and back behind the wall while the body climbs, swung forward
+    // over the last three metres of the rise so the claws come down on the battlements (pkThHydraTick)
+    var legs = [-1, 1].map(function (s) {
+      var sh = new THREE.Vector3(s * 2.9, 4.6, 1.6), el = new THREE.Vector3(s * 4.03, 11.3, 5.4).sub(sh), ft = new THREE.Vector3(s * 4.03, 10.75, 8.35).sub(sh), o = new THREE.Vector3();   // the foot on the merlons' tops (10.4)
       add(new THREE.SphereGeometry(1.0, 14, 10), Q.skin, sh.x, sh.y, sh.z);
-      [[sh, el, 0.75, 0.6], [el, ft, 0.6, 0.42]].forEach(function (L) { var d = L[1].clone().sub(L[0]), m = add(new THREE.CylinderGeometry(L[3], L[2], d.length(), 12), Q.skin, (L[0].x + L[1].x) / 2, (L[0].y + L[1].y) / 2, (L[0].z + L[1].z) / 2); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); });
-      add(new THREE.SphereGeometry(0.62, 12, 9), Q.skin, el.x, el.y, el.z);
-      var foot = add(new THREE.SphereGeometry(0.55, 12, 9), Q.skin, ft.x, ft.y, ft.z); foot.scale.set(1.2, 0.6, 1.3);
-      for (var c2 = 0; c2 < 4; c2++) { var cl = add(new THREE.ConeGeometry(0.12, 0.7, 6), Q.horn, ft.x + (c2 - 1.5) * 0.3, ft.y - 0.25, ft.z + 0.75); cl.rotation.x = 2.2; }
+      var leg = new THREE.Group(); leg.position.copy(sh); root.add(leg);
+      [[o, el, 0.85, 0.7], [el, ft, 0.66, 0.52]].forEach(function (L) { var d = L[1].clone().sub(L[0]), m = add(new THREE.CylinderGeometry(L[3], L[2], d.length(), 12), Q.skin, (L[0].x + L[1].x) / 2, (L[0].y + L[1].y) / 2, (L[0].z + L[1].z) / 2, leg); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); });
+      add(new THREE.SphereGeometry(0.74, 12, 9), Q.skin, el.x, el.y, el.z, leg);
+      var foot = add(new THREE.SphereGeometry(0.7, 14, 10), Q.skin, ft.x, ft.y, ft.z, leg); foot.scale.set(1.45, 0.55, 1.25);
+      // four toes over the edge, each ending in a hooked claw that bites into the gatehouse's face
+      for (var c2 = 0; c2 < 4; c2++) {
+        var tx2 = ft.x + (c2 - 1.5) * 0.36;
+        var toe = add(new THREE.CylinderGeometry(0.12, 0.17, 0.7, 8), Q.skin, tx2, ft.y - 0.2, ft.z + 0.82, leg); toe.rotation.x = 1.25;
+        var cl = add(new THREE.ConeGeometry(0.15, 1.05, 6), Q.horn, tx2, ft.y - 0.85, ft.z + 1.02, leg); cl.rotation.x = Math.PI + 0.25;
+      }
+      leg.rotation.x = -0.9;
+      return leg;
     });
     // the tail, curling down behind into the pit
     for (var tk = 0; tk < 8; tk++) { var tt = tk / 7, tx = Math.sin(tt * 2.4) * 2.2, ty = 3.2 - tt * 3.6, tz = -2.8 - tt * 2.4; add(new THREE.SphereGeometry(1.15 - tt * 0.8, 12, 9), Q.skin, tx, ty, tz); }
@@ -980,7 +994,7 @@
       [-1, 1].forEach(function (s) { for (var tq = 0; tq < 4; tq++) { var lt = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.13, 5), Q.tooth); lt.position.set(s * (0.22 - tq * 0.03), 0.1, 0.5 + tq * 0.25); jaw.add(lt); } });
       necks.push({ o: i - 2, segs: segs, joints: joints, head: head, jaw: jaw, ph: i * 1.3, to: PK_TH_HEADS[i] });
     }
-    return { root: root, wings: wings, necks: necks, y: -11, t: 0 };
+    return { root: root, wings: wings, necks: necks, legs: legs, y: -11, t: 0 };
   }
   // where each head comes to rest (x, y): high over the houses either side and over the gatehouse spire, leaning out toward the stand,
   // so none of them sits in a tower, a gable or the spire
@@ -994,6 +1008,9 @@
     if (!H.root.visible) return;
     H.t += dt;
     var breath = X.breath > 0;
+    // the forelegs: up and back while it climbs, then forward and down onto the gatehouse as it reaches the top
+    var reach = 1 - clamp(-H.y / 3, 0, 1); reach = reach * reach * (3 - 2 * reach);
+    if (H.legs) H.legs.forEach(function (L) { L.rotation.x = -0.9 * (1 - reach); });
     H.wings.forEach(function (w, i) { var s = i ? 1 : -1; w.rotation.z = s * (0.15 + Math.sin(H.t * 1.6) * 0.22); w.rotation.y = -s * 0.25; });
     H.necks.forEach(function (N) {
       var o = N.o, sway = Math.sin(H.t * 0.9 + N.ph) * 0.6, bob = Math.sin(H.t * 1.3 + N.ph * 1.7) * 0.4;
@@ -1210,6 +1227,9 @@
   }
   function pkTheaterTickRun(a, dt) {
     var C = pkCtl(a), X = a.extra, lw = X.lightWant, cast = pkTheaterCast(a);
+    // the audience applauds from the bow until the curtain is in
+    var clap = a.state === 'running' && a.t >= 256 && a.t < 283;
+    for (var si = 0; si < a.seats.length; si++) if (a.seats[si].guest) a.seats[si].guest.clap = clap;
     if (a.state === 'running' && X.cues) {
       while (X.cueI < X.cues.length && a.t >= X.cues[X.cueI].t) {
         var q = X.cues[X.cueI]; X.cueI++;
@@ -1252,7 +1272,7 @@
     var L = X.lights, k = Math.min(1, dt * 2);
     L.house.forEach(function (l) { l.intensity += (lw.house - l.intensity) * k; });
     L.wash.forEach(function (l) { l.intensity += (lw.wash - l.intensity) * k; });
-    L.spot.intensity += (lw.spot - L.spot.intensity) * k;
+    L.spot.intensity += (lw.spot * 0.6 - L.spot.intensity) * k;   // the follow spot at 60% of the script's level: at full it burnt out whoever it was on
     L.spot.target.position.lerp(_thV.set(X.spotAt.x, X.spotAt.y, X.spotAt.z), Math.min(1, dt * 1.5));
     L.fire.intensity = fireOn ? 3.2 * flick : 0;
     L.hydra.intensity += ((X.hydraUp ? 2.5 : 0) * (X.breath > 0 ? 1.8 : 1) - L.hydra.intensity) * k;
@@ -1273,11 +1293,21 @@
   function pkBuildTheater(p) {
     var a = pkAttr({
       id: 'theater', name: 'The Lindenburg Arena', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1],
-      seats: [], board: 120, run: 300, unload: 18, exit: [PK_TH.CX + 23.5, PK_TH.CZ + 11.0],   // out through the stair hall's gates, along the forecourt's north edge
+      seats: [], board: 120, run: 291, unload: 18, exit: [PK_TH.CX + 23.5, PK_TH.CZ + 11.0],   // out through the stair hall's gates, along the forecourt's north edge
       start: pkTheaterShowBegin, tickRun: pkTheaterTickRun   // doors open two minutes: the walk from the gate is about 95 s
     });
     pkTheaterBuild(a);
     var C = pkCtl(a); C.barsWant = 1; C.bars = 1;   // the curtain starts closed
+    a.curtain = true;
+    a.boardMin = 30;   // on AUTO the house closes once the line is in and seated, after half a minute at least
+    // the audience's way between the stair hall and the seats: straight up the middle of the stair, across the landing and
+    // through onto the stand's top walkway (route() finds the lobby, and the walkway and the row); out, the same in reverse
+    var way = function () {
+      var H = PK_TH_HALL, sm = (PK_THG.x + 0.3 + H.sx1) / 2, X0 = PK_TH.CX, Z0 = PK_TH.CZ;
+      return [{ x: X0 + sm, z: Z0 + H.s0 - 0.5 }, { x: X0 + sm, z: Z0 + H.s1 + 0.4 }, { x: X0 + PK_THG.x + 0.9, z: Z0 + 19.7 }, { x: X0 + PK_THG.x - 0.6, z: Z0 + 19.7 }];
+    };
+    a.seatPath = function (from, w) { var W = way(); return route(from, W[0]).concat(W.slice(1), route(W[3], { x: w.x, z: w.z })); };
+    a.walkOut = function (sp) { var W = way().reverse(); return route(sp, W[0]).concat(W.slice(1), route(W[3], { x: a.exit[0], z: a.exit[1] })); };                              // its 'bars' are the curtain: the gates and the end of a show leave it alone
     return a;
   }
   var _pkBuildAttractionsTH = pkBuildAttractions;

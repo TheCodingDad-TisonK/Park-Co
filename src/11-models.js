@@ -78,9 +78,11 @@ function pkMatPlasterRich() {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────
+// a rounded box. The engine picks the steps round each edge from the radius (1 to 3): six steps on every box made each one
+// about 2,000 triangles, a tiny button included, and put millions of them in the park
 function pkBevelBox(w, h, d, mat, x, y, z, parent, r) {
   var rOpt = r === undefined ? 0.12 : r;
-  var m = new THREE.Mesh(new bevelGeo(w, h, d, rOpt, 6), mat);
+  var m = new THREE.Mesh(bevelGeo(w, h, d, rOpt), mat);
   if (x !== undefined) m.position.set(x, y, z);
   if (parent) parent.add(m); else scene.add(m);
   m.castShadow = true; m.receiveShadow = true;

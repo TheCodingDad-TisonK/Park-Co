@@ -504,9 +504,18 @@
       }
       P.st = st;
     });
+    // the crawler crane works out on the site, never over the park: inside the ring its stretch is girders, and the gap it
+    // swings a girder into is the first span of the far deck stretch that stands well outside the railway
+    var craneSpan = -1;
+    for (i = 0; i < piers.length - 1 && craneSpan < 0; i++) {
+      var cmx = (piers[i].p.x + piers[i + 1].p.x) / 2, cmz = (piers[i].p.z + piers[i + 1].p.z) / 2;
+      if ((piers[i].s + piers[i + 1].s) / 2 / total > 0.78 && pkXpRingD(cmx, cmz) > 12 && piers[i].st !== 'form' && piers[i + 1].st !== 'form') craneSpan = i;
+    }
     // the spans between piers: what each stage has to show
     for (i = 0; i < piers.length - 1; i++) {
       var A2 = piers[i], B2 = piers[i + 1], fm = (A2.s + B2.s) / 2 / total, st2 = stage(fm);
+      if (st2 === 'crane') st2 = 'girder';
+      if (i === craneSpan) st2 = 'crane';
       if (A2.st === 'form' || B2.st === 'form') st2 = 'none';
       var ax = A2.p.x, az = A2.p.z, bx = B2.p.x, bz = B2.p.z, L2 = Math.hypot(bx - ax, bz - az), yaw = Math.atan2(bx - ax, bz - az), mx = (ax + bx) / 2, mz = (az + bz) / 2;
       var sg = pkXpGroup(mx, mz, yaw); sg.userData.pkXpVia = true; sg.userData.span = [ax, az, bx, bz, st2];

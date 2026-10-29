@@ -15,7 +15,7 @@
     TR.built = true;
   }
   function trResetToStation(i) {
-    var t = TR.t, st = TR.st[i]; t.mode = 'M'; t.s = st.s + 47; t.v = 0; t.at = i; t.nextSt = (i + 1) % TR.st.length; t.dwell = 0; t.brake = 1; t.throttle = 0;
+    var t = TR.t, st = TR.st[i]; t.mode = 'M'; t.s = st.s + trStopOff(); t.v = 0; t.at = i; t.nextSt = (i + 1) % TR.st.length; t.dwell = 0; t.brake = 1; t.throttle = 0;
     trPlaceUnits();
   }
   var _trPrevBuildWorld = GAME.buildWorld;
@@ -171,7 +171,7 @@
   function trEnterCab() { 
     var t = TR.t; if (!trCanBoard()) return; 
     t.driving = true; t.look.yaw = 0; t.look.pitch = -0.18; 
-    toast('On the footplate: W/S regulator, R / Shift+R reverser, A/D brake, G fire a shovel, V firehole doors, J / Shift+J injectors, B blower, K drain cocks, X sand, F whistle, N fireman, E to get off. The guide has the rest.', ''); sfx('click'); 
+    toast('On the footplate: W/S regulator, hold Space at a platform to stop on the mark, R / Shift+R reverser, A/D brake, G fire a shovel, V firehole doors, J / Shift+J injectors, B blower, K drain cocks, X sand, F whistle, N fireman, E to get off. The guide has the rest.', ''); sfx('click'); 
   }
   
   function trSit(u, seat) { 
@@ -199,6 +199,7 @@
       if (e.code === 'KeyC') { t.thirdPerson = !t.thirdPerson; if (!t.camDist) t.camDist = 5.5; sfx('click'); toast(t.thirdPerson ? '3rd person view. Scroll to zoom.' : '1st person view.', ''); return true; }
       if (e.code === 'KeyL') { trToggleCabLight(); return true; }
       if (t.driving) {
+        if (e.code === 'Space') { e.preventDefault(); player.keys.Space = true; return true; }   // held: the stop assist (trTick)
         if (e.code === 'KeyI') { trToggleEngine(); return true; }
         if (e.code === 'KeyU') { trToggleDoors(); return true; }
         if (e.code === 'KeyT') { trQuickFill(); return true; }
@@ -242,7 +243,9 @@
     var t = TR.t;
     if (TR.built && t && (t.driving || t.seat)) {
       var u = t.driving ? TR.units[0] : t.seat.u, g = u.g, c = Math.cos(g.rotation.y), s = Math.sin(g.rotation.y);
-      var lx = t.driving ? -2.55 : t.seat.seat.x, ly = t.driving ? 2.71 : t.seat.seat.y + 0.75, lz = t.driving ? -0.68 : t.seat.seat.z, face = t.driving ? 0 : t.seat.seat.face;
+      // seated in both: the cushion's top is seatTop, the eye 0.72 above it and the body's hips (0.86 up from its feet) on it
+      var seatTop = t.driving ? TR_CAB_SEAT : t.seat.seat.y + 0.07, roofUnder = t.driving ? 3.48 : 2.47;
+      var lx = t.driving ? -2.55 : t.seat.seat.x, ly = seatTop + 0.72, lz = t.driving ? -0.68 : t.seat.seat.z, face = t.driving ? 0 : t.seat.seat.face;
       var wx = g.position.x + lx * c + lz * s, wz = g.position.z - lx * s + lz * c;
       player.x = wx; player.z = wz; player.y = ly - 1.62; player.vy = 0;
       
@@ -255,14 +258,14 @@
           scene.add(t.playerBody);
         }
         t.playerBody.visible = true;
-        t.playerBody.position.set(wx, player.y, wz);
-        t.playerBody.rotation.y = g.rotation.y - Math.PI / 2 + face + t.look.yaw;
+        t.playerBody.position.set(wx, seatTop - 0.86, wz); t.playerBody.userData.baseY = seatTop - 0.86;
+        t.playerBody.rotation.y = g.rotation.y - Math.PI / 2 + face;   // the body stays facing the seat's way; the look turns the camera
         animateHuman(t.playerBody, dt, 'sit', 0, null, false);
         
         // Place the camera behind the player, looking at them
         var cx = wx + Math.sin(g.rotation.y - Math.PI / 2 + face + t.look.yaw) * t.camDist;
         var cz = wz + Math.cos(g.rotation.y - Math.PI / 2 + face + t.look.yaw) * t.camDist;
-        var cy = ly + 0.5 + t.look.pitch * t.camDist;
+        var cy = Math.min(ly + 0.5 + t.look.pitch * t.camDist, roofUnder - 0.2);   // under the roof, never up inside it
         camera.position.set(cx, cy, cz);
         camera.lookAt(wx, ly, wz);
       } else {
@@ -282,7 +285,11 @@
     var a = trPos(s, mode, _trA), y0 = a.yaw, b = trPos(s + 8, mode, _trB), d = Math.abs(b.yaw - y0); if (d > Math.PI) d = 2 * Math.PI - d; return d / 8 > 0.012 ? 6.5 : 9;
   }
   function trFwdDist(t, target) { var L = trLoopLen(t.mode), d = ((target - t.s) % L + L) % L; return d; }
-  function trTargetS(i, mode) { var s = TR.st[i].s + 47; if (mode === 'D' && s > TR.sJ2) s += TR.dL; return s; }
+  // where the loco's front stops at a platform: with it there every wagon's doors stand at that wagon's gate. Gate k is at
+  // trWagonX(k) along the platform, wagon k's middle is its own d behind the loco's front, and both step 5.1 m a wagon.
+  // (It was 47 m, which put the train 19 m past the gates and the loco's front off the end of the platform.)
+  function trStopOff() { var w0 = TR.units[2]; return trWagonX(0) + (w0 && w0.kind === 'wagon' ? w0.d : 15.7); }
+  function trTargetS(i, mode) { var s = TR.st[i].s + trStopOff(); if (mode === 'D' && s > TR.sJ2) s += TR.dL; return s; }
   function trTick(dt) {
     var t = TR.t, R = trState(), i, k;
     dt = Math.min(dt, 0.1);
@@ -295,6 +302,14 @@
       if (keys.KeyW) t.throttle = Math.min(1, t.throttle + dt * 0.5); if (keys.KeyS) t.throttle = Math.max(0, t.throttle - dt * 0.6);
       if (keys.KeyA) t.brake = Math.min(1, t.brake + dt * 0.6); if (keys.KeyD) t.brake = Math.max(0, t.brake - dt * 0.5);
       t.brakeKey = false; t.sand = !!keys.KeyX;
+      var ad = trAssistDist(t);
+      t.assist = !!keys.Space && (ad >= 0 || t.at >= 0);
+      if (t.assist) {
+        if (t.at >= 0) { t.throttle = 0; t.brake = 1; }
+        else { if (!(t.dir < 0 && t.v > 0.2) && t.cutoff < 0.25) t.cutoff = Math.abs(t.v) < 2 ? 0.75 : 0.5; trApproach(t, ad); }   // in gear, so she can creep the last metres
+      }
+      if (ad >= 0 && !t.assistHinted && !R.auto) { t.assistHinted = true; toast('Platform ahead: hold Space and she stops with every door at its gate', ''); }
+      if (ad < 0 && t.at < 0) t.assistHinted = false;
 
       if (keys.KeyH !== !!t.hornKey) { t.hornKey = !!keys.KeyH; trVoice('horn', t.hornKey || t.hornAutoT > 0); }
       if (keys.KeyF !== !!t.whistleKey) { t.whistleKey = !!keys.KeyF; trVoice('whistle', t.whistleKey || t.whistleAutoT > 0); }
@@ -326,7 +341,7 @@
     if (R.wear >= 100 && t.engine) { t.engine = false; t.fire = 0; toast('The engine has broken down: it needs a service in the depot', 'bad'); }
     // stations: stopped on a stop line
     var atNow = -1;
-    if (t.mode === 'M') for (i = 0; i < TR.st.length; i++) { var dd = Math.abs(trFwdDist(t, TR.st[i].s + 47)); dd = Math.min(dd, trLoopLen('M') - dd); if (i === t.departFrom) { if (dd > 5) t.departFrom = -1; continue; } if (dd < 1.6 && t.v < 0.25) atNow = i; }
+    if (t.mode === 'M') for (i = 0; i < TR.st.length; i++) { var dd = Math.abs(trFwdDist(t, TR.st[i].s + trStopOff())); dd = Math.min(dd, trLoopLen('M') - dd); if (i === t.departFrom) { if (dd > 5) t.departFrom = -1; continue; } if (dd < 1.6 && t.v < 0.25) atNow = i; }
     if (atNow >= 0 && t.at !== atNow) { t.at = atNow; t.nextSt = (atNow + 1) % TR.st.length; t.dwell = 30; t.announced = false; t.belled = false; if (!R.auto) toast('Arrived at ' + TR.st[atNow].name + '. Wait time: 30 seconds', ''); }
     if (t.at >= 0 && atNow < 0 && t.v > 0.6) { t.at = -1; }
     if (t.at >= 0 && t.v < 0.25) t.dwell = Math.max(0, t.dwell - dt);
@@ -369,14 +384,23 @@
     if (t.mode === 'D') { tgt = TR.sJ1 + trBypassStopS(); dist = trFwdDist(t, tgt); if (!(R.fuel < 99 || R.wear > 0 || R.dirt > 5) || t.serviceT === 0 && dist > 400) { tgt = trTargetS(t.nextSt, 'D'); dist = trFwdDist(t, tgt); } }
     else { tgt = trTargetS(t.nextSt, 'M'); dist = trFwdDist(t, tgt); }
     if (dist > trLoopLen(t.mode) - 3) dist = 0;
-    var lim = Math.min(trCurveLimit(t.s, t.mode), 8.2), vT = Math.min(lim, Math.sqrt(2 * 0.9 * Math.max(0, dist - 0.8))); if (dist < 0.5) vT = 0;
+    trApproach(t, dist);
+    if (R.fuel <= 0 || R.water <= 0) { t.throttle = 0; t.brake = 1; }
+  }
+  // run in to a stop dist metres ahead: up to the line speed, then braked down a steady 0.9 m/s2 to stand on the mark.
+  // AUTO drives every stretch with it; a driver holding Space hands it the run in to the platform (the stop assist)
+  function trApproach(t, dist) {
+    var lim = Math.min(trCurveLimit(t.s, t.mode), 8.2), vT = Math.min(lim, Math.sqrt(2 * 0.9 * Math.max(0, dist - 0.15))); if (dist < 0.12) vT = 0;
+    if (dist < 6 && vT > 0) vT = Math.max(vT, 0.45);   // the last metres at a walking crawl, so she reaches the mark rather than stopping short
     t.brake = 0;
     if (t.v < vT - 0.25) { t.throttle = Math.min(0.8, 0.25 + (vT - t.v) * 0.3); }
     else if (t.v > vT + 0.35) { t.throttle = 0; t.brake = Math.min(1, (t.v - vT) / 2 + 0.1); }
     else t.throttle = 0.18;
     if (vT === 0 && t.v < 0.6) { t.throttle = 0; t.brake = 1; }
-    if (R.fuel <= 0 || R.water <= 0) { t.throttle = 0; t.brake = 1; }
   }
+  // the stop assist: within this far of the next platform's stop mark, holding Space brings her in on the mark
+  var TR_ASSIST_M = 160;
+  function trAssistDist(t) { if (t.mode !== 'M' || t.at >= 0 || !TR.st.length) return -1; var d = trFwdDist(t, trTargetS(t.nextSt, 'M')); return d < TR_ASSIST_M ? d : -1; }
   function trBypassStopS() {   // where on the siding the loco's front stops: just inside the east end of the shed
     if (TR.bypStop !== undefined) return TR.bypStop; var P = TR.byp, best = 1e9, bi = 0; for (var i = 0; i < P.n; i++) { var d = Math.abs(P.x[i] - 88.5); if (d < best) { best = d; bi = i; } } return TR.bypStop = bi * P.ds;
   }

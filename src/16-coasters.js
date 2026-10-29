@@ -334,13 +334,14 @@
     });
   }
   // a coaster platform: kerb, deck, edge stripe, a plant tub and a lamp at each end
-  function pkCoPlatform(g, x0, x1, zN, zS, th, y) {
+  function pkCoPlatform(g, x0, x1, zN, zS, th, y, ends) {   // ends: [west, east] which ends get a planter and a lamp (both by default)
     var surf = y === undefined ? 0.18 : y, lift = surf - 0.18;
     if (lift > 0.02) box(x1 - x0, lift, zS - zN, pkMats().kerb, (x0 + x1) / 2, lift / 2, (zN + zS) / 2, g);
     box(x1 - x0, 0.12, zS - zN, pkMats().kerb, (x0 + x1) / 2, 0.06 + lift, (zN + zS) / 2, g);
     box(x1 - x0 - 0.12, 0.07, zS - zN - 0.12, pkMats().pavers, (x0 + x1) / 2, 0.145 + lift, (zN + zS) / 2, g);
     box(x1 - x0, 0.03, 0.16, MAT.hazard, (x0 + x1) / 2, 0.17 + lift, zN + 0.08, g);
-    [x0 + 0.5, x1 - 0.5].forEach(function (x) {
+    [x0 + 0.5, x1 - 0.5].forEach(function (x, ei) {
+      if (ends && !ends[ei]) return;
       pkRoundCyl(0.26, 0.5, pkMats().stone, x, 0.25 + lift, zS - 0.4, g, 12);
       pkRoundCyl(0.3, 0.08, pkMats().stone, x, 0.52 + lift, zS - 0.4, g, 12);
       pkRoundCyl(0.04, 2.5, MAT.steelDark, x, 1.25 + lift, zS - 0.34, g, 8);
@@ -921,6 +922,10 @@
   // x and z is world z ({ u0, u1, z0, z1, door: [z, z] }); the long window is on the z0 side, the door in the u0 wall
   function pkCabinBuild(g, a, o) {
     var s = o.s, AX = o.AX, K = o.K, T = 0.12, H = o.H || 2.9;
+    // o.y raises the whole cabin (a station whose platform stands above the ground): the room is built in a group lifted by
+    // it, its solids are lifted with it and its floor is walkable at that height
+    var lift = o.y || 0, sol = function (x0, x1, z0, z1, y0, y1) { solid(x0, x1, z0, z1, (y0 || 0) + lift, (y1 || 0) + lift); };
+    if (lift) { var g0 = g; g = new THREE.Group(); g.position.y = lift; g0.add(g); }
     var cfg = { name: o.name, sign: o.sign };
     function X(u) { return AX + s * u; }
     var trim = std({ color: o.trim, roughness: 0.7, metalness: 0.15 });
@@ -929,6 +934,10 @@
     var xa = Math.min(X(K.u0), X(K.u1)), xb = Math.max(X(K.u0), X(K.u1)), cx = (xa + xb) / 2, cz = (K.z0 + K.z1) / 2, W = xb - xa, D = K.z1 - K.z0;
     var xn = X(K.u0 + T / 2), xf = X(K.u1 - T / 2);          // the platform-side wall and the far wall
     box(W, 0.12, D, std({ color: 0x2e2e34, roughness: 0.95 }), cx, 0.06, cz, g);
+    if (lift) {
+      box(W + 0.1, lift, D + 0.1, pkMats().kerb, cx, -lift / 2, cz, g);                      // the cabin's stone base
+      PK_FLOOR_RECTS.push({ axis: 'z', x0: xa, x1: xb, z0: K.z0, z1: K.z1, y: lift + 0.12 });
+    }
     // the long window over the track: parapet, glass, header, posts
     box(W, 0.95, T, trim, cx, 0.475, K.z0 + T / 2, g);
     box(W - 0.2, 1.4, 0.05, glass, cx, 1.65, K.z0 + T / 2, g);
@@ -950,20 +959,20 @@
     box(W + 0.2, 0.1, D + 0.2, trim, cx, H + 0.05, cz, g);                                       // the roof slab
     pkSign3D([cfg.name.toUpperCase() + ' · CONTROL'], Math.min(3.2, W - 0.3), 0.26, cx, H - 0.27, K.z0 + T / 2 - 0.07, Math.PI, { bg: '#151a20', fg: cfg.sign }, g);
     // the walls are solid, the doorway is not; the desk is solid too
-    solid(xa, xb, K.z0, K.z0 + T + 0.04, 0, H);
-    solid(xf - 0.08, xf + 0.08, K.z0, K.z1, 0, H);
-    solid(xn - 0.08, xn + 0.08, K.z0, d0, 0, H);
-    solid(xn - 0.08, xn + 0.08, d1, K.z1, 0, H);
+    sol(xa, xb, K.z0, K.z0 + T + 0.04, 0, H);
+    sol(xf - 0.08, xf + 0.08, K.z0, K.z1, 0, H);
+    sol(xn - 0.08, xn + 0.08, K.z0, d0, 0, H);
+    sol(xn - 0.08, xn + 0.08, d1, K.z1, 0, H);
     // the desk under the long window, the operator facing the track with the platform on the side
     var con = new THREE.Group(); con.position.set(cx, 0.12, K.z0 + 0.5); g.add(con);
     pkBkDesk(con, 2.1);
     pkBoothPanel(a, con);
-    solid(cx - 1.05, cx + 1.05, K.z0 + 0.1, K.z0 + 0.82, 0, 0.95);
+    sol(cx - 1.05, cx + 1.05, K.z0 + 0.1, K.z0 + 0.82, 0, 0.95);
     // the kit, in a frame at the room's middle: local -z is the long window, +z the back
     var k = new THREE.Group(); k.position.set(cx, 0.12, cz); g.add(k);
     var fxl = (xf - cx) - s * 0.17;
     pkBkCabinet(a, k, fxl, 1.42, 0.2, -s * Math.PI / 2);
-    solid(Math.min(xf, xf - s * 0.36), Math.max(xf, xf - s * 0.36), cz - 0.3, cz + 0.7, 0, 2.0);
+    sol(Math.min(xf, xf - s * 0.36), Math.max(xf, xf - s * 0.36), cz - 0.3, cz + 0.7, 0, 2.0);
     pkBkMonitors(a, k, 0, 1.95, K.z0 + 0.36 - cz, 0, 0.32);
     pkBkClock(k, -s * 1.15, 2.2, K.z1 - 0.09 - cz, Math.PI, 0.14);
     a.boothClock = pkBkTimeClock(k, -s * 1.2, 1.5, K.z1 - 0.08 - cz, Math.PI, a.id, a.name);
