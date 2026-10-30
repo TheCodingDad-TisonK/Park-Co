@@ -1,4 +1,4 @@
-//@ Park Co, part 26: the ride operators - up to four hired hands who work the ride booths in shifts, by hand, on the real desk
+//@ Park Co, part 26: the ride operators - up to fifteen hired hands who work the ride booths in shifts, by hand, on the real desk
   // ── What they do ─────────────────────────────────────────────────
   // Each operator is a person in the park (not one of the engine's step NPCs: they climb booth steps and stand on a raised
   // floor, which the engine's NPCs cannot). A shift goes like this:
@@ -11,9 +11,9 @@
   // unless the player is near: no toasts, no log lines, only the sounds within earshot. They work 08:30 to 22:00; let go, or at
   // the end of the day, the last ride goes back on AUTO and they walk to HQ and go.
   var PK_OPS = { list: [], quiet: 0, near: false };
-  var PK_OP_NAMES = ['Jan', 'Fatima', 'Ruud', 'Mei', 'Bram', 'Ayesha', 'Finn', 'Noor', 'Daan', 'Lotte'];
-  var PK_OP_SKINS = [0xd8a97c, 0xc99266, 0xe8c49b, 0xe0b48e, 0xb87b5a, 0xf1d2b6, 0x8d5a3c, 0xd9a98a, 0xe2b48f, 0x5c3a28];
-  var PK_OP_HAIRS = [0x3a2a1c, 0x1e1712, 0x8a6a4a, 0x2a2a2a, 0x6b4a2b, 0x1d1510, 0xa8793f, 0x8a8a8a, 0xd9b36a, 0xb0352a];
+  var PK_OP_NAMES = ['Jan', 'Fatima', 'Ruud', 'Mei', 'Bram', 'Ayesha', 'Finn', 'Noor', 'Daan', 'Lotte', 'Sven', 'Yara', 'Joost', 'Ilse', 'Kofi'];
+  var PK_OP_SKINS = [0xd8a97c, 0xc99266, 0xe8c49b, 0xe0b48e, 0xb87b5a, 0xf1d2b6, 0x8d5a3c, 0xd9a98a, 0xe2b48f, 0x5c3a28, 0xf0cfae, 0xa8704e, 0xe6bf98, 0xdcae88, 0x6e4530];
+  var PK_OP_HAIRS = [0x3a2a1c, 0x1e1712, 0x8a6a4a, 0x2a2a2a, 0x6b4a2b, 0x1d1510, 0xa8793f, 0x8a8a8a, 0xd9b36a, 0xb0352a, 0xe0c27a, 0x15100c, 0x5a3a22, 0x9a7a5a, 0x241a12];
   var PK_OP_HOME = { x: -16.6, z: 42.5 };                     // HQ's door on the forecourt
   var PK_OP_BREAKS = [[-6.5, 20], [6.5, 20], [-6.5, 10], [6.5, 10], [-6.5, 2.5], [6.5, 2.5], [0, 26]];   // the midway's benches and the plaza
 
@@ -32,6 +32,7 @@
   // ── The booth, in the booth's own frame ──────────────────────────
   function pkOpLocal(a, lx, lz) { var f = a.boothFrame, c = Math.cos(f.ry), s = Math.sin(f.ry); return { x: f.x + lx * c + lz * s, z: f.z - lx * s + lz * c }; }
   function pkOpSpots(a) {
+    if (!a.boothFrame) return pkOpRoomSpots(a);   // a ride with a control room of its own
     var K = PK_BK, f = a.boothFrame, ds = f.ds, HW = K.W / 2, HD = K.D / 2, DZ = K.DOORZ;
     return {
       foot: pkOpLocal(a, ds * (HW + 1.35), DZ), out: pkOpLocal(a, ds * (HW + 0.35), DZ), inn: pkOpLocal(a, ds * (HW - 0.55), DZ),
@@ -39,9 +40,38 @@
       desk: pkOpLocal(a, -0.5, HD - 1.1), deskYaw: f.ry
     };
   }
+  // ── A control room of the ride's own ─────────────────────────────
+  // The six hall coasters, Danse Macabre, Droomvlucht and the Arena each have a room of their own making, not the booth kit.
+  // Every one has a door, a time clock and a desk, so the spots are read off those: the door's centre and the way through it
+  // (inside is the clock's side), a stand in front of the clock's face and one in front of the desk's panel. The Arena's room
+  // is up the stand: the walk there goes up the stair hall the audience climbs and along the top walkway first (pre).
+  function pkOpDoor(a) { return a.boothDoor || (a.extra && a.extra.door) || null; }
+  function pkOpRoomSpots(a) {
+    if (a.opSpots !== undefined) return a.opSpots;
+    var D = pkOpDoor(a), P = a.boothPanel && a.boothPanel.panel, K = a.boothClock;
+    if (!D || !P || !K) return (a.opSpots = null);
+    var V = function (o, x, y, z) { o.updateMatrixWorld(true); return o.localToWorld(new THREE.Vector3(x, y, z)); };
+    var flat = function (v) { var l = Math.hypot(v.x, v.z) || 1; return { x: v.x / l, z: v.z / l }; };
+    var ry0 = D.hinge.rotation.y; D.hinge.rotation.y = D.closedRy;
+    var dc = V(D.hinge, 0, 0, D.w / 2), dn = flat(V(D.hinge, 1, 0, D.w / 2).sub(dc));
+    D.hinge.rotation.y = ry0;
+    var kc = V(K, 0, 0, 0), kn = flat(V(K, 0, 0, 1).sub(kc)), pc = V(P, 0, 0, 0), pn = flat(V(P, 0, 0, 1).sub(pc));
+    var clock = { x: kc.x + kn.x * 0.55, z: kc.z + kn.z * 0.55 }, desk = { x: pc.x + pn.x * 0.62, z: pc.z + pn.z * 0.62 };
+    var s = (clock.x - dc.x) * dn.x + (clock.z - dc.z) * dn.z > 0 ? 1 : -1, at = function (k) { return { x: dc.x + dn.x * s * k, z: dc.z + dn.z * s * k }; };
+    var sp = { foot: at(-1.5), out: at(-0.6), inn: at(0.6), clock: clock, clockYaw: Math.atan2(-kn.x, -kn.z), desk: desk, deskYaw: Math.atan2(-pn.x, -pn.z), pre: null };
+    if (a.id === 'theater' && typeof PK_TH !== 'undefined') {
+      // up the stair hall, across the landing, west along the top walkway to the room's east end and round to its door
+      var H = PK_TH_HALL, G = PK_THG, X0 = PK_TH.CX, Z0 = PK_TH.CZ, sm = (G.x + 0.3 + H.sx1) / 2;
+      sp.pre = [{ x: X0 + sm, z: Z0 + H.s0 - 0.5 }, { x: X0 + sm, z: Z0 + H.s1 + 0.4 }, { x: X0 + G.x + 0.9, z: Z0 + 19.7 }, { x: X0 + G.x - 0.6, z: Z0 + 19.7 }];
+    }
+    return (a.opSpots = sp);
+  }
+  // a ride that runs itself (Droomvlucht's line never stops, the Arena's show runs to its cues): the operator keeps it on
+  // AUTO and minds it from the desk, starting Droomvlucht's system when a line forms, for a spell before moving on
+  function pkOpAutoRide(a) { return !!(a.continuous || a.curtain); }
   function pkOpCanWork(a) {
     var C = a.ctl;
-    if (!a.open || !a.boothFrame || !a.boothPanel || !a.boothDoor || !C || C.fault || C.maint) return false;
+    if (!a.open || !(a.boothFrame || pkOpRoomSpots(a)) || !a.boothPanel || !pkOpDoor(a) || !C || C.fault || C.maint) return false;
     if (PK.duty && PK.duty.id === a.id) return false;                 // the player is on duty there
     for (var i = 0; i < PK_OPS.list.length; i++) if (PK_OPS.list[i].ride === a) return false;
     return true;
@@ -50,7 +80,7 @@
     var best = null, bs = -1e9;
     PK.attractions.forEach(function (a) {
       if (!pkOpCanWork(a) || a === op.last) return;
-      var d = Math.hypot(a.boothFrame.x - op.x, a.boothFrame.z - op.z), sc = a.queue.length * 3 - d / 25 + Math.random() * 4 + (a.ctl.key ? 0 : 2);
+      var f = a.boothFrame || pkOpSpots(a).foot, d = Math.hypot(f.x - op.x, f.z - op.z), sc = a.queue.length * 3 - d / 25 + Math.random() * 4 + (a.ctl.key ? 0 : 2);
       if (sc > bs) { bs = sc; best = a; }
     });
     return best;
@@ -79,7 +109,7 @@
     return { pick: 'choosing a ride', toBooth: 'on the way to ' + r, enter: 'going into the booth', clockIn: 'clocking in', work: 'working ' + r + ' (round ' + Math.min(op.rounds + 1, op.target) + ' of ' + op.target + ')',
       finish: 'putting ' + r + ' back on AUTO', clockOut: 'clocking out', leave: 'leaving the booth', toBreak: 'off for a break', onBreak: 'on a break', home: 'going home' }[op.state] || op.state;
   }
-  function pkOpLine(op) { return op.state === 'work' ? 'Running ' + op.ride.name + ' by hand. I put it back on AUTO when I go.' : op.state === 'onBreak' ? 'Five minutes, boss.' : 'Hi! ' + pkOpWords(op).charAt(0).toUpperCase() + pkOpWords(op).slice(1) + '.'; }
+  function pkOpLine(op) { return op.state === 'work' ? (pkOpAutoRide(op.ride) ? 'Keeping an eye on ' + op.ride.name + '. It runs itself, I make sure it keeps running.' : 'Running ' + op.ride.name + ' by hand. I put it back on AUTO when I go.') : op.state === 'onBreak' ? 'Five minutes, boss.' : 'Hi! ' + pkOpWords(op).charAt(0).toUpperCase() + pkOpWords(op).slice(1) + '.'; }
   // a walk: the route finder over the park, or a straight line inside a booth
   function pkOpGo(op, p, straight) { op.path = straight ? [{ x: p.x, z: p.z }] : route({ x: op.x, z: op.z }, { x: p.x, z: p.z }); op.faceYaw = null; }
   function pkOpWalkThrough(op, pts) { op.path = pts.map(function (p) { return { x: p.x, z: p.z }; }); op.faceYaw = null; }
@@ -93,10 +123,20 @@
     op.ride = null;
   }
   // one look at the desk: what the ride wants now, done after a human pause
+  function pkOpMind(op, dt) {
+    var a = op.ride, C = a.ctl, E = a.extra || {};
+    op.mindT = (op.mindT || 0) + 0.4;
+    if (C.fault) return;
+    if (op.mindT > op.mindFor || PK.closed || op.going) { op.state = 'finish'; return; }
+    if (!C.auto) pkOpPress(op, 'auto');
+    var P = a.boothPanel;
+    if (a.continuous && E.sys === 'parked' && a.queue.length && P.start) { pkOpDo(op, function () { P.start.press(); }); op.wait = randf(1.5, 2.5); }
+  }
   function pkOpWork(op, dt) {
     var a = op.ride, C = a.ctl;
     op.wait -= dt; if (op.wait > 0) return;
     op.wait = 0.4;
+    if (pkOpAutoRide(a)) return pkOpMind(op, dt);
     if (C.fault) return;                                    // stopped: the operator waits for whoever pressed it to reset it
     if (C.auto) { op.state = 'finish'; return; }            // someone put it back on AUTO: the shift here is over
     var done = op.rounds >= op.target || PK.closed || op.going;
@@ -132,6 +172,13 @@
 
   // ── A shift, one frame ────────────────────────────────────────────
   function pkOpTick(op, dt) {
+    // the player clocked in here: the ride is theirs at once, so the operator stops where they are, hands it over as it
+    // stands (MANUAL or AUTO, as the desk is) and walks back to the clock to clock out
+    if (op.ride && pkOnDutyAt(op.ride.id) && (op.state === 'enter' || op.state === 'clockIn' || op.state === 'toDesk' || op.state === 'work')) {
+      if (Math.random() < 0.5) say(op.g, 'All yours.');
+      if (op.state !== 'enter') pkOpWalkThrough(op, [pkOpSpots(op.ride).clock]);   // coming in through the door, they are on their way to the clock already
+      op.state = 'toClockOut'; op.pose = 'idle';
+    }
     var moving = false;
     if (op.path && op.path.length) { moving = !walkAlong(op, op.path, op.speed, dt); }
     else if (op.faceYaw !== null) op.yaw += Math.atan2(Math.sin(op.faceYaw - op.yaw), Math.cos(op.faceYaw - op.yaw)) * Math.min(1, dt * 6);
@@ -145,21 +192,24 @@
         if (op.going) { op.state = 'home'; pkOpGo(op, PK_OP_HOME); return; }
         a = pkOpPick(op);
         if (!a) { op.state = 'toBreak'; var b = PK_OP_BREAKS[Math.floor(Math.random() * PK_OP_BREAKS.length)]; pkOpGo(op, { x: b[0], z: b[1] }); return; }
-        op.ride = a; op.rounds = 0; op.target = 2 + Math.floor(Math.random() * 3); op.state = 'toBooth'; pkOpGo(op, pkOpSpots(a).foot);
+        op.ride = a; op.rounds = 0; op.target = 2 + Math.floor(Math.random() * 3); op.mindT = 0; op.mindFor = randf(90, 200); op.state = 'toBooth';
+        var spa = pkOpSpots(a);
+        if (spa.pre) { op.path = route({ x: op.x, z: op.z }, spa.pre[0]).concat(spa.pre.slice(1), route(spa.pre[spa.pre.length - 1], spa.foot)); op.faceYaw = null; }
+        else pkOpGo(op, spa.foot);
         break;
       case 'toBooth':
         if (!pkOpStillFree(op)) { op.ride = null; op.state = 'pick'; return; }
-        a.boothDoor.want = 1; op.state = 'enter'; pkOpWalkThrough(op, [sp.out, sp.inn, sp.clock]);
+        pkOpDoor(a).want = 1; op.state = 'enter'; pkOpWalkThrough(op, [sp.out, sp.inn, sp.clock]);
         break;
       case 'enter':
         op.faceYaw = sp.clockYaw; op.state = 'clockIn'; op.t = 0; op.pose = 'work';
         break;
       case 'clockIn':
         if (op.t < 1.4) return;
-        a.boothDoor.want = 0;
+        pkOpDoor(a).want = 0;
         op.clocked = true; screenDirtyAll();
         if (!a.ctl.key) pkOpDo(op, function () { pkSetRideKey(a, true); });
-        if (a.ctl.auto) { pkOpPress(op, 'auto'); if (S.ctlAuto) S.ctlAuto[a.id] = true; }   // MANUAL for the shift only: a save mid-shift loads the ride on AUTO
+        if (a.ctl.auto && !pkOpAutoRide(a)) { pkOpPress(op, 'auto'); if (S.ctlAuto) S.ctlAuto[a.id] = true; }   // MANUAL for the shift only: a save mid-shift loads the ride on AUTO
         if (Math.random() < 0.5) say(op.g, 'Clocked in. ' + a.name + ' is mine.');
         op.state = 'toDesk'; op.pose = 'idle'; pkOpWalkThrough(op, [sp.desk]);
         break;
@@ -170,7 +220,7 @@
         op.faceYaw = sp.deskYaw; pkOpWork(op, dt);
         break;
       case 'finish':
-        if (a.ctl && !a.ctl.auto) pkOpPress(op, 'auto');
+        if (a.ctl && !a.ctl.auto && !pkOnDutyAt(a.id)) pkOpPress(op, 'auto');   // the player on duty here keeps the desk as they set it
         op.state = 'toClockOut'; op.pose = 'idle'; pkOpWalkThrough(op, [sp.clock]);
         break;
       case 'toClockOut':
@@ -178,11 +228,12 @@
         break;
       case 'clockOut':
         if (op.t < 1.2) return;
-        op.clocked = false; screenDirtyAll(); a.boothDoor.want = 1; op.pose = 'idle';
+        op.clocked = false; screenDirtyAll(); pkOpDoor(a).want = 1; op.pose = 'idle';
         op.state = 'leave'; pkOpWalkThrough(op, [sp.inn, sp.out, sp.foot]);
+        if (sp.pre) op.path = op.path.concat(route(sp.foot, sp.pre[sp.pre.length - 1]), sp.pre.slice(0, -1).reverse());   // back the way they came up
         break;
       case 'leave':
-        a.boothDoor.want = 0; op.last = a; op.ride = null;
+        pkOpDoor(a).want = 0; op.last = a; op.ride = null;
         if (op.going) { op.state = 'home'; pkOpGo(op, PK_OP_HOME); return; }
         if (Math.random() < 0.4) { op.state = 'toBreak'; var bb = PK_OP_BREAKS[Math.floor(Math.random() * PK_OP_BREAKS.length)]; pkOpGo(op, { x: bb[0], z: bb[1] }); }
         else op.state = 'pick';
@@ -228,4 +279,4 @@
   var _pkOpMigrate = GAME.migrate;
   GAME.migrate = function (s) { s = _pkOpMigrate ? _pkOpMigrate(s) : s; if (s.operator && typeof s.operators !== 'number') { s.operators = 1; s.auto = true; } return s; };
   var _pkOpT = GAME.T;
-  GAME.T = function () { var t = _pkOpT(); t.PK_OPS = PK_OPS; t.pkOpTick = pkOpTick; t.pkOpMake = pkOpMake; t.pkOpRemove = pkOpRemove; t.pkOpCount = pkOpCount; return t; };
+  GAME.T = function () { var t = _pkOpT(); t.PK_OPS = PK_OPS; t.pkOpTick = pkOpTick; t.pkOpMake = pkOpMake; t.pkOpRemove = pkOpRemove; t.pkOpCount = pkOpCount; t.pkOpSpots = pkOpSpots; t.pkOpCanWork = pkOpCanWork; t.route = route; return t; };

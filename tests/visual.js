@@ -16,7 +16,7 @@ const SHOTS = [
   { name: '03-midway',        pos: [0, 24],     look: [0, 2, -10] },
   { name: '04-carousel',      pos: [-22, 24],   look: [-34, 2, 20] },
   { name: '05-teacups',       pos: [-22, 5],    look: [-34, 1.5, 3] },
-  { name: '06-haunted',       pos: [-36, -16],  look: [-58, 4.5, -24] },
+  { name: '06-danse',         pos: [-36, -16],  look: [-58, 4.5, -24] },
   { name: '07-ferris',        pos: [22, 24],    look: [34, 5, 20] },
   { name: '08-dodgems',       pos: [22, 5],     look: [34, 2, 3] },
   { name: '09-coaster',       pos: [14, 16],    look: [0, 3, -14] },
@@ -87,7 +87,7 @@ async function main() {
     say.push(T.devCommand('cash', 50000));
     say.push(T.devCommand('xp', 6000)); T.hideCards();
     say.push(T.pkHire('clerk')); say.push(T.pkHire('operator'));
-    ['carousel', 'teacups', 'ferris', 'dodgems', 'droptower', 'flume', 'haunted'].forEach((id) => say.push(T.devCommand('open', id)));
+    ['carousel', 'teacups', 'ferris', 'dodgems', 'droptower', 'flume', 'danse', 'droom'].forEach((id) => say.push(T.devCommand('open', id)));
     say.push(T.devCommand('auto'));
     for (let i = 0; i < 4; i++) T.devCommand('spawn', 20);
     return say.join(' | ');

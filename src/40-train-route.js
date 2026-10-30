@@ -167,22 +167,38 @@
       var s = trNearestS(d.x, d.z), o = trSamp(TR.main, s, {}), g = trFrameGroup(o.x, o.z, o.yaw), dyn = trDyn(g);
       var X = { id: d.id, s: s, x: o.x, z: o.z, yaw: o.yaw, dx: o.dx, dz: o.dz, g: g, poles: [], leds: [], lanes: d.lanes, road: d.road, up: 0, active: false, beepT: 0, flip: 0, hold: false };
       // the crossing deck: planks between and beside the rails
-      box(3.4, 0.07, d.road ? 8.4 : 3.6, M.deck, 0, 0.085, 0, g);
-      // a sleeper-and-sand apron at each side
+      box(2 * (Math.max.apply(null, d.lanes.map(Math.abs)) + (d.road ? 1.5 : 1.0)), 0.07, 3.4, M.deck, 0, 0.085, 0, g);   // the whole road's width along the line, 3.4 across the rails
+      // each side of the line: a barrier post at the road's edge (opposite corners, as half barriers stand) with a striped
+      // boom that stands upright while the crossing is open and comes down level across the road when it closes; and a
+      // signal mast outside the road's edge facing the road on that side: the St Andrew's cross over two red lights that
+      // flash in turn on a black backplate, and the bell on top. (Local x runs along the line, z along the road.)
+      var edge = Math.max.apply(null, d.lanes.map(Math.abs)) + (d.road ? 1.5 : 1.0), lampM = std({ color: 0x3a0a08, roughness: 0.3 });
+      var crossTex = tex(256, 64, function (c, W, H) { c.fillStyle = '#c8222a'; c.fillRect(0, 0, W, H); c.fillStyle = '#ffffff'; c.fillRect(8, 8, W - 16, H - 16); c.fillStyle = '#c8222a'; c.fillRect(20, 20, W - 40, H - 40); c.fillStyle = '#ffffff'; c.fillRect(26, 26, W - 52, H - 52); });
+      var crossM = std({ map: crossTex, roughness: 0.5 });
+      X.booms = [];
       [-1, 1].forEach(function (side) {
-        d.lanes.forEach(function (lane) {
-          var pole = new THREE.Group(); pole.position.set(lane, -1.35, side * 2.5); dyn.add(pole);
-          var p = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 1.4, 12), strip); p.position.y = 0.7; p.castShadow = true; pole.add(p);
-          sphere(0.1, M.iron, 0, 1.43, 0, pole);
-          var led = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), M.led); led.position.set(0, 1.3, side * -0.07); pole.add(led); led.userData.noBake = true;
-          X.poles.push(pole); X.leds.push({ m: led, phase: (side > 0 ? 0 : 1) });
+        var px = side * (edge + 0.35), pz = side * 2.7, L = 2 * edge + 0.1;
+        // the barrier post: a cabinet on a plinth, white with a black band, the boom's pivot on top
+        pkBevelBox(0.5, 0.25, 0.5, M.iron, px, 0.12, pz, g, 0.02);
+        pkBevelBox(0.38, 1.05, 0.38, M.white, px, 0.75, pz, g, 0.03); box(0.4, 0.14, 0.4, M.black, px, 0.95, pz, g);
+        var piv = new THREE.Group(); piv.position.set(px, 1.12, pz); dyn.add(piv);
+        var dirX = -side;                                                  // the boom reaches across the road
+        box(L, 0.1, 0.1, strip, dirX * L / 2, 0, 0, piv);
+        box(L * 0.6, 0.05, 0.05, M.iron, dirX * L * 0.3, -0.09, 0, piv);
+        box(0.5, 0.18, 0.2, M.iron, -dirX * 0.3, 0, 0, piv);               // the counterweight behind the pivot
+        [0.25, 0.6, 0.95].forEach(function (f, k) { var bl = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), M.led); bl.position.set(dirX * L * f, 0.08, 0); piv.add(bl); bl.userData.noBake = true; X.leds.push({ m: bl, phase: k % 2 }); });
+        piv.rotation.z = -side * Math.PI / 2;                                // open: standing up
+        X.booms.push({ g: piv, side: side });
+        // the signal mast
+        var mast = new THREE.Group(); mast.position.set(side * (edge + 1.4), 0, side * 3.4); mast.rotation.y = side > 0 ? 0 : Math.PI; g.add(mast);
+        pkRoundCyl(0.07, 3.6, M.iron, 0, 1.8, 0, mast, 8); pkBevelBox(0.4, 0.2, 0.4, M.iron, 0, 0.1, 0, mast, 0.02);
+        [-1, 1].forEach(function (r) { var bd = box(1.25, 0.24, 0.03, crossM, 0, 3.15, 0.08, mast); bd.rotation.z = r * Math.PI / 4; });
+        pkBevelBox(0.9, 0.42, 0.06, M.black, 0, 2.35, 0.06, mast, 0.02);
+        [-0.24, 0.24].forEach(function (lx, k) {
+          var lens = new THREE.Mesh(new THREE.CircleGeometry(0.13, 18), M.led); lens.position.set(lx, 2.35, 0.1); mast.add(lens); lens.userData.noBake = true; X.leds.push({ m: lens, phase: k });
+          var hood = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.16, 16, 1, true, -Math.PI / 2, Math.PI), M.black); hood.rotation.x = Math.PI / 2; hood.position.set(lx, 2.37, 0.16); mast.add(hood);
         });
-        // the signal mast: a cross-buck, two LED lenses and the horn, either side of the road
-        var mast = new THREE.Group(); mast.position.set(d.lanes[d.lanes.length - 1] + 1.9, 0, side * 3.3); g.add(mast);
-        pkRoundCyl(0.06, 3.1, M.iron, 0, 1.55, 0, mast, 8);
-        var bx = box(0.14, 0.9, 0.9, M.white, 0, 2.55, 0, mast); bx.rotation.x = 0;
-        [-0.25, 0.25].forEach(function (zz, k) { var lens = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), M.led); lens.position.set(0.08, 2.55, zz); mast.add(lens); lens.userData.noBake = true; X.leds.push({ m: lens, phase: k }); });
-        box(0.04, 0.6, 0.6, M.red, 0.075, 2.55, 0, mast);
+        pkRoundCyl(0.12, 0.14, M.black, 0, 3.72, 0, mast, 12); sphere(0.08, M.iron, 0, 3.82, 0, mast);     // the bell
       });
       TR.xing.push(X);
     });

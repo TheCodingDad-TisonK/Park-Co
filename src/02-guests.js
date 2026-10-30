@@ -2,7 +2,7 @@
   // ── The guests ────────────────────────────────────────────────────
   // A guest arrives from the car park, joins the shorter ticket line, buys a ticket, passes a turnstile, queues for the
   // coaster, boards when the gates open, rides, and goes home. The whole thing is a small state machine on a walk record.
-  var PK_POOL = [], PK_GUEST_MAX = 110;
+  var PK_POOL = [], PK_GUEST_MAX = 200;
   function pkTakeHuman() {
     if (PK_POOL.length) { var g = PK_POOL.pop(); g.visible = true; scene.add(g); return g; }
     // makeHuman builds the figure but does not put it in the world: without this every new guest walked, queued and rode
@@ -41,10 +41,12 @@
   function pkPickBooth() {
     if (!PK.booths || !PK.booths.length) return 0;
     // the shorter line, and a coin toss when both are empty: tie-breaking to the west window sent every guest through one
-    // turnstile and left the east booth looking closed
-    var best = [], bl = 1e9;
+    // turnstile and left the east booth looking closed. The guests already on their way to a window count as in its line,
+    // or a whole car park's worth arriving at once all picked the same empty window
+    var best = [], bl = 1e9, coming = PK.booths.map(function () { return 0; });
+    PK.guests.forEach(function (g) { if (g.state === 'walkBooth' && coming[g.booth] !== undefined) coming[g.booth]++; });
     for (var i = 0; i < PK.booths.length; i++) {
-      var n = PK.booths[i].queue.length;
+      var n = PK.booths[i].queue.length + coming[i];
       if (n < bl) { bl = n; best = [i]; } else if (n === bl) best.push(i);
     }
     return best[Math.floor(Math.random() * best.length)];

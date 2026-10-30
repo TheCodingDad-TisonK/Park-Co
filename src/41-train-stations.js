@@ -268,35 +268,146 @@
 
   // ── The depot ─────────────────────────────────────────────────────
   function trBuildDepot() {
-    var M = trMats(), P = pkMats(), zc = TR.N - 12, D = TR.depot = { x0: 28, x1: 92, z: zc, bays: {} };
-    pkSlab(70, 14.4, 60, zc, 0.02, std({ color: 0x6d6a64, roughness: 0.95 }));
-    pkBevelBox(70, 5.2, 0.5, P.cream, 60, 2.6, zc - 7.2, scene, 0.05);
-    pkBevelBox(70, 1.2, 0.5, P.cream, 60, 0.6, zc + 7.2, scene, 0.05); pkBevelBox(70, 0.9, 0.5, P.cream, 60, 4.75, zc + 7.2, scene, 0.05);
-    for (var px = 26; px <= 94; px += 4.25) box(0.4, 3.6, 0.5, M.woodD, px, 3.0, zc + 7.2, scene);
-    for (var wx = 28.1; wx < 94; wx += 4.25) { plane(3.2, 2.7, P.pane, wx + 1.9, 2.95, zc + 6.94, 0, Math.PI, scene); }
-    pkBevelBox(0.5, 5.2, 14.4, P.cream, 25.2, 2.6, zc, scene, 0.05); pkBevelBox(0.5, 5.2, 14.4, P.cream, 94.8, 2.6, zc, scene, 0.05);
-    pkGableRoof(70, 15, 3.2, P.slate, P.cream, 60, 5.2, zc, scene, 0.6);
-    pkBevelBox(0.7, 1.4, 4.0, P.stoneDark, 25.1, 4.5, zc, scene, 0.05); pkBevelBox(0.7, 1.4, 4.0, P.stoneDark, 94.9, 4.5, zc, scene, 0.05);
-    sign(['LINDENBURG RAILWAY', 'LOCOMOTIVE DEPOT'], 6.4, 1.0, 60, 6.2, zc + 7.55, 0, { w: 640, h: 100, bg: '#12301f', fg: '#f2e6b8' }, scene);
-    box(14, 0.05, 0.9, std({ color: 0x0a0b0c, roughness: 1 }), 59, 0.075, zc);
-    for (var gx = 52.5; gx < 66; gx += 0.9) box(0.08, 0.04, 0.9, M.iron, gx, 0.115, zc);
-    [zc - 5.5, zc + 5.5].forEach(function (zz) { pkBevelBox(0.35, 5, 0.35, M.iron, 59, 2.5, zz, scene, 0.03); });
-    box(0.4, 0.45, 11.6, pkPaint(0xe3a02e, 0.5, 0.4), 59, 4.8, zc, scene); var hoist = box(0.9, 0.5, 0.9, M.iron, 59, 4.35, zc - 1.5, scene); pkRod(59, 4.1, zc - 1.5, 59, 3.0, zc - 1.5, 0.02, M.iron, scene, 4);
-    pkBevelBox(4.4, 2.6, 2.4, M.stoneDark, 40, 1.3, zc - 5.6, scene, 0.05); for (var c = 0; c < 9; c++) sphere(0.5 + (c % 3) * 0.12, M.coal, 38.6 + (c % 4) * 0.95, 2.7 + (c % 2) * 0.2, zc - 5.6 + ((c * 3) % 5 - 2) * 0.3, scene);
-    box(0.6, 0.12, 2.6, M.iron, 40, 2.4, zc - 3.4, scene).rotation.x = 0.5;
-    pkRoundCyl(0.12, 4.0, M.iron, 45, 2.0, zc + 3.3, scene, 10); pkRod(45, 3.9, zc + 3.3, 45, 3.5, zc + 1.2, 0.07, M.iron, scene, 8); pkRod(45, 3.5, zc + 1.2, 45, 2.3, zc + 1.2, 0.08, M.black, scene, 8);
-    [zc - 2.4, zc + 2.4].forEach(function (zz) { pkBevelBox(0.3, 3.8, 0.3, M.iron, 80, 1.9, zz, scene, 0.03); });
-    pkBevelBox(0.3, 0.3, 5.1, M.iron, 80, 3.8, zc, scene, 0.03);
-    D.brushes = []; [-1, 1].forEach(function (sd) { var br = trDyn(); br.position.set(80, 0, zc + sd * 1.9); pkRoundCyl(0.45, 2.6, pkPaint(0x2a7fd0, 0.9, 0), 0, 1.7, 0, br, 14); pkRoundCyl(0.05, 3.2, M.iron, 0, 1.7, 0, br, 6); D.brushes.push(br); });
-    D.spray = []; for (var n = 0; n < 8; n++) { var sp = new THREE.Mesh(new THREE.SphereGeometry(0.04, 4, 4), new THREE.MeshBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.8 })); sp.visible = false; sp.userData.noBake = true; scene.add(sp); D.spray.push(sp); }
-    function console3(x, label, cost, prompt, fn) {
-      pkBevelBox(0.9, 1.3, 0.5, pkPaint(0x3b4650, 0.5, 0.5), x, 0.65, zc + 5.9, scene, 0.03);
-      sign([label], 0.8, 0.2, x, 1.5, zc + 5.63, 0, { w: 256, h: 64, bg: '#1b232c', fg: '#f5b53d' }, scene);
-      hitBox(0.9, 1.4, 0.6, x, 0.7, zc + 5.7, { prompt: prompt, use: fn }, scene);
+    var M = trMats(), P = pkMats(), zc = TR.N - 12, D = TR.depot = { x0: 44, x1: 95.5, z: zc, bays: {} };
+    // The engine shed: a brick shed of two roads under a slate roof. The running road (the siding, z = zc) runs straight
+    // through it from x 42, so the shed stands on that straight; the second road beside it is a dead end with the depot's
+    // works van on it. Brick walls on a stone plinth, pilasters and tall arched windows, arched doorways at both ends with
+    // their timber doors folded open, roof lights and a smoke vent along the ridge; inside the iron trusses, enamel
+    // pendants, the inspection pit and the hoist, the wash bay, the benches, the lockers, the foreman's office.
+    var X0 = 44, X1 = 95.5, ZN = zc - 9, ZS = zc + 5, H = 7.2, R1 = zc, R2 = zc - 5, cx = (X0 + X1) / 2, cz = (ZN + ZS) / 2;
+    var brick = pkMatBrick(), stone = P.stone, dark = P.stoneDark, wood = M.woodD, iron = M.iron;
+    var glass = std({ color: 0x2a3b4a, roughness: 0.08, metalness: 0.6 }), white = pkPaint(0xf0ece2, 0.6, 0.05), green = pkPaint(0x1d5b3b, 0.5, 0.2);
+    var bayW = (X1 - X0) / 12;
+    // the floor: concrete, and stone setts between and beside the running road's rails
+    pkSlab(X1 - X0, ZS - ZN, cx, cz, 0.02, std({ color: 0x6d6a64, roughness: 0.95 }));
+    box(X1 - X0, 0.02, 1.9, std({ color: 0x55524d, roughness: 0.95, map: P.paverTex }), cx, 0.035, R1, scene);
+    // the long walls: a plinth, the brick, a pilaster at every bay, an arched window between, a cornice along the top
+    [[ZN, -1], [ZS, 1]].forEach(function (w) {
+      var z = w[0], o = w[1];
+      box(X1 - X0, H, 0.45, brick, cx, H / 2, z, scene); solid(X0, X1, z - 0.25, z + 0.25, 0, H);
+      box(X1 - X0 + 0.1, 0.9, 0.62, stone, cx, 0.45, z, scene);
+      box(X1 - X0 + 0.2, 0.3, 0.7, stone, cx, H - 0.1, z, scene);
+      for (var b = 0; b <= 12; b++) box(0.6, H - 0.9, 0.75, brick, X0 + b * bayW, 0.9 + (H - 0.9) / 2, z, scene);
+      for (var bw = 0; bw < 12; bw++) {
+        var wx = X0 + (bw + 0.5) * bayW;
+        box(1.7, 2.8, 0.5, glass, wx, 3.6, z, scene);                                                  // the glass, both faces
+        [-1, 1].forEach(function (f) {
+          var fz = z + f * 0.26;
+          var head = new THREE.Mesh(new THREE.CircleGeometry(0.85, 16, 0, Math.PI), glass); head.position.set(wx, 5.0, fz); head.rotation.y = f > 0 ? 0 : Math.PI; scene.add(head);
+          var arc = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.12, 6, 18, Math.PI), stone); arc.position.set(wx, 5.0, fz); arc.rotation.y = f > 0 ? 0 : Math.PI; scene.add(arc);
+          box(0.05, 2.8, 0.03, white, wx, 3.6, fz, scene); [2.7, 3.6, 4.5].forEach(function (y) { box(1.7, 0.04, 0.03, white, wx, y, fz, scene); });
+          box(2.0, 0.16, 0.12, stone, wx, 2.16, fz, scene);                                            // the sill
+        });
+      }
+    });
+    // the gable ends: brick walls with an arched doorway over each road, a stone surround, the doors folded open outside
+    function gableEnd(x, out) {
+      var sh = new THREE.Shape(); sh.moveTo(ZN - 0.3, 0); sh.lineTo(ZS + 0.3, 0); sh.lineTo(ZS + 0.3, H); sh.lineTo(ZN - 0.3, H); sh.closePath();
+      [R1, R2].forEach(function (rz) { var hp = new THREE.Path(), r = 2.2, sp = 4.6; hp.moveTo(rz - r, 0); hp.lineTo(rz - r, sp); hp.absarc(rz, sp, r, Math.PI, 0, true); hp.lineTo(rz + r, 0); hp.closePath(); sh.holes.push(hp); });
+      var geo = new THREE.ExtrudeGeometry(sh, { depth: 0.5, bevelEnabled: false, curveSegments: 18 }), uv = geo.attributes.uv;
+      for (var i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / 4, uv.getY(i) / 4);
+      var m = new THREE.Mesh(geo, brick); m.rotation.y = -Math.PI / 2; m.position.set(x + 0.25, 0, 0); m.castShadow = true; m.receiveShadow = true; scene.add(m);
+      [R1, R2].forEach(function (rz) {
+        var ring = new THREE.Mesh(new THREE.TorusGeometry(2.38, 0.2, 6, 20, Math.PI), stone); ring.rotation.y = Math.PI / 2; ring.position.set(x + out * 0.28, 4.6, rz); scene.add(ring);
+        box(0.6, 1.2, 0.4, dark, x + out * 0.2, 0.6, rz - 2.45, scene); box(0.6, 1.2, 0.4, dark, x + out * 0.2, 0.6, rz + 2.45, scene);
+        // the doors: two timber leaves on the jambs, stood open square to the wall (the doorways are too close together
+        // for the leaves to fold back flat), strapped in iron
+        [-1, 1].forEach(function (s) {
+          var lz = rz + s * 2.32, lx = x + out * (0.3 + 1.1);
+          box(2.2, 4.4, 0.12, green, lx, 2.2, lz, scene);
+          [0.6, 2.2, 3.8].forEach(function (y) { box(2.2, 0.14, 0.04, iron, lx, y, lz + s * 0.07, scene); });
+          for (var pl = -0.9; pl <= 0.91; pl += 0.3) box(0.02, 4.3, 0.02, pkPaint(0x174a30, 0.6, 0.1), lx + pl, 2.2, lz + s * 0.065, scene);
+          solid(lx - 1.1, lx + 1.1, lz - 0.08, lz + 0.08, 0, 4.4);
+        });
+      });
+      // the solid wall between and outside the doorways stops the player
+      [[ZN - 0.3, R2 - 2.2], [R2 + 2.2, R1 - 2.2], [R1 + 2.2, ZS + 0.3]].forEach(function (seg) { solid(x - 0.25, x + 0.25, seg[0], seg[1], 0, H); });
     }
-    console3(38, 'COAL + WATER', 0, function () { return trInDepot() ? 'Fill up coal and water' + trFillCost() : 'Bring the train into the depot first'; }, function () { trDoFill(); });
-    console3(60, 'SERVICE', 0, function () { return trInDepot() ? 'Service the train - ' + trServiceCost() : 'Bring the train into the depot first'; }, function () { trDoService(); });
-    console3(80, 'WASH', 0, function () { return trInDepot() ? 'Wash the train ($30)' : 'Bring the train into the depot first'; }, function () { trDoWash(); });
+    gableEnd(X0, -1); gableEnd(X1, 1);
+    // the roof: slate on brick gables, a run of roof lights down each slope, the smoke vent along the ridge
+    var hd = (ZS - ZN) / 2 + 0.7, rise = 3.6, a = Math.atan2(rise, hd);
+    pkGableRoof(X1 - X0 + 0.8, ZS - ZN + 1.4, rise, P.slate, brick, cx, H, cz, scene, 0.5);
+    [-1, 1].forEach(function (s) {
+      for (var rl = X0 + 4; rl < X1 - 3; rl += 6.5) {
+        var gl = box(3.0, 0.04, 2.4, std({ color: 0x9fc6d8, roughness: 0.1, metalness: 0.4 }), rl, H + rise * 0.5 + 0.2, cz + s * hd * 0.5, scene); gl.rotation.x = s * a;
+      }
+    });
+    box(X1 - X0 - 4, 1.0, 1.6, brick, cx, H + rise + 0.2, cz, scene);
+    for (var lv = X0 + 2.5; lv < X1 - 2.4; lv += 0.6) [-1, 1].forEach(function (s) { var lb = box(0.5, 0.06, 0.04, iron, lv, H + rise + 0.25, cz + s * 0.82, scene); lb.rotation.x = s * 0.5; });
+    pkGableRoof(X1 - X0 - 3.4, 2.2, 0.6, P.slate, brick, cx, H + rise + 0.7, cz, scene, 0.2);
+    // the name and the date over the east doors
+    sign(['LINDENBURG RAILWAY', 'LOCOMOTIVE DEPOT'], 7.6, 1.1, X1 + 0.32, H + 1.5, cz, Math.PI / 2, { w: 760, h: 110, bg: '#12301f', fg: '#f2e6b8' }, scene);
+    var ds = new THREE.Mesh(new THREE.CircleGeometry(0.55, 24), stone); ds.rotation.y = Math.PI / 2; ds.position.set(X1 + 0.31, H + 2.9, cz); scene.add(ds);
+    sign(['1904'], 0.7, 0.3, X1 + 0.33, H + 2.9, cz, Math.PI / 2, { w: 160, h: 64, bg: '#b8ae9c', fg: '#3a3026', plate: false }, scene);
+    // inside: the iron trusses, a pendant lamp over each road at every other bay
+    for (var tb = 1; tb < 12; tb++) {
+      var tx = X0 + tb * bayW;
+      pkRod(tx, H, ZN + 0.3, tx, H, ZS - 0.3, 0.05, iron, scene, 6);
+      pkRod(tx, H, ZN + 0.3, tx, H + rise - 0.3, cz, 0.07, iron, scene, 6); pkRod(tx, H, ZS - 0.3, tx, H + rise - 0.3, cz, 0.07, iron, scene, 6);
+      pkRod(tx, H, cz, tx, H + rise - 0.3, cz, 0.04, iron, scene, 6);
+      if (tb % 2 === 1) [R1, R2].forEach(function (rz) {
+        pkRod(tx, H, rz, tx, 5.6, rz, 0.012, iron, scene, 4);
+        var shade = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.3, 16, 1, true), std({ color: 0x1d5b3b, roughness: 0.5, side: THREE.DoubleSide })); shade.position.set(tx, 5.45, rz); scene.add(shade);
+        sphere(0.12, glowMat(0xfff0c8, 1.2), tx, 5.32, rz, scene);
+      });
+    }
+    // the inspection pit under the running road, the hoist over it
+    box(14, 0.05, 0.9, std({ color: 0x0a0b0c, roughness: 1 }), 59, 0.075, R1);
+    for (var gx = 52.5; gx < 66; gx += 0.9) box(0.08, 0.04, 0.9, iron, gx, 0.115, R1);
+    [R1 - 2.7, R1 + 2.7].forEach(function (zz) { pkBevelBox(0.35, 6.2, 0.35, iron, 59, 3.1, zz, scene, 0.03); });
+    box(0.4, 0.45, 5.8, pkPaint(0xe3a02e, 0.5, 0.4), 59, 6.1, R1, scene); box(0.9, 0.5, 0.9, iron, 59, 5.65, R1 - 1.0, scene); pkRod(59, 5.4, R1 - 1.0, 59, 4.2, R1 - 1.0, 0.02, iron, scene, 4);
+    // the wash bay: a portal over the running road at x 80, its two brushes and the spray (the wash in part 43 runs them)
+    [R1 - 2.4, R1 + 2.4].forEach(function (zz) { pkBevelBox(0.3, 3.8, 0.3, iron, 80, 1.9, zz, scene, 0.03); });
+    pkBevelBox(0.3, 0.3, 5.1, iron, 80, 3.8, R1, scene, 0.03);
+    D.brushes = []; [-1, 1].forEach(function (sd) { var br = trDyn(); br.position.set(80, 0, R1 + sd * 1.9); pkRoundCyl(0.45, 2.6, pkPaint(0x2a7fd0, 0.9, 0), 0, 1.7, 0, br, 14); pkRoundCyl(0.05, 3.2, iron, 0, 1.7, 0, br, 6); D.brushes.push(br); });
+    D.spray = []; for (var n = 0; n < 8; n++) { var sp = new THREE.Mesh(new THREE.SphereGeometry(0.04, 4, 4), new THREE.MeshBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.8 })); sp.visible = false; sp.userData.noBake = true; scene.add(sp); D.spray.push(sp); }
+    // the second road: a dead end with a buffer stop, the depot's works van standing on it
+    for (var sl = X0 + 0.6; sl < X1 - 2.5; sl += 0.7) box(1.6, 0.08, 0.22, wood, sl, 0.06, R2, scene);
+    [-0.56, 0.56].forEach(function (o) { box(X1 - X0 - 3, 0.12, 0.07, iron, (X0 + X1 - 2.4) / 2, 0.16, R2 + o, scene); });
+    pkBevelBox(0.5, 1.0, 2.2, pkPaint(0x8e2a22, 0.6, 0.2), X1 - 2.2, 0.5, R2, scene, 0.04); box(0.12, 0.3, 2.3, pkStripes('#f0c04a', '#1b1b1b'), X1 - 2.45, 0.9, R2, scene);
+    var van = new THREE.Group(); van.position.set(64, 0, R2); scene.add(van);
+    pkBevelBox(5.2, 0.18, 1.9, iron, 0, 0.8, 0, van, 0.02);
+    pkBevelBox(5.0, 2.2, 2.1, pkPaint(0x6a2a22, 0.7, 0.1), 0, 2.0, 0, van, 0.04);
+    var vr = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, 5.1, 20, 1, false, -0.42, 0.84), pkPaint(0x3a3d40, 0.7, 0.2)); vr.rotation.z = Math.PI / 2; vr.rotation.y = 0; vr.geometry.rotateX(-Math.PI / 2); vr.position.set(0, 0.62, 0); van.add(vr);
+    [-1, 1].forEach(function (s) { box(1.2, 1.8, 0.04, pkPaint(0x5a2420, 0.7, 0.1), 0, 1.95, s * 1.07, van); sign(['WORKS No. 2'], 1.4, 0.24, -1.5, 2.6, s * 1.08, s > 0 ? 0 : Math.PI, { w: 256, h: 44, bg: '#6a2a22', fg: '#f2e6b8', plate: false }, van); });
+    [-1.6, 1.6].forEach(function (wx) { [-1, 1].forEach(function (s) { var wh = trWheel(0.4, M.black, M.black, van, wx, 0.5, s * 0.72, 6); }); });
+    [-1, 1].forEach(function (e) { [-0.6, 0.6].forEach(function (z) { var bf = pkRoundCyl(0.09, 0.2, iron, e * 2.65, 0.9, z, van, 8); bf.rotation.z = Math.PI / 2; }); });
+    solid(61.3, 66.7, R2 - 1.1, R2 + 1.1, 0, 3.2);
+    // along the north wall: benches with vices, a tool board over each, lockers at the east end, a wheelset on its stands
+    for (var bx = 50; bx <= 80; bx += 10) {
+      pkBevelBox(2.6, 0.08, 0.8, wood, bx, 0.92, ZN + 0.75, scene, 0.02); [-1.2, 1.2].forEach(function (lx) { box(0.07, 0.9, 0.7, iron, bx + lx, 0.45, ZN + 0.75, scene); });
+      box(0.2, 0.18, 0.2, iron, bx + 0.9, 1.05, ZN + 1.0, scene); pkRod(bx + 0.9, 1.1, ZN + 1.1, bx + 0.9, 1.1, ZN + 1.35, 0.015, iron, scene, 6);
+      box(2.4, 1.2, 0.04, pkPaint(0xd8c9a8, 0.8, 0.05), bx, 1.9, ZN + 0.26, scene);
+      for (var tl = 0; tl < 7; tl++) box(0.04, 0.2 + (tl % 3) * 0.1, 0.03, iron, bx - 1.0 + tl * 0.33, 1.9, ZN + 0.29, scene);
+      solid(bx - 1.3, bx + 1.3, ZN + 0.3, ZN + 1.2, 0, 1.0);
+    }
+    for (var lk = 0; lk < 6; lk++) pkBevelBox(0.55, 1.9, 0.5, pkPaint(0x2f4a62, 0.5, 0.4), 86 + lk * 0.6, 0.95, ZN + 0.55, scene, 0.02);
+    solid(85.6, 89.6, ZN + 0.25, ZN + 0.85, 0, 1.9);
+    [70.2, 71.8].forEach(function (sx) { pkRoundCyl(0.06, 0.6, iron, sx, 0.3, ZN + 2.2, scene, 6); });
+    var ws = new THREE.Group(); ws.position.set(71, 0.82, ZN + 2.2); scene.add(ws); ws.rotation.y = Math.PI / 2;
+    [-0.6, 0.6].forEach(function (z) { trWheel(0.55, M.black, M.black, ws, 0, 0, z, 8); }); pkRoundCyl(0.06, 1.4, iron, 0, 0, 0, ws, 8).rotation.x = Math.PI / 2;
+    // oil drums, fire buckets on the south wall, the service consoles along it
+    [[74, ZS - 0.8], [74.8, ZS - 0.7], [74.4, ZS - 1.4]].forEach(function (d, i) { pkRoundCyl(0.3, 0.88, pkPaint([0x2a5a8a, 0x8a2a22, 0x2a6a3a][i], 0.6, 0.3), d[0], 0.44, d[1], scene, 14); });
+    for (var fb = 0; fb < 4; fb++) { pkRoundCyl(0.13, 0.3, pkPaint(0xc8322a, 0.5, 0.2), 50 + fb * 0.45, 1.5, ZS - 0.35, scene, 10); box(0.02, 0.06, 0.02, iron, 50 + fb * 0.45, 1.7, ZS - 0.3, scene); }
+    sign(['FIRE'], 1.6, 0.25, 50.7, 2.0, ZS - 0.24, Math.PI, { w: 256, h: 40, bg: '#c8322a', fg: '#ffffff', plate: false }, scene);
+    function console3(x, label, prompt, fn) {
+      pkBevelBox(0.9, 1.3, 0.5, pkPaint(0x3b4650, 0.5, 0.5), x, 0.65, R1 + 3.9, scene, 0.03);
+      sign([label], 0.8, 0.2, x, 1.5, R1 + 3.63, Math.PI, { w: 256, h: 64, bg: '#1b232c', fg: '#f5b53d' }, scene);
+      hitBox(0.9, 1.4, 0.6, x, 0.7, R1 + 3.75, { prompt: prompt, use: fn }, scene);
+      solid(x - 0.45, x + 0.45, R1 + 3.65, R1 + 4.15, 0, 1.3);
+    }
+    console3(56, 'COAL + WATER', function () { return trInDepot() ? 'Fill up coal and water' + trFillCost() : 'Bring the train into the depot first'; }, function () { trDoFill(); });
+    console3(66, 'SERVICE', function () { return trInDepot() ? 'Service the train - ' + trServiceCost() : 'Bring the train into the depot first'; }, function () { trDoService(); });
+    console3(83, 'WASH', function () { return trInDepot() ? 'Wash the train ($30)' : 'Bring the train into the depot first'; }, function () { trDoWash(); });
+    // the foreman's office in the south-west corner: a timber room glazed above the waist
+    var ox0 = 45, ox1 = 49.5, oz0 = R1 + 2.6, oz1 = ZS - 0.25;
+    box(ox1 - ox0, 1.1, 0.1, green, (ox0 + ox1) / 2, 0.55, oz0, scene); box(ox1 - ox0, 1.2, 0.04, glass, (ox0 + ox1) / 2, 1.7, oz0, scene); box(ox1 - ox0, 0.6, 0.1, green, (ox0 + ox1) / 2, 2.6, oz0, scene);
+    box(0.1, 2.9, oz1 - oz0, green, ox1, 1.45, (oz0 + oz1) / 2, scene); box(ox1 - ox0 + 0.2, 0.1, oz1 - oz0 + 0.2, wood, (ox0 + ox1) / 2, 2.95, (oz0 + oz1) / 2, scene);
+    pkBevelBox(1.4, 0.06, 0.7, wood, 46.6, 0.85, oz1 - 0.5, scene, 0.02); box(0.5, 0.35, 0.03, pkPaint(0x1b232c, 0.5, 0.2), 46.6, 1.1, oz1 - 0.75, scene);
+    sign(['FOREMAN'], 1.1, 0.2, (ox0 + ox1) / 2, 2.45, oz0 - 0.06, Math.PI, { w: 256, h: 48, bg: '#12301f', fg: '#f2e6b8' }, scene);
+    solid(ox0, ox1, oz0 - 0.05, oz0 + 0.05, 0, 2.9); solid(ox1 - 0.05, ox1 + 0.05, oz0, oz1, 0, 2.9);
+    // the yard outside each end: a concrete apron
+    pkSlab(10, 16, X1 + 5, cz, 0.018, std({ color: 0x6d6a64, roughness: 0.95 })); pkSlab(8, 16, X0 - 4, cz, 0.018, std({ color: 0x6d6a64, roughness: 0.95 }));
     var wt = new THREE.Group(); wt.position.set(104, 0, zc - 20); scene.add(wt);
     [[-1.4, -1.4], [1.4, -1.4], [-1.4, 1.4], [1.4, 1.4]].forEach(function (p) { pkRod(p[0], 0, p[1], p[0] * 0.8, 6, p[1] * 0.8, 0.12, M.woodD, wt, 8); });
     pkRoundCyl(2.2, 3.4, M.woodD, 0, 7.7, 0, wt, 20); trCone(2.5, 1.8, M.slateRed, 0, 10.2, 0, wt, 20);

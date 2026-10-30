@@ -92,4 +92,21 @@
     }
     return result;
   };
+
+  // ── Zoom in 1st person ─────────────────────────────────────────────
+  // The wheel narrows the view, up to four times closer, and back out to the field of view set in the settings. It takes
+  // the wheel only when nothing else wants it: not in 3rd person (on foot or on the train), not with the tablet up, and not
+  // while aiming at a screen that scrolls.
+  var PK_ZOOM = 1, _pkZoomPrevWheel = GAME.wheel;
+  GAME.wheel = function (dir, e) {
+    var tr = TR && TR.t, third = PK_3P.on || (tr && (tr.driving || tr.seat) && tr.thirdPerson);
+    var sc = typeof screenUnderCrosshair === 'function' ? screenUnderCrosshair() : null;
+    if (third || PK_TABLET.open || (sc && sc.scrollable) || !ui.started || ui.blocked()) {
+      if (PK_ZOOM !== 1 && third) { PK_ZOOM = 1; camera.fov = SET.fov; camera.updateProjectionMatrix(); }
+      return _pkZoomPrevWheel ? _pkZoomPrevWheel(dir, e) : false;
+    }
+    PK_ZOOM = clamp(PK_ZOOM * (dir < 0 ? 1.25 : 0.8), 1, 4); if (PK_ZOOM < 1.04) PK_ZOOM = 1;
+    camera.fov = 2 * Math.atan(Math.tan(SET.fov * Math.PI / 360) / PK_ZOOM) * 180 / Math.PI; camera.updateProjectionMatrix();
+    return true;
+  };
 })();

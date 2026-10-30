@@ -18,7 +18,7 @@
   // crossroads, with a side street to each far ride's queue; the North Promenade closes the ring and the Garden Walk crosses it.
   var PK_ROUTES = [
     [-22, 3, -46, 3, 4, 'fair'],                                                                                   // the Fairground avenue: teacups, the kids' lane
-    [-31, 3, -31, -60, 3.6, 'dark'], [-31, -24, -45.5, -24, 3.8, 'dark'], [-31, -52, -45.5, -52, 3.8, 'dark'],      // the Dark Woods: haunted manor, drop tower
+    [-31, 3, -31, -60, 3.6, 'dark'], [-31, -24, -45.5, -24, 3.8, 'dark'], [-31, -52, -45.5, -52, 3.8, 'dark'],      // the Dark Woods: Danse Macabre, drop tower
     [22, 3, 46, 3, 4, 'thrill'],                                                                                   // the Thrills avenue: dodgems
     [35, 3, 35, -60, 3.6, 'coaster'], [35, -24, 47.5, -24, 3.8, 'coaster'],                                         // Coaster Country: log flume
     [-31, -60, 35, -60, 5, 'garden'],                                                                               // the North Promenade
@@ -269,7 +269,7 @@
     pkSignpost(-28.4, 0.4, [['TEACUPS & KIDS <', Math.PI], ['DARK WOODS ^', Math.PI / 2], ['STATION SQUARE >', 0]]);
     pkSignpost(37.4, 0.4, [['DODGEMS & BARON >', 0], ['COASTER COUNTRY ^', Math.PI / 2], ['< STATION SQUARE', Math.PI]]);
     // where the streets cross the Garden Walk
-    pkSignpost(-28.4, -41.4, [['GARDEN WALK >', 0], ['DROP TOWER ^', Math.PI / 2], ['HAUNTED MANOR v', -Math.PI / 2]]);
+    pkSignpost(-28.4, -41.4, [['GARDEN WALK >', 0], ['DROP TOWER ^', Math.PI / 2], ['DANSE MACABRE v', -Math.PI / 2]]);
     pkSignpost(37.4, -41.4, [['< GARDEN WALK', Math.PI], ['SERPENT & MOONWOOD ^', Math.PI / 2], ['LOG FLUME v', -Math.PI / 2]]);
     // and where the streets meet the North Promenade
     pkSignpost(-28.4, -57.4, [['DROP TOWER <', Math.PI], ['NORTH GARDENS >', 0], ['STATION SQUARE v', -Math.PI / 2]]);
