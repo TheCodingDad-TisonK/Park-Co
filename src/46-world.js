@@ -26,7 +26,7 @@
     if (d < 8 + m) return false;
     if (Math.abs(z - 76) < 7 + m) return false;
     for (var i = 0; i < PK_XP_STATIONS.length; i++) { var s = PK_XP_STATIONS[i]; if (Math.abs(x - s[0]) < 36 + m && Math.abs(z - s[1]) < 36 + m) return false; }
-    if (x > 8 - m && x < 112 + m && z > -172 - m && z < -120) return false;           // the depot and its siding
+    if (x > 8 - m && x < 132 + m && z > -172 - m && z < -120) return false;           // the depot, its siding and TOW-1's spur and bay (part 47)
     if (Math.abs(x + 17) < 6 + m && z < -120 && z > -158) return false;              // Windmill Halt's footpath out to the viewing platform
     return true;
   }

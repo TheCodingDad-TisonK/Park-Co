@@ -1135,7 +1135,7 @@
   }
   // ── Staff ─────────────────────────────────────────────────────────
   // one clerk; up to ten ride operators, who work the rides in shifts (part 26). S.operator stays true while any is hired
-  var PK_OPS_MAX = 10;
+  var PK_OPS_MAX = 15;
   function pkOpCount() { return typeof S.operators === 'number' ? S.operators : (S.operator ? 1 : 0); }
   function pkWages() { return (S.clerk ? 40 : 0) + 60 * pkOpCount(); }
   function pkHire(which) {

@@ -51,7 +51,7 @@ app.whenReady().then(async () => {
 
   // let the park fill: a couple of minutes of game time so guests walk in, queue and ride
   await exec("window.PARK_CO.T.run(150)");
-  await exec("['carousel','teacups','ferris','dodgems','droptower','flume','haunted'].forEach(function(id){ window.PARK_CO.T.pkOpenRide(id); }); true;");
+  await exec("['carousel','teacups','ferris','dodgems','droptower','flume','danse','droom'].forEach(function(id){ window.PARK_CO.T.pkOpenRide(id); }); true;");
   await wait(300);
   await exec("['dc-start','dc-panel','dc-menu','dc-hud'].forEach(function(id){ var e=document.getElementById(id); if(e) e.style.display='none'; }); document.body.style.background='#0b0f14'; true;");
 

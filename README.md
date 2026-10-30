@@ -47,7 +47,7 @@ Take control of your very own theme park and watch it come to life. Inspired by 
 
 From selling tickets at the gate to dispatching coasters, running the railway, and keeping your guests happy — every aspect of park management falls into your capable hands. Earn XP as you serve your guests, level up, and unlock new opportunities as your park grows.
 
-> **Time Scale:** 1 in-game hour = 75 real seconds  
+> **Time Scale:** 1 in-game hour = 5 real minutes (a full day is two hours)  
 > **Goal:** Keep the queues moving, the guests happy, and the park running smoothly!
 
 ---

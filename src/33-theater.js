@@ -298,8 +298,10 @@
     // the desk under the window with the two consoles, the chair, the CCTV over the right end, the ride cabinet
     var desk = new THREE.Group(); desk.position.set(-0.75, BF, BZ0 + 0.5); g.add(desk); pkBkDesk(desk, 5.3);
     pkTheaterDesk(a, g, BF, BZ0);
-    pkBkChair(g, -1.2, BZ0 + 1.75, Math.PI, BF);
-    pkBkMonitors(a, g, 1.3, BF + 1.95, BZ0 + 0.42, 0, 0.27);
+    // a chair at each console (SHOW at x -2.15, STAGE at -0.35), and the two CCTV screens on one bracket, each hung over
+    // the middle of its console
+    pkBkChair(g, -2.15, BZ0 + 1.75, Math.PI, BF); pkBkChair(g, -0.35, BZ0 + 1.75, Math.PI, BF);
+    pkBkMonitors(a, g, -1.25, BF + 1.95, BZ0 + 0.42, 0, 0.9);
     pkBkCabinet(a, g, BX - 0.18, BF + 1.35, BZ0 + 3.0, -Math.PI / 2);
     pkTheaterWallScreens(a, g, BF, BZ0, BX);
 

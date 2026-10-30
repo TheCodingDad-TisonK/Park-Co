@@ -21,7 +21,7 @@
     { id: 'dodgems',   name: 'Dodgems',      x: 56,  z: 3,  r: 8.2,  q: [44, 3],    level: 8 },
     { id: 'droptower', name: 'Drop tower',   x: -54, z: -52, r: 6.5, q: [-44, -52], level: 9 },
     { id: 'flume',     name: 'Log flume',    x: 54,  z: -32, r: 9.0, q: [46.4, -24], level: 10 },
-    { id: 'haunted',   name: 'Haunted house',x: -58, z: -24, r: 9.5, q: [-44, -24],  level: 11 }
+    { id: 'danse',     name: 'Danse Macabre',  x: -58, z: -24, r: 12,  q: [-44, -24],  level: 11, qside: -1, pad: 0.02 }   // part 49: the boarding row at the abbey's doors; the abbey lays its own ground
   ];
   // the ladder: what the park earns its way to. Every ride is open from the first day; the levels open the services.
   var PK_LEVELS = [
@@ -377,6 +377,7 @@
         if (othin < 0.3) continue;                                                  // thin it a little, as the ring is
         var ofx = ox + ojx, ofz = oz + ojz, oseed = Math.abs(Math.round(ofx * 13 + ofz * 7));
         if (typeof pkThemeKeepClear === 'function' && pkThemeKeepClear(ofx, ofz)) continue;
+        if (ofx > 4 && ofx < 136 && ofz > -176 && ofz < -118) continue;          // the railway's depot, its yard and TOW-1's bay (parts 41, 47)
         if (oseed % 4 === 0) pkConifer(ofx, ofz, osc, null, oseed); else pkTree(ofx, ofz, osc, null, oseed);
       }
     }
@@ -394,7 +395,7 @@
     for (var j = 0; j < 4; j++) trafficAdd(77.5, -1, randf(7, 11));
     // the cars are the guests' own now (part 19): the lot fills through the day and empties at closing. A wheel stop heads
     // every bay
-    pkLotBays().forEach(function (b) { box(1.7, 0.12, 0.22, MAT.steelDark, b.x, 0.06, b.front + (b.front < 62 ? 0.5 : -0.5)); });
+    pkLotBays().forEach(function (b) { if (!b.ms) box(1.7, 0.12, 0.22, MAT.steelDark, b.x, 0.06, b.front + (b.front < 62 ? 0.5 : -0.5)); });   // the multi-storey marks its own (part 51)
     // lamp posts down the edges of the lot
     [[-31.6, 55.5], [31.6, 55.5], [-31.6, 68.5], [31.6, 68.5]].forEach(function (p) { pkLamp(p[0], p[1], 5.2); });
     // and a barrier at the entrance drive, with a little booth

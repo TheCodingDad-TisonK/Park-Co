@@ -317,7 +317,7 @@
     ['horn', 'whistle'].forEach(function (kd) { var key = kd + 'Auto'; if (t[key] > 0) { t[key] -= dt; if (t[key] <= 0 && !(kd === 'horn' ? t.hornKey : t.whistleKey)) { trVoice(kd, false); t[kd === 'horn' ? 'hornOn' : 'whistleOn'] = false; } } });
     if (R.auto) trAuto(dt);
     // the speed limit and the safety system (ATB)
-    if (t.v < 0.2) { if (t.cutoff > 0.01) t.dir = 1; else if (t.cutoff < -0.01) t.dir = -1; }   // the reverser sets which way she goes
+    if (t.v < 0.2 && !t.towed) { if (t.cutoff > 0.01) t.dir = 1; else if (t.cutoff < -0.01) t.dir = -1; }   // the reverser sets which way she goes (on tow, the tug does)
     var lim = trCurveLimit(t.s, t.mode), want = trBrakeTick(dt), thr = t.throttle; t.atb = '';
     if (R.wear > 80) lim = Math.min(lim, 5);
     if (t.mode === 'D') lim = Math.min(lim, 4);
@@ -328,13 +328,17 @@
     var thrust = trTractive(thr, dt);
     var drag = 0.012 * t.v + (t.v > 0.02 ? 0.05 : 0);
     var a = thrust - drag - want * 3.0 * (t.v > 0.02 ? 1 : 0);
-    t.v = Math.max(0, Math.min(11, t.v + a * dt)); if (want >= 0.99 && thrust < 0.05 && t.v < 0.08) t.v = 0;
+    // on tow (part 47) the tug sets her speed and direction, her own engine and brakes are out of it
+    if (!t.towed) { t.v = Math.max(0, Math.min(11, t.v + a * dt)); if (want >= 0.99 && thrust < 0.05 && t.v < 0.08) t.v = 0; }
     var ds = t.v * dt * t.dir, prev = t.s; t.s += ds;
     // the loop, the points, the depot loop
     var L = trLoopLen(t.mode); if (t.s >= L) { t.s -= L; R.laps++; } else if (t.s < 0) t.s += L;
     if (t.mode === 'M' && ds > 0 && prev < TR.sJ1 && t.s >= TR.sJ1) { if (R.points === 'depot') t.mode = 'D'; }
     if (t.mode === 'D' && ds > 0 && t.s - TR.len > TR.sJ1 + TR.byp.L) { t.mode = 'M'; t.s -= TR.dL; R.points = 'main'; }
     if (t.mode === 'D' && ds < 0 && t.s < TR.sJ1) { t.mode = 'M'; }
+    // backing up the main line into the east end of the siding, points set to the depot: she switches when her last wagon
+    // (leading, going backwards) crosses the junction
+    if (t.mode === 'M' && ds < 0 && R.points === 'depot' && prev - TR.len >= TR.sJ2 && t.s - TR.len < TR.sJ2) { t.mode = 'D'; t.s += TR.dL; }
     // fuel, water, wear, dirt
     var run = Math.abs(ds);
     R.wear = Math.min(100, R.wear + run * 0.004); R.dirt = Math.min(100, R.dirt + run * 0.006);
@@ -455,8 +459,10 @@
       var X = TR.xing[i], act = false, p;
       for (j = 0; j < TR.units.length && !act; j++) { p = TR.units[j].g.position; if (Math.hypot(p.x - X.x, p.z - X.z) < 8.5) act = true; }
       if (!act && t.v > 0.3) for (k = 0; k < 8 && !act; k++) { var pp = trPos(t.s + t.dir * (k * 12 + 2), t.mode, _trA); if (Math.hypot(pp.x - X.x, pp.z - X.z) < 6) act = true; }
+      // TOW-1 (part 47) closes a crossing too: standing on it, or running toward it
+      var tg = TR.tugRef; if (!act && tg && tg.built && tg.g) { var tq = tg.g.position, td = Math.hypot(tq.x - X.x, tq.z - X.z); if (td < 7 || (Math.abs(tg.v) > 0.2 && td < 7 + Math.abs(tg.v) * 6)) act = true; }
       X.active = act; X.up += ((act ? 1 : 0) - X.up) * Math.min(1, dt * 1.6); if (Math.abs(X.up - (act ? 1 : 0)) < 0.01) X.up = act ? 1 : 0;
-      for (j = 0; j < X.poles.length; j++) X.poles[j].position.y = -1.35 + 1.35 * Math.min(1, X.up);
+      if (X.booms) X.booms.forEach(function (bm) { bm.g.rotation.z = -bm.side * (Math.PI / 2) * (1 - Math.min(1, X.up)); });   // up while open, level across the road when closed
       if (act) { X.flip += dt * 2.2; X.beepT -= dt; if (X.beepT <= 0 && X.up > 0.1) { X.beepT = 0.42; var hi = Math.floor(X.flip * 2) % 2 === 0; trTone('square', hi ? 1040 : 760, 0.18, 0.1, X.x, X.z, { lp: 2600 }); } }
       for (j = 0; j < X.leds.length; j++) { var on = act && X.up > 0.2 && ((Math.floor(X.flip * 2) + X.leds[j].phase) % 2 === 0); X.leds[j].m.material = on ? M.ledOn : M.led; }
       if (typeof traffic !== 'undefined' && traffic && traffic.cars && X.road) traffic.cars.forEach(function (c) {

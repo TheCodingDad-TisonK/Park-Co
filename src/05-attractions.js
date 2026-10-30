@@ -342,7 +342,7 @@
   function pkBuildAttractions() {
     pkMats();
     PK.xp = S.xp || 0;
-    var makers = { carousel: pkBuildCarousel, teacups: pkBuildTeacups, ferris: pkBuildFerris, dodgems: pkBuildDodgems, droptower: pkBuildDropTower, flume: pkBuildFlume, haunted: pkBuildHaunted };
+    var makers = { carousel: pkBuildCarousel, teacups: pkBuildTeacups, ferris: pkBuildFerris, dodgems: pkBuildDodgems, droptower: pkBuildDropTower, flume: pkBuildFlume, danse: pkBuildDanse, droom: pkBuildDroom };
     PK_PLOTS.forEach(function (p) {
       var mk = makers[p.id]; if (!mk) return;
       var a = mk(p, true);
@@ -792,81 +792,4 @@
     berths.forEach(function (gzz) { pkStationGatePair(g, dockX, gzz, -lane, 0, gw, pkCtl(a), 0x2f6b4a); });   // swinging toward the boats
     return a;
   }
-  // ── The haunted house ────────────────────────────────────────────
-  // A two-storey Victorian manor, its front to the midway: clapboard over a stone base, a slate roof with a cross gable, a corner
-  // tower with a spire, a porch on turned columns, lit windows with shutters, a chimney, and a graveyard either side.
-  function pkBuildHaunted(p, open) {
-    var M = pkMats(), g = new THREE.Group(); g.position.set(p.x, 0, p.z); g.rotation.y = p.x < 0 ? Math.PI / 2 : -Math.PI / 2; scene.add(g);
-    var wall = M.clapGrey, trim = pkPaint(0xe8e2d4, 0.7, 0), lit = glowMat(0xff9a3d, 0.9), dim = glowMat(0x7a5a3a, 0.5), shutter = pkPaint(0x23332a, 0.7, 0.1);
-    box(12.4, 0.6, 10.4, M.stoneDark, 0, 0.3, 0, g);
-    box(12, 3.0, 10, wall, 0, 2.1, 0, g);
-    box(12.2, 0.2, 10.2, trim, 0, 3.6, 0, g);
-    box(12, 2.8, 10, wall, 0, 5.0, 0, g);
-    [[-6, -5], [6, -5], [-6, 5], [6, 5]].forEach(function (c) { box(0.22, 5.8, 0.22, trim, c[0], 3.5, c[1], g); });
-    pkGableRoof(12, 10, 3.6, M.slate, wall, 0, 6.4, 0, g, 0.5);
-    var cg = new THREE.Group(); cg.position.set(-0.5, 6.0, 3.6); cg.rotation.y = Math.PI / 2; g.add(cg);
-    pkGableRoof(3.6, 4.2, 2.6, M.slate, wall, 0, 0, 0, cg, 0.35);
-    pkWindow(g, -0.5, 7.2, 5.45, 0.9, 1.1, 0, trim, lit);
-    // the tower and its spire
-    box(3.4, 9.6, 3.4, wall, 4.4, 5.4, 3.4, g);
-    box(3.6, 0.2, 3.6, trim, 4.4, 10.2, 3.4, g);
-    pkHipRoof(4.0, 4.0, 4.2, M.slate, 4.4, 10.3, 3.4, g);
-    pkRod(4.4, 14.4, 3.4, 4.4, 15.8, 3.4, 0.04, M.iron, g, 6); sphere(0.12, M.iron, 4.4, 15.2, 3.4, g);
-    pkWindow(g, 4.4, 8.2, 5.15, 0.8, 1.2, 0, trim, lit); pkWindow(g, 6.15, 8.2, 3.4, 0.8, 1.2, Math.PI / 2, trim, dim);
-    box(1.0, 3.8, 1.0, MAT.brick, -3.8, 8.6, -2.0, g); box(1.2, 0.2, 1.2, M.stoneDark, -3.8, 10.5, -2.0, g);
-    // windows, some lit, some with a shutter hanging loose
-    [[-4.4, 2.2], [-2.3, 2.2], [-4.4, 5.0], [-2.3, 5.0], [1.8, 5.0], [4.4, 5.0]].forEach(function (w, i) {
-      pkWindow(g, w[0], w[1], 5.03, 0.95, 1.5, 0, trim, i % 3 === 1 ? lit : (i % 3 === 2 ? dim : M.pane));
-      box(0.42, 1.6, 0.06, shutter, w[0] - 0.75, w[1], 5.06, g);
-      var s2 = box(0.42, 1.6, 0.06, shutter, w[0] + 0.75, w[1] - (i === 4 ? 0.12 : 0), 5.06, g); if (i === 4) s2.rotation.z = 0.32;
-    });
-    [-3, 0, 3].forEach(function (z, i) { [2.2, 5.0].forEach(function (y, j) { [-1, 1].forEach(function (sx) { pkWindow(g, sx * 6.03, y, z, 0.95, 1.5, sx * Math.PI / 2, trim, (i + j + (sx > 0 ? 1 : 0)) % 3 === 0 ? lit : M.pane); }); }); });
-    // the porch: a deck, steps, four turned columns, a railing of balusters and a lean-to roof
-    box(7.2, 0.24, 2.6, MAT.wood, -0.5, 0.72, 6.3, g);
-    for (var st = 0; st < 3; st++) box(2.2, 0.2, 0.4, MAT.wood, -0.5, 0.5 - st * 0.2, 7.8 + st * 0.4, g);
-    [-3.8, -1.9, 0.9, 2.8].forEach(function (x) { pkLathe([[0, 0], [0.16, 0], [0.16, 0.2], [0.1, 0.3], [0.09, 2.2], [0.14, 2.35], [0.14, 2.5], [0, 2.5]], trim, x, 0.84, 7.4, g, 12); });
-    [[-3.8, -1.9], [0.9, 2.8]].forEach(function (seg) { box(seg[1] - seg[0], 0.08, 0.1, trim, (seg[0] + seg[1]) / 2, 1.7, 7.4, g); for (var bx = seg[0] + 0.2; bx < seg[1] - 0.1; bx += 0.22) box(0.05, 0.8, 0.05, trim, bx, 1.28, 7.4, g); });
-    var pr = box(7.8, 0.14, 3.0, M.slate, -0.5, 3.55, 6.45, g); pr.rotation.x = 0.16;
-    // the front doors: they swing open when the ride boards
-    var doors = [];
-    [-1, 1].forEach(function (s) {
-      var hinge = pkMover(g, -0.5 + s * 1.05, 0.84, 5.06);
-      box(1.02, 2.5, 0.08, pkPaint(0x3a1f1a, 0.7, 0), -s * 0.51, 1.25, 0, hinge);
-      box(0.6, 0.8, 0.02, lit, -s * 0.51, 1.75, 0.05, hinge);
-      sphere(0.05, M.brass, -s * 0.88, 1.2, 0.08, hinge);
-      pkFuse(hinge); doors.push({ h: hinge, s: s });
-    });
-    box(2.5, 0.25, 0.14, trim, -0.5, 3.47, 5.08, g);
-    sign(['THE HAUNTED MANOR'], 2.6, 0.42, -0.5, 4.05, 5.12, 0, { bg: '#1b232c', fg: '#ff8a3d' }, g);
-    [-2.0, 1.0].forEach(function (x) { cyl(0.11, 0.36, glowMat(0xffb060, 1.4), x, 2.6, 5.2, g, 8); });
-    // the graveyard either side: headstones, crosses, dead trees and a low iron fence
-    var stone = pkPaint(0x8e8a84, 0.95, 0), stoneShape = [[-0.32, 0], [0.32, 0], [0.32, 0.7], [0.22, 0.86], [0, 0.92], [-0.22, 0.86], [-0.32, 0.7]];
-    [-1, 1].forEach(function (s) {
-      for (var gr = 0; gr < 7; gr++) {
-        var gx = s * (7.6 + (gr % 3) * 1.2), gz = -3.5 + Math.floor(gr / 3) * 2.6 + (gr % 2) * 0.5;
-        if (gr % 3 === 2) { box(0.12, 0.95, 0.1, stone, gx, 0.48, gz, g); box(0.5, 0.12, 0.1, stone, gx, 0.7, gz, g); }
-        else { var hs = pkExtrude(stoneShape, 0.14, stone, gx, 0, gz, g, 0.02); hs.rotation.y = s * Math.PI / 2 + randf(-0.25, 0.25); hs.rotation.z = randf(-0.12, 0.12); }
-        box(0.7, 0.06, 1.3, M.soil, gx, 0.03, gz + 0.8, g);
-      }
-      var tx = s * 10.0;
-      cyl(0.13, 3.6, M.bark, tx, 1.8, 2.0, g, 8, 0.22);
-      pkRod(tx, 2.6, 2.0, tx + s * 1.2, 3.8, 2.6, 0.06, M.bark, g, 6); pkRod(tx, 3.1, 2.0, tx - s * 0.9, 4.2, 1.2, 0.05, M.bark, g, 6); pkRod(tx + s * 0.8, 3.4, 2.4, tx + s * 1.3, 4.3, 1.9, 0.035, M.bark, g, 5);
-      [[6.8, -5], [11.6, -5], [11.6, 5], [6.8, 5]].forEach(function (c, ci, arr) { var n2 = arr[(ci + 1) % arr.length]; if (ci === 3) return; pkRod(s * c[0], 0.95, c[1], s * n2[0], 0.95, n2[1], 0.03, M.iron, g, 6); pkRod(s * c[0], 0.2, c[1], s * n2[0], 0.2, n2[1], 0.025, M.iron, g, 6); });
-      for (var fp = 0; fp < 12; fp++) { var fz = -5 + fp * (10 / 11); box(0.03, 1.0, 0.03, M.iron, s * 11.6, 0.5, fz, g); }
-    });
-    // the ride happens inside: six standing places behind the doors
-    var inside = new THREE.Group(); inside.position.set(0, 0.6, -1.0); g.add(inside);
-    var seats = [];
-    for (var k = 0; k < 6; k++) seats.push({ par: inside, x: -3.6 + (k % 3) * 3.6, y: 0, z: (k < 3 ? -2 : 2), guest: null, pose: 'stand' });
-    pkLocalSolid(g, -6.3, 6.3, -5.3, 5.3, 0, 7); pkLocalSolid(g, -4.1, 3.1, 5.3, 7.5, 0, 1.2);
-    pkLocalSolid(g, 6.6, 11.8, -5.2, 5.2, 0, 1.0); pkLocalSolid(g, -11.8, -6.6, -5.2, 5.2, 0, 1.0);
-    var a = pkAttr({ id: 'haunted', name: 'Haunted house', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats, board: 6, run: 20, unload: 4,
-      tickRun: function (at, dt) {
-        // the lit windows flicker while a party is inside, and the house groans
-        if (at.state === 'running') { lit.emissiveIntensity = 0.6 + Math.max(0, Math.sin(worldTime * 13) * Math.sin(worldTime * 3.1)) * 1.4; if (Math.floor(at.t / 4) !== Math.floor((at.t - dt) / 4)) sfx('door'); }
-        else lit.emissiveIntensity = 0.9;
-      } });
-    a.extra.inside = inside;
-    pkCtl(a).gateObjs.push(function (t) { doors.forEach(function (d) { d.h.rotation.y = d.s * 1.45 * t; }); });
-    return a;
-  }
+  // Danse Macabre, on the old manor's plot, is built in part 49

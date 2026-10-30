@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.5.0 (2026-10-30): Big Update
+
+## New
+- **Droomvlucht:** a suspended dark ride through seven dreams, in the new Marerijk land.
+- **Danse Macabre:** a spooky show ride in the Dark Woods, in place of the Haunted Manor.
+- **New control desks** for both rides, each with its own look.
+- **Multi-storey car park:** three levels beside the car park, with its own drive, barrier and stairs. Every car that parks there pays a parking fee, and you set the fee on the PC's Finance page.
+- **TOW-1, the rescue tug:** fetch a train that dies out on the line and bring it home to the depot.
+- **A new locomotive depot** and **real level crossings** with barriers, lights and bells.
+- **Zoom in first person** with the mouse wheel.
+
+## Improved
+- The park now takes up to **200 guests** (was 110).
+- **Longer days:** a game day now lasts about two hours.
+- **AUTO for every ride** on the PC and tablet: one button turns the key on and lets the ride run itself.
+- **Up to 15 ride operators** (was 10), and they now work **every ride**, including the indoor coasters, Danse Macabre, Droomvlucht and the Arena.
+- Both ticket windows now share the crowd, and the clerk keeps both lines moving.
+- The Arena's control room has chairs, and the Mountain King is darker inside.
+
+## Fixed
+- Operators no longer take over a ride you are clocked in at.
+- No more car parking on the walkway to the gate.
+- TOW-1 closes the level crossings, has a proper two-tone horn, and clicking its controls no longer throws you out of the cab.
+
 ## 1.4.1 (2026-10-29): Improvement Update
 
 A smoother park, a new set of carriages for the Lindenburg Railway, proper station gates at every ride, and a tidier way into the Lindenburg Arena.

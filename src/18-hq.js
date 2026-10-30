@@ -380,8 +380,8 @@
   function pkHQMonitorWall(x, y, z) {
     var g = new THREE.Group(); g.position.set(x, y, z); scene.add(g);
     pkBevelBox(3.5, 1.4, 0.1, MAT.steelDark, 0, 0, -0.04, g, 0.02);
-    var LANDS = [['THE FAIRGROUND', ['carousel', 'teacups', 'kround', 'kpots', 'kpuffin']], ['THRILLS', ['ferris', 'dodgems', 'baron']], ['THE DARK WOODS', ['haunted', 'droptower', 'nocturne', 'wreck']],
-      ['COASTER COUNTRY', ['flume', 'serpent', 'moonwood']], ['THE COASTER', []], ['THE GATE', null]];
+    var LANDS = [['THE FAIRGROUND', ['carousel', 'teacups', 'kround', 'kpots', 'kpuffin']], ['THRILLS', ['ferris', 'dodgems', 'baron']], ['THE DARK WOODS', ['danse', 'droptower', 'nocturne', 'wreck']],
+      ['COASTER COUNTRY', ['flume', 'serpent', 'moonwood']], ['MARERIJK', ['droom']], ['THE COASTER', []], ['THE GATE', null]];
     LANDS.forEach(function (L, i) {
       var cx = -1.15 + (i % 3) * 1.15, cy = 0.33 - Math.floor(i / 3) * 0.66;
       var sc = touchScreen({ w: 300, h: 180, pw: 1.08, ph: 0.6, x: cx, y: cy, z: 0.02, parent: g, title: 'Security: ' + L[0].toLowerCase(),

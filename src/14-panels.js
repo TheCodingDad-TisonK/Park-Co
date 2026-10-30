@@ -209,11 +209,19 @@
       c.fillStyle = S.acc; c.beginPath(); c.ellipse(x - r * 0.62, y - r * 0.05, r * 0.08, r * 0.2, 0, 0, 6.28); c.fill();
       c.strokeStyle = S.acc; c.lineWidth = r * 0.09; for (var k = 0; k < 2; k++) { c.beginPath(); for (var i = 0; i <= 20; i++) { var xx = x - r * 0.75 + i * r * 0.075, yy = y + r * (0.35 + k * 0.22) + Math.sin(i * 0.9) * r * 0.07; if (i) c.lineTo(xx, yy); else c.moveTo(xx, yy); } c.stroke(); }
     },
-    haunted: function (c, x, y, r, S) {
-      c.fillStyle = S.acc; c.beginPath(); c.arc(x + r * 0.32, y - r * 0.38, r * 0.3, 0, 6.28); c.fill();
-      c.fillStyle = S.zone2 || '#151318'; c.beginPath(); c.arc(x + r * 0.44, y - r * 0.46, r * 0.26, 0, 6.28); c.fill();
-      c.fillStyle = S.ink; c.beginPath(); c.moveTo(x - r * 0.7, y + r * 0.75); c.lineTo(x - r * 0.7, y); c.lineTo(x - r * 0.45, y - r * 0.3); c.lineTo(x - r * 0.2, y); c.lineTo(x - r * 0.2, y - r * 0.15); c.lineTo(x + r * 0.15, y - r * 0.5); c.lineTo(x + r * 0.5, y - r * 0.15); c.lineTo(x + r * 0.5, y + r * 0.75); c.closePath(); c.fill();
-      c.fillStyle = S.acc; [[-0.55, 0.25], [-0.05, 0.1], [0.25, 0.1], [0.25, 0.45], [-0.05, 0.45]].forEach(function (w) { c.fillRect(x + w[0] * r, y + w[1] * r, r * 0.13, r * 0.17); });
+    danse: function (c, x, y, r, S) {
+      c.strokeStyle = S.ink; c.lineWidth = r * 0.06; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(x - r * 0.7, y - r * 0.7); c.lineTo(x + r * 0.75, y + r * 0.65); c.stroke();
+      c.fillStyle = S.acc; c.beginPath(); c.ellipse(x + r * 0.5, y - r * 0.55, r * 0.16, r * 0.34, -0.7, 0, 6.28); c.fill();
+      c.fillStyle = S.zone2 || '#151318'; c.beginPath(); c.arc(x - r * 0.15, y - r * 0.1, r * 0.22, 0, 6.28); c.fill();
+      c.strokeStyle = S.dim; c.lineWidth = r * 0.03;
+      [-0.2, 0, 0.2].forEach(function (k) { c.beginPath(); c.moveTo(x - r * 0.6, y + r * 0.35 + k * r); c.lineTo(x + r * 0.6, y + r * 0.35 + k * r); c.stroke(); });
+    },
+    droom: function (c, x, y, r, S) {
+      c.fillStyle = S.acc; c.beginPath(); c.arc(x, y + r * 0.2, r * 0.5, 0, 6.28); c.fill();
+      c.fillStyle = S.zone2 || '#151318'; c.beginPath(); c.arc(x + r * 0.18, y + r * 0.28, r * 0.42, 0, 6.28); c.fill();
+      c.strokeStyle = S.ink; c.lineWidth = r * 0.04; c.beginPath(); c.moveTo(x, y - r * 0.2); c.lineTo(x, y - r * 0.55); c.stroke();
+      c.fillStyle = S.ink; c.beginPath(); c.moveTo(x - r * 0.28, y - r * 0.75); c.lineTo(x + r * 0.28, y - r * 0.75); c.lineTo(x + r * 0.18, y - r * 0.45); c.lineTo(x - r * 0.18, y - r * 0.45); c.closePath(); c.fill();
     },
     kround: function (c, x, y, r, S) {
       c.fillStyle = S.acc; for (var k = 0; k < 12; k++) { var a = k * Math.PI / 6; c.beginPath(); c.moveTo(x + Math.cos(a - 0.14) * r * 0.5, y + Math.sin(a - 0.14) * r * 0.5); c.lineTo(x + Math.cos(a) * r * 0.85, y + Math.sin(a) * r * 0.85); c.lineTo(x + Math.cos(a + 0.14) * r * 0.5, y + Math.sin(a + 0.14) * r * 0.5); c.fill(); }
@@ -347,7 +355,9 @@
       flame: { font: sans, head: ser, ink: '#fff0d0', dim: '#ffc48a', acc: '#ffd08a', zone: 'rgba(40,6,2,0.5)', zone2: '#5a1408', edge: 'rgba(255,208,138,0.6)', win: '#120302', grid: 'rgba(255,208,138,0.07)', rim: gold, collar: brass, dial: 'black', lever: 'orange', tele: '#ffb03a', glow: 0.32,
         base: function (c, W, H) { pkPnFill(c, W, H, '#c8452a', '#5a1408'); pkPnFlames(c, W, H); pkPnVignette(c, W, H, 0.4); pkPnPinstripe(c, W, H, 10, '#ffd08a', 2.5, 30); } },
       mountain: { font: sans, head: ser, ink: '#f2e2b0', dim: '#b8b4c8', acc: '#d8b04a', zone: 'rgba(8,10,22,0.5)', zone2: '#1e2540', edge: 'rgba(216,176,74,0.6)', win: '#060814', grid: 'rgba(216,176,74,0.07)', rim: gold, collar: brass, screw: brass, dial: 'bone', lever: 'navy', tele: '#f2d27a', glow: 0.3,
-        base: function (c, W, H) { pkPnStone(c, W, H, '#4f5f8c', '#262e4a'); pkPnMountains(c, 0, H * 0.62, W, H * 0.38, 'rgba(10,14,30,0.4)', 'rgba(255,255,255,0.12)'); pkPnRunes(c, 40, 28, W - 80, 64, 'rgba(216,176,74,0.35)', 16); pkPnRunes(c, 40, H - 28, W - 80, 64, 'rgba(216,176,74,0.35)', 16); pkPnVignette(c, W, H, 0.4); } }
+        base: function (c, W, H) { pkPnStone(c, W, H, '#4f5f8c', '#262e4a'); pkPnMountains(c, 0, H * 0.62, W, H * 0.38, 'rgba(10,14,30,0.4)', 'rgba(255,255,255,0.12)'); pkPnRunes(c, 40, 28, W - 80, 64, 'rgba(216,176,74,0.35)', 16); pkPnRunes(c, 40, H - 28, W - 80, 64, 'rgba(216,176,74,0.35)', 16); pkPnVignette(c, W, H, 0.4); } },
+      droom: { font: sans, head: ser, ink: '#f0e8ff', dim: '#b0a0d0', acc: '#e0c0ff', zone: 'rgba(30,16,60,0.55)', zone2: '#2a1f4a', edge: 'rgba(224,192,255,0.6)', win: '#0a0618', grid: 'rgba(224,192,255,0.08)', rim: chrome, collar: chrome, dial: 'night', lever: 'purple', tele: '#e0c0ff', glow: 0.3,
+        base: function (c, W, H) { pkPnFill(c, W, H, '#6a5aa8', '#2a1f4a'); pkPnStars(c, W, H, 420, '#e8e4ff'); pkPnVignette(c, W, H, 0.4); pkPnPinstripe(c, W, H, 10, 'rgba(224,192,255,0.6)', 2, 24); } }
     };
     // the park's flagship coaster: its own deep steel blue, the lattice of its spine behind the printing, Park Co gold
     S.flagship = { font: sans, head: '"Bahnschrift SemiBold", Bahnschrift, sans-serif', ink: '#eef3f8', dim: '#9fb4cc', acc: '#ffcf5a', zone: 'rgba(4,10,22,0.45)', zone2: '#0d1f3a', edge: 'rgba(255,207,90,0.55)', win: '#030810', grid: 'rgba(143,195,255,0.07)', rim: chrome, collar: chrome, dial: 'black', lever: 'black', tele: '#ffcf5a', glow: 0.32,
@@ -417,12 +427,18 @@
       sig: { label: 'DOCK BELL', sfx: 'pkFlumeBell', words: 'the dock bell rings', col: 'teal' },
       ann: [['voice', 'DOCK\nBELL', '#7fd0ff'], ['pumps', 'PUMPS\nRUNNING', '#5fd38d']],
       tele: function (a, C, T) { return ['FLOW ' + T.flow.toFixed(0) + ' M3/H  LVL ' + T.level.toFixed(0) + '%', 'LOGS ' + T.n + '  ' + T.block + '  ' + (T.v * 3.6).toFixed(0) + ' KM/H']; } },
-    haunted: { style: 'gothic', title: 'The Haunted Manor', model: 'DARK RIDE · SIX ROOMS · EST. 1888', kind: 'rooms', seatCol: 0xff8a3d,
+    danse: { style: 'gothic', title: 'Danse Macabre', model: 'DYNAMIC MOTION STAGE 6 · 36 SEATS · 3 M DROP', kind: 'stage', seatCol: 0xff8a3d,
       caps: { test: 'purple', station: 'cream' },
-      g2: { unit: 'fog %', min: 0, max: 100, ticks: 5, red: 0.0, get: function (T) { return T.fog / 100; } },
-      sig: { label: 'THE HOWL', sfx: 'pkHowl', words: 'something howls in the manor', col: 'purple' },
-      ann: [['voice', 'HOWLS', '#ff8a3d'], ['fx', 'SCARE\nFX', '#c9a0ff']],
-      tele: function (a, C, T) { return ['ROOM ' + (T.room + 1) + ' ' + T.roomName, 'FOG ' + T.fog.toFixed(0) + '%  FX ' + (T.fx ? 'FIRING' : 'ARMED')]; } },
+      g2: { unit: 'deg', min: 0, max: 14, ticks: 7, red: 0.86, get: function (T) { return (T.tilt || 0) / 14; } },
+      sig: { label: 'ORGAN', sfx: 'pkDanseOrgan', words: 'the organ strikes up the danse', col: 'purple' },
+      ann: [['voice', 'ORGAN', '#ff8a3d'], ['motion', 'PLATFORM\nTILT', '#c9a0ff']],
+      tele: function (a, C, T) { return ['PLATFORM ' + (T.h || 0).toFixed(1) + ' M  TILT ' + (T.tilt || 0).toFixed(0) + ' DEG', 'STALLS ' + (T.n || 0) + '  BEAT ' + ((T.beat || 0) + 1)]; } },
+    droom: { style: 'droom', title: 'Droomvlucht', model: 'SUSPENDED DARK RIDE 6 · 7 DREAMS · 18 KM/H', kind: 'flight', seatCol: 0xe0c0ff,
+      caps: { test: 'purple', station: 'cream' },
+      g2: { unit: 'm', min: 0, max: 3, ticks: 6, red: 0.0, get: function (T) { return (T.h || 0) / 3; } },
+      sig: { label: 'LULLABY', sfx: 'pkDroomChime', words: 'the music box plays its lullaby', col: 'purple' },
+      ann: [['voice', 'MUSIC\nBOX', '#e0c0ff'], ['motion', 'FLYING', '#c0d0ff']],
+      tele: function (a, C, T) { return ['ALT ' + (T.h || 0).toFixed(1) + ' M  ' + (T.sceneName || 'EMPTY'), 'GONDOLAS ' + (T.n || 0) + '  LOOP']; } },
     kround: { style: 'toy', base: ['#ff8a6a', '#e0563f', 'rgba(255,255,255,0.18)'], title: 'Little Roundabout', model: 'TINY TURN 1 · FOR SMALL RIDERS', kind: 'rotor', seatCol: 0xffe36a,
       g2: { unit: 'rpm', min: 0, max: 8, ticks: 4, red: 0, get: function (T) { return T.rpm / 8; } },
       sig: { label: 'TOOT TOOT', sfx: 'pkKidTune', words: 'toot toot', col: 'sky' },
@@ -688,6 +704,66 @@
       }
     };
   };
+  // Danse Macabre's stage: six stalls in a ring, lit where a rider sits, with the tilt, the height and the beat read out
+  PK_PN_KINDS.stage = function (a, sh) {
+    var list = pkPnCarriers(a), pts = [], cx = 0, cz = 0, rmax = 0.1, v = new THREE.Vector3();
+    list.forEach(function (e) { pkPnCarrierPos(a, e, v); pts.push([v.x, v.z]); cx += v.x; cz += v.z; });
+    cx /= Math.max(1, pts.length); cz /= Math.max(1, pts.length);
+    pts.forEach(function (p) { rmax = Math.max(rmax, Math.hypot(p[0] - cx, p[1] - cz)); });
+    var W = PK_PN_WIN, mx = (W.x0 + W.x1) / 2 - 0.06, my = (W.y0 + W.y1) / 2, R0 = Math.min(W.x1 - W.x0, W.y1 - W.y0) / 2 - 0.022, k = R0 / (rmax * 1.12);
+    var at = function (x, z) { return [mx + (x - cx) * k, my - (z - cz) * k]; };
+    var pips = [];
+    return {
+      draw: function (R, S) {
+        pkPnCircle(R, mx, my, R0 + 0.008, null, S.edge, 0.0025);
+        pkPnCircle(R, mx, my, 0.012, S.acc, null);
+        var lx = W.x1 - 0.055;
+        pkPnText(R, S, 'STALLS', lx, W.y1 - 0.03, 0.0105, { col: S.dim });
+        pkPnText(R, S, String(list.length), lx, W.y1 - 0.055, 0.02, { col: S.ink });
+        pkPnText(R, S, 'TILT', lx, W.y1 - 0.1, 0.0105, { col: S.dim });
+        pkPnText(R, S, 'DIA ' + (rmax * 2).toFixed(1) + ' M', lx, W.y0 + 0.04, 0.0105, { col: S.dim });
+        pkPnText(R, S, 'LIT = SEATED', lx, W.y0 + 0.018, 0.009, { col: S.dim });
+      },
+      build: function (P) {
+        list.forEach(function (e, i) { var p = pkPnPip(P, 0.0085, sh.seatCol); var q = at(pts[i][0], pts[i][1]); p.set(q[0], q[1]); pips.push(p); });
+      },
+      tick: function (dt, T) {
+        T.n = list.length;
+        for (var i = 0; i < list.length; i++) { pkPnCarrierPos(a, list[i], v); var q = at(v.x, v.z); pips[i].set(q[0], q[1]); pkPnPipLight(pips[i], pkPnFull(list[i]) ? 1 : 0.16, dt); }
+        var E = a.extra && a.extra.show;
+        T.h = E ? E.h : 1.3; T.tilt = E ? E.tilt : 0; T.beat = E ? E.beat : -1;
+      }
+    };
+  };
+  // Droomvlucht's flight: six gondolas as pips on the loop, lit where a rider sits, with the altitude read out
+  PK_PN_KINDS.flight = function (a, sh) {
+    var list = pkPnCarriers(a), pts = [], cx = 0, cz = 0, rmax = 0.1, v = new THREE.Vector3();
+    list.forEach(function (e) { pkPnCarrierPos(a, e, v); pts.push([v.x, v.z]); cx += v.x; cz += v.z; });
+    cx /= Math.max(1, pts.length); cz /= Math.max(1, pts.length);
+    pts.forEach(function (p) { rmax = Math.max(rmax, Math.hypot(p[0] - cx, p[1] - cz)); });
+    var W = PK_PN_WIN, mx = (W.x0 + W.x1) / 2 - 0.06, my = (W.y0 + W.y1) / 2, R0 = Math.min(W.x1 - W.x0, W.y1 - W.y0) / 2 - 0.022, k = R0 / (rmax * 1.12);
+    var at = function (x, z) { return [mx + (x - cx) * k, my - (z - cz) * k]; };
+    var pips = [];
+    return {
+      draw: function (R, S) {
+        pkPnCircle(R, mx, my, R0 + 0.008, null, S.edge, 0.0025);
+        pkPnCircle(R, mx, my, 0.012, S.acc, null);
+        var lx = W.x1 - 0.055;
+        pkPnText(R, S, 'GONDOLAS', lx, W.y1 - 0.03, 0.0105, { col: S.dim });
+        pkPnText(R, S, String(list.length), lx, W.y1 - 0.055, 0.02, { col: S.ink });
+        pkPnText(R, S, 'LOOP ' + (rmax * 2).toFixed(0) + ' M', lx, W.y0 + 0.04, 0.0105, { col: S.dim });
+        pkPnText(R, S, 'LIT = RIDING', lx, W.y0 + 0.018, 0.009, { col: S.dim });
+      },
+      build: function (P) {
+        list.forEach(function (e, i) { var p = pkPnPip(P, 0.0085, sh.seatCol); var q = at(pts[i][0], pts[i][1]); p.set(q[0], q[1]); pips.push(p); });
+      },
+      tick: function (dt, T) {
+        T.n = list.length;
+        for (var i = 0; i < list.length; i++) { pkPnCarrierPos(a, list[i], v); var q = at(v.x, v.z); pips[i].set(q[0], q[1]); pkPnPipLight(pips[i], pkPnFull(list[i]) ? 1 : 0.16, dt); }
+        T.h = 0.7; T.tilt = a.state === 'running' ? 0.7 : 0; T.sceneName = a.state === 'running' ? 'DREAMING' : (a.state === 'boarding' ? 'BOARDING' : 'EMPTY');
+      }
+    };
+  };
   // a track in plan and in profile: from the coaster's own curve (or the flume's own course), the lift marked, the train on
   // it car by car, a cursor on the profile, and block lamps that go red where the train is
   PK_PN_KINDS.track = function (a, sh) {
@@ -786,6 +862,8 @@
     mel.forEach(function (n) { sTone('square', n[0], t + n[1], 0.28, 0.03, { lp: 2600 }); sTone('triangle', n[0] * 2, t + n[1], 0.18, 0.012); });
     [0, 0.6, 1.2, 1.8].forEach(function (b, i) { sTone('triangle', i % 2 ? 196 : 131, t + b, 0.22, 0.05); sTone('triangle', 392, t + b + 0.2, 0.12, 0.025); sTone('triangle', 392, t + b + 0.4, 0.12, 0.025); });
   };
+  SFX.pkDanseOrgan = function (t) { [196, 262, 330, 392, 523, 659].forEach(function (f, i) { sTone('sawtooth', f, t + i * 0.3, 1.6, 0.035, { lp: 1600 }); sTone('sine', f * 2, t + i * 0.3, 0.8, 0.012); }); sTone('sine', 98, t, 2.2, 0.06, { f1: 60 }); };
+  SFX.pkDroomChime = function (t) { [[523, 0], [659, 0.4], [784, 0.8], [659, 1.2], [880, 1.6], [784, 2.0], [1047, 2.4]].forEach(function (n) { sTone('triangle', n[0], t + n[1], 0.5, 0.05); sTone('sine', n[0] * 2, t + n[1], 0.3, 0.015); }); };
   SFX.pkTeaBell = function (t) { [1568, 1976, 2349, 1976, 2637].forEach(function (f, i) { sTone('sine', f, t + i * 0.22, 0.9, 0.035); sTone('sine', f * 2.01, t + i * 0.22, 0.4, 0.008); }); };
   SFX.pkWheelChime = function (t) { [659, 880, 1319, 988].forEach(function (f, i) { sTone('sine', f, t + i * 0.42, 1.6, 0.045); }); };
   SFX.pkKlaxon = function (t) { for (var i = 0; i < 2; i++) { sTone('sawtooth', 210, t + i * 0.55, 0.42, 0.06, { f1: 470, lp: 1800 }); sTone('square', 105, t + i * 0.55, 0.42, 0.025, { f1: 235, lp: 900 }); } };
@@ -985,6 +1063,7 @@
           else if (d[0] === 'pumps') on = live && T.flow > 200;
           else if (d[0] === 'fx') on = live && T.fx ? 'flash' : false;
           else if (d[0] === 'happy') on = live && a.riders > 0;
+          else if (d[0] === 'motion') on = live && T.tilt > 0.5;
           else if (d[0] === 'lift') on = live && a.state === 'running' && T.blk === 1;
           else if (d[0] === 'brake') on = live && (a.state !== 'running' || T.blk === 3);
           A[d[0]].on = on;

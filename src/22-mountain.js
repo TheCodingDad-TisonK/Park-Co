@@ -83,7 +83,7 @@
     var K = PK_MK, M = pkFtM(), H = K.H, cx = (K.x0 + K.x1) / 2, cz = (K.z0 + K.z1) / 2, W = K.x1 - K.x0, D = K.z1 - K.z0;
     var stone = std({ color: 0x8f8a80, roughness: 0.95, map: pkMats().stone.map }), dark = std({ color: 0x5f5a54, roughness: 0.95 });
     // walls: the lift's portal and the low portal in the north wall, the west door, a blank south and east
-    var inner = std({ color: 0x34302c, roughness: 0.97, map: pkMats().stone.map });
+    var inner = std({ color: 0x1f1c1a, roughness: 0.98, map: pkMats().stone.map });
     pkMkWall(g, stone, K.x0, K.z0, K.x1, K.z0, H, [K.liftPortal, K.lowPortal], inner, 1);
     pkMkWall(g, stone, K.x0, K.z1, K.x1, K.z1, H, [], inner, -1);
     pkMkWall(g, stone, K.x1, K.z0, K.x1, K.z1, H, [], inner, -1);
@@ -135,7 +135,7 @@
   // inside: the floor, the ceiling, the king in the helix, crystals along the walls, low light
   function pkMkInside(g) {
     var K = PK_MK, cx = (K.x0 + K.x1) / 2, cz = (K.z0 + K.z1) / 2, W = K.x1 - K.x0, D = K.z1 - K.z0;
-    pkPaved(W - 0.7, D - 0.7, std({ color: 0x3e3a35, roughness: 0.95, map: pkMats().stone.map }), cx, 0.03, cz, 1.6, g);
+    pkPaved(W - 0.7, D - 0.7, std({ color: 0x2a2724, roughness: 0.95, map: pkMats().stone.map }), cx, 0.03, cz, 1.6, g);
     var ceil = box(W - 0.7, 0.12, D - 0.7, std({ color: 0x1c1d26, roughness: 0.95 }), cx, K.H - 0.06, cz, g); ceil.castShadow = false;
     // the king: a throne on a rock, a robed figure, a gold crown, a glowing staff. Inside the helix (rail at 5 m round him)
     var kx = K.king[0], kz = K.king[1], rock = std({ color: 0x4a4650, roughness: 0.95 }), robe = std({ color: 0x5a2a6a, roughness: 0.8 }), gold = pkFtM().gold;

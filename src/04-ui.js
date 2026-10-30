@@ -1,7 +1,7 @@
 //@ Park Co, part 04: the clock, the day, the panel and the guide
   // ── The clock and the day ─────────────────────────────────────────
   function pkTick(dt) {
-    S.time += dt / 75;   // 75 real seconds a game hour, like Depot Co (was dt / 60: too fast)
+    S.time += dt / 300;   // 300 real seconds a game hour: a two-hour day, 65 minutes of it open (was dt / 75, and dt / 60 before that)
     var min = Math.floor(S.time * 60);
     if (min !== PK.lastMin) { PK.lastMin = min; hudDirty = true; }
     if (S.time >= 24) { S.time -= 24; S.day++; PK.lastDay = S.day; pkNewDay(); }
@@ -16,7 +16,9 @@
       PK.clerkT = (PK.clerkT || 0) - dt;
       if (PK.clerkT <= 0) {
         PK.clerkT = 2.2;
-        for (var i = 0; i < PK.booths.length; i++) if (PK.booths[i].queue.length) { pkServe(i); break; }
+        // the longer line first, so one clerk keeps both windows moving (the first window first left the other one standing)
+        var bi = -1; for (var i = 0; i < PK.booths.length; i++) if (PK.booths[i].queue.length && (bi < 0 || PK.booths[i].queue.length > PK.booths[bi].queue.length)) bi = i;
+        if (bi >= 0) pkServe(bi);
       }
     }
     if (closing && PK.timeWasOpen === true) {
@@ -158,7 +160,7 @@
       '<p><b>The window.</b> Your clerk sells tickets to the line on their own; stand at a window and use it (E or left-click, your choice in Settings) to keep up with a rush (the screen on the counter sells too). The clerk costs ' + money(40) + ' a day from day 2.</p>' +
       '<p><b>The coaster.</b> In the operator room, east of the platform: <b>Gates</b> lifts the platform gates and the queue walks in one seat at a time, <b>Restraints</b> pulls the bars down over the riders, <b>Dispatch</b> sends the train. In the wrong order the screen refuses. An empty train can be sent as a test run. <b>E-stop</b> stops the ride; press it again to reset.</p>' +
       '<p><b>AUTO.</b> Switch AUTO on - on the screen in the operator room, or on any booth screen - and the coaster runs itself: gates, restraints, dispatch, round and round.</p>' +
-      '<p><b>The other rides.</b> The carousel, teacups, ferris wheel, dodgems, drop tower, log flume and haunted house run automatically when AUTO is on. Each has an operator booth beside it - walk in and work its desk: gates, restraints, dispatch, E-stop, test-run and AUTO. On MANUAL nothing happens on its own: you open the gates, bring the bars down, dispatch, and after the ride raise the bars to let the riders off. Hired operators work the booths in shifts and leave each ride on AUTO when they go. Guests need a ticket before riding.</p>' +
+      '<p><b>The other rides.</b> The carousel, teacups, ferris wheel, dodgems, drop tower, log flume, Danse Macabre and Droomvlucht run automatically when AUTO is on. Each has an operator booth beside it - walk in and work its desk: gates, restraints, dispatch, E-stop, test-run and AUTO. On MANUAL nothing happens on its own: you open the gates, bring the bars down, dispatch, and after the ride raise the bars to let the riders off. Hired operators work the booths in shifts and leave each ride on AUTO when they go. Guests need a ticket before riding.</p>' +
       '<p><b>Levels.</b> Tickets, rides and snacks earn xp. Each level opens a service: the snack stand, a hire or the park lights.</p>' +
       '<p><b>The Lindenburg Arena.</b> West of the Dark Woods. Work the show from the control room at the top of the grandstand: turn the key, open the gate, let them sit, shut the gate, close the curtain and START. On MANUAL the stage cues are yours: a cue lamp on the STAGE console blinks slowly on standby and fast on GO. TEST SHOW plays it to an empty house; BOW with no show running calls the cast out for a curtain call.</p>' +
       '<p><b>Fly mode.</b> F3 lifts you off the ground: W A S D along the look, Space up, C down, Shift fast. F3 again to land. Shift+F3 shows the frame rate.</p>' +

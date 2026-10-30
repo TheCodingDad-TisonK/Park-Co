@@ -229,19 +229,22 @@
   }
   function pkPCMoney(c, sc, X, Y, W, H) {
     var lw = W * 0.44;
-    pkPCPanel(c, X, Y, lw, 150, 'Prices');
+    pkPCPanel(c, X, Y, lw, 196, 'Prices');
     pkPCText(c, 'Adult ticket', X + 14, Y + 52, 15, '#d7dee4'); pkPCText(c, money(S.ticketPrice), X + 150, Y + 54, 22, '#f5b53d', true);
     pkPCBtn(sc, X + lw - 150, Y + 32, 64, 30, '- 1', function () { pkPrice(-1); });
     pkPCBtn(sc, X + lw - 78, Y + 32, 64, 30, '+ 1', function () { pkPrice(1); });
     pkPCText(c, 'Fries', X + 14, Y + 104, 15, '#d7dee4'); pkPCText(c, money(S.snackPrice), X + 150, Y + 106, 22, '#f5b53d', true);
     pkPCBtn(sc, X + lw - 150, Y + 84, 64, 30, '- 0.50', function () { pkSnackPrice(-0.5); });
     pkPCBtn(sc, X + lw - 78, Y + 84, 64, 30, '+ 0.50', function () { pkSnackPrice(0.5); });
-    pkPCText(c, PK.snackOpen ? 'the snack stand is open' : 'the snack stand opens at level 2', X + 14, Y + 138, 11, '#8b98a4');
-    var ty = Y + 160, wages = pkWages(), st = S.stats || {};
-    pkPCPanel(c, X, ty, lw, H - 160, 'Today and all time');
-    [['Earned today', money(PK.today.earned || 0), '#5fd38d'], ['Tickets / snacks', PK.today.tickets + ' / ' + PK.today.snacks, '#eef1f5'], ['Wages a day', money(wages), '#f0c04a'],
+    pkPCText(c, 'Parking', X + 14, Y + 150, 15, '#d7dee4'); pkPCText(c, money(pkMsFee()), X + 150, Y + 152, 22, '#f5b53d', true);
+    pkPCBtn(sc, X + lw - 150, Y + 130, 64, 30, '- 1', function () { pkMsSetFee(-1); });
+    pkPCBtn(sc, X + lw - 78, Y + 130, 64, 30, '+ 1', function () { pkMsSetFee(1); });
+    pkPCText(c, (PK.snackOpen ? 'the snack stand is open' : 'the snack stand opens at level 2') + '  ·  parking is per car, in the multi-storey', X + 14, Y + 184, 11, '#8b98a4');
+    var ty = Y + 206, wages = pkWages(), st = S.stats || {};
+    pkPCPanel(c, X, ty, lw, H - 206, 'Today and all time');
+    [['Earned today', money(PK.today.earned || 0), '#5fd38d'], ['Tickets / snacks / parking', PK.today.tickets + ' / ' + PK.today.snacks + ' / ' + money(PK.today.parking || 0), '#eef1f5'], ['Wages a day', money(wages), '#f0c04a'],
       ['Earned, all time', money(st.earned || 0), '#5fd38d'], ['Spent, all time', money(st.spent || 0), '#ff8a5c']].forEach(function (r, i) {
-      pkPCText(c, r[0], X + 14, ty + 48 + i * 30, 14, '#a0acb8'); pkPCText(c, r[1], X + lw - 14, ty + 48 + i * 30, 15, r[2], true, 'right');
+      pkPCText(c, r[0], X + 14, ty + 44 + i * 24, 14, '#a0acb8'); pkPCText(c, r[1], X + lw - 14, ty + 44 + i * 24, 15, r[2], true, 'right');
     });
     // the ledger
     var gx = X + lw + 10, gw = W - lw - 10;
@@ -264,6 +267,18 @@
     });
     return rows;
   }
+  // a ride runs itself from the office only with its operator key ON as well as its desk on AUTO, so the PC's AUTO is both:
+  // on turns the key and sets AUTO, off puts the desk back to MANUAL and leaves the key where it is
+  function pkPCRideAuto(a) { var C = a.ctl || {}; return !!(a.open && C.key && C.auto); }
+  function pkPCRideAutoSet(a, on) {
+    var C = pkCtl(a);
+    if (on) {
+      if (!a.open) return pkBoothRefuse(a.name + ' has no power - the breaker is off');
+      if (!C.key && !pkSetRideKey(a, true)) return false;
+      if (C.auto) { screenDirtyAll(); return true; }
+    }
+    return pkBoothAuto(a);
+  }
   function pkPCRides(c, sc, X, Y, W, H) {
     var rows = pkPCRideRows(), per = 8, pages = Math.ceil(rows.length / per); PK_PC.page = clamp(PK_PC.page, 0, pages - 1);
     pkPCPanel(c, X, Y, W, H);
@@ -283,7 +298,11 @@
         var auto = pkCoasterAuto();
         pkPCBtn(sc, X + W - 236, y + 3, 104, 26, auto ? 'AUTO on' : 'AUTO off', function () { pkSetAuto(!S.auto); }, auto);
         pkPCBtn(sc, X + W - 124, y + 3, 112, 26, 'Service ' + Math.round(S.wear || 0) + '%', function () { pkService(); }, (S.wear || 0) > 0, '#f0c04a');
-      } else pkPCBtn(sc, X + W - 124, y + 3, 112, 26, r.open ? 'Shut it' : 'Open it', function () { pkSetRideOpen(r.a.id, !r.a.open); }, !r.open, '#5fd38d');
+      } else {
+        var rAuto = pkPCRideAuto(r.a);
+        pkPCBtn(sc, X + W - 236, y + 3, 104, 26, rAuto ? 'AUTO on' : 'AUTO off', function () { pkPCRideAutoSet(r.a, !pkPCRideAuto(r.a)); }, rAuto);
+        pkPCBtn(sc, X + W - 124, y + 3, 112, 26, r.open ? 'Shut it' : 'Open it', function () { pkSetRideOpen(r.a.id, !r.a.open); }, !r.open, '#5fd38d');
+      }
     });
     var py = Y + H - 40;
     pkPCText(c, 'Page ' + (PK_PC.page + 1) + ' of ' + pages + '   ·   ' + pkOpenCount() + ' of ' + rows.length + ' open', X + 16, py + 24, 13, '#8b98a4');
@@ -326,12 +345,13 @@
     pkPCText(c, 'Serves both ticket windows  ·  ' + money(40) + ' a day', X + 14, Y + 52, 12, '#8b98a4');
     pkPCText(c, S.clerk ? 'ON THE PAYROLL' : 'NOT HIRED', X + 14, Y + 80, 12, S.clerk ? '#5fd38d' : '#a0acb8', true);
     pkPCBtn(sc, X + cw - 150, Y + 56, 136, 30, S.clerk ? 'Let go' : 'Hire (' + money(400) + ')', function () { said(S.clerk ? pkFire('clerk') : pkHire('clerk')); }, !S.clerk, S.clerk ? '#ff8a5c' : '#5fd38d');
-    // the operators: up to four, working the booths in shifts
+    // the operators: up to PK_OPS_MAX, working the booths in shifts
     var ox = X + cw + 10, n = pkOpCount();
     pkPCPanel(c, ox, Y, cw, 96);
     pkPCText(c, 'Ride operators  ' + n + ' / ' + PK_OPS_MAX, ox + 14, Y + 30, 17, '#eef1f5', true);
     pkPCText(c, 'Shifts in the ride booths  ·  ' + money(60) + ' a day each', ox + 14, Y + 52, 12, '#8b98a4');
-    for (var k = 0; k < PK_OPS_MAX; k++) { c.fillStyle = k < n ? '#5fd38d' : 'rgba(255,255,255,0.14)'; c.beginPath(); c.arc(ox + 20 + k * 16, Y + 76, 5, 0, 6.283); c.fill(); }
+    var dg = Math.min(16, (cw - 262) / PK_OPS_MAX), dr = Math.min(5, dg * 0.36);   // a dot per place on the roster, fitted in before the buttons
+    for (var k = 0; k < PK_OPS_MAX; k++) { c.fillStyle = k < n ? '#5fd38d' : 'rgba(255,255,255,0.14)'; c.beginPath(); c.arc(ox + 20 + k * dg, Y + 76, dr, 0, 6.283); c.fill(); }
     pkPCBtn(sc, ox + cw - 232, Y + 60, 108, 28, 'Hire (' + money(600) + ')', function () { said(pkHire('operator')); }, n < PK_OPS_MAX, '#5fd38d');
     pkPCBtn(sc, ox + cw - 116, Y + 60, 102, 28, 'Let one go', function () { said(pkFire('operator')); }, n > 0, '#ff8a5c');
     var ry = Y + 106;

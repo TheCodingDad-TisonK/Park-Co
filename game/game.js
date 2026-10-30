@@ -4989,7 +4989,7 @@
     "mesh cylinder 2.6x0.04@-14,3,1.3": { hidden: true },
     "mesh plane 10x1.2@0,27.8,6": { ry: -180, hidden: true },
     "mesh plane 12x1.55@0,27.94,6.9": { ry: -180 },
-    "mesh plane 2.35x1.8@32.5,58.41,0.95": { x: 40, z: 59.65 },
+    "mesh plane 2.35x1.8@32.5,58.41,0.95": { x: 40, z: 59.65, hidden: true },
     "mesh plane 2.37x1.8@-120.81,56,0.95": { hidden: true },
     "mesh plane 2.37x1.8@-123.29,56,0.95": { x: -123.3, hidden: true },
     "mesh plane 2.37x1.8@-125.78,56,0.95": { hidden: true },
@@ -5335,7 +5335,7 @@
     { id: 'dodgems',   name: 'Dodgems',      x: 56,  z: 3,  r: 8.2,  q: [44, 3],    level: 8 },
     { id: 'droptower', name: 'Drop tower',   x: -54, z: -52, r: 6.5, q: [-44, -52], level: 9 },
     { id: 'flume',     name: 'Log flume',    x: 54,  z: -32, r: 9.0, q: [46.4, -24], level: 10 },
-    { id: 'haunted',   name: 'Haunted house',x: -58, z: -24, r: 9.5, q: [-44, -24],  level: 11 }
+    { id: 'danse',     name: 'Danse Macabre',  x: -58, z: -24, r: 12,  q: [-44, -24],  level: 11, qside: -1, pad: 0.02 }   // part 49: the boarding row at the abbey's doors; the abbey lays its own ground
   ];
   // the ladder: what the park earns its way to. Every ride is open from the first day; the levels open the services.
   var PK_LEVELS = [
@@ -5691,6 +5691,7 @@
         if (othin < 0.3) continue;                                                  // thin it a little, as the ring is
         var ofx = ox + ojx, ofz = oz + ojz, oseed = Math.abs(Math.round(ofx * 13 + ofz * 7));
         if (typeof pkThemeKeepClear === 'function' && pkThemeKeepClear(ofx, ofz)) continue;
+        if (ofx > 4 && ofx < 136 && ofz > -176 && ofz < -118) continue;          // the railway's depot, its yard and TOW-1's bay (parts 41, 47)
         if (oseed % 4 === 0) pkConifer(ofx, ofz, osc, null, oseed); else pkTree(ofx, ofz, osc, null, oseed);
       }
     }
@@ -5708,7 +5709,7 @@
     for (var j = 0; j < 4; j++) trafficAdd(77.5, -1, randf(7, 11));
     // the cars are the guests' own now (part 19): the lot fills through the day and empties at closing. A wheel stop heads
     // every bay
-    pkLotBays().forEach(function (b) { box(1.7, 0.12, 0.22, MAT.steelDark, b.x, 0.06, b.front + (b.front < 62 ? 0.5 : -0.5)); });
+    pkLotBays().forEach(function (b) { if (!b.ms) box(1.7, 0.12, 0.22, MAT.steelDark, b.x, 0.06, b.front + (b.front < 62 ? 0.5 : -0.5)); });   // the multi-storey marks its own (part 51)
     // lamp posts down the edges of the lot
     [[-31.6, 55.5], [31.6, 55.5], [-31.6, 68.5], [31.6, 68.5]].forEach(function (p) { pkLamp(p[0], p[1], 5.2); });
     // and a barrier at the entrance drive, with a little booth
@@ -5934,7 +5935,7 @@
   // ── The guests ────────────────────────────────────────────────────
   // A guest arrives from the car park, joins the shorter ticket line, buys a ticket, passes a turnstile, queues for the
   // coaster, boards when the gates open, rides, and goes home. The whole thing is a small state machine on a walk record.
-  var PK_POOL = [], PK_GUEST_MAX = 110;
+  var PK_POOL = [], PK_GUEST_MAX = 200;
   function pkTakeHuman() {
     if (PK_POOL.length) { var g = PK_POOL.pop(); g.visible = true; scene.add(g); return g; }
     // makeHuman builds the figure but does not put it in the world: without this every new guest walked, queued and rode
@@ -5973,10 +5974,12 @@
   function pkPickBooth() {
     if (!PK.booths || !PK.booths.length) return 0;
     // the shorter line, and a coin toss when both are empty: tie-breaking to the west window sent every guest through one
-    // turnstile and left the east booth looking closed
-    var best = [], bl = 1e9;
+    // turnstile and left the east booth looking closed. The guests already on their way to a window count as in its line,
+    // or a whole car park's worth arriving at once all picked the same empty window
+    var best = [], bl = 1e9, coming = PK.booths.map(function () { return 0; });
+    PK.guests.forEach(function (g) { if (g.state === 'walkBooth' && coming[g.booth] !== undefined) coming[g.booth]++; });
     for (var i = 0; i < PK.booths.length; i++) {
-      var n = PK.booths[i].queue.length;
+      var n = PK.booths[i].queue.length + coming[i];
       if (n < bl) { bl = n; best = [i]; } else if (n === bl) best.push(i);
     }
     return best[Math.floor(Math.random() * best.length)];
@@ -7461,7 +7464,7 @@
   }
   // ── Staff ─────────────────────────────────────────────────────────
   // one clerk; up to ten ride operators, who work the rides in shifts (part 26). S.operator stays true while any is hired
-  var PK_OPS_MAX = 10;
+  var PK_OPS_MAX = 15;
   function pkOpCount() { return typeof S.operators === 'number' ? S.operators : (S.operator ? 1 : 0); }
   function pkWages() { return (S.clerk ? 40 : 0) + 60 * pkOpCount(); }
   function pkHire(which) {
@@ -7479,7 +7482,7 @@
   }
   // ── The clock and the day ─────────────────────────────────────────
   function pkTick(dt) {
-    S.time += dt / 75;   // 75 real seconds a game hour, like Depot Co (was dt / 60: too fast)
+    S.time += dt / 300;   // 300 real seconds a game hour: a two-hour day, 65 minutes of it open (was dt / 75, and dt / 60 before that)
     var min = Math.floor(S.time * 60);
     if (min !== PK.lastMin) { PK.lastMin = min; hudDirty = true; }
     if (S.time >= 24) { S.time -= 24; S.day++; PK.lastDay = S.day; pkNewDay(); }
@@ -7494,7 +7497,9 @@
       PK.clerkT = (PK.clerkT || 0) - dt;
       if (PK.clerkT <= 0) {
         PK.clerkT = 2.2;
-        for (var i = 0; i < PK.booths.length; i++) if (PK.booths[i].queue.length) { pkServe(i); break; }
+        // the longer line first, so one clerk keeps both windows moving (the first window first left the other one standing)
+        var bi = -1; for (var i = 0; i < PK.booths.length; i++) if (PK.booths[i].queue.length && (bi < 0 || PK.booths[i].queue.length > PK.booths[bi].queue.length)) bi = i;
+        if (bi >= 0) pkServe(bi);
       }
     }
     if (closing && PK.timeWasOpen === true) {
@@ -7636,7 +7641,7 @@
       '<p><b>The window.</b> Your clerk sells tickets to the line on their own; stand at a window and use it (E or left-click, your choice in Settings) to keep up with a rush (the screen on the counter sells too). The clerk costs ' + money(40) + ' a day from day 2.</p>' +
       '<p><b>The coaster.</b> In the operator room, east of the platform: <b>Gates</b> lifts the platform gates and the queue walks in one seat at a time, <b>Restraints</b> pulls the bars down over the riders, <b>Dispatch</b> sends the train. In the wrong order the screen refuses. An empty train can be sent as a test run. <b>E-stop</b> stops the ride; press it again to reset.</p>' +
       '<p><b>AUTO.</b> Switch AUTO on - on the screen in the operator room, or on any booth screen - and the coaster runs itself: gates, restraints, dispatch, round and round.</p>' +
-      '<p><b>The other rides.</b> The carousel, teacups, ferris wheel, dodgems, drop tower, log flume and haunted house run automatically when AUTO is on. Each has an operator booth beside it - walk in and work its desk: gates, restraints, dispatch, E-stop, test-run and AUTO. On MANUAL nothing happens on its own: you open the gates, bring the bars down, dispatch, and after the ride raise the bars to let the riders off. Hired operators work the booths in shifts and leave each ride on AUTO when they go. Guests need a ticket before riding.</p>' +
+      '<p><b>The other rides.</b> The carousel, teacups, ferris wheel, dodgems, drop tower, log flume, Danse Macabre and Droomvlucht run automatically when AUTO is on. Each has an operator booth beside it - walk in and work its desk: gates, restraints, dispatch, E-stop, test-run and AUTO. On MANUAL nothing happens on its own: you open the gates, bring the bars down, dispatch, and after the ride raise the bars to let the riders off. Hired operators work the booths in shifts and leave each ride on AUTO when they go. Guests need a ticket before riding.</p>' +
       '<p><b>Levels.</b> Tickets, rides and snacks earn xp. Each level opens a service: the snack stand, a hire or the park lights.</p>' +
       '<p><b>The Lindenburg Arena.</b> West of the Dark Woods. Work the show from the control room at the top of the grandstand: turn the key, open the gate, let them sit, shut the gate, close the curtain and START. On MANUAL the stage cues are yours: a cue lamp on the STAGE console blinks slowly on standby and fast on GO. TEST SHOW plays it to an empty house; BOW with no show running calls the cast out for a curtain call.</p>' +
       '<p><b>Fly mode.</b> F3 lifts you off the ground: W A S D along the look, Space up, C down, Shift fast. F3 again to land. Shift+F3 shows the frame rate.</p>' +
@@ -7985,7 +7990,7 @@
   function pkBuildAttractions() {
     pkMats();
     PK.xp = S.xp || 0;
-    var makers = { carousel: pkBuildCarousel, teacups: pkBuildTeacups, ferris: pkBuildFerris, dodgems: pkBuildDodgems, droptower: pkBuildDropTower, flume: pkBuildFlume, haunted: pkBuildHaunted };
+    var makers = { carousel: pkBuildCarousel, teacups: pkBuildTeacups, ferris: pkBuildFerris, dodgems: pkBuildDodgems, droptower: pkBuildDropTower, flume: pkBuildFlume, danse: pkBuildDanse, droom: pkBuildDroom };
     PK_PLOTS.forEach(function (p) {
       var mk = makers[p.id]; if (!mk) return;
       var a = mk(p, true);
@@ -8435,84 +8440,7 @@
     berths.forEach(function (gzz) { pkStationGatePair(g, dockX, gzz, -lane, 0, gw, pkCtl(a), 0x2f6b4a); });   // swinging toward the boats
     return a;
   }
-  // ── The haunted house ────────────────────────────────────────────
-  // A two-storey Victorian manor, its front to the midway: clapboard over a stone base, a slate roof with a cross gable, a corner
-  // tower with a spire, a porch on turned columns, lit windows with shutters, a chimney, and a graveyard either side.
-  function pkBuildHaunted(p, open) {
-    var M = pkMats(), g = new THREE.Group(); g.position.set(p.x, 0, p.z); g.rotation.y = p.x < 0 ? Math.PI / 2 : -Math.PI / 2; scene.add(g);
-    var wall = M.clapGrey, trim = pkPaint(0xe8e2d4, 0.7, 0), lit = glowMat(0xff9a3d, 0.9), dim = glowMat(0x7a5a3a, 0.5), shutter = pkPaint(0x23332a, 0.7, 0.1);
-    box(12.4, 0.6, 10.4, M.stoneDark, 0, 0.3, 0, g);
-    box(12, 3.0, 10, wall, 0, 2.1, 0, g);
-    box(12.2, 0.2, 10.2, trim, 0, 3.6, 0, g);
-    box(12, 2.8, 10, wall, 0, 5.0, 0, g);
-    [[-6, -5], [6, -5], [-6, 5], [6, 5]].forEach(function (c) { box(0.22, 5.8, 0.22, trim, c[0], 3.5, c[1], g); });
-    pkGableRoof(12, 10, 3.6, M.slate, wall, 0, 6.4, 0, g, 0.5);
-    var cg = new THREE.Group(); cg.position.set(-0.5, 6.0, 3.6); cg.rotation.y = Math.PI / 2; g.add(cg);
-    pkGableRoof(3.6, 4.2, 2.6, M.slate, wall, 0, 0, 0, cg, 0.35);
-    pkWindow(g, -0.5, 7.2, 5.45, 0.9, 1.1, 0, trim, lit);
-    // the tower and its spire
-    box(3.4, 9.6, 3.4, wall, 4.4, 5.4, 3.4, g);
-    box(3.6, 0.2, 3.6, trim, 4.4, 10.2, 3.4, g);
-    pkHipRoof(4.0, 4.0, 4.2, M.slate, 4.4, 10.3, 3.4, g);
-    pkRod(4.4, 14.4, 3.4, 4.4, 15.8, 3.4, 0.04, M.iron, g, 6); sphere(0.12, M.iron, 4.4, 15.2, 3.4, g);
-    pkWindow(g, 4.4, 8.2, 5.15, 0.8, 1.2, 0, trim, lit); pkWindow(g, 6.15, 8.2, 3.4, 0.8, 1.2, Math.PI / 2, trim, dim);
-    box(1.0, 3.8, 1.0, MAT.brick, -3.8, 8.6, -2.0, g); box(1.2, 0.2, 1.2, M.stoneDark, -3.8, 10.5, -2.0, g);
-    // windows, some lit, some with a shutter hanging loose
-    [[-4.4, 2.2], [-2.3, 2.2], [-4.4, 5.0], [-2.3, 5.0], [1.8, 5.0], [4.4, 5.0]].forEach(function (w, i) {
-      pkWindow(g, w[0], w[1], 5.03, 0.95, 1.5, 0, trim, i % 3 === 1 ? lit : (i % 3 === 2 ? dim : M.pane));
-      box(0.42, 1.6, 0.06, shutter, w[0] - 0.75, w[1], 5.06, g);
-      var s2 = box(0.42, 1.6, 0.06, shutter, w[0] + 0.75, w[1] - (i === 4 ? 0.12 : 0), 5.06, g); if (i === 4) s2.rotation.z = 0.32;
-    });
-    [-3, 0, 3].forEach(function (z, i) { [2.2, 5.0].forEach(function (y, j) { [-1, 1].forEach(function (sx) { pkWindow(g, sx * 6.03, y, z, 0.95, 1.5, sx * Math.PI / 2, trim, (i + j + (sx > 0 ? 1 : 0)) % 3 === 0 ? lit : M.pane); }); }); });
-    // the porch: a deck, steps, four turned columns, a railing of balusters and a lean-to roof
-    box(7.2, 0.24, 2.6, MAT.wood, -0.5, 0.72, 6.3, g);
-    for (var st = 0; st < 3; st++) box(2.2, 0.2, 0.4, MAT.wood, -0.5, 0.5 - st * 0.2, 7.8 + st * 0.4, g);
-    [-3.8, -1.9, 0.9, 2.8].forEach(function (x) { pkLathe([[0, 0], [0.16, 0], [0.16, 0.2], [0.1, 0.3], [0.09, 2.2], [0.14, 2.35], [0.14, 2.5], [0, 2.5]], trim, x, 0.84, 7.4, g, 12); });
-    [[-3.8, -1.9], [0.9, 2.8]].forEach(function (seg) { box(seg[1] - seg[0], 0.08, 0.1, trim, (seg[0] + seg[1]) / 2, 1.7, 7.4, g); for (var bx = seg[0] + 0.2; bx < seg[1] - 0.1; bx += 0.22) box(0.05, 0.8, 0.05, trim, bx, 1.28, 7.4, g); });
-    var pr = box(7.8, 0.14, 3.0, M.slate, -0.5, 3.55, 6.45, g); pr.rotation.x = 0.16;
-    // the front doors: they swing open when the ride boards
-    var doors = [];
-    [-1, 1].forEach(function (s) {
-      var hinge = pkMover(g, -0.5 + s * 1.05, 0.84, 5.06);
-      box(1.02, 2.5, 0.08, pkPaint(0x3a1f1a, 0.7, 0), -s * 0.51, 1.25, 0, hinge);
-      box(0.6, 0.8, 0.02, lit, -s * 0.51, 1.75, 0.05, hinge);
-      sphere(0.05, M.brass, -s * 0.88, 1.2, 0.08, hinge);
-      pkFuse(hinge); doors.push({ h: hinge, s: s });
-    });
-    box(2.5, 0.25, 0.14, trim, -0.5, 3.47, 5.08, g);
-    sign(['THE HAUNTED MANOR'], 2.6, 0.42, -0.5, 4.05, 5.12, 0, { bg: '#1b232c', fg: '#ff8a3d' }, g);
-    [-2.0, 1.0].forEach(function (x) { cyl(0.11, 0.36, glowMat(0xffb060, 1.4), x, 2.6, 5.2, g, 8); });
-    // the graveyard either side: headstones, crosses, dead trees and a low iron fence
-    var stone = pkPaint(0x8e8a84, 0.95, 0), stoneShape = [[-0.32, 0], [0.32, 0], [0.32, 0.7], [0.22, 0.86], [0, 0.92], [-0.22, 0.86], [-0.32, 0.7]];
-    [-1, 1].forEach(function (s) {
-      for (var gr = 0; gr < 7; gr++) {
-        var gx = s * (7.6 + (gr % 3) * 1.2), gz = -3.5 + Math.floor(gr / 3) * 2.6 + (gr % 2) * 0.5;
-        if (gr % 3 === 2) { box(0.12, 0.95, 0.1, stone, gx, 0.48, gz, g); box(0.5, 0.12, 0.1, stone, gx, 0.7, gz, g); }
-        else { var hs = pkExtrude(stoneShape, 0.14, stone, gx, 0, gz, g, 0.02); hs.rotation.y = s * Math.PI / 2 + randf(-0.25, 0.25); hs.rotation.z = randf(-0.12, 0.12); }
-        box(0.7, 0.06, 1.3, M.soil, gx, 0.03, gz + 0.8, g);
-      }
-      var tx = s * 10.0;
-      cyl(0.13, 3.6, M.bark, tx, 1.8, 2.0, g, 8, 0.22);
-      pkRod(tx, 2.6, 2.0, tx + s * 1.2, 3.8, 2.6, 0.06, M.bark, g, 6); pkRod(tx, 3.1, 2.0, tx - s * 0.9, 4.2, 1.2, 0.05, M.bark, g, 6); pkRod(tx + s * 0.8, 3.4, 2.4, tx + s * 1.3, 4.3, 1.9, 0.035, M.bark, g, 5);
-      [[6.8, -5], [11.6, -5], [11.6, 5], [6.8, 5]].forEach(function (c, ci, arr) { var n2 = arr[(ci + 1) % arr.length]; if (ci === 3) return; pkRod(s * c[0], 0.95, c[1], s * n2[0], 0.95, n2[1], 0.03, M.iron, g, 6); pkRod(s * c[0], 0.2, c[1], s * n2[0], 0.2, n2[1], 0.025, M.iron, g, 6); });
-      for (var fp = 0; fp < 12; fp++) { var fz = -5 + fp * (10 / 11); box(0.03, 1.0, 0.03, M.iron, s * 11.6, 0.5, fz, g); }
-    });
-    // the ride happens inside: six standing places behind the doors
-    var inside = new THREE.Group(); inside.position.set(0, 0.6, -1.0); g.add(inside);
-    var seats = [];
-    for (var k = 0; k < 6; k++) seats.push({ par: inside, x: -3.6 + (k % 3) * 3.6, y: 0, z: (k < 3 ? -2 : 2), guest: null, pose: 'stand' });
-    pkLocalSolid(g, -6.3, 6.3, -5.3, 5.3, 0, 7); pkLocalSolid(g, -4.1, 3.1, 5.3, 7.5, 0, 1.2);
-    pkLocalSolid(g, 6.6, 11.8, -5.2, 5.2, 0, 1.0); pkLocalSolid(g, -11.8, -6.6, -5.2, 5.2, 0, 1.0);
-    var a = pkAttr({ id: 'haunted', name: 'Haunted house', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats, board: 6, run: 20, unload: 4,
-      tickRun: function (at, dt) {
-        // the lit windows flicker while a party is inside, and the house groans
-        if (at.state === 'running') { lit.emissiveIntensity = 0.6 + Math.max(0, Math.sin(worldTime * 13) * Math.sin(worldTime * 3.1)) * 1.4; if (Math.floor(at.t / 4) !== Math.floor((at.t - dt) / 4)) sfx('door'); }
-        else lit.emissiveIntensity = 0.9;
-      } });
-    a.extra.inside = inside;
-    pkCtl(a).gateObjs.push(function (t) { doors.forEach(function (d) { d.h.rotation.y = d.s * 1.45 * t; }); });
-    return a;
-  }
+  // Danse Macabre, on the old manor's plot, is built in part 49
   // ── The dressing ─────────────────────────────────────────────────
   // Everything here is static and parented to one group per plot, so a plot that is not open yet is not drawn and is not
   // baked; opening it flips the group visible and the world is baked again.
@@ -8523,7 +8451,7 @@
     dodgems:   { a: 0xe0563f, b: 0xf0c04a, ground: 0x8a8f96, name: 'The Dodgem Arena' },
     droptower: { a: 0x3a3f48, b: 0xf0c04a, ground: 0x9a938a, name: 'The Drop' },
     flume:     { a: 0x3f7fa8, b: 0x8a6a4a, ground: 0x8a9a7a, name: 'The Log Flume' },
-    haunted:   { a: 0x4a4a55, b: 0xff8a3d, ground: 0x6e6a60, name: 'The Haunted Manor' }
+    danse:     { a: 0x4a4a55, b: 0xff8a3d, ground: 0x6e6a60, name: 'Danse Macabre' }
   };
   // the pavers, tinted toward the ride's own colour so each plot reads as a place of its own
   var PK_PADS = {};
@@ -8701,7 +8629,7 @@
   // pointed roof in the ride's colours, its name over the way in, two lanterns) and a separate exit round the ring with its
   // own sign, where the riders come off. The fence is solid; the gaps are the only ways in and out, so the guests walk in at
   // the entrance and leave by the exit. The radius keeps clear of everything the ride swings round. The flume (its own
-  // channel) and the haunted manor (its porch) have their stations already.
+  // channel) and Danse Macabre (its porch) have their stations already.
   // the fence radius, and 'arch' where something overhead (a ride's own canopy, the arena's eaves) leaves no room for a roof
   // A ride's station gate: a pair of railed steel leaves on capped posts, a gilt top rail and a hazard-striped meeting edge,
   // in the ride's colour. (x, z) is the middle of the opening, (ix, iz) the way the leaves swing (into the station for an
@@ -8856,12 +8784,6 @@
       box(2.6, 6.2, 0.3, glowMat(0x9fd8ff, 0.55), p.x, 4.1, p.z - 15.6, g);
       box(3.0, 2.4, 2.6, std({ color: 0x8a6a4a, roughness: 0.95 }), p.x + p.r + 2.8, 1.2, p.z + 4.0, g);
       sign(['LOGS'], 1.6, 0.5, p.x + p.r + 2.8, 2.6, p.z + 5.32, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
-    } else if (a.id === 'haunted') {
-      for (var d = 0; d < 8; d++) {
-        var dx = p.x + randf(-9, 9), dz = p.z + randf(6, 12);
-        cyl(0.12, randf(2.6, 4.4), std({ color: 0x3a332c, roughness: 1 }), dx, 2.0, dz, g, 6);
-        box(0.9, 0.09, 0.09, std({ color: 0x3a332c, roughness: 1 }), dx, 3.1, dz, g);
-      }
     }
   }
   // ── Free pieces ──────────────────────────────────────────────────
@@ -10596,7 +10518,7 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
   // crossroads, with a side street to each far ride's queue; the North Promenade closes the ring and the Garden Walk crosses it.
   var PK_ROUTES = [
     [-22, 3, -46, 3, 4, 'fair'],                                                                                   // the Fairground avenue: teacups, the kids' lane
-    [-31, 3, -31, -60, 3.6, 'dark'], [-31, -24, -45.5, -24, 3.8, 'dark'], [-31, -52, -45.5, -52, 3.8, 'dark'],      // the Dark Woods: haunted manor, drop tower
+    [-31, 3, -31, -60, 3.6, 'dark'], [-31, -24, -45.5, -24, 3.8, 'dark'], [-31, -52, -45.5, -52, 3.8, 'dark'],      // the Dark Woods: Danse Macabre, drop tower
     [22, 3, 46, 3, 4, 'thrill'],                                                                                   // the Thrills avenue: dodgems
     [35, 3, 35, -60, 3.6, 'coaster'], [35, -24, 47.5, -24, 3.8, 'coaster'],                                         // Coaster Country: log flume
     [-31, -60, 35, -60, 5, 'garden'],                                                                               // the North Promenade
@@ -10847,7 +10769,7 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
     pkSignpost(-28.4, 0.4, [['TEACUPS & KIDS <', Math.PI], ['DARK WOODS ^', Math.PI / 2], ['STATION SQUARE >', 0]]);
     pkSignpost(37.4, 0.4, [['DODGEMS & BARON >', 0], ['COASTER COUNTRY ^', Math.PI / 2], ['< STATION SQUARE', Math.PI]]);
     // where the streets cross the Garden Walk
-    pkSignpost(-28.4, -41.4, [['GARDEN WALK >', 0], ['DROP TOWER ^', Math.PI / 2], ['HAUNTED MANOR v', -Math.PI / 2]]);
+    pkSignpost(-28.4, -41.4, [['GARDEN WALK >', 0], ['DROP TOWER ^', Math.PI / 2], ['DANSE MACABRE v', -Math.PI / 2]]);
     pkSignpost(37.4, -41.4, [['< GARDEN WALK', Math.PI], ['SERPENT & MOONWOOD ^', Math.PI / 2], ['LOG FLUME v', -Math.PI / 2]]);
     // and where the streets meet the North Promenade
     pkSignpost(-28.4, -57.4, [['DROP TOWER <', Math.PI], ['NORTH GARDENS >', 0], ['STATION SQUARE v', -Math.PI / 2]]);
@@ -11951,10 +11873,11 @@ function pkCtlHood(parent, x, y, z, w, h, lean) {
 // the office wall, with a supply dial, a load dial, a lamp per circuit and a breaker per ride.
 var PK_CAB_RIDES = [
   ['coaster', 'THE COASTER'], ['carousel', 'CAROUSEL'], ['teacups', 'TEACUPS'], ['ferris', 'FERRIS WHEEL'],
-  ['dodgems', 'DODGEMS'], ['droptower', 'DROP TOWER'], ['flume', 'LOG FLUME'], ['haunted', 'HAUNTED HOUSE'],
+  ['dodgems', 'DODGEMS'], ['droptower', 'DROP TOWER'], ['flume', 'LOG FLUME'], ['danse', 'DANSE MACABRE'],
   ['kround', 'LITTLE ROUNDABOUT'], ['kpots', 'WOBBLY POTS'], ['kpuffin', 'PUFFIN LINE'],
   ['serpent', 'THE SERPENT'], ['baron', "BARON'S DROP"], ['nocturne', 'NOCTURNE'], ['wreck', 'THE WRECK'],
-  ['moonwood', 'MOONWOOD'], ['dragon', 'THE DRAGON'], ['firebird', 'THE FIREBIRD'], ['mountain', 'THE MOUNTAIN KING']
+  ['moonwood', 'MOONWOOD'], ['dragon', 'THE DRAGON'], ['firebird', 'THE FIREBIRD'], ['mountain', 'THE MOUNTAIN KING'],
+  ['droom', 'DROOMVLUCHT']
 ];
 var PK_CAB_PER_COL = 10;
 function pkCabRideSlot(i) {
@@ -12318,11 +12241,19 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       c.fillStyle = S.acc; c.beginPath(); c.ellipse(x - r * 0.62, y - r * 0.05, r * 0.08, r * 0.2, 0, 0, 6.28); c.fill();
       c.strokeStyle = S.acc; c.lineWidth = r * 0.09; for (var k = 0; k < 2; k++) { c.beginPath(); for (var i = 0; i <= 20; i++) { var xx = x - r * 0.75 + i * r * 0.075, yy = y + r * (0.35 + k * 0.22) + Math.sin(i * 0.9) * r * 0.07; if (i) c.lineTo(xx, yy); else c.moveTo(xx, yy); } c.stroke(); }
     },
-    haunted: function (c, x, y, r, S) {
-      c.fillStyle = S.acc; c.beginPath(); c.arc(x + r * 0.32, y - r * 0.38, r * 0.3, 0, 6.28); c.fill();
-      c.fillStyle = S.zone2 || '#151318'; c.beginPath(); c.arc(x + r * 0.44, y - r * 0.46, r * 0.26, 0, 6.28); c.fill();
-      c.fillStyle = S.ink; c.beginPath(); c.moveTo(x - r * 0.7, y + r * 0.75); c.lineTo(x - r * 0.7, y); c.lineTo(x - r * 0.45, y - r * 0.3); c.lineTo(x - r * 0.2, y); c.lineTo(x - r * 0.2, y - r * 0.15); c.lineTo(x + r * 0.15, y - r * 0.5); c.lineTo(x + r * 0.5, y - r * 0.15); c.lineTo(x + r * 0.5, y + r * 0.75); c.closePath(); c.fill();
-      c.fillStyle = S.acc; [[-0.55, 0.25], [-0.05, 0.1], [0.25, 0.1], [0.25, 0.45], [-0.05, 0.45]].forEach(function (w) { c.fillRect(x + w[0] * r, y + w[1] * r, r * 0.13, r * 0.17); });
+    danse: function (c, x, y, r, S) {
+      c.strokeStyle = S.ink; c.lineWidth = r * 0.06; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(x - r * 0.7, y - r * 0.7); c.lineTo(x + r * 0.75, y + r * 0.65); c.stroke();
+      c.fillStyle = S.acc; c.beginPath(); c.ellipse(x + r * 0.5, y - r * 0.55, r * 0.16, r * 0.34, -0.7, 0, 6.28); c.fill();
+      c.fillStyle = S.zone2 || '#151318'; c.beginPath(); c.arc(x - r * 0.15, y - r * 0.1, r * 0.22, 0, 6.28); c.fill();
+      c.strokeStyle = S.dim; c.lineWidth = r * 0.03;
+      [-0.2, 0, 0.2].forEach(function (k) { c.beginPath(); c.moveTo(x - r * 0.6, y + r * 0.35 + k * r); c.lineTo(x + r * 0.6, y + r * 0.35 + k * r); c.stroke(); });
+    },
+    droom: function (c, x, y, r, S) {
+      c.fillStyle = S.acc; c.beginPath(); c.arc(x, y + r * 0.2, r * 0.5, 0, 6.28); c.fill();
+      c.fillStyle = S.zone2 || '#151318'; c.beginPath(); c.arc(x + r * 0.18, y + r * 0.28, r * 0.42, 0, 6.28); c.fill();
+      c.strokeStyle = S.ink; c.lineWidth = r * 0.04; c.beginPath(); c.moveTo(x, y - r * 0.2); c.lineTo(x, y - r * 0.55); c.stroke();
+      c.fillStyle = S.ink; c.beginPath(); c.moveTo(x - r * 0.28, y - r * 0.75); c.lineTo(x + r * 0.28, y - r * 0.75); c.lineTo(x + r * 0.18, y - r * 0.45); c.lineTo(x - r * 0.18, y - r * 0.45); c.closePath(); c.fill();
     },
     kround: function (c, x, y, r, S) {
       c.fillStyle = S.acc; for (var k = 0; k < 12; k++) { var a = k * Math.PI / 6; c.beginPath(); c.moveTo(x + Math.cos(a - 0.14) * r * 0.5, y + Math.sin(a - 0.14) * r * 0.5); c.lineTo(x + Math.cos(a) * r * 0.85, y + Math.sin(a) * r * 0.85); c.lineTo(x + Math.cos(a + 0.14) * r * 0.5, y + Math.sin(a + 0.14) * r * 0.5); c.fill(); }
@@ -12456,7 +12387,9 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       flame: { font: sans, head: ser, ink: '#fff0d0', dim: '#ffc48a', acc: '#ffd08a', zone: 'rgba(40,6,2,0.5)', zone2: '#5a1408', edge: 'rgba(255,208,138,0.6)', win: '#120302', grid: 'rgba(255,208,138,0.07)', rim: gold, collar: brass, dial: 'black', lever: 'orange', tele: '#ffb03a', glow: 0.32,
         base: function (c, W, H) { pkPnFill(c, W, H, '#c8452a', '#5a1408'); pkPnFlames(c, W, H); pkPnVignette(c, W, H, 0.4); pkPnPinstripe(c, W, H, 10, '#ffd08a', 2.5, 30); } },
       mountain: { font: sans, head: ser, ink: '#f2e2b0', dim: '#b8b4c8', acc: '#d8b04a', zone: 'rgba(8,10,22,0.5)', zone2: '#1e2540', edge: 'rgba(216,176,74,0.6)', win: '#060814', grid: 'rgba(216,176,74,0.07)', rim: gold, collar: brass, screw: brass, dial: 'bone', lever: 'navy', tele: '#f2d27a', glow: 0.3,
-        base: function (c, W, H) { pkPnStone(c, W, H, '#4f5f8c', '#262e4a'); pkPnMountains(c, 0, H * 0.62, W, H * 0.38, 'rgba(10,14,30,0.4)', 'rgba(255,255,255,0.12)'); pkPnRunes(c, 40, 28, W - 80, 64, 'rgba(216,176,74,0.35)', 16); pkPnRunes(c, 40, H - 28, W - 80, 64, 'rgba(216,176,74,0.35)', 16); pkPnVignette(c, W, H, 0.4); } }
+        base: function (c, W, H) { pkPnStone(c, W, H, '#4f5f8c', '#262e4a'); pkPnMountains(c, 0, H * 0.62, W, H * 0.38, 'rgba(10,14,30,0.4)', 'rgba(255,255,255,0.12)'); pkPnRunes(c, 40, 28, W - 80, 64, 'rgba(216,176,74,0.35)', 16); pkPnRunes(c, 40, H - 28, W - 80, 64, 'rgba(216,176,74,0.35)', 16); pkPnVignette(c, W, H, 0.4); } },
+      droom: { font: sans, head: ser, ink: '#f0e8ff', dim: '#b0a0d0', acc: '#e0c0ff', zone: 'rgba(30,16,60,0.55)', zone2: '#2a1f4a', edge: 'rgba(224,192,255,0.6)', win: '#0a0618', grid: 'rgba(224,192,255,0.08)', rim: chrome, collar: chrome, dial: 'night', lever: 'purple', tele: '#e0c0ff', glow: 0.3,
+        base: function (c, W, H) { pkPnFill(c, W, H, '#6a5aa8', '#2a1f4a'); pkPnStars(c, W, H, 420, '#e8e4ff'); pkPnVignette(c, W, H, 0.4); pkPnPinstripe(c, W, H, 10, 'rgba(224,192,255,0.6)', 2, 24); } }
     };
     // the park's flagship coaster: its own deep steel blue, the lattice of its spine behind the printing, Park Co gold
     S.flagship = { font: sans, head: '"Bahnschrift SemiBold", Bahnschrift, sans-serif', ink: '#eef3f8', dim: '#9fb4cc', acc: '#ffcf5a', zone: 'rgba(4,10,22,0.45)', zone2: '#0d1f3a', edge: 'rgba(255,207,90,0.55)', win: '#030810', grid: 'rgba(143,195,255,0.07)', rim: chrome, collar: chrome, dial: 'black', lever: 'black', tele: '#ffcf5a', glow: 0.32,
@@ -12526,12 +12459,18 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       sig: { label: 'DOCK BELL', sfx: 'pkFlumeBell', words: 'the dock bell rings', col: 'teal' },
       ann: [['voice', 'DOCK\nBELL', '#7fd0ff'], ['pumps', 'PUMPS\nRUNNING', '#5fd38d']],
       tele: function (a, C, T) { return ['FLOW ' + T.flow.toFixed(0) + ' M3/H  LVL ' + T.level.toFixed(0) + '%', 'LOGS ' + T.n + '  ' + T.block + '  ' + (T.v * 3.6).toFixed(0) + ' KM/H']; } },
-    haunted: { style: 'gothic', title: 'The Haunted Manor', model: 'DARK RIDE · SIX ROOMS · EST. 1888', kind: 'rooms', seatCol: 0xff8a3d,
+    danse: { style: 'gothic', title: 'Danse Macabre', model: 'DYNAMIC MOTION STAGE 6 · 36 SEATS · 3 M DROP', kind: 'stage', seatCol: 0xff8a3d,
       caps: { test: 'purple', station: 'cream' },
-      g2: { unit: 'fog %', min: 0, max: 100, ticks: 5, red: 0.0, get: function (T) { return T.fog / 100; } },
-      sig: { label: 'THE HOWL', sfx: 'pkHowl', words: 'something howls in the manor', col: 'purple' },
-      ann: [['voice', 'HOWLS', '#ff8a3d'], ['fx', 'SCARE\nFX', '#c9a0ff']],
-      tele: function (a, C, T) { return ['ROOM ' + (T.room + 1) + ' ' + T.roomName, 'FOG ' + T.fog.toFixed(0) + '%  FX ' + (T.fx ? 'FIRING' : 'ARMED')]; } },
+      g2: { unit: 'deg', min: 0, max: 14, ticks: 7, red: 0.86, get: function (T) { return (T.tilt || 0) / 14; } },
+      sig: { label: 'ORGAN', sfx: 'pkDanseOrgan', words: 'the organ strikes up the danse', col: 'purple' },
+      ann: [['voice', 'ORGAN', '#ff8a3d'], ['motion', 'PLATFORM\nTILT', '#c9a0ff']],
+      tele: function (a, C, T) { return ['PLATFORM ' + (T.h || 0).toFixed(1) + ' M  TILT ' + (T.tilt || 0).toFixed(0) + ' DEG', 'STALLS ' + (T.n || 0) + '  BEAT ' + ((T.beat || 0) + 1)]; } },
+    droom: { style: 'droom', title: 'Droomvlucht', model: 'SUSPENDED DARK RIDE 6 · 7 DREAMS · 18 KM/H', kind: 'flight', seatCol: 0xe0c0ff,
+      caps: { test: 'purple', station: 'cream' },
+      g2: { unit: 'm', min: 0, max: 3, ticks: 6, red: 0.0, get: function (T) { return (T.h || 0) / 3; } },
+      sig: { label: 'LULLABY', sfx: 'pkDroomChime', words: 'the music box plays its lullaby', col: 'purple' },
+      ann: [['voice', 'MUSIC\nBOX', '#e0c0ff'], ['motion', 'FLYING', '#c0d0ff']],
+      tele: function (a, C, T) { return ['ALT ' + (T.h || 0).toFixed(1) + ' M  ' + (T.sceneName || 'EMPTY'), 'GONDOLAS ' + (T.n || 0) + '  LOOP']; } },
     kround: { style: 'toy', base: ['#ff8a6a', '#e0563f', 'rgba(255,255,255,0.18)'], title: 'Little Roundabout', model: 'TINY TURN 1 · FOR SMALL RIDERS', kind: 'rotor', seatCol: 0xffe36a,
       g2: { unit: 'rpm', min: 0, max: 8, ticks: 4, red: 0, get: function (T) { return T.rpm / 8; } },
       sig: { label: 'TOOT TOOT', sfx: 'pkKidTune', words: 'toot toot', col: 'sky' },
@@ -12797,6 +12736,66 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       }
     };
   };
+  // Danse Macabre's stage: six stalls in a ring, lit where a rider sits, with the tilt, the height and the beat read out
+  PK_PN_KINDS.stage = function (a, sh) {
+    var list = pkPnCarriers(a), pts = [], cx = 0, cz = 0, rmax = 0.1, v = new THREE.Vector3();
+    list.forEach(function (e) { pkPnCarrierPos(a, e, v); pts.push([v.x, v.z]); cx += v.x; cz += v.z; });
+    cx /= Math.max(1, pts.length); cz /= Math.max(1, pts.length);
+    pts.forEach(function (p) { rmax = Math.max(rmax, Math.hypot(p[0] - cx, p[1] - cz)); });
+    var W = PK_PN_WIN, mx = (W.x0 + W.x1) / 2 - 0.06, my = (W.y0 + W.y1) / 2, R0 = Math.min(W.x1 - W.x0, W.y1 - W.y0) / 2 - 0.022, k = R0 / (rmax * 1.12);
+    var at = function (x, z) { return [mx + (x - cx) * k, my - (z - cz) * k]; };
+    var pips = [];
+    return {
+      draw: function (R, S) {
+        pkPnCircle(R, mx, my, R0 + 0.008, null, S.edge, 0.0025);
+        pkPnCircle(R, mx, my, 0.012, S.acc, null);
+        var lx = W.x1 - 0.055;
+        pkPnText(R, S, 'STALLS', lx, W.y1 - 0.03, 0.0105, { col: S.dim });
+        pkPnText(R, S, String(list.length), lx, W.y1 - 0.055, 0.02, { col: S.ink });
+        pkPnText(R, S, 'TILT', lx, W.y1 - 0.1, 0.0105, { col: S.dim });
+        pkPnText(R, S, 'DIA ' + (rmax * 2).toFixed(1) + ' M', lx, W.y0 + 0.04, 0.0105, { col: S.dim });
+        pkPnText(R, S, 'LIT = SEATED', lx, W.y0 + 0.018, 0.009, { col: S.dim });
+      },
+      build: function (P) {
+        list.forEach(function (e, i) { var p = pkPnPip(P, 0.0085, sh.seatCol); var q = at(pts[i][0], pts[i][1]); p.set(q[0], q[1]); pips.push(p); });
+      },
+      tick: function (dt, T) {
+        T.n = list.length;
+        for (var i = 0; i < list.length; i++) { pkPnCarrierPos(a, list[i], v); var q = at(v.x, v.z); pips[i].set(q[0], q[1]); pkPnPipLight(pips[i], pkPnFull(list[i]) ? 1 : 0.16, dt); }
+        var E = a.extra && a.extra.show;
+        T.h = E ? E.h : 1.3; T.tilt = E ? E.tilt : 0; T.beat = E ? E.beat : -1;
+      }
+    };
+  };
+  // Droomvlucht's flight: six gondolas as pips on the loop, lit where a rider sits, with the altitude read out
+  PK_PN_KINDS.flight = function (a, sh) {
+    var list = pkPnCarriers(a), pts = [], cx = 0, cz = 0, rmax = 0.1, v = new THREE.Vector3();
+    list.forEach(function (e) { pkPnCarrierPos(a, e, v); pts.push([v.x, v.z]); cx += v.x; cz += v.z; });
+    cx /= Math.max(1, pts.length); cz /= Math.max(1, pts.length);
+    pts.forEach(function (p) { rmax = Math.max(rmax, Math.hypot(p[0] - cx, p[1] - cz)); });
+    var W = PK_PN_WIN, mx = (W.x0 + W.x1) / 2 - 0.06, my = (W.y0 + W.y1) / 2, R0 = Math.min(W.x1 - W.x0, W.y1 - W.y0) / 2 - 0.022, k = R0 / (rmax * 1.12);
+    var at = function (x, z) { return [mx + (x - cx) * k, my - (z - cz) * k]; };
+    var pips = [];
+    return {
+      draw: function (R, S) {
+        pkPnCircle(R, mx, my, R0 + 0.008, null, S.edge, 0.0025);
+        pkPnCircle(R, mx, my, 0.012, S.acc, null);
+        var lx = W.x1 - 0.055;
+        pkPnText(R, S, 'GONDOLAS', lx, W.y1 - 0.03, 0.0105, { col: S.dim });
+        pkPnText(R, S, String(list.length), lx, W.y1 - 0.055, 0.02, { col: S.ink });
+        pkPnText(R, S, 'LOOP ' + (rmax * 2).toFixed(0) + ' M', lx, W.y0 + 0.04, 0.0105, { col: S.dim });
+        pkPnText(R, S, 'LIT = RIDING', lx, W.y0 + 0.018, 0.009, { col: S.dim });
+      },
+      build: function (P) {
+        list.forEach(function (e, i) { var p = pkPnPip(P, 0.0085, sh.seatCol); var q = at(pts[i][0], pts[i][1]); p.set(q[0], q[1]); pips.push(p); });
+      },
+      tick: function (dt, T) {
+        T.n = list.length;
+        for (var i = 0; i < list.length; i++) { pkPnCarrierPos(a, list[i], v); var q = at(v.x, v.z); pips[i].set(q[0], q[1]); pkPnPipLight(pips[i], pkPnFull(list[i]) ? 1 : 0.16, dt); }
+        T.h = 0.7; T.tilt = a.state === 'running' ? 0.7 : 0; T.sceneName = a.state === 'running' ? 'DREAMING' : (a.state === 'boarding' ? 'BOARDING' : 'EMPTY');
+      }
+    };
+  };
   // a track in plan and in profile: from the coaster's own curve (or the flume's own course), the lift marked, the train on
   // it car by car, a cursor on the profile, and block lamps that go red where the train is
   PK_PN_KINDS.track = function (a, sh) {
@@ -12895,6 +12894,8 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     mel.forEach(function (n) { sTone('square', n[0], t + n[1], 0.28, 0.03, { lp: 2600 }); sTone('triangle', n[0] * 2, t + n[1], 0.18, 0.012); });
     [0, 0.6, 1.2, 1.8].forEach(function (b, i) { sTone('triangle', i % 2 ? 196 : 131, t + b, 0.22, 0.05); sTone('triangle', 392, t + b + 0.2, 0.12, 0.025); sTone('triangle', 392, t + b + 0.4, 0.12, 0.025); });
   };
+  SFX.pkDanseOrgan = function (t) { [196, 262, 330, 392, 523, 659].forEach(function (f, i) { sTone('sawtooth', f, t + i * 0.3, 1.6, 0.035, { lp: 1600 }); sTone('sine', f * 2, t + i * 0.3, 0.8, 0.012); }); sTone('sine', 98, t, 2.2, 0.06, { f1: 60 }); };
+  SFX.pkDroomChime = function (t) { [[523, 0], [659, 0.4], [784, 0.8], [659, 1.2], [880, 1.6], [784, 2.0], [1047, 2.4]].forEach(function (n) { sTone('triangle', n[0], t + n[1], 0.5, 0.05); sTone('sine', n[0] * 2, t + n[1], 0.3, 0.015); }); };
   SFX.pkTeaBell = function (t) { [1568, 1976, 2349, 1976, 2637].forEach(function (f, i) { sTone('sine', f, t + i * 0.22, 0.9, 0.035); sTone('sine', f * 2.01, t + i * 0.22, 0.4, 0.008); }); };
   SFX.pkWheelChime = function (t) { [659, 880, 1319, 988].forEach(function (f, i) { sTone('sine', f, t + i * 0.42, 1.6, 0.045); }); };
   SFX.pkKlaxon = function (t) { for (var i = 0; i < 2; i++) { sTone('sawtooth', 210, t + i * 0.55, 0.42, 0.06, { f1: 470, lp: 1800 }); sTone('square', 105, t + i * 0.55, 0.42, 0.025, { f1: 235, lp: 900 }); } };
@@ -13094,6 +13095,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
           else if (d[0] === 'pumps') on = live && T.flow > 200;
           else if (d[0] === 'fx') on = live && T.fx ? 'flash' : false;
           else if (d[0] === 'happy') on = live && a.riders > 0;
+          else if (d[0] === 'motion') on = live && T.tilt > 0.5;
           else if (d[0] === 'lift') on = live && a.state === 'running' && T.blk === 1;
           else if (d[0] === 'brake') on = live && (a.state !== 'running' || T.blk === 3);
           A[d[0]].on = on;
@@ -15810,8 +15812,8 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   function pkHQMonitorWall(x, y, z) {
     var g = new THREE.Group(); g.position.set(x, y, z); scene.add(g);
     pkBevelBox(3.5, 1.4, 0.1, MAT.steelDark, 0, 0, -0.04, g, 0.02);
-    var LANDS = [['THE FAIRGROUND', ['carousel', 'teacups', 'kround', 'kpots', 'kpuffin']], ['THRILLS', ['ferris', 'dodgems', 'baron']], ['THE DARK WOODS', ['haunted', 'droptower', 'nocturne', 'wreck']],
-      ['COASTER COUNTRY', ['flume', 'serpent', 'moonwood']], ['THE COASTER', []], ['THE GATE', null]];
+    var LANDS = [['THE FAIRGROUND', ['carousel', 'teacups', 'kround', 'kpots', 'kpuffin']], ['THRILLS', ['ferris', 'dodgems', 'baron']], ['THE DARK WOODS', ['danse', 'droptower', 'nocturne', 'wreck']],
+      ['COASTER COUNTRY', ['flume', 'serpent', 'moonwood']], ['MARERIJK', ['droom']], ['THE COASTER', []], ['THE GATE', null]];
     LANDS.forEach(function (L, i) {
       var cx = -1.15 + (i % 3) * 1.15, cy = 0.33 - Math.floor(i / 3) * 0.66;
       var sc = touchScreen({ w: 300, h: 180, pw: 1.08, ph: 0.6, x: cx, y: cy, z: 0.02, parent: g, title: 'Security: ' + L[0].toLowerCase(),
@@ -15859,7 +15861,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // through the morning and empties at closing. The cars are the game's own (the engine's road network wanders at random);
   // each follows a path laid from waypoints, and waits for the car in front.
   // The lot: rank A (z 53..58, noses north) and rank B (z 66..71, noses south), 22 bays a rank, 2.75 m wide, either side of an
-  // aisle along z 62. Rank A's bay 11 is the walkway to the gate; rank B's bays 10 and 11 are the drive, and 9 and 12 beside it
+  // aisle along z 62. Rank A's bays 10 and 11 are the walkway to the gate (its paving is 5.5 m wide); rank B's bays 10 and 11 are the drive, and 9 and 12 beside it
   // stay empty (no car could turn into them off the drive). The traffic keeps
   // left, as on the road: up the drive on x -1.4, down it on x +1.4; along the aisle west on z 63.4, east on z 60.6.
   var PK_BAY_X0 = -28.875, PK_BAY_W = 2.75, PK_AISLE_W = 63.4, PK_AISLE_E = 60.6, PK_DRIVE_IN = -1.4, PK_DRIVE_OUT = 1.4;
@@ -15868,7 +15870,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     if (PK_LOT.bays.length) return PK_LOT.bays;
     for (var i = 0; i < 22; i++) {
       var x = PK_BAY_X0 + i * PK_BAY_W;
-      if (i !== 11) PK_LOT.bays.push({ x: x, z: 55.5, front: 53.0, mouth: 58.6, yaw: Math.PI / 2, car: null });     // rank A
+      if (i !== 10 && i !== 11) PK_LOT.bays.push({ x: x, z: 55.5, front: 53.0, mouth: 58.6, yaw: Math.PI / 2, car: null });     // rank A
       if (i < 9 || i > 12) PK_LOT.bays.push({ x: x, z: 68.5, front: 71.0, mouth: 65.4, yaw: -Math.PI / 2, car: null });   // rank B
     }
     return PK_LOT.bays;
@@ -15882,18 +15884,20 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   }
   // a path through waypoints, sampled by distance; rev marks a stretch driven backwards
   function pkLotPath(pts) {
-    var c = new THREE.CatmullRomCurve3(pts.map(function (p) { return new THREE.Vector3(p[0], 0, p[1]); }), false, 'centripetal');
+    var c = new THREE.CatmullRomCurve3(pts.map(function (p) { return new THREE.Vector3(p[0], p[2] || 0, p[1]); }), false, 'centripetal');
     return { c: c, len: c.getLength() };
   }
   // a straight run along the aisle from a to b, dropped where the bay is too close to the drive for it (the turn takes it all)
   function pkLotAisle(a, b, dir) { return (b[0] - a[0]) * dir > 0.5 ? [a, b] : []; }
   function pkLotIn(bay, fromEast) {
+    if (bay.ms) return pkMsIn(bay, fromEast);   // a bay in the multi-storey (part 51)
     var sx = bay.x < PK_DRIVE_IN ? -1 : 1, lane = sx < 0 ? PK_AISLE_W : PK_AISLE_E, nose = bay.yaw === Math.PI / 2 ? -1 : 1;
     var road = fromEast ? [[95, 77.5], [12, 77.5], [4, 77.2], [0.2, 75.6]] : [[-95, 74.5], [-8, 74.5], [-3.4, 74.2]];
     return road.concat([[PK_DRIVE_IN, 72.4], [PK_DRIVE_IN, 67.0]], pkLotAisle([PK_DRIVE_IN + sx * 2.6, lane], [bay.x - sx * 3.6, lane], sx),
       [[bay.x - sx * 1.3, (lane + bay.mouth) / 2], [bay.x, bay.mouth + nose * 0.8], [bay.x, bay.z]]);
   }
   function pkLotOut(bay, toEast) {
+    if (bay.ms) return pkMsOut(bay, toEast);
     var sx = bay.x < PK_DRIVE_OUT ? -1 : 1, lane = sx < 0 ? PK_AISLE_E : PK_AISLE_W, nose = bay.yaw === Math.PI / 2 ? -1 : 1;
     // back out across the aisle with the tail swinging away from the drive, so the car ends up facing the way out
     var back = [[bay.x, bay.z], [bay.x, bay.mouth - nose * 0.6], [bay.x + sx * 1.6, lane]];
@@ -15908,7 +15912,8 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var free = pkLotBays().filter(function (b) { return !b.car; });
     if (!free.length) return null;
     // the bays nearest the walk to the gate go first, with a little chance in it
-    free.sort(function (a, b) { return Math.abs(a.x) + (a.z > 62 ? 4 : 0) - Math.abs(b.x) - (b.z > 62 ? 4 : 0); });
+    var cost = function (b) { return b.ms ? 100 + b.L * 20 + Math.abs(b.x - 36) : Math.abs(b.x) + (b.z > 62 ? 4 : 0); };
+    free.sort(function (a, b) { return cost(a) - cost(b); });
     var bay = free[Math.floor(Math.min(free.length - 1, Math.pow(Math.random(), 2) * free.length))];
     var g = carMesh({ col: pick(PK_LOT_COLS) }); g.userData.dynamic = true; scene.add(g);
     var r = Math.random(), n = r < 0.15 ? 1 : r < 0.5 ? 2 : r < 0.75 ? 3 : 4;
@@ -15920,18 +15925,22 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   }
   function pkLotPlace(car) {
     var u = Math.min(1, car.s / car.path.len), p = car.path.c.getPointAt(u), t = car.path.c.getTangentAt(u);
-    car.g.position.set(p.x, 0, p.z);
+    car.g.position.set(p.x, p.y, p.z);
     var yaw = Math.atan2(-t.z, t.x) + (car.rev ? Math.PI : 0);            // the mesh runs along local +x
-    car.g.rotation.y = yaw;
+    car.g.rotation.order = 'YZX'; car.g.rotation.y = yaw;
+    car.g.rotation.z = Math.atan2(t.y, Math.hypot(t.x, t.z)) * (car.rev ? -1 : 1);   // nose up a ramp, nose down coming off it
     var ws = car.g.userData.wheels; if (ws) ws.forEach(function (w) { w.rotation.z -= (car.rev ? -1 : 1) * car.v * 0.016 / 0.33; });
   }
   // out of the car: the party gets out on either side and walks up to the ticket windows
   function pkLotUnload(car) {
     var b = car.bay, side = [[-1, -0.6], [1, -0.6], [-1, 0.7], [1, 0.7]];
+    if (b.ms) pkMsPay(car);
     for (var i = 0; i < car.n; i++) {
       var gu = pkSpawnGuest(), off = side[i];
       // the bay runs along z: the doors are either side in x
-      gu.rec.x = b.x + off[0] * 1.15; gu.rec.z = b.z + off[1]; gu.g.position.set(gu.rec.x, 0, gu.rec.z);
+      if (b.L) { gu.rec.x = PK_MS.door.x + off[0] * 0.4; gu.rec.z = PK_MS.door.z + off[1] * 0.5; }
+      else { gu.rec.x = b.x + off[0] * 1.15; gu.rec.z = b.z + off[1]; }
+      gu.g.position.set(gu.rec.x, 0, gu.rec.z);
       gu.car = car; car.party.push(gu);
     }
     car.state = 'parked';
@@ -15940,6 +15949,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   function pkLotHome(gu) {
     var car = gu.car; if (!car) return false;
     var b = car.bay, sd = gu.rec.x < b.x ? -1 : 1;
+    if (b.L) { pkGo(gu, PK_MS.door.x, PK_MS.door.z, 'toCar'); return true; }   // up the stairs to a deck: in at the tower's door
     pkGo(gu, b.x + sd * 1.25, b.z, 'toCar');
     return true;
   }
@@ -15956,6 +15966,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var fx = Math.cos(-car.g.rotation.y), fz = Math.sin(-car.g.rotation.y); if (car.rev) { fx = -fx; fz = -fz; }
     for (var i = 0; i < PK_LOT.cars.length; i++) {
       var o = PK_LOT.cars[i]; if (o === car || o.state === 'parked') continue;
+      if (Math.abs(o.g.position.y - car.g.position.y) > 1.6) continue;   // a deck above or below
       var dx = o.g.position.x - car.g.position.x, dz = o.g.position.z - car.g.position.z, ahead = dx * fx + dz * fz, side = Math.abs(dx * fz - dz * fx);
       if (ahead > 0.5 && ahead < 6.5 && side < 1.9) return o;
     }
@@ -15963,9 +15974,10 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   }
   // a car leaves its bay only when no other car near it is backing out and the aisle at its bay is clear
   function pkLotMayLeave(car) {
-    var b = car.bay, mz = (b.mouth + 62) / 2;
+    var b = car.bay, mz = (b.mouth + (b.aisle || 62)) / 2;
     for (var i = 0; i < PK_LOT.cars.length; i++) {
       var o = PK_LOT.cars[i]; if (o === car || o.state === 'parked') continue;
+      if (Math.abs(o.g.position.y - (b.y || 0)) > 1.6) continue;
       var d = Math.hypot(o.g.position.x - b.x, o.g.position.z - mz);
       if ((o.state === 'back' && d < 16) || d < 7) return false;
     }
@@ -16004,6 +16016,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       car.s += car.v * dt;
       pkLotPlace(car);
       if (Math.hypot(car.g.position.x, car.g.position.z - 72.6) < 7) near = true;
+      if (Math.hypot(car.g.position.x - PK_MS.dx, car.g.position.z - PK_MS.boomZ) < 7) PK_MS.near = true;
       if (car.s < car.path.len - 0.02) continue;
       if (car.state === 'in') { car.s = car.path.len; car.v = 0; pkLotPlace(car); pkLotUnload(car); }
       else if (car.state === 'back') { car.state = 'out'; car.rev = false; car.path = pkLotPath(car.out.fwd); car.s = 0; car.bay.car = null; }
@@ -16012,6 +16025,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     // the barrier lifts for a car and drops behind it
     PK_LOT.boomT = clamp(PK_LOT.boomT + (near ? 1.6 : -0.8) * dt, 0, 1);
     if (PK_LOT.boom) PK_LOT.boom.rotation.z = PK_LOT.boomT * 1.35;
+    pkMsBoomTick(dt);
   }
   // ── Why ──────────────────────────────────────────────────────────
   // A theme park is a story, not a set of sheds with signs: warm lanterns, towers with pointed roofs, stepped Dutch gables,
@@ -16494,7 +16508,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var K = PK_MK, M = pkFtM(), H = K.H, cx = (K.x0 + K.x1) / 2, cz = (K.z0 + K.z1) / 2, W = K.x1 - K.x0, D = K.z1 - K.z0;
     var stone = std({ color: 0x8f8a80, roughness: 0.95, map: pkMats().stone.map }), dark = std({ color: 0x5f5a54, roughness: 0.95 });
     // walls: the lift's portal and the low portal in the north wall, the west door, a blank south and east
-    var inner = std({ color: 0x34302c, roughness: 0.97, map: pkMats().stone.map });
+    var inner = std({ color: 0x1f1c1a, roughness: 0.98, map: pkMats().stone.map });
     pkMkWall(g, stone, K.x0, K.z0, K.x1, K.z0, H, [K.liftPortal, K.lowPortal], inner, 1);
     pkMkWall(g, stone, K.x0, K.z1, K.x1, K.z1, H, [], inner, -1);
     pkMkWall(g, stone, K.x1, K.z0, K.x1, K.z1, H, [], inner, -1);
@@ -16546,7 +16560,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // inside: the floor, the ceiling, the king in the helix, crystals along the walls, low light
   function pkMkInside(g) {
     var K = PK_MK, cx = (K.x0 + K.x1) / 2, cz = (K.z0 + K.z1) / 2, W = K.x1 - K.x0, D = K.z1 - K.z0;
-    pkPaved(W - 0.7, D - 0.7, std({ color: 0x3e3a35, roughness: 0.95, map: pkMats().stone.map }), cx, 0.03, cz, 1.6, g);
+    pkPaved(W - 0.7, D - 0.7, std({ color: 0x2a2724, roughness: 0.95, map: pkMats().stone.map }), cx, 0.03, cz, 1.6, g);
     var ceil = box(W - 0.7, 0.12, D - 0.7, std({ color: 0x1c1d26, roughness: 0.95 }), cx, K.H - 0.06, cz, g); ceil.castShadow = false;
     // the king: a throne on a rock, a robed figure, a gold crown, a glowing staff. Inside the helix (rail at 5 m round him)
     var kx = K.king[0], kz = K.king[1], rock = std({ color: 0x4a4650, roughness: 0.95 }), robe = std({ color: 0x5a2a6a, roughness: 0.8 }), gold = pkFtM().gold;
@@ -17241,19 +17255,22 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   }
   function pkPCMoney(c, sc, X, Y, W, H) {
     var lw = W * 0.44;
-    pkPCPanel(c, X, Y, lw, 150, 'Prices');
+    pkPCPanel(c, X, Y, lw, 196, 'Prices');
     pkPCText(c, 'Adult ticket', X + 14, Y + 52, 15, '#d7dee4'); pkPCText(c, money(S.ticketPrice), X + 150, Y + 54, 22, '#f5b53d', true);
     pkPCBtn(sc, X + lw - 150, Y + 32, 64, 30, '- 1', function () { pkPrice(-1); });
     pkPCBtn(sc, X + lw - 78, Y + 32, 64, 30, '+ 1', function () { pkPrice(1); });
     pkPCText(c, 'Fries', X + 14, Y + 104, 15, '#d7dee4'); pkPCText(c, money(S.snackPrice), X + 150, Y + 106, 22, '#f5b53d', true);
     pkPCBtn(sc, X + lw - 150, Y + 84, 64, 30, '- 0.50', function () { pkSnackPrice(-0.5); });
     pkPCBtn(sc, X + lw - 78, Y + 84, 64, 30, '+ 0.50', function () { pkSnackPrice(0.5); });
-    pkPCText(c, PK.snackOpen ? 'the snack stand is open' : 'the snack stand opens at level 2', X + 14, Y + 138, 11, '#8b98a4');
-    var ty = Y + 160, wages = pkWages(), st = S.stats || {};
-    pkPCPanel(c, X, ty, lw, H - 160, 'Today and all time');
-    [['Earned today', money(PK.today.earned || 0), '#5fd38d'], ['Tickets / snacks', PK.today.tickets + ' / ' + PK.today.snacks, '#eef1f5'], ['Wages a day', money(wages), '#f0c04a'],
+    pkPCText(c, 'Parking', X + 14, Y + 150, 15, '#d7dee4'); pkPCText(c, money(pkMsFee()), X + 150, Y + 152, 22, '#f5b53d', true);
+    pkPCBtn(sc, X + lw - 150, Y + 130, 64, 30, '- 1', function () { pkMsSetFee(-1); });
+    pkPCBtn(sc, X + lw - 78, Y + 130, 64, 30, '+ 1', function () { pkMsSetFee(1); });
+    pkPCText(c, (PK.snackOpen ? 'the snack stand is open' : 'the snack stand opens at level 2') + '  ·  parking is per car, in the multi-storey', X + 14, Y + 184, 11, '#8b98a4');
+    var ty = Y + 206, wages = pkWages(), st = S.stats || {};
+    pkPCPanel(c, X, ty, lw, H - 206, 'Today and all time');
+    [['Earned today', money(PK.today.earned || 0), '#5fd38d'], ['Tickets / snacks / parking', PK.today.tickets + ' / ' + PK.today.snacks + ' / ' + money(PK.today.parking || 0), '#eef1f5'], ['Wages a day', money(wages), '#f0c04a'],
       ['Earned, all time', money(st.earned || 0), '#5fd38d'], ['Spent, all time', money(st.spent || 0), '#ff8a5c']].forEach(function (r, i) {
-      pkPCText(c, r[0], X + 14, ty + 48 + i * 30, 14, '#a0acb8'); pkPCText(c, r[1], X + lw - 14, ty + 48 + i * 30, 15, r[2], true, 'right');
+      pkPCText(c, r[0], X + 14, ty + 44 + i * 24, 14, '#a0acb8'); pkPCText(c, r[1], X + lw - 14, ty + 44 + i * 24, 15, r[2], true, 'right');
     });
     // the ledger
     var gx = X + lw + 10, gw = W - lw - 10;
@@ -17276,6 +17293,18 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     });
     return rows;
   }
+  // a ride runs itself from the office only with its operator key ON as well as its desk on AUTO, so the PC's AUTO is both:
+  // on turns the key and sets AUTO, off puts the desk back to MANUAL and leaves the key where it is
+  function pkPCRideAuto(a) { var C = a.ctl || {}; return !!(a.open && C.key && C.auto); }
+  function pkPCRideAutoSet(a, on) {
+    var C = pkCtl(a);
+    if (on) {
+      if (!a.open) return pkBoothRefuse(a.name + ' has no power - the breaker is off');
+      if (!C.key && !pkSetRideKey(a, true)) return false;
+      if (C.auto) { screenDirtyAll(); return true; }
+    }
+    return pkBoothAuto(a);
+  }
   function pkPCRides(c, sc, X, Y, W, H) {
     var rows = pkPCRideRows(), per = 8, pages = Math.ceil(rows.length / per); PK_PC.page = clamp(PK_PC.page, 0, pages - 1);
     pkPCPanel(c, X, Y, W, H);
@@ -17295,7 +17324,11 @@ function pkBuildParkCabinet(px, py, pz, ry) {
         var auto = pkCoasterAuto();
         pkPCBtn(sc, X + W - 236, y + 3, 104, 26, auto ? 'AUTO on' : 'AUTO off', function () { pkSetAuto(!S.auto); }, auto);
         pkPCBtn(sc, X + W - 124, y + 3, 112, 26, 'Service ' + Math.round(S.wear || 0) + '%', function () { pkService(); }, (S.wear || 0) > 0, '#f0c04a');
-      } else pkPCBtn(sc, X + W - 124, y + 3, 112, 26, r.open ? 'Shut it' : 'Open it', function () { pkSetRideOpen(r.a.id, !r.a.open); }, !r.open, '#5fd38d');
+      } else {
+        var rAuto = pkPCRideAuto(r.a);
+        pkPCBtn(sc, X + W - 236, y + 3, 104, 26, rAuto ? 'AUTO on' : 'AUTO off', function () { pkPCRideAutoSet(r.a, !pkPCRideAuto(r.a)); }, rAuto);
+        pkPCBtn(sc, X + W - 124, y + 3, 112, 26, r.open ? 'Shut it' : 'Open it', function () { pkSetRideOpen(r.a.id, !r.a.open); }, !r.open, '#5fd38d');
+      }
     });
     var py = Y + H - 40;
     pkPCText(c, 'Page ' + (PK_PC.page + 1) + ' of ' + pages + '   ·   ' + pkOpenCount() + ' of ' + rows.length + ' open', X + 16, py + 24, 13, '#8b98a4');
@@ -17338,12 +17371,13 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     pkPCText(c, 'Serves both ticket windows  ·  ' + money(40) + ' a day', X + 14, Y + 52, 12, '#8b98a4');
     pkPCText(c, S.clerk ? 'ON THE PAYROLL' : 'NOT HIRED', X + 14, Y + 80, 12, S.clerk ? '#5fd38d' : '#a0acb8', true);
     pkPCBtn(sc, X + cw - 150, Y + 56, 136, 30, S.clerk ? 'Let go' : 'Hire (' + money(400) + ')', function () { said(S.clerk ? pkFire('clerk') : pkHire('clerk')); }, !S.clerk, S.clerk ? '#ff8a5c' : '#5fd38d');
-    // the operators: up to four, working the booths in shifts
+    // the operators: up to PK_OPS_MAX, working the booths in shifts
     var ox = X + cw + 10, n = pkOpCount();
     pkPCPanel(c, ox, Y, cw, 96);
     pkPCText(c, 'Ride operators  ' + n + ' / ' + PK_OPS_MAX, ox + 14, Y + 30, 17, '#eef1f5', true);
     pkPCText(c, 'Shifts in the ride booths  ·  ' + money(60) + ' a day each', ox + 14, Y + 52, 12, '#8b98a4');
-    for (var k = 0; k < PK_OPS_MAX; k++) { c.fillStyle = k < n ? '#5fd38d' : 'rgba(255,255,255,0.14)'; c.beginPath(); c.arc(ox + 20 + k * 16, Y + 76, 5, 0, 6.283); c.fill(); }
+    var dg = Math.min(16, (cw - 262) / PK_OPS_MAX), dr = Math.min(5, dg * 0.36);   // a dot per place on the roster, fitted in before the buttons
+    for (var k = 0; k < PK_OPS_MAX; k++) { c.fillStyle = k < n ? '#5fd38d' : 'rgba(255,255,255,0.14)'; c.beginPath(); c.arc(ox + 20 + k * dg, Y + 76, dr, 0, 6.283); c.fill(); }
     pkPCBtn(sc, ox + cw - 232, Y + 60, 108, 28, 'Hire (' + money(600) + ')', function () { said(pkHire('operator')); }, n < PK_OPS_MAX, '#5fd38d');
     pkPCBtn(sc, ox + cw - 116, Y + 60, 102, 28, 'Let one go', function () { said(pkFire('operator')); }, n > 0, '#ff8a5c');
     var ry = Y + 106;
@@ -17444,9 +17478,9 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // unless the player is near: no toasts, no log lines, only the sounds within earshot. They work 08:30 to 22:00; let go, or at
   // the end of the day, the last ride goes back on AUTO and they walk to HQ and go.
   var PK_OPS = { list: [], quiet: 0, near: false };
-  var PK_OP_NAMES = ['Jan', 'Fatima', 'Ruud', 'Mei', 'Bram', 'Ayesha', 'Finn', 'Noor', 'Daan', 'Lotte'];
-  var PK_OP_SKINS = [0xd8a97c, 0xc99266, 0xe8c49b, 0xe0b48e, 0xb87b5a, 0xf1d2b6, 0x8d5a3c, 0xd9a98a, 0xe2b48f, 0x5c3a28];
-  var PK_OP_HAIRS = [0x3a2a1c, 0x1e1712, 0x8a6a4a, 0x2a2a2a, 0x6b4a2b, 0x1d1510, 0xa8793f, 0x8a8a8a, 0xd9b36a, 0xb0352a];
+  var PK_OP_NAMES = ['Jan', 'Fatima', 'Ruud', 'Mei', 'Bram', 'Ayesha', 'Finn', 'Noor', 'Daan', 'Lotte', 'Sven', 'Yara', 'Joost', 'Ilse', 'Kofi'];
+  var PK_OP_SKINS = [0xd8a97c, 0xc99266, 0xe8c49b, 0xe0b48e, 0xb87b5a, 0xf1d2b6, 0x8d5a3c, 0xd9a98a, 0xe2b48f, 0x5c3a28, 0xf0cfae, 0xa8704e, 0xe6bf98, 0xdcae88, 0x6e4530];
+  var PK_OP_HAIRS = [0x3a2a1c, 0x1e1712, 0x8a6a4a, 0x2a2a2a, 0x6b4a2b, 0x1d1510, 0xa8793f, 0x8a8a8a, 0xd9b36a, 0xb0352a, 0xe0c27a, 0x15100c, 0x5a3a22, 0x9a7a5a, 0x241a12];
   var PK_OP_HOME = { x: -16.6, z: 42.5 };                     // HQ's door on the forecourt
   var PK_OP_BREAKS = [[-6.5, 20], [6.5, 20], [-6.5, 10], [6.5, 10], [-6.5, 2.5], [6.5, 2.5], [0, 26]];   // the midway's benches and the plaza
 
@@ -17465,6 +17499,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // ── The booth, in the booth's own frame ──────────────────────────
   function pkOpLocal(a, lx, lz) { var f = a.boothFrame, c = Math.cos(f.ry), s = Math.sin(f.ry); return { x: f.x + lx * c + lz * s, z: f.z - lx * s + lz * c }; }
   function pkOpSpots(a) {
+    if (!a.boothFrame) return pkOpRoomSpots(a);   // a ride with a control room of its own
     var K = PK_BK, f = a.boothFrame, ds = f.ds, HW = K.W / 2, HD = K.D / 2, DZ = K.DOORZ;
     return {
       foot: pkOpLocal(a, ds * (HW + 1.35), DZ), out: pkOpLocal(a, ds * (HW + 0.35), DZ), inn: pkOpLocal(a, ds * (HW - 0.55), DZ),
@@ -17472,9 +17507,38 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       desk: pkOpLocal(a, -0.5, HD - 1.1), deskYaw: f.ry
     };
   }
+  // ── A control room of the ride's own ─────────────────────────────
+  // The six hall coasters, Danse Macabre, Droomvlucht and the Arena each have a room of their own making, not the booth kit.
+  // Every one has a door, a time clock and a desk, so the spots are read off those: the door's centre and the way through it
+  // (inside is the clock's side), a stand in front of the clock's face and one in front of the desk's panel. The Arena's room
+  // is up the stand: the walk there goes up the stair hall the audience climbs and along the top walkway first (pre).
+  function pkOpDoor(a) { return a.boothDoor || (a.extra && a.extra.door) || null; }
+  function pkOpRoomSpots(a) {
+    if (a.opSpots !== undefined) return a.opSpots;
+    var D = pkOpDoor(a), P = a.boothPanel && a.boothPanel.panel, K = a.boothClock;
+    if (!D || !P || !K) return (a.opSpots = null);
+    var V = function (o, x, y, z) { o.updateMatrixWorld(true); return o.localToWorld(new THREE.Vector3(x, y, z)); };
+    var flat = function (v) { var l = Math.hypot(v.x, v.z) || 1; return { x: v.x / l, z: v.z / l }; };
+    var ry0 = D.hinge.rotation.y; D.hinge.rotation.y = D.closedRy;
+    var dc = V(D.hinge, 0, 0, D.w / 2), dn = flat(V(D.hinge, 1, 0, D.w / 2).sub(dc));
+    D.hinge.rotation.y = ry0;
+    var kc = V(K, 0, 0, 0), kn = flat(V(K, 0, 0, 1).sub(kc)), pc = V(P, 0, 0, 0), pn = flat(V(P, 0, 0, 1).sub(pc));
+    var clock = { x: kc.x + kn.x * 0.55, z: kc.z + kn.z * 0.55 }, desk = { x: pc.x + pn.x * 0.62, z: pc.z + pn.z * 0.62 };
+    var s = (clock.x - dc.x) * dn.x + (clock.z - dc.z) * dn.z > 0 ? 1 : -1, at = function (k) { return { x: dc.x + dn.x * s * k, z: dc.z + dn.z * s * k }; };
+    var sp = { foot: at(-1.5), out: at(-0.6), inn: at(0.6), clock: clock, clockYaw: Math.atan2(-kn.x, -kn.z), desk: desk, deskYaw: Math.atan2(-pn.x, -pn.z), pre: null };
+    if (a.id === 'theater' && typeof PK_TH !== 'undefined') {
+      // up the stair hall, across the landing, west along the top walkway to the room's east end and round to its door
+      var H = PK_TH_HALL, G = PK_THG, X0 = PK_TH.CX, Z0 = PK_TH.CZ, sm = (G.x + 0.3 + H.sx1) / 2;
+      sp.pre = [{ x: X0 + sm, z: Z0 + H.s0 - 0.5 }, { x: X0 + sm, z: Z0 + H.s1 + 0.4 }, { x: X0 + G.x + 0.9, z: Z0 + 19.7 }, { x: X0 + G.x - 0.6, z: Z0 + 19.7 }];
+    }
+    return (a.opSpots = sp);
+  }
+  // a ride that runs itself (Droomvlucht's line never stops, the Arena's show runs to its cues): the operator keeps it on
+  // AUTO and minds it from the desk, starting Droomvlucht's system when a line forms, for a spell before moving on
+  function pkOpAutoRide(a) { return !!(a.continuous || a.curtain); }
   function pkOpCanWork(a) {
     var C = a.ctl;
-    if (!a.open || !a.boothFrame || !a.boothPanel || !a.boothDoor || !C || C.fault || C.maint) return false;
+    if (!a.open || !(a.boothFrame || pkOpRoomSpots(a)) || !a.boothPanel || !pkOpDoor(a) || !C || C.fault || C.maint) return false;
     if (PK.duty && PK.duty.id === a.id) return false;                 // the player is on duty there
     for (var i = 0; i < PK_OPS.list.length; i++) if (PK_OPS.list[i].ride === a) return false;
     return true;
@@ -17483,7 +17547,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var best = null, bs = -1e9;
     PK.attractions.forEach(function (a) {
       if (!pkOpCanWork(a) || a === op.last) return;
-      var d = Math.hypot(a.boothFrame.x - op.x, a.boothFrame.z - op.z), sc = a.queue.length * 3 - d / 25 + Math.random() * 4 + (a.ctl.key ? 0 : 2);
+      var f = a.boothFrame || pkOpSpots(a).foot, d = Math.hypot(f.x - op.x, f.z - op.z), sc = a.queue.length * 3 - d / 25 + Math.random() * 4 + (a.ctl.key ? 0 : 2);
       if (sc > bs) { bs = sc; best = a; }
     });
     return best;
@@ -17512,7 +17576,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     return { pick: 'choosing a ride', toBooth: 'on the way to ' + r, enter: 'going into the booth', clockIn: 'clocking in', work: 'working ' + r + ' (round ' + Math.min(op.rounds + 1, op.target) + ' of ' + op.target + ')',
       finish: 'putting ' + r + ' back on AUTO', clockOut: 'clocking out', leave: 'leaving the booth', toBreak: 'off for a break', onBreak: 'on a break', home: 'going home' }[op.state] || op.state;
   }
-  function pkOpLine(op) { return op.state === 'work' ? 'Running ' + op.ride.name + ' by hand. I put it back on AUTO when I go.' : op.state === 'onBreak' ? 'Five minutes, boss.' : 'Hi! ' + pkOpWords(op).charAt(0).toUpperCase() + pkOpWords(op).slice(1) + '.'; }
+  function pkOpLine(op) { return op.state === 'work' ? (pkOpAutoRide(op.ride) ? 'Keeping an eye on ' + op.ride.name + '. It runs itself, I make sure it keeps running.' : 'Running ' + op.ride.name + ' by hand. I put it back on AUTO when I go.') : op.state === 'onBreak' ? 'Five minutes, boss.' : 'Hi! ' + pkOpWords(op).charAt(0).toUpperCase() + pkOpWords(op).slice(1) + '.'; }
   // a walk: the route finder over the park, or a straight line inside a booth
   function pkOpGo(op, p, straight) { op.path = straight ? [{ x: p.x, z: p.z }] : route({ x: op.x, z: op.z }, { x: p.x, z: p.z }); op.faceYaw = null; }
   function pkOpWalkThrough(op, pts) { op.path = pts.map(function (p) { return { x: p.x, z: p.z }; }); op.faceYaw = null; }
@@ -17526,10 +17590,20 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     op.ride = null;
   }
   // one look at the desk: what the ride wants now, done after a human pause
+  function pkOpMind(op, dt) {
+    var a = op.ride, C = a.ctl, E = a.extra || {};
+    op.mindT = (op.mindT || 0) + 0.4;
+    if (C.fault) return;
+    if (op.mindT > op.mindFor || PK.closed || op.going) { op.state = 'finish'; return; }
+    if (!C.auto) pkOpPress(op, 'auto');
+    var P = a.boothPanel;
+    if (a.continuous && E.sys === 'parked' && a.queue.length && P.start) { pkOpDo(op, function () { P.start.press(); }); op.wait = randf(1.5, 2.5); }
+  }
   function pkOpWork(op, dt) {
     var a = op.ride, C = a.ctl;
     op.wait -= dt; if (op.wait > 0) return;
     op.wait = 0.4;
+    if (pkOpAutoRide(a)) return pkOpMind(op, dt);
     if (C.fault) return;                                    // stopped: the operator waits for whoever pressed it to reset it
     if (C.auto) { op.state = 'finish'; return; }            // someone put it back on AUTO: the shift here is over
     var done = op.rounds >= op.target || PK.closed || op.going;
@@ -17565,6 +17639,13 @@ function pkBuildParkCabinet(px, py, pz, ry) {
 
   // ── A shift, one frame ────────────────────────────────────────────
   function pkOpTick(op, dt) {
+    // the player clocked in here: the ride is theirs at once, so the operator stops where they are, hands it over as it
+    // stands (MANUAL or AUTO, as the desk is) and walks back to the clock to clock out
+    if (op.ride && pkOnDutyAt(op.ride.id) && (op.state === 'enter' || op.state === 'clockIn' || op.state === 'toDesk' || op.state === 'work')) {
+      if (Math.random() < 0.5) say(op.g, 'All yours.');
+      if (op.state !== 'enter') pkOpWalkThrough(op, [pkOpSpots(op.ride).clock]);   // coming in through the door, they are on their way to the clock already
+      op.state = 'toClockOut'; op.pose = 'idle';
+    }
     var moving = false;
     if (op.path && op.path.length) { moving = !walkAlong(op, op.path, op.speed, dt); }
     else if (op.faceYaw !== null) op.yaw += Math.atan2(Math.sin(op.faceYaw - op.yaw), Math.cos(op.faceYaw - op.yaw)) * Math.min(1, dt * 6);
@@ -17578,21 +17659,24 @@ function pkBuildParkCabinet(px, py, pz, ry) {
         if (op.going) { op.state = 'home'; pkOpGo(op, PK_OP_HOME); return; }
         a = pkOpPick(op);
         if (!a) { op.state = 'toBreak'; var b = PK_OP_BREAKS[Math.floor(Math.random() * PK_OP_BREAKS.length)]; pkOpGo(op, { x: b[0], z: b[1] }); return; }
-        op.ride = a; op.rounds = 0; op.target = 2 + Math.floor(Math.random() * 3); op.state = 'toBooth'; pkOpGo(op, pkOpSpots(a).foot);
+        op.ride = a; op.rounds = 0; op.target = 2 + Math.floor(Math.random() * 3); op.mindT = 0; op.mindFor = randf(90, 200); op.state = 'toBooth';
+        var spa = pkOpSpots(a);
+        if (spa.pre) { op.path = route({ x: op.x, z: op.z }, spa.pre[0]).concat(spa.pre.slice(1), route(spa.pre[spa.pre.length - 1], spa.foot)); op.faceYaw = null; }
+        else pkOpGo(op, spa.foot);
         break;
       case 'toBooth':
         if (!pkOpStillFree(op)) { op.ride = null; op.state = 'pick'; return; }
-        a.boothDoor.want = 1; op.state = 'enter'; pkOpWalkThrough(op, [sp.out, sp.inn, sp.clock]);
+        pkOpDoor(a).want = 1; op.state = 'enter'; pkOpWalkThrough(op, [sp.out, sp.inn, sp.clock]);
         break;
       case 'enter':
         op.faceYaw = sp.clockYaw; op.state = 'clockIn'; op.t = 0; op.pose = 'work';
         break;
       case 'clockIn':
         if (op.t < 1.4) return;
-        a.boothDoor.want = 0;
+        pkOpDoor(a).want = 0;
         op.clocked = true; screenDirtyAll();
         if (!a.ctl.key) pkOpDo(op, function () { pkSetRideKey(a, true); });
-        if (a.ctl.auto) { pkOpPress(op, 'auto'); if (S.ctlAuto) S.ctlAuto[a.id] = true; }   // MANUAL for the shift only: a save mid-shift loads the ride on AUTO
+        if (a.ctl.auto && !pkOpAutoRide(a)) { pkOpPress(op, 'auto'); if (S.ctlAuto) S.ctlAuto[a.id] = true; }   // MANUAL for the shift only: a save mid-shift loads the ride on AUTO
         if (Math.random() < 0.5) say(op.g, 'Clocked in. ' + a.name + ' is mine.');
         op.state = 'toDesk'; op.pose = 'idle'; pkOpWalkThrough(op, [sp.desk]);
         break;
@@ -17603,7 +17687,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
         op.faceYaw = sp.deskYaw; pkOpWork(op, dt);
         break;
       case 'finish':
-        if (a.ctl && !a.ctl.auto) pkOpPress(op, 'auto');
+        if (a.ctl && !a.ctl.auto && !pkOnDutyAt(a.id)) pkOpPress(op, 'auto');   // the player on duty here keeps the desk as they set it
         op.state = 'toClockOut'; op.pose = 'idle'; pkOpWalkThrough(op, [sp.clock]);
         break;
       case 'toClockOut':
@@ -17611,11 +17695,12 @@ function pkBuildParkCabinet(px, py, pz, ry) {
         break;
       case 'clockOut':
         if (op.t < 1.2) return;
-        op.clocked = false; screenDirtyAll(); a.boothDoor.want = 1; op.pose = 'idle';
+        op.clocked = false; screenDirtyAll(); pkOpDoor(a).want = 1; op.pose = 'idle';
         op.state = 'leave'; pkOpWalkThrough(op, [sp.inn, sp.out, sp.foot]);
+        if (sp.pre) op.path = op.path.concat(route(sp.foot, sp.pre[sp.pre.length - 1]), sp.pre.slice(0, -1).reverse());   // back the way they came up
         break;
       case 'leave':
-        a.boothDoor.want = 0; op.last = a; op.ride = null;
+        pkOpDoor(a).want = 0; op.last = a; op.ride = null;
         if (op.going) { op.state = 'home'; pkOpGo(op, PK_OP_HOME); return; }
         if (Math.random() < 0.4) { op.state = 'toBreak'; var bb = PK_OP_BREAKS[Math.floor(Math.random() * PK_OP_BREAKS.length)]; pkOpGo(op, { x: bb[0], z: bb[1] }); }
         else op.state = 'pick';
@@ -17661,7 +17746,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   var _pkOpMigrate = GAME.migrate;
   GAME.migrate = function (s) { s = _pkOpMigrate ? _pkOpMigrate(s) : s; if (s.operator && typeof s.operators !== 'number') { s.operators = 1; s.auto = true; } return s; };
   var _pkOpT = GAME.T;
-  GAME.T = function () { var t = _pkOpT(); t.PK_OPS = PK_OPS; t.pkOpTick = pkOpTick; t.pkOpMake = pkOpMake; t.pkOpRemove = pkOpRemove; t.pkOpCount = pkOpCount; return t; };
+  GAME.T = function () { var t = _pkOpT(); t.PK_OPS = PK_OPS; t.pkOpTick = pkOpTick; t.pkOpMake = pkOpMake; t.pkOpRemove = pkOpRemove; t.pkOpCount = pkOpCount; t.pkOpSpots = pkOpSpots; t.pkOpCanWork = pkOpCanWork; t.route = route; return t; };
   // plays its wordmark for a beat once the made-with splash (Co Engine 89-splash) hands the screen over — 1.6 s, then it
   // fades into the start screen. With no #co-splash on the page (an older engine), it still fades at boot, the way it
   // always did. The bar and the tips animate on transform/opacity only, so the compositor keeps them moving while the
@@ -18431,8 +18516,10 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     // the desk under the window with the two consoles, the chair, the CCTV over the right end, the ride cabinet
     var desk = new THREE.Group(); desk.position.set(-0.75, BF, BZ0 + 0.5); g.add(desk); pkBkDesk(desk, 5.3);
     pkTheaterDesk(a, g, BF, BZ0);
-    pkBkChair(g, -1.2, BZ0 + 1.75, Math.PI, BF);
-    pkBkMonitors(a, g, 1.3, BF + 1.95, BZ0 + 0.42, 0, 0.27);
+    // a chair at each console (SHOW at x -2.15, STAGE at -0.35), and the two CCTV screens on one bracket, each hung over
+    // the middle of its console
+    pkBkChair(g, -2.15, BZ0 + 1.75, Math.PI, BF); pkBkChair(g, -0.35, BZ0 + 1.75, Math.PI, BF);
+    pkBkMonitors(a, g, -1.25, BF + 1.95, BZ0 + 0.42, 0, 0.9);
     pkBkCabinet(a, g, BX - 0.18, BF + 1.35, BZ0 + 3.0, -Math.PI / 2);
     pkTheaterWallScreens(a, g, BF, BZ0, BX);
 
@@ -20346,22 +20433,38 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       var s = trNearestS(d.x, d.z), o = trSamp(TR.main, s, {}), g = trFrameGroup(o.x, o.z, o.yaw), dyn = trDyn(g);
       var X = { id: d.id, s: s, x: o.x, z: o.z, yaw: o.yaw, dx: o.dx, dz: o.dz, g: g, poles: [], leds: [], lanes: d.lanes, road: d.road, up: 0, active: false, beepT: 0, flip: 0, hold: false };
       // the crossing deck: planks between and beside the rails
-      box(3.4, 0.07, d.road ? 8.4 : 3.6, M.deck, 0, 0.085, 0, g);
-      // a sleeper-and-sand apron at each side
+      box(2 * (Math.max.apply(null, d.lanes.map(Math.abs)) + (d.road ? 1.5 : 1.0)), 0.07, 3.4, M.deck, 0, 0.085, 0, g);   // the whole road's width along the line, 3.4 across the rails
+      // each side of the line: a barrier post at the road's edge (opposite corners, as half barriers stand) with a striped
+      // boom that stands upright while the crossing is open and comes down level across the road when it closes; and a
+      // signal mast outside the road's edge facing the road on that side: the St Andrew's cross over two red lights that
+      // flash in turn on a black backplate, and the bell on top. (Local x runs along the line, z along the road.)
+      var edge = Math.max.apply(null, d.lanes.map(Math.abs)) + (d.road ? 1.5 : 1.0), lampM = std({ color: 0x3a0a08, roughness: 0.3 });
+      var crossTex = tex(256, 64, function (c, W, H) { c.fillStyle = '#c8222a'; c.fillRect(0, 0, W, H); c.fillStyle = '#ffffff'; c.fillRect(8, 8, W - 16, H - 16); c.fillStyle = '#c8222a'; c.fillRect(20, 20, W - 40, H - 40); c.fillStyle = '#ffffff'; c.fillRect(26, 26, W - 52, H - 52); });
+      var crossM = std({ map: crossTex, roughness: 0.5 });
+      X.booms = [];
       [-1, 1].forEach(function (side) {
-        d.lanes.forEach(function (lane) {
-          var pole = new THREE.Group(); pole.position.set(lane, -1.35, side * 2.5); dyn.add(pole);
-          var p = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 1.4, 12), strip); p.position.y = 0.7; p.castShadow = true; pole.add(p);
-          sphere(0.1, M.iron, 0, 1.43, 0, pole);
-          var led = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), M.led); led.position.set(0, 1.3, side * -0.07); pole.add(led); led.userData.noBake = true;
-          X.poles.push(pole); X.leds.push({ m: led, phase: (side > 0 ? 0 : 1) });
+        var px = side * (edge + 0.35), pz = side * 2.7, L = 2 * edge + 0.1;
+        // the barrier post: a cabinet on a plinth, white with a black band, the boom's pivot on top
+        pkBevelBox(0.5, 0.25, 0.5, M.iron, px, 0.12, pz, g, 0.02);
+        pkBevelBox(0.38, 1.05, 0.38, M.white, px, 0.75, pz, g, 0.03); box(0.4, 0.14, 0.4, M.black, px, 0.95, pz, g);
+        var piv = new THREE.Group(); piv.position.set(px, 1.12, pz); dyn.add(piv);
+        var dirX = -side;                                                  // the boom reaches across the road
+        box(L, 0.1, 0.1, strip, dirX * L / 2, 0, 0, piv);
+        box(L * 0.6, 0.05, 0.05, M.iron, dirX * L * 0.3, -0.09, 0, piv);
+        box(0.5, 0.18, 0.2, M.iron, -dirX * 0.3, 0, 0, piv);               // the counterweight behind the pivot
+        [0.25, 0.6, 0.95].forEach(function (f, k) { var bl = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), M.led); bl.position.set(dirX * L * f, 0.08, 0); piv.add(bl); bl.userData.noBake = true; X.leds.push({ m: bl, phase: k % 2 }); });
+        piv.rotation.z = -side * Math.PI / 2;                                // open: standing up
+        X.booms.push({ g: piv, side: side });
+        // the signal mast
+        var mast = new THREE.Group(); mast.position.set(side * (edge + 1.4), 0, side * 3.4); mast.rotation.y = side > 0 ? 0 : Math.PI; g.add(mast);
+        pkRoundCyl(0.07, 3.6, M.iron, 0, 1.8, 0, mast, 8); pkBevelBox(0.4, 0.2, 0.4, M.iron, 0, 0.1, 0, mast, 0.02);
+        [-1, 1].forEach(function (r) { var bd = box(1.25, 0.24, 0.03, crossM, 0, 3.15, 0.08, mast); bd.rotation.z = r * Math.PI / 4; });
+        pkBevelBox(0.9, 0.42, 0.06, M.black, 0, 2.35, 0.06, mast, 0.02);
+        [-0.24, 0.24].forEach(function (lx, k) {
+          var lens = new THREE.Mesh(new THREE.CircleGeometry(0.13, 18), M.led); lens.position.set(lx, 2.35, 0.1); mast.add(lens); lens.userData.noBake = true; X.leds.push({ m: lens, phase: k });
+          var hood = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.16, 16, 1, true, -Math.PI / 2, Math.PI), M.black); hood.rotation.x = Math.PI / 2; hood.position.set(lx, 2.37, 0.16); mast.add(hood);
         });
-        // the signal mast: a cross-buck, two LED lenses and the horn, either side of the road
-        var mast = new THREE.Group(); mast.position.set(d.lanes[d.lanes.length - 1] + 1.9, 0, side * 3.3); g.add(mast);
-        pkRoundCyl(0.06, 3.1, M.iron, 0, 1.55, 0, mast, 8);
-        var bx = box(0.14, 0.9, 0.9, M.white, 0, 2.55, 0, mast); bx.rotation.x = 0;
-        [-0.25, 0.25].forEach(function (zz, k) { var lens = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), M.led); lens.position.set(0.08, 2.55, zz); mast.add(lens); lens.userData.noBake = true; X.leds.push({ m: lens, phase: k }); });
-        box(0.04, 0.6, 0.6, M.red, 0.075, 2.55, 0, mast);
+        pkRoundCyl(0.12, 0.14, M.black, 0, 3.72, 0, mast, 12); sphere(0.08, M.iron, 0, 3.82, 0, mast);     // the bell
       });
       TR.xing.push(X);
     });
@@ -20644,35 +20747,146 @@ function pkBuildParkCabinet(px, py, pz, ry) {
 
   // ── The depot ─────────────────────────────────────────────────────
   function trBuildDepot() {
-    var M = trMats(), P = pkMats(), zc = TR.N - 12, D = TR.depot = { x0: 28, x1: 92, z: zc, bays: {} };
-    pkSlab(70, 14.4, 60, zc, 0.02, std({ color: 0x6d6a64, roughness: 0.95 }));
-    pkBevelBox(70, 5.2, 0.5, P.cream, 60, 2.6, zc - 7.2, scene, 0.05);
-    pkBevelBox(70, 1.2, 0.5, P.cream, 60, 0.6, zc + 7.2, scene, 0.05); pkBevelBox(70, 0.9, 0.5, P.cream, 60, 4.75, zc + 7.2, scene, 0.05);
-    for (var px = 26; px <= 94; px += 4.25) box(0.4, 3.6, 0.5, M.woodD, px, 3.0, zc + 7.2, scene);
-    for (var wx = 28.1; wx < 94; wx += 4.25) { plane(3.2, 2.7, P.pane, wx + 1.9, 2.95, zc + 6.94, 0, Math.PI, scene); }
-    pkBevelBox(0.5, 5.2, 14.4, P.cream, 25.2, 2.6, zc, scene, 0.05); pkBevelBox(0.5, 5.2, 14.4, P.cream, 94.8, 2.6, zc, scene, 0.05);
-    pkGableRoof(70, 15, 3.2, P.slate, P.cream, 60, 5.2, zc, scene, 0.6);
-    pkBevelBox(0.7, 1.4, 4.0, P.stoneDark, 25.1, 4.5, zc, scene, 0.05); pkBevelBox(0.7, 1.4, 4.0, P.stoneDark, 94.9, 4.5, zc, scene, 0.05);
-    sign(['LINDENBURG RAILWAY', 'LOCOMOTIVE DEPOT'], 6.4, 1.0, 60, 6.2, zc + 7.55, 0, { w: 640, h: 100, bg: '#12301f', fg: '#f2e6b8' }, scene);
-    box(14, 0.05, 0.9, std({ color: 0x0a0b0c, roughness: 1 }), 59, 0.075, zc);
-    for (var gx = 52.5; gx < 66; gx += 0.9) box(0.08, 0.04, 0.9, M.iron, gx, 0.115, zc);
-    [zc - 5.5, zc + 5.5].forEach(function (zz) { pkBevelBox(0.35, 5, 0.35, M.iron, 59, 2.5, zz, scene, 0.03); });
-    box(0.4, 0.45, 11.6, pkPaint(0xe3a02e, 0.5, 0.4), 59, 4.8, zc, scene); var hoist = box(0.9, 0.5, 0.9, M.iron, 59, 4.35, zc - 1.5, scene); pkRod(59, 4.1, zc - 1.5, 59, 3.0, zc - 1.5, 0.02, M.iron, scene, 4);
-    pkBevelBox(4.4, 2.6, 2.4, M.stoneDark, 40, 1.3, zc - 5.6, scene, 0.05); for (var c = 0; c < 9; c++) sphere(0.5 + (c % 3) * 0.12, M.coal, 38.6 + (c % 4) * 0.95, 2.7 + (c % 2) * 0.2, zc - 5.6 + ((c * 3) % 5 - 2) * 0.3, scene);
-    box(0.6, 0.12, 2.6, M.iron, 40, 2.4, zc - 3.4, scene).rotation.x = 0.5;
-    pkRoundCyl(0.12, 4.0, M.iron, 45, 2.0, zc + 3.3, scene, 10); pkRod(45, 3.9, zc + 3.3, 45, 3.5, zc + 1.2, 0.07, M.iron, scene, 8); pkRod(45, 3.5, zc + 1.2, 45, 2.3, zc + 1.2, 0.08, M.black, scene, 8);
-    [zc - 2.4, zc + 2.4].forEach(function (zz) { pkBevelBox(0.3, 3.8, 0.3, M.iron, 80, 1.9, zz, scene, 0.03); });
-    pkBevelBox(0.3, 0.3, 5.1, M.iron, 80, 3.8, zc, scene, 0.03);
-    D.brushes = []; [-1, 1].forEach(function (sd) { var br = trDyn(); br.position.set(80, 0, zc + sd * 1.9); pkRoundCyl(0.45, 2.6, pkPaint(0x2a7fd0, 0.9, 0), 0, 1.7, 0, br, 14); pkRoundCyl(0.05, 3.2, M.iron, 0, 1.7, 0, br, 6); D.brushes.push(br); });
-    D.spray = []; for (var n = 0; n < 8; n++) { var sp = new THREE.Mesh(new THREE.SphereGeometry(0.04, 4, 4), new THREE.MeshBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.8 })); sp.visible = false; sp.userData.noBake = true; scene.add(sp); D.spray.push(sp); }
-    function console3(x, label, cost, prompt, fn) {
-      pkBevelBox(0.9, 1.3, 0.5, pkPaint(0x3b4650, 0.5, 0.5), x, 0.65, zc + 5.9, scene, 0.03);
-      sign([label], 0.8, 0.2, x, 1.5, zc + 5.63, 0, { w: 256, h: 64, bg: '#1b232c', fg: '#f5b53d' }, scene);
-      hitBox(0.9, 1.4, 0.6, x, 0.7, zc + 5.7, { prompt: prompt, use: fn }, scene);
+    var M = trMats(), P = pkMats(), zc = TR.N - 12, D = TR.depot = { x0: 44, x1: 95.5, z: zc, bays: {} };
+    // The engine shed: a brick shed of two roads under a slate roof. The running road (the siding, z = zc) runs straight
+    // through it from x 42, so the shed stands on that straight; the second road beside it is a dead end with the depot's
+    // works van on it. Brick walls on a stone plinth, pilasters and tall arched windows, arched doorways at both ends with
+    // their timber doors folded open, roof lights and a smoke vent along the ridge; inside the iron trusses, enamel
+    // pendants, the inspection pit and the hoist, the wash bay, the benches, the lockers, the foreman's office.
+    var X0 = 44, X1 = 95.5, ZN = zc - 9, ZS = zc + 5, H = 7.2, R1 = zc, R2 = zc - 5, cx = (X0 + X1) / 2, cz = (ZN + ZS) / 2;
+    var brick = pkMatBrick(), stone = P.stone, dark = P.stoneDark, wood = M.woodD, iron = M.iron;
+    var glass = std({ color: 0x2a3b4a, roughness: 0.08, metalness: 0.6 }), white = pkPaint(0xf0ece2, 0.6, 0.05), green = pkPaint(0x1d5b3b, 0.5, 0.2);
+    var bayW = (X1 - X0) / 12;
+    // the floor: concrete, and stone setts between and beside the running road's rails
+    pkSlab(X1 - X0, ZS - ZN, cx, cz, 0.02, std({ color: 0x6d6a64, roughness: 0.95 }));
+    box(X1 - X0, 0.02, 1.9, std({ color: 0x55524d, roughness: 0.95, map: P.paverTex }), cx, 0.035, R1, scene);
+    // the long walls: a plinth, the brick, a pilaster at every bay, an arched window between, a cornice along the top
+    [[ZN, -1], [ZS, 1]].forEach(function (w) {
+      var z = w[0], o = w[1];
+      box(X1 - X0, H, 0.45, brick, cx, H / 2, z, scene); solid(X0, X1, z - 0.25, z + 0.25, 0, H);
+      box(X1 - X0 + 0.1, 0.9, 0.62, stone, cx, 0.45, z, scene);
+      box(X1 - X0 + 0.2, 0.3, 0.7, stone, cx, H - 0.1, z, scene);
+      for (var b = 0; b <= 12; b++) box(0.6, H - 0.9, 0.75, brick, X0 + b * bayW, 0.9 + (H - 0.9) / 2, z, scene);
+      for (var bw = 0; bw < 12; bw++) {
+        var wx = X0 + (bw + 0.5) * bayW;
+        box(1.7, 2.8, 0.5, glass, wx, 3.6, z, scene);                                                  // the glass, both faces
+        [-1, 1].forEach(function (f) {
+          var fz = z + f * 0.26;
+          var head = new THREE.Mesh(new THREE.CircleGeometry(0.85, 16, 0, Math.PI), glass); head.position.set(wx, 5.0, fz); head.rotation.y = f > 0 ? 0 : Math.PI; scene.add(head);
+          var arc = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.12, 6, 18, Math.PI), stone); arc.position.set(wx, 5.0, fz); arc.rotation.y = f > 0 ? 0 : Math.PI; scene.add(arc);
+          box(0.05, 2.8, 0.03, white, wx, 3.6, fz, scene); [2.7, 3.6, 4.5].forEach(function (y) { box(1.7, 0.04, 0.03, white, wx, y, fz, scene); });
+          box(2.0, 0.16, 0.12, stone, wx, 2.16, fz, scene);                                            // the sill
+        });
+      }
+    });
+    // the gable ends: brick walls with an arched doorway over each road, a stone surround, the doors folded open outside
+    function gableEnd(x, out) {
+      var sh = new THREE.Shape(); sh.moveTo(ZN - 0.3, 0); sh.lineTo(ZS + 0.3, 0); sh.lineTo(ZS + 0.3, H); sh.lineTo(ZN - 0.3, H); sh.closePath();
+      [R1, R2].forEach(function (rz) { var hp = new THREE.Path(), r = 2.2, sp = 4.6; hp.moveTo(rz - r, 0); hp.lineTo(rz - r, sp); hp.absarc(rz, sp, r, Math.PI, 0, true); hp.lineTo(rz + r, 0); hp.closePath(); sh.holes.push(hp); });
+      var geo = new THREE.ExtrudeGeometry(sh, { depth: 0.5, bevelEnabled: false, curveSegments: 18 }), uv = geo.attributes.uv;
+      for (var i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / 4, uv.getY(i) / 4);
+      var m = new THREE.Mesh(geo, brick); m.rotation.y = -Math.PI / 2; m.position.set(x + 0.25, 0, 0); m.castShadow = true; m.receiveShadow = true; scene.add(m);
+      [R1, R2].forEach(function (rz) {
+        var ring = new THREE.Mesh(new THREE.TorusGeometry(2.38, 0.2, 6, 20, Math.PI), stone); ring.rotation.y = Math.PI / 2; ring.position.set(x + out * 0.28, 4.6, rz); scene.add(ring);
+        box(0.6, 1.2, 0.4, dark, x + out * 0.2, 0.6, rz - 2.45, scene); box(0.6, 1.2, 0.4, dark, x + out * 0.2, 0.6, rz + 2.45, scene);
+        // the doors: two timber leaves on the jambs, stood open square to the wall (the doorways are too close together
+        // for the leaves to fold back flat), strapped in iron
+        [-1, 1].forEach(function (s) {
+          var lz = rz + s * 2.32, lx = x + out * (0.3 + 1.1);
+          box(2.2, 4.4, 0.12, green, lx, 2.2, lz, scene);
+          [0.6, 2.2, 3.8].forEach(function (y) { box(2.2, 0.14, 0.04, iron, lx, y, lz + s * 0.07, scene); });
+          for (var pl = -0.9; pl <= 0.91; pl += 0.3) box(0.02, 4.3, 0.02, pkPaint(0x174a30, 0.6, 0.1), lx + pl, 2.2, lz + s * 0.065, scene);
+          solid(lx - 1.1, lx + 1.1, lz - 0.08, lz + 0.08, 0, 4.4);
+        });
+      });
+      // the solid wall between and outside the doorways stops the player
+      [[ZN - 0.3, R2 - 2.2], [R2 + 2.2, R1 - 2.2], [R1 + 2.2, ZS + 0.3]].forEach(function (seg) { solid(x - 0.25, x + 0.25, seg[0], seg[1], 0, H); });
     }
-    console3(38, 'COAL + WATER', 0, function () { return trInDepot() ? 'Fill up coal and water' + trFillCost() : 'Bring the train into the depot first'; }, function () { trDoFill(); });
-    console3(60, 'SERVICE', 0, function () { return trInDepot() ? 'Service the train - ' + trServiceCost() : 'Bring the train into the depot first'; }, function () { trDoService(); });
-    console3(80, 'WASH', 0, function () { return trInDepot() ? 'Wash the train ($30)' : 'Bring the train into the depot first'; }, function () { trDoWash(); });
+    gableEnd(X0, -1); gableEnd(X1, 1);
+    // the roof: slate on brick gables, a run of roof lights down each slope, the smoke vent along the ridge
+    var hd = (ZS - ZN) / 2 + 0.7, rise = 3.6, a = Math.atan2(rise, hd);
+    pkGableRoof(X1 - X0 + 0.8, ZS - ZN + 1.4, rise, P.slate, brick, cx, H, cz, scene, 0.5);
+    [-1, 1].forEach(function (s) {
+      for (var rl = X0 + 4; rl < X1 - 3; rl += 6.5) {
+        var gl = box(3.0, 0.04, 2.4, std({ color: 0x9fc6d8, roughness: 0.1, metalness: 0.4 }), rl, H + rise * 0.5 + 0.2, cz + s * hd * 0.5, scene); gl.rotation.x = s * a;
+      }
+    });
+    box(X1 - X0 - 4, 1.0, 1.6, brick, cx, H + rise + 0.2, cz, scene);
+    for (var lv = X0 + 2.5; lv < X1 - 2.4; lv += 0.6) [-1, 1].forEach(function (s) { var lb = box(0.5, 0.06, 0.04, iron, lv, H + rise + 0.25, cz + s * 0.82, scene); lb.rotation.x = s * 0.5; });
+    pkGableRoof(X1 - X0 - 3.4, 2.2, 0.6, P.slate, brick, cx, H + rise + 0.7, cz, scene, 0.2);
+    // the name and the date over the east doors
+    sign(['LINDENBURG RAILWAY', 'LOCOMOTIVE DEPOT'], 7.6, 1.1, X1 + 0.32, H + 1.5, cz, Math.PI / 2, { w: 760, h: 110, bg: '#12301f', fg: '#f2e6b8' }, scene);
+    var ds = new THREE.Mesh(new THREE.CircleGeometry(0.55, 24), stone); ds.rotation.y = Math.PI / 2; ds.position.set(X1 + 0.31, H + 2.9, cz); scene.add(ds);
+    sign(['1904'], 0.7, 0.3, X1 + 0.33, H + 2.9, cz, Math.PI / 2, { w: 160, h: 64, bg: '#b8ae9c', fg: '#3a3026', plate: false }, scene);
+    // inside: the iron trusses, a pendant lamp over each road at every other bay
+    for (var tb = 1; tb < 12; tb++) {
+      var tx = X0 + tb * bayW;
+      pkRod(tx, H, ZN + 0.3, tx, H, ZS - 0.3, 0.05, iron, scene, 6);
+      pkRod(tx, H, ZN + 0.3, tx, H + rise - 0.3, cz, 0.07, iron, scene, 6); pkRod(tx, H, ZS - 0.3, tx, H + rise - 0.3, cz, 0.07, iron, scene, 6);
+      pkRod(tx, H, cz, tx, H + rise - 0.3, cz, 0.04, iron, scene, 6);
+      if (tb % 2 === 1) [R1, R2].forEach(function (rz) {
+        pkRod(tx, H, rz, tx, 5.6, rz, 0.012, iron, scene, 4);
+        var shade = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.3, 16, 1, true), std({ color: 0x1d5b3b, roughness: 0.5, side: THREE.DoubleSide })); shade.position.set(tx, 5.45, rz); scene.add(shade);
+        sphere(0.12, glowMat(0xfff0c8, 1.2), tx, 5.32, rz, scene);
+      });
+    }
+    // the inspection pit under the running road, the hoist over it
+    box(14, 0.05, 0.9, std({ color: 0x0a0b0c, roughness: 1 }), 59, 0.075, R1);
+    for (var gx = 52.5; gx < 66; gx += 0.9) box(0.08, 0.04, 0.9, iron, gx, 0.115, R1);
+    [R1 - 2.7, R1 + 2.7].forEach(function (zz) { pkBevelBox(0.35, 6.2, 0.35, iron, 59, 3.1, zz, scene, 0.03); });
+    box(0.4, 0.45, 5.8, pkPaint(0xe3a02e, 0.5, 0.4), 59, 6.1, R1, scene); box(0.9, 0.5, 0.9, iron, 59, 5.65, R1 - 1.0, scene); pkRod(59, 5.4, R1 - 1.0, 59, 4.2, R1 - 1.0, 0.02, iron, scene, 4);
+    // the wash bay: a portal over the running road at x 80, its two brushes and the spray (the wash in part 43 runs them)
+    [R1 - 2.4, R1 + 2.4].forEach(function (zz) { pkBevelBox(0.3, 3.8, 0.3, iron, 80, 1.9, zz, scene, 0.03); });
+    pkBevelBox(0.3, 0.3, 5.1, iron, 80, 3.8, R1, scene, 0.03);
+    D.brushes = []; [-1, 1].forEach(function (sd) { var br = trDyn(); br.position.set(80, 0, R1 + sd * 1.9); pkRoundCyl(0.45, 2.6, pkPaint(0x2a7fd0, 0.9, 0), 0, 1.7, 0, br, 14); pkRoundCyl(0.05, 3.2, iron, 0, 1.7, 0, br, 6); D.brushes.push(br); });
+    D.spray = []; for (var n = 0; n < 8; n++) { var sp = new THREE.Mesh(new THREE.SphereGeometry(0.04, 4, 4), new THREE.MeshBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.8 })); sp.visible = false; sp.userData.noBake = true; scene.add(sp); D.spray.push(sp); }
+    // the second road: a dead end with a buffer stop, the depot's works van standing on it
+    for (var sl = X0 + 0.6; sl < X1 - 2.5; sl += 0.7) box(1.6, 0.08, 0.22, wood, sl, 0.06, R2, scene);
+    [-0.56, 0.56].forEach(function (o) { box(X1 - X0 - 3, 0.12, 0.07, iron, (X0 + X1 - 2.4) / 2, 0.16, R2 + o, scene); });
+    pkBevelBox(0.5, 1.0, 2.2, pkPaint(0x8e2a22, 0.6, 0.2), X1 - 2.2, 0.5, R2, scene, 0.04); box(0.12, 0.3, 2.3, pkStripes('#f0c04a', '#1b1b1b'), X1 - 2.45, 0.9, R2, scene);
+    var van = new THREE.Group(); van.position.set(64, 0, R2); scene.add(van);
+    pkBevelBox(5.2, 0.18, 1.9, iron, 0, 0.8, 0, van, 0.02);
+    pkBevelBox(5.0, 2.2, 2.1, pkPaint(0x6a2a22, 0.7, 0.1), 0, 2.0, 0, van, 0.04);
+    var vr = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, 5.1, 20, 1, false, -0.42, 0.84), pkPaint(0x3a3d40, 0.7, 0.2)); vr.rotation.z = Math.PI / 2; vr.rotation.y = 0; vr.geometry.rotateX(-Math.PI / 2); vr.position.set(0, 0.62, 0); van.add(vr);
+    [-1, 1].forEach(function (s) { box(1.2, 1.8, 0.04, pkPaint(0x5a2420, 0.7, 0.1), 0, 1.95, s * 1.07, van); sign(['WORKS No. 2'], 1.4, 0.24, -1.5, 2.6, s * 1.08, s > 0 ? 0 : Math.PI, { w: 256, h: 44, bg: '#6a2a22', fg: '#f2e6b8', plate: false }, van); });
+    [-1.6, 1.6].forEach(function (wx) { [-1, 1].forEach(function (s) { var wh = trWheel(0.4, M.black, M.black, van, wx, 0.5, s * 0.72, 6); }); });
+    [-1, 1].forEach(function (e) { [-0.6, 0.6].forEach(function (z) { var bf = pkRoundCyl(0.09, 0.2, iron, e * 2.65, 0.9, z, van, 8); bf.rotation.z = Math.PI / 2; }); });
+    solid(61.3, 66.7, R2 - 1.1, R2 + 1.1, 0, 3.2);
+    // along the north wall: benches with vices, a tool board over each, lockers at the east end, a wheelset on its stands
+    for (var bx = 50; bx <= 80; bx += 10) {
+      pkBevelBox(2.6, 0.08, 0.8, wood, bx, 0.92, ZN + 0.75, scene, 0.02); [-1.2, 1.2].forEach(function (lx) { box(0.07, 0.9, 0.7, iron, bx + lx, 0.45, ZN + 0.75, scene); });
+      box(0.2, 0.18, 0.2, iron, bx + 0.9, 1.05, ZN + 1.0, scene); pkRod(bx + 0.9, 1.1, ZN + 1.1, bx + 0.9, 1.1, ZN + 1.35, 0.015, iron, scene, 6);
+      box(2.4, 1.2, 0.04, pkPaint(0xd8c9a8, 0.8, 0.05), bx, 1.9, ZN + 0.26, scene);
+      for (var tl = 0; tl < 7; tl++) box(0.04, 0.2 + (tl % 3) * 0.1, 0.03, iron, bx - 1.0 + tl * 0.33, 1.9, ZN + 0.29, scene);
+      solid(bx - 1.3, bx + 1.3, ZN + 0.3, ZN + 1.2, 0, 1.0);
+    }
+    for (var lk = 0; lk < 6; lk++) pkBevelBox(0.55, 1.9, 0.5, pkPaint(0x2f4a62, 0.5, 0.4), 86 + lk * 0.6, 0.95, ZN + 0.55, scene, 0.02);
+    solid(85.6, 89.6, ZN + 0.25, ZN + 0.85, 0, 1.9);
+    [70.2, 71.8].forEach(function (sx) { pkRoundCyl(0.06, 0.6, iron, sx, 0.3, ZN + 2.2, scene, 6); });
+    var ws = new THREE.Group(); ws.position.set(71, 0.82, ZN + 2.2); scene.add(ws); ws.rotation.y = Math.PI / 2;
+    [-0.6, 0.6].forEach(function (z) { trWheel(0.55, M.black, M.black, ws, 0, 0, z, 8); }); pkRoundCyl(0.06, 1.4, iron, 0, 0, 0, ws, 8).rotation.x = Math.PI / 2;
+    // oil drums, fire buckets on the south wall, the service consoles along it
+    [[74, ZS - 0.8], [74.8, ZS - 0.7], [74.4, ZS - 1.4]].forEach(function (d, i) { pkRoundCyl(0.3, 0.88, pkPaint([0x2a5a8a, 0x8a2a22, 0x2a6a3a][i], 0.6, 0.3), d[0], 0.44, d[1], scene, 14); });
+    for (var fb = 0; fb < 4; fb++) { pkRoundCyl(0.13, 0.3, pkPaint(0xc8322a, 0.5, 0.2), 50 + fb * 0.45, 1.5, ZS - 0.35, scene, 10); box(0.02, 0.06, 0.02, iron, 50 + fb * 0.45, 1.7, ZS - 0.3, scene); }
+    sign(['FIRE'], 1.6, 0.25, 50.7, 2.0, ZS - 0.24, Math.PI, { w: 256, h: 40, bg: '#c8322a', fg: '#ffffff', plate: false }, scene);
+    function console3(x, label, prompt, fn) {
+      pkBevelBox(0.9, 1.3, 0.5, pkPaint(0x3b4650, 0.5, 0.5), x, 0.65, R1 + 3.9, scene, 0.03);
+      sign([label], 0.8, 0.2, x, 1.5, R1 + 3.63, Math.PI, { w: 256, h: 64, bg: '#1b232c', fg: '#f5b53d' }, scene);
+      hitBox(0.9, 1.4, 0.6, x, 0.7, R1 + 3.75, { prompt: prompt, use: fn }, scene);
+      solid(x - 0.45, x + 0.45, R1 + 3.65, R1 + 4.15, 0, 1.3);
+    }
+    console3(56, 'COAL + WATER', function () { return trInDepot() ? 'Fill up coal and water' + trFillCost() : 'Bring the train into the depot first'; }, function () { trDoFill(); });
+    console3(66, 'SERVICE', function () { return trInDepot() ? 'Service the train - ' + trServiceCost() : 'Bring the train into the depot first'; }, function () { trDoService(); });
+    console3(83, 'WASH', function () { return trInDepot() ? 'Wash the train ($30)' : 'Bring the train into the depot first'; }, function () { trDoWash(); });
+    // the foreman's office in the south-west corner: a timber room glazed above the waist
+    var ox0 = 45, ox1 = 49.5, oz0 = R1 + 2.6, oz1 = ZS - 0.25;
+    box(ox1 - ox0, 1.1, 0.1, green, (ox0 + ox1) / 2, 0.55, oz0, scene); box(ox1 - ox0, 1.2, 0.04, glass, (ox0 + ox1) / 2, 1.7, oz0, scene); box(ox1 - ox0, 0.6, 0.1, green, (ox0 + ox1) / 2, 2.6, oz0, scene);
+    box(0.1, 2.9, oz1 - oz0, green, ox1, 1.45, (oz0 + oz1) / 2, scene); box(ox1 - ox0 + 0.2, 0.1, oz1 - oz0 + 0.2, wood, (ox0 + ox1) / 2, 2.95, (oz0 + oz1) / 2, scene);
+    pkBevelBox(1.4, 0.06, 0.7, wood, 46.6, 0.85, oz1 - 0.5, scene, 0.02); box(0.5, 0.35, 0.03, pkPaint(0x1b232c, 0.5, 0.2), 46.6, 1.1, oz1 - 0.75, scene);
+    sign(['FOREMAN'], 1.1, 0.2, (ox0 + ox1) / 2, 2.45, oz0 - 0.06, Math.PI, { w: 256, h: 48, bg: '#12301f', fg: '#f2e6b8' }, scene);
+    solid(ox0, ox1, oz0 - 0.05, oz0 + 0.05, 0, 2.9); solid(ox1 - 0.05, ox1 + 0.05, oz0, oz1, 0, 2.9);
+    // the yard outside each end: a concrete apron
+    pkSlab(10, 16, X1 + 5, cz, 0.018, std({ color: 0x6d6a64, roughness: 0.95 })); pkSlab(8, 16, X0 - 4, cz, 0.018, std({ color: 0x6d6a64, roughness: 0.95 }));
     var wt = new THREE.Group(); wt.position.set(104, 0, zc - 20); scene.add(wt);
     [[-1.4, -1.4], [1.4, -1.4], [-1.4, 1.4], [1.4, 1.4]].forEach(function (p) { pkRod(p[0], 0, p[1], p[0] * 0.8, 6, p[1] * 0.8, 0.12, M.woodD, wt, 8); });
     pkRoundCyl(2.2, 3.4, M.woodD, 0, 7.7, 0, wt, 20); trCone(2.5, 1.8, M.slateRed, 0, 10.2, 0, wt, 20);
@@ -21663,7 +21877,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     ['horn', 'whistle'].forEach(function (kd) { var key = kd + 'Auto'; if (t[key] > 0) { t[key] -= dt; if (t[key] <= 0 && !(kd === 'horn' ? t.hornKey : t.whistleKey)) { trVoice(kd, false); t[kd === 'horn' ? 'hornOn' : 'whistleOn'] = false; } } });
     if (R.auto) trAuto(dt);
     // the speed limit and the safety system (ATB)
-    if (t.v < 0.2) { if (t.cutoff > 0.01) t.dir = 1; else if (t.cutoff < -0.01) t.dir = -1; }   // the reverser sets which way she goes
+    if (t.v < 0.2 && !t.towed) { if (t.cutoff > 0.01) t.dir = 1; else if (t.cutoff < -0.01) t.dir = -1; }   // the reverser sets which way she goes (on tow, the tug does)
     var lim = trCurveLimit(t.s, t.mode), want = trBrakeTick(dt), thr = t.throttle; t.atb = '';
     if (R.wear > 80) lim = Math.min(lim, 5);
     if (t.mode === 'D') lim = Math.min(lim, 4);
@@ -21674,13 +21888,17 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var thrust = trTractive(thr, dt);
     var drag = 0.012 * t.v + (t.v > 0.02 ? 0.05 : 0);
     var a = thrust - drag - want * 3.0 * (t.v > 0.02 ? 1 : 0);
-    t.v = Math.max(0, Math.min(11, t.v + a * dt)); if (want >= 0.99 && thrust < 0.05 && t.v < 0.08) t.v = 0;
+    // on tow (part 47) the tug sets her speed and direction, her own engine and brakes are out of it
+    if (!t.towed) { t.v = Math.max(0, Math.min(11, t.v + a * dt)); if (want >= 0.99 && thrust < 0.05 && t.v < 0.08) t.v = 0; }
     var ds = t.v * dt * t.dir, prev = t.s; t.s += ds;
     // the loop, the points, the depot loop
     var L = trLoopLen(t.mode); if (t.s >= L) { t.s -= L; R.laps++; } else if (t.s < 0) t.s += L;
     if (t.mode === 'M' && ds > 0 && prev < TR.sJ1 && t.s >= TR.sJ1) { if (R.points === 'depot') t.mode = 'D'; }
     if (t.mode === 'D' && ds > 0 && t.s - TR.len > TR.sJ1 + TR.byp.L) { t.mode = 'M'; t.s -= TR.dL; R.points = 'main'; }
     if (t.mode === 'D' && ds < 0 && t.s < TR.sJ1) { t.mode = 'M'; }
+    // backing up the main line into the east end of the siding, points set to the depot: she switches when her last wagon
+    // (leading, going backwards) crosses the junction
+    if (t.mode === 'M' && ds < 0 && R.points === 'depot' && prev - TR.len >= TR.sJ2 && t.s - TR.len < TR.sJ2) { t.mode = 'D'; t.s += TR.dL; }
     // fuel, water, wear, dirt
     var run = Math.abs(ds);
     R.wear = Math.min(100, R.wear + run * 0.004); R.dirt = Math.min(100, R.dirt + run * 0.006);
@@ -21801,8 +22019,10 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       var X = TR.xing[i], act = false, p;
       for (j = 0; j < TR.units.length && !act; j++) { p = TR.units[j].g.position; if (Math.hypot(p.x - X.x, p.z - X.z) < 8.5) act = true; }
       if (!act && t.v > 0.3) for (k = 0; k < 8 && !act; k++) { var pp = trPos(t.s + t.dir * (k * 12 + 2), t.mode, _trA); if (Math.hypot(pp.x - X.x, pp.z - X.z) < 6) act = true; }
+      // TOW-1 (part 47) closes a crossing too: standing on it, or running toward it
+      var tg = TR.tugRef; if (!act && tg && tg.built && tg.g) { var tq = tg.g.position, td = Math.hypot(tq.x - X.x, tq.z - X.z); if (td < 7 || (Math.abs(tg.v) > 0.2 && td < 7 + Math.abs(tg.v) * 6)) act = true; }
       X.active = act; X.up += ((act ? 1 : 0) - X.up) * Math.min(1, dt * 1.6); if (Math.abs(X.up - (act ? 1 : 0)) < 0.01) X.up = act ? 1 : 0;
-      for (j = 0; j < X.poles.length; j++) X.poles[j].position.y = -1.35 + 1.35 * Math.min(1, X.up);
+      if (X.booms) X.booms.forEach(function (bm) { bm.g.rotation.z = -bm.side * (Math.PI / 2) * (1 - Math.min(1, X.up)); });   // up while open, level across the road when closed
       if (act) { X.flip += dt * 2.2; X.beepT -= dt; if (X.beepT <= 0 && X.up > 0.1) { X.beepT = 0.42; var hi = Math.floor(X.flip * 2) % 2 === 0; trTone('square', hi ? 1040 : 760, 0.18, 0.1, X.x, X.z, { lp: 2600 }); } }
       for (j = 0; j < X.leds.length; j++) { var on = act && X.up > 0.2 && ((Math.floor(X.flip * 2) + X.leds[j].phase) % 2 === 0); X.leds[j].m.material = on ? M.ledOn : M.led; }
       if (typeof traffic !== 'undefined' && traffic && traffic.cars && X.road) traffic.cars.forEach(function (c) {
@@ -21939,6 +22159,23 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       PK_3P.body.visible = false;
     }
     return result;
+  };
+
+  // ── Zoom in 1st person ─────────────────────────────────────────────
+  // The wheel narrows the view, up to four times closer, and back out to the field of view set in the settings. It takes
+  // the wheel only when nothing else wants it: not in 3rd person (on foot or on the train), not with the tablet up, and not
+  // while aiming at a screen that scrolls.
+  var PK_ZOOM = 1, _pkZoomPrevWheel = GAME.wheel;
+  GAME.wheel = function (dir, e) {
+    var tr = TR && TR.t, third = PK_3P.on || (tr && (tr.driving || tr.seat) && tr.thirdPerson);
+    var sc = typeof screenUnderCrosshair === 'function' ? screenUnderCrosshair() : null;
+    if (third || PK_TABLET.open || (sc && sc.scrollable) || !ui.started || ui.blocked()) {
+      if (PK_ZOOM !== 1 && third) { PK_ZOOM = 1; camera.fov = SET.fov; camera.updateProjectionMatrix(); }
+      return _pkZoomPrevWheel ? _pkZoomPrevWheel(dir, e) : false;
+    }
+    PK_ZOOM = clamp(PK_ZOOM * (dir < 0 ? 1.25 : 0.8), 1, 4); if (PK_ZOOM < 1.04) PK_ZOOM = 1;
+    camera.fov = 2 * Math.atan(Math.tan(SET.fov * Math.PI / 360) / PK_ZOOM) * 180 / Math.PI; camera.updateProjectionMatrix();
+    return true;
   };
 })();
   // the regulator, the steam manifold with its injector, blower and pump valves, the gauges), a Johnson bar, a straight-air brake
@@ -22459,7 +22696,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     if (d < 8 + m) return false;
     if (Math.abs(z - 76) < 7 + m) return false;
     for (var i = 0; i < PK_XP_STATIONS.length; i++) { var s = PK_XP_STATIONS[i]; if (Math.abs(x - s[0]) < 36 + m && Math.abs(z - s[1]) < 36 + m) return false; }
-    if (x > 8 - m && x < 112 + m && z > -172 - m && z < -120) return false;           // the depot and its siding
+    if (x > 8 - m && x < 132 + m && z > -172 - m && z < -120) return false;           // the depot, its siding and TOW-1's spur and bay (part 47)
     if (Math.abs(x + 17) < 6 + m && z < -120 && z > -158) return false;              // Windmill Halt's footpath out to the viewing platform
     return true;
   }
@@ -23194,6 +23431,2851 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   GAME.buildWorld = function (loaded) { var r = _pkXpPrevBuildWorld ? _pkXpPrevBuildWorld(loaded) : undefined; pkXpBuild(); return r; };
   var _pkXpPrevT = GAME.T;
   GAME.T = function () { var o = _pkXpPrevT(); o.pkXpKit = { stump: pkXpStump, logs: pkXpLogs, brush: pkXpBrush, spoil: pkXpSpoil, cabin: pkXpCabin, container: pkXpContainer, skip: pkXpSkip, toilet: pkXpToilet, pipes: pkXpPipes, beams: pkXpBeams, pallets: pkXpPallets, flood: pkXpFlood, worker: pkXpWorker, excavator: pkXpExcavator, truck: pkXpTruck, dozer: pkXpDozer, roller: pkXpRoller, mixer: pkXpMixer, harvester: pkXpHarvester, crane: pkXpCrane, crawler: pkXpCrawler, shell: pkXpShell, ride: pkXpRideSteel, fence: pkXpFenceRun, house: pkXpHouse }; o.PK_XP = PK_XP; o.pkXpRingD = pkXpRingD; o.pkXpFree = pkXpFree; o.pkXpBand = pkXpBand; return o; };
+(function () {
+  var TG = { built: false, mode: 'S', s: 0, v: 0, face: -1, dir: 0, ctlPos: 0, master: true, headOn: true, beaconOn: true, estop: false, amps: 0, driving: false, coupled: false, off: 0, bay: true, look: { yaw: 0, pitch: -0.12 },
+    batt: 100, beaconA: 0, scrT: 0, g: null, HL: 1.85 };
+  var TG_MAX = 4.5, TG_MAX_TOW = 2.2, TG_SPUR_X0 = 100;
+
+  // ── Where it runs ─────────────────────────────────────────────────
+  // The spur leaves the depot siding at x 100 (east of the shed) and swings 3.2 m north onto a straight that ends at a
+  // buffer stop. Its own coordinate runs from the junction (0) to the stop; below 0 the tug is back on the siding.
+  function tgBuildSpur() {
+    var P = TR.byp, bi = 0, best = 1e9;
+    for (var i = 0; i < P.n; i++) { var d = Math.abs(P.x[i] - TG_SPUR_X0); if (d < best) { best = d; bi = i; } }
+    TG.sJ = bi * P.ds;                                        // the junction on the siding, in the siding's own metres
+    var jx = P.x[bi], jz = P.z[bi], pts = [];
+    for (var x = jx; x <= jx + 26.01; x += 0.5) { var f = clamp((x - jx) / 16, 0, 1); f = f * f * (3 - 2 * f); pts.push([x, jz - 3.2 * f]); }
+    TR.spur = trResample(pts, false);
+  }
+  // the tug's place: on the spur ('S'), or on the railway in the train's own coordinates ('M' the main loop, 'D' through
+  // the depot). Off the spur's near end it is on the siding.
+  function tgSamp(mode, s, o) {
+    if (mode === 'S') { if (s < 0) return trPos(TR.sJ1 + TG.sJ + s, 'D', o); return trSamp(TR.spur, s, o); }
+    return trPos(s, mode, o);
+  }
+  // a position in one coordinate given in another, or null when there is no such place (the siding is not on the main)
+  function tgConv(s, from, to) {
+    if (from === to) return s;
+    if (from === 'S') { if (s >= 0) return null; s = TR.sJ1 + TG.sJ + s; from = 'D'; if (to === 'D') return s; }
+    if (from === 'M' && to === 'D') { if (s < TR.sJ1) return s; if (s > TR.sJ2) return s + TR.dL; return null; }
+    if (from === 'D' && to === 'M') { if (s < TR.sJ1) return s; if (s > TR.sJ1 + TR.byp.L) return s - TR.dL; return null; }
+    return null;
+  }
+  function tgWrap(d, mode) { var L = trLoopLen(mode); d = ((d % L) + L) % L; return d > L / 2 ? d - L : d; }
+  // the gaps to the train: ahead of her nose, and behind her tail (in the train's coordinates)
+  function tgGaps() {
+    var t = TR.t, ts = tgConv(TG.s, TG.mode, t.mode); if (ts === null) return null;
+    return { s: ts, nose: tgWrap(ts - TG.HL - t.s, t.mode), tail: tgWrap((t.s - TR.len) - (ts + TG.HL), t.mode) };
+  }
+  // coupled, the tug rides on the train: off metres from her nose, in her coordinates, crossing the points ahead of her
+  function tgFollow() {
+    var t = TR.t, R = trState(), s = t.s + TG.off, mode = t.mode;
+    if (mode === 'M' && R.points === 'depot') {
+      if (TG.off > 0 && t.s < TR.sJ1 && s >= TR.sJ1) mode = 'D';                                   // leading into the siding
+      else if (TG.off < 0 && t.s - TR.len >= TR.sJ2 && s < TR.sJ2) { mode = 'D'; s += TR.dL; }    // leading backwards into it
+    }
+    TG.mode = mode; TG.s = s;
+  }
+
+  // ── The model ─────────────────────────────────────────────────────
+  function tgScreen(w, h, pw, ph) {
+    var cv = document.createElement('canvas'); cv.width = w; cv.height = h; var tx = new THREE.CanvasTexture(cv);
+    var m = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), new THREE.MeshBasicMaterial({ map: tx })); m.userData.noBake = true;
+    return { cv: cv, c: cv.getContext('2d'), tex: tx, m: m };
+  }
+  function tgBuild() {
+    var M = trMats(), P = pkMats(), g = trDyn(); TG.g = g;
+    var yellow = pkPaint(0xf2b522, 0.45, 0.25), black = M.black, iron = M.iron, haz = pkStripes('#f0c04a', '#1b1b1b');
+    var glass = std({ color: 0x9fc6cc, roughness: 0.08, metalness: 0.3, transparent: true, opacity: 0.28 });
+    // the frame, the buffers and a coupling hook at each end, four wheels in axleboxes
+    pkBevelBox(3.7, 0.2, 1.7, black, 0, 0.78, 0, g, 0.02);
+    [-1, 1].forEach(function (e) {
+      box(0.12, 0.34, 1.9, haz, e * 1.86, 0.84, 0, g);
+      [-0.55, 0.55].forEach(function (z) { var bf = pkRoundCyl(0.08, 0.22, iron, e * 2.0, 0.9, z, g, 8); bf.rotation.z = Math.PI / 2; pkRoundCyl(0.15, 0.04, iron, e * 2.11, 0.9, z, g, 10).rotation.z = Math.PI / 2; });
+      box(0.3, 0.08, 0.12, iron, e * 2.05, 0.9, 0, g); box(0.06, 0.18, 0.12, iron, e * 2.2, 0.86, 0, g);
+    });
+    TG.wheels = [];
+    [-1, 1].forEach(function (s) { [-1.1, 1.1].forEach(function (x) { TG.wheels.push(trWheel(0.3, black, black, g, x, 0.55, s * 0.72, 6)); pkBevelBox(0.22, 0.22, 0.14, black, x, 0.55, s * 0.88, g, 0.02); }); });
+    [-1.1, 1.1].forEach(function (ax) { pkRoundCyl(0.045, 1.6, iron, ax, 0.55, 0, g, 8).rotation.x = Math.PI / 2; });
+    // the hoods: battery boxes front and back, yellow with black-and-yellow ends and the charge socket
+    [[1.25, 1.1], [-1.4, 0.8]].forEach(function (h) {
+      pkBevelBox(h[1], 0.82, 1.5, yellow, h[0], 1.29, 0, g, 0.06);
+      for (var v = 0; v < 4; v++) box(h[1] - 0.2, 0.03, 0.02, black, h[0], 1.08 + v * 0.13, 0.76, g);
+    });
+    pkRoundCyl(0.08, 0.06, iron, -1.82, 1.3, 0.4, g, 10).rotation.z = Math.PI / 2;
+    // the cab: a glazed box in the middle with a white roof, an amber beacon, an LED bar and an aerial
+    var cx0 = -0.95, cx1 = 0.65, cH = 2.75, cw = 1.6, ccx = (cx0 + cx1) / 2;
+    box(cx1 - cx0, 0.08, cw, pkPaint(0x2b3238, 0.6, 0.3), ccx, 0.92, 0, g);                       // the floor
+    [[cx0, -cw / 2], [cx0, cw / 2], [cx1, -cw / 2], [cx1, cw / 2]].forEach(function (c) { box(0.08, cH - 0.9, 0.08, yellow, c[0], 0.9 + (cH - 0.9) / 2, c[1], g); });
+    [-1, 1].forEach(function (s) { box(cx1 - cx0, 0.55, 0.05, yellow, ccx, 1.2, s * cw / 2, g); box(cx1 - cx0 - 0.1, 1.1, 0.02, glass, ccx, 2.0, s * cw / 2, g); });
+    [cx0, cx1].forEach(function (x) { box(0.05, 0.55, cw, yellow, x, 1.2, 0, g); box(0.02, 1.1, cw - 0.1, glass, x, 2.0, 0, g); });
+    pkBevelBox(cx1 - cx0 + 0.2, 0.1, cw + 0.2, pkPaint(0xf2f2ee, 0.5, 0.1), ccx, cH, 0, g, 0.03);
+    pkRoundCyl(0.11, 0.06, black, ccx, cH + 0.08, 0, g, 12);
+    var beaconM = std({ color: 0xff9a1a, roughness: 0.3, transparent: true, opacity: 0.85, emissive: 0xff8a00, emissiveIntensity: 0.4 });
+    var beacon = pkRoundCyl(0.1, 0.16, beaconM, ccx, cH + 0.19, 0, g, 12); beacon.userData.noBake = true; TG.beacon = beaconM;
+    TG.beaconSpin = new THREE.Group(); TG.beaconSpin.position.set(ccx, cH + 0.19, 0); g.add(TG.beaconSpin);
+    box(0.02, 0.1, 0.16, std({ color: 0xffffff, emissive: 0xffc060, emissiveIntensity: 1 }), 0.08, 0, 0, TG.beaconSpin).userData.noBake = true;
+    box(0.06, 0.06, 1.1, black, cx1 + 0.08, cH - 0.05, 0, g); box(0.02, 0.04, 1.0, std({ color: 0xffffff, emissive: 0xdfe8ff, emissiveIntensity: 0.6 }), cx1 + 0.11, cH - 0.05, 0, g);
+    pkRod(cx0 + 0.1, cH + 0.05, -0.6, cx0 + 0.1, cH + 0.75, -0.6, 0.01, black, g, 4); sphere(0.025, M.brass, cx0 + 0.1, cH + 0.77, -0.6, g);
+    // headlights at both ends, and the tug's name
+    [-1, 1].forEach(function (e) { [-0.5, 0.5].forEach(function (z) { var hl = pkRoundCyl(0.09, 0.05, std({ color: 0xfffbe8, emissive: 0xfff2c0, emissiveIntensity: 0.9 }), e * 1.83 + (e > 0 ? -0.02 : 0.28), 1.5, z, g, 12); hl.rotation.z = Math.PI / 2; }); });
+    [-1, 1].forEach(function (s) { sign(['TOW-1'], 0.62, 0.2, 1.25, 1.45, s * 0.77, s > 0 ? 0 : Math.PI, { w: 256, h: 80, bg: '#1b1b1b', fg: '#f2b522' }, g); });
+    // inside: a modern shunter's driving position. The driver's seat on its pedestal; a sloped desk in front with a lit
+    // fascia (the key, the direction switch, the lights, an LED readout and three gauges, the warning lights, the coupler,
+    // the horn and the route, the emergency stop); the master controller at the right hand on its own quadrant; a display
+    // in a hood over the desk with the line map and the drive; a radio handset and an extinguisher on the back wall.
+    var seat = std({ color: 0x23262b, roughness: 0.8 }), frame = std({ color: 0x3a4048, roughness: 0.55, metalness: 0.35 });
+    pkBevelBox(0.5, 0.11, 0.48, seat, -0.45, 1.42, -0.15, g, 0.05); pkBevelBox(0.11, 0.66, 0.48, seat, -0.71, 1.78, -0.15, g, 0.05);
+    pkBevelBox(0.11, 0.18, 0.4, seat, -0.71, 2.18, -0.15, g, 0.05);                                  // the headrest
+    [-1, 1].forEach(function (s) { pkBevelBox(0.36, 0.05, 0.07, seat, -0.5, 1.62, -0.15 + s * 0.27, g, 0.02); });   // armrests
+    pkRoundCyl(0.05, 0.42, frame, -0.45, 1.16, -0.15, g, 10); pkRoundCyl(0.2, 0.03, frame, -0.45, 0.97, -0.15, g, 14);
+    box(0.95, 0.012, 1.3, std({ color: 0x15171a, roughness: 0.95 }), -0.25, 0.965, 0, g);           // the rubber floor mat
+    // the desk: a carcass under a sloped top, and the fascia set into it facing the driver
+    pkBevelBox(0.36, 0.6, 1.3, frame, 0.42, 1.26, -0.12, g, 0.03);
+    var P = pkCtlPanel({
+      w: 1.0, h: 0.42, x: 0.25, y: 1.62, z: -0.15, ry: -Math.PI / 2, tilt: -1.0, parent: g, key: 'pk-tow1-desk',
+      paint: function (c, W, H) { c.fillStyle = '#2b3036'; c.fillRect(0, 0, W, H); for (var i = 0; i < 2600; i++) { c.fillStyle = 'rgba(255,255,255,' + randf(0.01, 0.035) + ')'; c.fillRect(Math.random() * W, Math.random() * H, randf(1, 14), 1); } },
+      draw: function (c, W, H) {
+        var R = pkCtlRuler(W, H, 1.0, 0.42); R.c = c;
+        R.box(-0.36, 0.0, 0.25, 0.38, 'rgba(255,255,255,0.18)'); R.box(0.0, 0.0, 0.42, 0.38, 'rgba(255,255,255,0.18)'); R.box(0.35, 0.0, 0.26, 0.38, 'rgba(255,255,255,0.18)');
+        R.engrave('MASTER', -0.43, 0.17, 0.018); R.engrave('DIRECTION', -0.3, 0.17, 0.018);
+        R.txt('R   N   F', -0.3, 0.035, 0.014, '#9fb0bc');
+        R.engrave('HEAD', -0.43, -0.17, 0.016); R.engrave('BEACON', -0.3, -0.17, 0.016);
+        R.engrave('BRAKE', -0.12, -0.185, 0.015); R.engrave('BATTERY', 0.0, -0.185, 0.015); R.engrave('MOTOR', 0.12, -0.185, 0.015);
+        R.engrave('COUPLER', 0.25, -0.02, 0.014); R.engrave('HORN', 0.35, -0.02, 0.014); R.engrave('ROUTE', 0.45, -0.02, 0.014);
+        R.engrave('EMERGENCY', 0.3, -0.185, 0.014);
+        R.txt('TOW-1  LINDENBURG RAILWAY', 0.0, 0.192, 0.013, '#f2b522', 'center', '700');
+      }
+    });
+    TG.desk = P;
+    TG.ctl = {};
+    TG.ctl.key = pkCtlKey(P, -0.43, 0.09, { id: 'key', label: 'Master switch', on: true, act: function (on) { TG.master = on; } });
+    TG.ctl.dir = pkCtlRotary(P, -0.3, 0.09, { id: 'dir', n: 3, pos: 1, prompt: 'Direction switch', names: ['REVERSE', 'NEUTRAL', 'FORWARD'], act: function (p) { TG.dir = p - 1; } });
+    TG.ctl.head = pkCtlToggle(P, -0.43, -0.09, { id: 'head', on: true, prompt: 'Headlights', act: function (on) { TG.headOn = on; } });
+    TG.ctl.beacon = pkCtlToggle(P, -0.3, -0.09, { id: 'beacon', on: true, prompt: 'Beacon', act: function (on) { TG.beaconOn = on; } });
+    TG.ctl.read = pkCtlReadout(P, 0.0, 0.1, 0.38, 0.13, {});
+    TG.ctl.gBrake = pkCtlGauge(P, -0.12, -0.08, { r: 0.058, label: 'BAR', min: 0, max: 5, unit: 'bar', dial: 'black', get: function () { return clamp((TG.brakeK || 0), 0, 1); } });
+    TG.ctl.gBatt = pkCtlGauge(P, 0.0, -0.08, { r: 0.058, label: '%', min: 0, max: 100, unit: '%', red: 20, dial: 'black', get: function () { return TG.batt / 100; } });
+    TG.ctl.gAmp = pkCtlGauge(P, 0.12, -0.08, { r: 0.058, label: 'A', min: 0, max: 400, unit: 'A', dial: 'black', get: function () { return clamp(TG.amps / 400, 0, 1); } });
+    TG.ctl.ann = {};
+    [['COUPLED', 0.25, '#5fd38d'], ['ON TOW', 0.335, '#f0c04a'], ['BATT LOW', 0.42, '#ff6a3a']].forEach(function (a) { TG.ctl.ann[a[0]] = pkCtlAnnun(P, a[1], 0.15, 0.075, 0.045, a[0], { col: a[2] }); });
+    TG.ctl.couple = pkCtlBtn(P, 0.25, 0.06, { id: 'couple', label: 'COUPLER', col: 'blue', r: 0.03, lampCol: 0x4aa8ff, prompt: 'Coupler: couple or uncouple (C)', act: function () { tgCouple(); } });
+    TG.ctl.horn = pkCtlBtn(P, 0.35, 0.06, { id: 'horn', label: 'HORN', col: 'amber', r: 0.03, lampCol: 0xffd23a, prompt: 'Horn (H)', act: function () { tgHorn(); } });
+    TG.ctl.route = pkCtlBtn(P, 0.45, 0.06, { id: 'route', label: 'ROUTE', col: 'white', r: 0.03, lampCol: 0xffffff, prompt: 'Route: into the bay or out along the line (P)', act: function () { tgRoute(); } });
+    TG.ctl.stop = pkCtlMushroom(P, 0.38, -0.1, { r: 0.05, prompt: 'Emergency stop', act: function () { TG.estop = true; }, release: function () { TG.estop = false; } });
+    // the master controller: a T handle on a quadrant at the right hand. Back is brake, the middle coast, forward power
+    var mc = new THREE.Group(); mc.position.set(-0.12, 1.5, 0.42); g.add(mc);
+    pkBevelBox(0.42, 0.14, 0.2, frame, 0, 0, 0, mc, 0.02);
+    var qd = pkCtlFace('pk-tow1-mc', 0.4, 0.18, function (c, W, H) { c.fillStyle = '#1b1f23'; c.fillRect(0, 0, W, H); c.font = '700 ' + Math.round(H * 0.24) + 'px Bahnschrift, Arial'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      [['B', 0.08, '#ff6a3a'], ['0', 0.38, '#e4ebef'], ['1', 0.53, '#5fd38d'], ['2', 0.66, '#5fd38d'], ['3', 0.79, '#5fd38d'], ['4', 0.92, '#5fd38d']].forEach(function (n) { c.fillStyle = n[2]; c.fillText(n[0], n[1] * W, H * 0.3); });
+      c.fillStyle = '#0a0c0e'; c.fillRect(W * 0.05, H * 0.55, W * 0.9, H * 0.16); });
+    var qm = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.18), new THREE.MeshStandardMaterial({ map: qd, roughness: 0.5 })); qm.rotation.x = -Math.PI / 2; qm.position.y = 0.072; mc.add(qm);
+    var mcPiv = new THREE.Group(); mcPiv.position.set(0, 0.07, 0.0); mc.add(mcPiv); TG.mcPiv = mcPiv;
+    pkRoundCyl(0.014, 0.2, MAT.chrome, 0, 0.1, 0, mcPiv, 10);
+    var tH = pkRoundCyl(0.024, 0.16, std({ color: 0x1b1d20, roughness: 0.5 }), 0, 0.21, 0, mcPiv, 12); tH.rotation.x = Math.PI / 2;
+    sphere(0.018, std({ color: 0xc8322a, roughness: 0.4 }), 0, 0.21, 0.085, mcPiv);
+    hitBox(0.45, 0.35, 0.25, -0.12, 1.65, 0.42, { prompt: function () { return 'Master controller: ' + tgNotchName() + ' (W more power, S brake)'; }, use: function () { TG.ctlPos = Math.min(1, (TG.ctlPos || 0) + 0.25); sfx('click'); } }, g);
+    // the display in its hood over the middle of the desk
+    var hood = pkCtlHood(g, 0.5, 2.05, -0.15, 0.5, 0.28, 0.25); hood.rotation.y = -Math.PI / 2;
+    var dsp = tgScreen(512, 288, 0.5, 0.28); dsp.m.position.z = 0.004; hood.add(dsp.m); TG.dsp = dsp;
+    // the back wall: the radio handset in its cradle and an extinguisher
+    pkBevelBox(0.06, 0.28, 0.16, frame, -0.92, 2.0, 0.45, g, 0.02); pkBevelBox(0.05, 0.22, 0.07, std({ color: 0x15171a, roughness: 0.6 }), -0.88, 2.0, 0.45, g, 0.02);
+    pkTube([[-0.88, 1.88, 0.45], [-0.84, 1.6, 0.5], [-0.9, 1.4, 0.42], [-0.92, 1.85, 0.36]], 0.008, std({ color: 0x15171a, roughness: 0.6 }), g, false, 12, 5);
+    pkRoundCyl(0.065, 0.42, std({ color: 0xc8322a, roughness: 0.4 }), -0.86, 1.18, -0.6, g, 12); pkRoundCyl(0.03, 0.06, MAT.chrome, -0.86, 1.43, -0.6, g, 8);
+    // climbing in: from the platform side or the other
+    [-1, 1].forEach(function (s) { hitBox(1.0, 1.4, 0.8, ccx, 1.6, s * 1.05, { prompt: function () { return tgCanBoard() ? 'Climb into TOW-1, the rescue tug' : ''; }, use: function () { tgEnter(); } }, g); });
+    TG.built = true;
+  }
+  // the spur itself: ballast and track, a buffer stop, the charging bay under its canopy, the charger and its sign
+  function tgBuildBay() {
+    var M = trMats(), P = pkMats(), S = TR.spur, iron = M.iron;
+    trRibbon(S, 3.0, 0.05, M.ballast); trLayTrack(S, 0, S.L);
+    var e = trSamp(S, S.L, {}), b = trSamp(S, S.L - 9, {});
+    var g = trFrameGroup(e.x, e.z, e.yaw);
+    // the buffer stop
+    pkBevelBox(0.5, 1.0, 2.2, pkPaint(0x8e2a22, 0.6, 0.2), 0.4, 0.5, 0, g, 0.04); box(0.12, 0.3, 2.3, pkStripes('#f0c04a', '#1b1b1b'), 0.1, 0.9, 0, g);
+    [-0.55, 0.55].forEach(function (z) { var bf = pkRoundCyl(0.1, 0.3, iron, -0.05, 0.9, z, g, 8); bf.rotation.z = Math.PI / 2; });
+    // the canopy over the bay: four posts, a pitched roof
+    [[-1.0, -1.7], [-1.0, 1.7], [-7.5, -1.7], [-7.5, 1.7]].forEach(function (c) { pkRoundCyl(0.08, 3.4, iron, c[0], 1.7, c[1], g, 8); });
+    var roofG = new THREE.Group(); roofG.position.set(-4.25, 3.4, 0); g.add(roofG); pkGableRoof(7.2, 4.0, 0.7, P.slate, iron, 0, 0, 0, roofG, 0.15);
+    // the charger: a cabinet with a screen and the cable to the tug's socket, and the bay's name
+    pkBevelBox(0.5, 1.5, 0.6, pkPaint(0x2a5ad8, 0.5, 0.3), -5.2, 0.75, -2.3, g, 0.04);
+    box(0.28, 0.2, 0.02, std({ color: 0x0a1410, emissive: 0x3ddc6a, emissiveIntensity: 0.5 }), -5.2, 1.2, -1.99, g);
+    pkTube([[-5.2, 0.6, -2.0], [-5.1, 0.25, -1.6], [-5.6, 0.35, -1.1], [-5.8, 1.1, -0.85]], 0.03, M.black, g, false, 12, 6);
+    sign(['TOW-1', 'RESCUE TUG BAY'], 1.6, 0.42, -4.25, 2.95, -1.75, 0, { w: 384, h: 100, bg: '#1b1b1b', fg: '#f2b522' }, g);
+  }
+
+  // ── Getting in and driving ────────────────────────────────────────
+  function tgCanBoard() { var t = TR.t; return TG.built && !TG.driving && !(t && (t.driving || t.seat)) && Math.abs(TG.v) < 0.2; }
+  function tgEnter() {
+    if (!tgCanBoard()) return;
+    TG.driving = true; TG.look.yaw = 0; TG.look.pitch = -0.2; sfx('click');
+    toast('TOW-1: R / Shift+R direction switch, W / S master controller (power and brake), Space emergency brake, C coupler, H horn, L headlights, P route to the bay or the line, E to climb out. Couple to either end of the train and bring her home through the depot points.', '');
+  }
+  function tgLeave() {
+    if (Math.abs(TG.v) > 0.2) { toast('Stop TOW-1 first', 'bad'); return true; }
+    var g = TG.g, c = Math.cos(g.rotation.y), s = Math.sin(g.rotation.y), lz = 1.7;
+    var ex = g.position.x + lz * s, ez = g.position.z + lz * c;
+    player.x = ex; player.z = ez; player.y = floorY(ex, ez); player.vy = 0; player.yaw = g.rotation.y; player.pitch = 0;
+    TG.driving = false; sfx('click'); return true;
+  }
+  function tgCouple() {
+    var t = TR.t, R = trState();
+    if (TG.coupled) {
+      if (Math.abs(TG.v) > 0.15) { toast('Stop before you uncouple', 'bad'); return; }
+      TG.coupled = false; t.towed = false; t.v = 0; t.brake = 1; TG.v = 0; sfx('click'); toast('Uncoupled: the train\'s brakes are back on', ''); return;
+    }
+    var gp = tgGaps();
+    if (!gp || (Math.abs(gp.nose) > 1.0 && Math.abs(gp.tail) > 1.0)) { toast('Nothing to couple to: back TOW-1 up to the end of the train', 'bad'); return; }
+    if (t.v > 0.25) { toast('The train is moving', 'bad'); return; }
+    TG.off = tgWrap(gp.s - t.s, t.mode);                     // where the tug sits from her nose: ahead (+) or behind her tail (-)
+    TG.coupled = true; t.towed = true; t.brake = 0; t.throttle = 0; t.v = 0;
+    if (R.auto) { R.auto = false; toast('AUTO off: TOW-1 has the train', ''); }
+    sfx('ok'); toast('Coupled to the ' + (TG.off > 0 ? 'engine' : 'last carriage') + '. Set the points to the DEPOT and bring her in.', 'good');
+  }
+  // ── The tick: the drive, the battery, the screens, the train it hauls ──
+  // the drive: the master controller (TG.ctlPos, -1 full brake .. 0 coast .. +1 full power, moved by W and S like the steam
+  // engine's regulator) and the direction switch (TG.dir: -1 reverse, 0 neutral, +1 forward, the cab's own way). Space and
+  // the emergency stop put on the full brake.
+  function tgNotchName() { var c = TG.ctlPos || 0; if (c < -0.05) return 'BRAKE ' + Math.round(-c * 100) + '%'; if (c < 0.05) return 'COAST'; return 'POWER ' + Math.min(4, Math.ceil(c * 4)); }
+  function tgDrive(dt) {
+    var keys = player.keys || {}, max = TG.coupled ? TG_MAX_TOW : TG_MAX, acc = TG.coupled ? 0.4 : 1.0;
+    if (TG.driving) { if (keys.KeyW) TG.ctlPos = Math.min(1, (TG.ctlPos || 0) + dt * 0.9); if (keys.KeyS) TG.ctlPos = Math.max(-1, (TG.ctlPos || 0) - dt * 0.9); }
+    var c = TG.ctlPos || 0, live = TG.master !== false && TG.batt > 0 && !TG.estop;
+    var u = TG.v * TG.face, power = live && c > 0.05 && TG.dir ? Math.ceil(c * 4) / 4 : 0;
+    if (power > 0) u += TG.dir * power * acc * dt;
+    u = clamp(u, -max, max);
+    var brake = (c < -0.05 ? -c * 2.2 : 0) + (keys.Space && TG.driving ? 3.0 : 0) + (TG.estop ? 3.0 : 0) + (power === 0 ? 0.12 : 0);
+    TG.brakeK = clamp((c < -0.05 ? -c : 0) + ((keys.Space && TG.driving) || TG.estop ? 1 : 0), 0, 1);
+    if (u > 0) u = Math.max(0, u - brake * dt); else if (u < 0) u = Math.min(0, u + brake * dt);
+    TG.v = u * TG.face;
+    TG.amps = power * (TG.coupled ? 360 : 140) + Math.abs(u) * 6;
+    TG.batt = clamp(TG.batt - TG.amps * dt * 0.00012, 0, 100);
+    if (TG.driving && c > 0.05 && !TG.dir && !TG.dirHinted) { TG.dirHinted = true; toast('TOW-1: set the direction switch (R) to FORWARD or REVERSE', 'bad'); }
+    if (TG.dir) TG.dirHinted = false;
+  }
+  // the horn: a modern two-tone air horn, a minor third (311 and 370 Hz), each note two reeds a touch apart so they beat
+  // like a real trumpet, shaped through a brassy peak. It sounds while H is held (or the button is pressed), and from
+  // outside it carries less the further you stand from the tug.
+  var TG_HORN = null;
+  function tgHornVoice() {
+    if (TG_HORN || !trOk()) return TG_HORN;
+    var gn = AC.createGain(); gn.gain.value = 0;
+    var hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 170;
+    var pk = AC.createBiquadFilter(); pk.type = 'peaking'; pk.frequency.value = 950; pk.Q.value = 1.1; pk.gain.value = 7;
+    var lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2800;
+    gn.connect(hp); hp.connect(pk); pk.connect(lp); lp.connect(sfxBus);
+    [[311, 0.5], [312.8, 0.35], [370, 0.5], [372.4, 0.35], [155.5, 0.12]].forEach(function (f) {
+      var o = AC.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f[0];
+      var og = AC.createGain(); og.gain.value = f[1]; o.connect(og); og.connect(gn); o.start();
+    });
+    return (TG_HORN = { gn: gn, level: 0 });
+  }
+  function tgHorn() { TG.hornT = Math.max(TG.hornT || 0, 0.45); tgHornVoice(); }
+  function tgHornTick(dt) {
+    var V = TG_HORN; if (!V) return;
+    TG.hornT = Math.max(0, (TG.hornT || 0) - dt);
+    var on = TG.hornT > 0 || (TG.driving && player.keys && player.keys.KeyH), vol = TG.driving ? 1 : (TG.g ? trVol(TG.g.position.x, TG.g.position.z) : 0);
+    var want = on ? 0.13 * vol : 0;
+    V.level += (want - V.level) * Math.min(1, dt * (on ? 30 : 9)); V.gn.gain.value = V.level;
+  }
+  function tgRoute() { TG.bay = !TG.bay; sfx('click'); toast('TOW-1 route: ' + (TG.bay ? 'into the bay at the spur' : 'out along the line'), ''); }
+  function tgSetDir(d) { if (Math.abs(TG.v) > 0.2) { toast('Stop before you change direction', 'bad'); return; } TG.dir = clamp(d, -1, 1); if (TG.ctl && TG.ctl.dir) TG.ctl.dir.set(TG.dir + 1, true); sfx('click'); }
+  function tgMove(dt) {
+    var R = trState(), ds = TG.v * dt, prev = TG.s; TG.s += ds;
+    if (TG.mode === 'S') {
+      if (TG.s > TR.spur.L - TG.HL - 0.6) { TG.s = TR.spur.L - TG.HL - 0.6; if (TG.v > 0.3) sfx('bad'); TG.v = 0; }   // the buffer stop
+      if (TG.s < 0) { TG.mode = 'D'; TG.s = TR.sJ1 + TG.sJ + TG.s; }
+      if (TG.mode === 'S' && TG.s > 3) { R.tug = { mode: 'S', s: TG.s }; TG.batt = Math.min(100, TG.batt + dt * 2); }   // on charge in the bay
+      return;
+    }
+    if (TG.mode === 'D') {
+      var j = TR.sJ1 + TG.sJ;
+      if (ds > 0 && prev < j && TG.s >= j && TG.bay) { TG.mode = 'S'; TG.s -= j; return; }
+      if (ds > 0 && TG.s > TR.sJ1 + TR.byp.L) { TG.mode = 'M'; TG.s -= TR.dL; }
+      else if (ds < 0 && TG.s < TR.sJ1) TG.mode = 'M';
+    } else {
+      if (ds > 0 && prev < TR.sJ1 && TG.s >= TR.sJ1 && R.points === 'depot') TG.mode = 'D';
+      else if (ds < 0 && prev >= TR.sJ2 && TG.s < TR.sJ2 && R.points === 'depot') { TG.mode = 'D'; TG.s += TR.dL; }
+    }
+    var L = trLoopLen(TG.mode); TG.s = ((TG.s % L) + L) % L;
+    R.tug = { mode: TG.mode, s: TG.s };
+  }
+  // the train cannot pass through the tug: an uncoupled tug on the line stops her, and the tug stops against her
+  function tgBumpers() {
+    var t = TR.t, gp = tgGaps(); if (!gp) return;
+    if (gp.nose < 0.05 && gp.nose > -3 && TG.v < 0) { TG.v = 0; sfx('bad'); }
+    if (gp.tail < 0.05 && gp.tail > -3 && TG.v > 0) { TG.v = 0; sfx('bad'); }
+    var noseGap = gp.nose, tailGap = gp.tail;
+    if (t.dir > 0 && t.v > 0 && noseGap < 2.5 && noseGap > -3) { t.v = 0; t.brake = 1; if (!TG.warned) { TG.warned = true; toast('The train stopped short: TOW-1 is on the line', 'bad'); } }
+    else if (t.dir < 0 && t.v > 0 && tailGap < 2.5 && tailGap > -3) { t.v = 0; t.brake = 1; if (!TG.warned) { TG.warned = true; toast('The train stopped short: TOW-1 is on the line', 'bad'); } }
+    else TG.warned = false;
+  }
+  function tgPlace() {
+    var a = tgSamp(TG.mode, TG.s + 1.1 * TG.face, {}), ax = a.x, az = a.z, b = tgSamp(TG.mode, TG.s - 1.1 * TG.face, {});   // its front the way the cab looks
+    TG.g.position.set((ax + b.x) / 2, 0, (az + b.z) / 2); TG.g.rotation.y = Math.atan2(-(az - b.z), ax - b.x);
+    TG.wheels.forEach(function (w) { w.rotation.z -= TG.dv * TG.face / 0.3; });
+  }
+  function tgScreens(dt) {
+    var t = TR.t, R = trState(), gp = tgGaps();
+    if (TG.mcPiv) TG.mcPiv.rotation.z = -(TG.ctlPos || 0) * 0.6;                         // forward for power, back for brake
+    var C = TG.ctl; if (!C || !C.ann) return;
+    C.ann['COUPLED'].on = TG.coupled; C.ann['ON TOW'].on = TG.coupled && Math.abs(TG.v) > 0.05 ? 'flash' : TG.coupled; C.ann['BATT LOW'].on = TG.batt < 20;
+    C.couple.setLit(TG.coupled); C.route.setLit(TG.bay);
+    TG.scr0 = (TG.scr0 || 0) - dt; if (TG.scr0 > 0) return; TG.scr0 = 0.25;
+    C.read.set([(Math.abs(TG.v) * 3.6).toFixed(1) + ' KM/H  ' + ['REV', 'NEU', 'FWD'][(TG.dir || 0) + 1], tgNotchName(), 'BATT ' + Math.round(TG.batt) + '%  ' + Math.round(TG.amps || 0) + ' A']);
+    var d = TG.dsp, c = d.c, W = 512, H = 288;
+    c.fillStyle = '#0b0f14'; c.fillRect(0, 0, W, H);
+    c.fillStyle = '#16202b'; c.fillRect(0, 0, W, 30); c.fillStyle = '#e4ebef'; c.font = '700 17px Bahnschrift, Arial'; c.textAlign = 'left'; c.textBaseline = 'middle';
+    c.fillText('TOW-1', 12, 15); c.fillStyle = '#9fb0bc'; c.fillText('POINTS ' + (R.points === 'depot' ? 'DEPOT' : 'MAIN') + '   ROUTE ' + (TG.bay ? 'BAY' : 'LINE'), 90, 15);
+    c.textAlign = 'right'; c.fillText(fmtTime(S.time), W - 12, 15);
+    // the line map on the left: the loop, the depot siding, the train in amber, TOW-1 in blue
+    var P = TR.main, sx = function (x) { return 14 + (x + 140) / 320 * 300; }, sz = function (z) { return 44 + (z + 160) / 280 * 230; };
+    c.strokeStyle = '#3a4b5a'; c.lineWidth = 4; c.beginPath(); for (var i = 0; i < P.n; i += 3) { var X = sx(P.x[i]), Z = sz(P.z[i]); if (i) c.lineTo(X, Z); else c.moveTo(X, Z); } c.closePath(); c.stroke();
+    c.strokeStyle = '#5a7085'; c.lineWidth = 3; c.beginPath(); for (i = 0; i < TR.byp.n; i += 3) { X = sx(TR.byp.x[i]); Z = sz(TR.byp.z[i]); if (i) c.lineTo(X, Z); else c.moveTo(X, Z); } c.stroke();
+    var tp = TR.units[0].g.position, up = TG.g.position;
+    c.fillStyle = '#ffb02e'; c.beginPath(); c.arc(sx(tp.x), sz(tp.z), 7, 0, 6.283); c.fill(); c.fillStyle = '#4aa8ff'; c.beginPath(); c.arc(sx(up.x), sz(up.z), 6, 0, 6.283); c.fill();
+    // the drive on the right
+    c.textAlign = 'left'; c.fillStyle = '#e4ebef'; c.font = '700 44px Bahnschrift, Arial'; c.fillText((Math.abs(TG.v) * 3.6).toFixed(1), 334, 80);
+    c.font = '600 15px Bahnschrift, Arial'; c.fillStyle = '#9fb0bc'; c.fillText('km/h', 334, 110);
+    var rows = [['DIRECTION', ['REVERSE', 'NEUTRAL', 'FORWARD'][(TG.dir || 0) + 1]], ['CONTROLLER', tgNotchName()], ['COUPLER', TG.coupled ? 'LOCKED' : 'OPEN'], ['TRAIN', gp ? Math.round(Math.min(Math.abs(gp.nose), Math.abs(gp.tail))) + ' m' : '--'], ['ENGINE', t.engine ? 'IN STEAM' : 'DEAD']];
+    rows.forEach(function (r, k) { c.fillStyle = '#9fb0bc'; c.fillText(r[0], 334, 140 + k * 28); c.fillStyle = '#e4ebef'; c.textAlign = 'right'; c.fillText(r[1], W - 12, 140 + k * 28); c.textAlign = 'left'; });
+    d.tex.needsUpdate = true;
+  }
+  function tgTick(dt) {
+    if (!TG.built || !TR.built) return;
+    dt = Math.min(dt, 0.1);
+    var t = TR.t;
+    tgDrive(dt);
+    if (TG.coupled) {
+      // the train goes the tug's way at the tug's speed; trTick (run next) moves her, her points and her stations
+      t.towed = true; t.v = Math.abs(TG.v); if (Math.abs(TG.v) > 0.01) t.dir = TG.v > 0 ? 1 : -1; t.brake = 0; t.throttle = 0;
+    }
+  }
+  function tgAfter(dt) {
+    if (!TG.built || !TR.built) return;
+    dt = Math.min(dt, 0.1);
+    if (TG.coupled) { tgFollow(); trState().tug = { mode: TG.mode, s: TG.s }; } else { tgMove(dt); tgBumpers(); }
+    TG.dv = TG.v * dt;
+    tgPlace();
+    tgHornTick(dt);
+    TG.beaconA += dt * 6; TG.beaconSpin.rotation.y = TG.beaconA; TG.beacon.emissiveIntensity = TG.beaconOn !== false && (Math.abs(TG.v) > 0.05 || TG.driving) ? 1.6 : 0.3;
+    if (TG.driving) tgScreens(dt);
+  }
+
+  // ── Hooks: build, tick, keys, the camera ──────────────────────────
+  var _tgPrevBuild = GAME.buildWorld;
+  GAME.buildWorld = function (loaded) {
+    var r = _tgPrevBuild ? _tgPrevBuild(loaded) : undefined;
+    try {
+      if (TR.built && !TG.built) {
+        tgBuildSpur(); tgBuildBay(); tgBuild(); TR.tugRef = TG;   // the level crossings (part 43) watch it too
+        var R = trState(), sv = R.tug;
+        if (sv && (sv.mode === 'S' || sv.mode === 'M' || sv.mode === 'D') && isFinite(sv.s)) { TG.mode = sv.mode; TG.s = sv.s; } else { TG.mode = 'S'; TG.s = TR.spur.L - TG.HL - 0.6; }
+        TG.dv = 0; tgPlace();
+      }
+    } catch (e) { if (window.console) console.error('TOW-1', e); }
+    return r;
+  };
+  var _tgPrevTick = GAME.tick;
+  GAME.tick = function (dt) {
+    try { tgTick(dt); } catch (e) { if (window.console) console.error('TOW-1', e); }
+    if (_tgPrevTick) _tgPrevTick(dt);
+    try { tgAfter(dt); } catch (e2) { if (window.console) console.error('TOW-1', e2); }
+  };
+  var _tgPrevKey = GAME.key;
+  GAME.key = function (e) {
+    if (TG.driving && !e.repeat) {
+      if (e.code === 'KeyE') { if (focusText) return false; return tgLeave(); }   // aimed at a control, E (or a click, which sends E) works the control; aimed away, it climbs out
+      if (e.code === 'KeyR') { tgSetDir((TG.dir || 0) + (e.shiftKey ? -1 : 1)); return true; }
+      if (e.code === 'KeyC') { TG.ctl.couple.press(); return true; }
+      if (e.code === 'KeyH') { player.keys.KeyH = true; TG.ctl.horn.press(); return true; }   // held: the horn sounds until H comes up
+      if (e.code === 'KeyL') { TG.ctl.head.flip(); return true; }
+      if (e.code === 'KeyP') { TG.ctl.route.press(); return true; }
+      if (e.code === 'Space') { e.preventDefault(); player.keys.Space = true; return true; }
+    }
+    return _tgPrevKey ? _tgPrevKey(e) : false;
+  };
+  var _tgPrevMouse = GAME.mouseLook;
+  GAME.mouseLook = function (e, sx, iy) {
+    if (TG.driving) { TG.look.yaw = clamp(TG.look.yaw - e.movementX * sx, -2.6, 2.6); TG.look.pitch = clamp(TG.look.pitch - e.movementY * sx * iy, -1.3, 1.3); return true; }
+    return _tgPrevMouse ? _tgPrevMouse(e, sx, iy) : false;
+  };
+  var _tgPrevOverride = GAME.playerOverride;
+  GAME.playerOverride = function (dt) {
+    if (TG.driving && TG.g) {
+      // the driver's seat, looking forward along the tug (its +x), the eye over the cushion
+      var g = TG.g, c = Math.cos(g.rotation.y), s = Math.sin(g.rotation.y), lx = -0.45, lz = -0.15, ly = 1.47 + 0.72;
+      var wx = g.position.x + lx * c + lz * s, wz = g.position.z - lx * s + lz * c;
+      player.x = wx; player.z = wz; player.y = ly - 1.62; player.vy = 0;
+      camera.position.set(wx, ly, wz); camera.rotation.order = 'YXZ'; camera.rotation.set(TG.look.pitch, g.rotation.y - Math.PI / 2 + TG.look.yaw, 0);
+      player.yaw = camera.rotation.y; player.pitch = TG.look.pitch;
+      return true;
+    }
+    return _tgPrevOverride ? _tgPrevOverride(dt) : false;
+  };
+  var _tgPrevT = GAME.T;
+  GAME.T = function () { var o = _tgPrevT ? _tgPrevT() : {}; o.TG = TG; o.tgCouple = tgCouple; o.tgEnter = tgEnter; return o; };
+})();
+  // ── Marerijk ─────────────────────────────────────────────────────
+  // Efteling's Droomvlucht at full scale, in the woods west of the Dark Woods: a show building 30 by 62 m and 16 m high,
+  // its fairy-palace front (a gatehouse with a pointed portal and a round dream window, slender towers with pointed roofs,
+  // two great flower medallions, a big round corner tower, lily ponds either side) looking east onto the Marerijk promenade,
+  // which leaves the Arena path at x -74. Inside, the station hall (the queue, the platform, the glazed control cabin) is
+  // walled off from the dream: eight two-seat gondolas hang 2.5 m under an overhead rail and fly a closed course of about
+  // 260 m. Out of the station they climb into the Castle Realm and over its castles on their rocks, through the canopy of
+  // the Wondrous Forest at 11 m, down into the Fairy Garden past King Oberon on his sunflower throne, through the Star
+  // Tunnel, among the floating Heavenly Strongholds, then two turns fast down the spiral round the hollow swamp tree of
+  // the Squelch Forest, past the Dream Swamp and through the fog wall back into the station. The building keeps west of
+  // the viaduct (part 46, x -67 here) and inside the ring line's west station (x -115).
+  var PK_DV = { X0: -110, X1: -80, Z0: -32, Z1: 30, H: 16, ROOF: 16.4, g: null,
+    ST: { x: -85, z0: -9, z1: -22.5, y: 3.2 },          // the boarding leg of the U: the rail at y, the gondolas leaving -z
+    HALL: { x0: -94, x1: -80, z0: -24, z1: -1, h: 7 },   // the station hall, walled off from the scenes
+    SP: { x: -86, z: 4.5, r: 4.2, y0: 12.5, y1: 4.6 },   // the spiral round the swamp tree: top and bottom of its rail
+    DOOR: -9, EXIT: -22, HANG: 2.55, N: 12, GAP: 2.7, DGAP: 6 };   // DGAP: how far the last one out has to be before the next goes: the walkway never stops
+  PK_LANDS.marerijk = { name: 'MARERIJK', a: 0x8a5fb3, b: 0xf0c04a, pave: 0xc9b0d9, sign: '#e0c0ff' };
+  PK_ROUTES.push([-74, -40, -74, 12, 4.0, 'marerijk']);   // the promenade: south off the Arena path, along the palace front
+  PK_ARCHES.push([-74, -36.5, 'z', 'marerijk']);
+  PK_PLOTS.push({ id: 'droom', name: 'Droomvlucht', x: -95, z: -1, r: 16, q: [-88.0, -2.75], level: 22, pad: 0.02 });
+  PK_THEME.droom = { a: 0x8a5fb3, b: 0xf0c04a, ground: 0xb9a8c9, name: 'Droomvlucht', noBunting: true, noDecor: true, portal: function () {} };
+  PK_KEEP.push([-95, -24, 13], [-95, -4, 13], [-95, 16, 13], [-95, 27, 9], [-77, -9, 8], [-77, -24, 6]);   // the woods stand round it, not in it
+
+  // ── Materials ────────────────────────────────────────────────────
+  var PK_DV_M = null;
+  function pkDvNightTex() {
+    return tex(512, 512, function (c, w, h) {
+      var rnd = pkRng(321), gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#0a0d24'); gr.addColorStop(1, '#151a3a'); c.fillStyle = gr; c.fillRect(0, 0, w, h);
+      for (var i = 0; i < 260; i++) { var r = rnd() < 0.9 ? 1 : 2; c.fillStyle = 'rgba(230,236,255,' + (0.4 + rnd() * 0.6).toFixed(2) + ')'; c.fillRect(rnd() * w, rnd() * h, r, r); }
+    }, 1, 1);
+  }
+  function pkDvM() {
+    if (PK_DV_M) return PK_DV_M;
+    var M = pkMats(), X = PK_DV_M = {}, night = pkDvNightTex();
+    X.stucco = std({ map: TEX.plaster, color: 0xf3ede2, roughness: 0.88 });
+    X.trim = std({ map: TEX.plaster, color: 0xd9ccb2, roughness: 0.85 });
+    X.base = std({ map: TEX.plaster, color: 0xa99d88, roughness: 0.92 });
+    X.lilac = std({ map: TEX.plaster, color: 0xb79ad6, roughness: 0.8 });
+    X.roof = std({ map: M.slate.map, color: 0x8a6ab8, roughness: 0.7, side: THREE.DoubleSide });
+    X.roofBlue = std({ map: M.slate.map, color: 0x6f86cf, roughness: 0.7, side: THREE.DoubleSide });
+    X.roofGrey = std({ map: M.slate.map, color: 0x6c6878, roughness: 0.8, side: THREE.DoubleSide });
+    X.gold = M.gold; X.iron = M.iron; X.bark = M.bark; X.water = M.water; X.soil = M.soil;
+    X.night = std({ map: night, color: 0xffffff, emissive: 0xffffff, emissiveMap: night, emissiveIntensity: 0.35, roughness: 1 }); X.night.userData.tile = [9, 9];
+    X.dark = std({ color: 0x14162a, roughness: 1 });
+    X.rail = std({ color: 0x3a3f46, roughness: 0.4, metalness: 0.6 });
+    X.rock = std({ color: 0x6a6476, roughness: 0.95, flatShading: true });
+    X.rockDark = std({ color: 0x3a3a44, roughness: 0.95, flatShading: true });
+    X.trunk = std({ map: M.bark.map, color: 0x6a5a48, roughness: 1 });
+    X.swampTrunk = std({ map: M.bark.map, color: 0x3e4632, roughness: 1 });
+    X.leaf = [0x2f5a4a, 0x3a6a52, 0x284a40].map(function (c) { return std({ map: M.leafTex, color: c, roughness: 0.95, flatShading: true }); });
+    X.moss = std({ color: 0x4a5a2a, roughness: 1, side: THREE.DoubleSide });
+    X.mud = std({ map: M.water.map, color: 0x3a4a2a, roughness: 0.3, emissive: 0x0a1a08, emissiveIntensity: 0.4 });
+    X.cloud = std({ color: 0xf0f2ff, roughness: 1, emissive: 0x30365a, emissiveIntensity: 0.5 });
+    // the lit things answer to the scene, not to the park's lamps (part 01), so they start low and the tick sets them
+    X.win = std({ color: 0x332211, emissive: 0xffd28a, emissiveIntensity: 0.4 });
+    X.fall = std({ map: M.water.map, color: 0x9fd8ff, emissive: 0x6ab8ff, emissiveIntensity: 0.4, transparent: true, opacity: 0.8, side: THREE.DoubleSide });
+    X.shroom = std({ color: 0x4a2a5a, emissive: 0xff70d0, emissiveIntensity: 0.4 });
+    X.elf = std({ color: 0x8aa890, emissive: 0xb8ffd8, emissiveIntensity: 0.4 });
+    X.fairy = std({ color: 0x664422, emissive: 0xffe9a0, emissiveIntensity: 0.4 });
+    X.petal = [0xf0a6c0, 0xb89ae0, 0xf6d36a, 0x9ad0f0].map(function (c) { return std({ color: c, emissive: c, emissiveIntensity: 0.3, roughness: 0.6, side: THREE.DoubleSide }); });
+    X.sun = std({ color: 0xf0c040, emissive: 0xd09020, emissiveIntensity: 0.3, roughness: 0.6, side: THREE.DoubleSide });
+    X.starA = std({ color: 0x222233, emissive: 0xeef2ff, emissiveIntensity: 0.4 });
+    X.starB = std({ color: 0x222233, emissive: 0xfff2c8, emissiveIntensity: 0.4 });
+    X.planet = [0x9a7ae0, 0xe08a6a, 0x6ac0e0].map(function (c) { return std({ color: c, emissive: c, emissiveIntensity: 0.25, roughness: 0.5 }); });
+    X.comet = std({ color: 0x223344, emissive: 0xd8f0ff, emissiveIntensity: 0.4 });
+    X.wisp = std({ color: 0x223322, emissive: 0xb8ff70, emissiveIntensity: 0.4 });
+    X.troll = std({ color: 0x5a6a3a, roughness: 0.9 });
+    X.oberon = std({ color: 0x6a3a8a, emissive: 0x3a1a5a, emissiveIntensity: 0.4, roughness: 0.6 });
+    X.white = std({ color: 0xf4f2ee, roughness: 0.6, emissive: 0x404050, emissiveIntensity: 0.3 });
+    X.brown = std({ color: 0x6a4a2e, roughness: 0.9 });
+    X.globe = std({ color: 0x444444, emissive: 0xfff6e0, emissiveIntensity: 0.4 });
+    X.blueLamp = std({ color: 0x112244, emissive: 0x5a9aff, emissiveIntensity: 0.4 });
+    X.fog = new THREE.MeshBasicMaterial({ map: pkDmMistTex(), transparent: true, opacity: 0.5, depthWrite: false, color: 0xcfe0ff, side: THREE.DoubleSide });
+    X.gondola = [0x1c2442, 0x1f2846, 0x1a2140, 0x202a48].map(function (c) { return std({ color: c, roughness: 0.45, metalness: 0.1 }); });
+    X.seat = std({ color: 0x4a2a5a, roughness: 0.8 });
+    return X;
+  }
+
+  // ── The course ───────────────────────────────────────────────────
+  // the rail, as points the curve runs through (x, y, z): the station straight, the climb, the castles, the forest, the
+  // garden, the star tunnel, the strongholds, the way down to the spiral, two turns down it, and back into the station
+  function pkDvPoints() {
+    var D = PK_DV, S = D.ST, P = D.SP, pts = [
+      [S.x, S.y, S.z0], [S.x, S.y, -15.5], [S.x, S.y, S.z1],
+      [-85.2, 3.5, -26.0], [-86.8, 4.8, -29.0], [-91.0, 6.2, -30.2], [-96.5, 7.2, -30.0], [-101.5, 7.9, -29.4],
+      [-106.4, 8.5, -27.2], [-107.4, 9.5, -20.5], [-103.6, 10.0, -14.6], [-98.4, 10.6, -13.0],
+      [-97.6, 11.0, -7.5], [-101.8, 11.4, -3.6], [-106.8, 11.0, 1.0],
+      [-106.2, 10.0, 7.6], [-100.4, 9.0, 11.4], [-104.2, 8.5, 16.6],
+      [-107.0, 9.0, 22.0], [-102.0, 9.4, 27.0], [-95.0, 10.0, 27.6],
+      [-88.0, 11.4, 27.0], [-82.6, 12.4, 22.2], [-84.4, 13.0, 15.4], [-88.6, 13.0, 10.6], [P.x - P.r, P.y0 + 0.2, P.z + 2.2]
+    ];
+    // the spiral: two turns down, starting and ending at its west point heading -z
+    for (var i = 0; i <= 32; i++) { var f = i / 32, th = Math.PI - 4 * Math.PI * (1 - f); pts.push([P.x + Math.cos(th) * P.r, P.y0 + (P.y1 - P.y0) * f, P.z + Math.sin(th) * P.r]); }
+    // home: west under the strongholds, north up the corridor behind the station wall through the fog, round into the
+    // arriving leg of the U and round its bend
+    pts.push([-92.6, 3.9, 1.6], [-95.6, 3.65, 0.5], [-95.7, 3.55, -4.0], [-95.5, 3.5, -12], [-95.5, 3.4, -21.5], [-94.6, 3.3, -26.4], [-92.4, 3.2, -27.3],
+      [-91, 3.2, -24], [-91, 3.2, -16], [-91, 3.2, -11], [-90.6, 3.2, -7.5], [-89.5, 3.2, -6.4], [-88, 3.2, -6.0], [-86.5, 3.2, -6.4], [-85.4, 3.2, -7.5]);
+    return pts;
+  }
+  // where along the course each scene is, by the lead gondola's distance from the station head: the speed there
+  function pkDvSpeed(D, s) {
+    var L = D.L, v = 2.2;
+    if (s > D.sSpiral0 && s < D.sSpiral1) v = 4.6;                     // fast down the spiral
+    else if (s < D.sClimb) v = 1.8;                                    // the climb out of the station
+    else if (s > D.sSpiral1) v = 1.6;                                  // the wake-up and the way home
+    return Math.max(0.35, Math.min(v, 0.6 + s * 0.6, 0.6 + (L - s) * 0.45));   // eased out of the station and into it
+  }
+  function pkDvCourse() {
+    var D = PK_DV, pts = pkDvPoints().map(function (p) { return new THREE.Vector3(p[0], p[1], p[2]); });
+    var curve = new THREE.CatmullRomCurve3(pts, true, 'centripetal'), L = curve.getLength(), n = Math.ceil(L / 0.25);
+    var P = [], T = [];
+    for (var i = 0; i <= n; i++) { var u = i / n; P.push(curve.getPointAt(u)); T.push(curve.getTangentAt(u)); }
+    var sAt = function (x, z, y) { var best = 0, bd = 1e9; for (var k = 0; k <= n; k++) { var d = Math.pow(P[k].x - x, 2) + Math.pow(P[k].z - z, 2) + (y === undefined ? 0 : Math.pow(P[k].y - y, 2)); if (d < bd) { bd = d; best = k; } } return best / n * L; };
+    D.curve = curve; D.L = L; D.n = n; D.P = P; D.T = T;
+    D.sHead = sAt(D.ST.x, D.ST.z1);
+    // distances counted from the station head, the way the gondolas go
+    var rel = function (s) { return ((s - D.sHead) % L + L) % L; };
+    D.sClimb = rel(sAt(-101.5, -29.4));
+    D.sSpiral0 = rel(sAt(D.SP.x - D.SP.r, D.SP.z + 2.2, D.SP.y0 + 0.2));
+    D.sSpiral1 = rel(sAt(-92.6, 1.2));
+    D.sStationIn = rel(sAt(-91, -24, 3.2));            // the arriving leg: in from the corridor
+    D.sUnload = D.sStationIn + 2.5;                     // where the riders get off
+    D.sLoad0 = rel(sAt(-90.6, -7.5, 3.2));              // the bend of the U and the leg out: where they get on
+    // the run: the time each stretch takes at its speed, summed; the table turns time back into distance
+    var tab = [0], dt = 0, step = 0.5;
+    for (var s = step; s <= L + 1e-6; s += step) { dt += step / pkDvSpeed(D, s - step / 2); tab.push(dt); }
+    D.tab = tab; D.step = step; D.run = Math.ceil(dt) + 1;
+    return D;
+  }
+  // the course at distance s from the station head: a point and the way along
+  function pkDvAt(D, s, out, tan) {
+    var a = ((D.sHead + s) % D.L + D.L) % D.L, f = a / D.L * D.n, k = Math.min(D.n - 1, Math.floor(f)), r = f - k;
+    out.copy(D.P[k]).lerp(D.P[k + 1], r); if (tan) tan.copy(D.T[k]).lerp(D.T[k + 1], r).normalize();
+    return out;
+  }
+
+  // ── The gondolas ─────────────────────────────────────────────────
+  // a gondola for two, hung from its bogie on the rail by a curved arm behind the riders: a rounded tub in its own
+  // colour, gilt rims, a cushioned bench, a star on its nose and a lap bar. The group sits on the rail; the tub hangs
+  // HANG metres under it, swinging out a little on the curves.
+  function pkDvGondola(g, i, seats, bars) {
+    var D = PK_DV, X = pkDvM(), paint = X.gondola[i % X.gondola.length], gd = pkMover(g, D.ST.x, D.ST.y, D.ST.z1); gd.rotation.order = 'YXZ';
+    box(0.42, 0.28, 0.9, X.rail, 0, 0.05, 0, { parent: gd, r: 0.04 });
+    [-0.3, 0.3].forEach(function (z) { cyl(0.09, 0.06, X.iron, 0, 0.2, z, gd, 10).rotation.z = Math.PI / 2; });
+    pkTube([[0, -0.08, -0.15], [0, -0.7, -0.55], [0, -1.6, -0.7], [0, -2.2, -0.55]], 0.06, X.rail, gd, false, 20, 8);
+    var b = new THREE.Group(); b.position.y = -D.HANG; gd.add(b);
+    box(1.34, 0.12, 1.2, paint, 0, -0.32, 0, { parent: b, r: 0.05 });
+    box(1.34, 0.52, 0.1, paint, 0, -0.06, -0.55, { parent: b, r: 0.04 });
+    box(1.34, 0.44, 0.1, paint, 0, -0.1, 0.56, { parent: b, r: 0.04 });
+    [-1, 1].forEach(function (s) { box(0.1, 0.48, 1.2, paint, s * 0.67, -0.08, 0, { parent: b, r: 0.04 }); });
+    box(1.4, 0.05, 0.06, X.gold, 0, 0.17, 0.58, b); box(1.4, 0.05, 0.06, X.gold, 0, 0.2, -0.58, b);
+    [-1, 1].forEach(function (s) { box(0.06, 0.05, 1.24, X.gold, s * 0.7, 0.17, 0, b); });
+    box(1.2, 0.12, 0.5, X.seat, 0, -0.06, -0.22, { parent: b, r: 0.04 });
+    box(1.2, 0.5, 0.1, X.seat, 0, 0.2, -0.46, { parent: b, r: 0.04 });
+    pkExtrude([[0, 0.16], [0.05, 0.05], [0.16, 0.05], [0.07, -0.02], [0.1, -0.13], [0, -0.06], [-0.1, -0.13], [-0.07, -0.02], [-0.16, 0.05], [-0.05, 0.05]], 0.03, X.gold, 0, -0.06, 0.62, b, 0.005);
+    var mine = [];
+    [-0.3, 0.3].forEach(function (x) { var st = { par: gd, x: x, y: -D.HANG - 0.02 - 0.76 + 0.02, z: -0.18, ry: 0, guest: null }; seats.push(st); mine.push(st); });
+    var bar = pkMover(b, 0, 0.3, 0.0);
+    pkTube([[-0.6, 0, 0], [-0.6, 0, 0.32], [0.6, 0, 0.32], [0.6, 0, 0]], 0.03, X.iron, bar, false, 14, 6);
+    bars.push(bar);
+    pkFuse(gd);
+    return { g: gd, i: i, roll: 0, yaw: 0, s: 0, v: 0, seats: mine, bar: bar, barT: 1, hold: 0, unloaded: true };
+  }
+
+  // ── The scenes ───────────────────────────────────────────────────
+  function pkDvRockPillar(par, x, z, h, r, seed) {
+    var X = pkDvM(), rnd = pkRng(seed), y = 0;
+    for (var k = 0; k < 3; k++) {
+      var hh = h / 3 * (1.1 - k * 0.1), rr = r * (1 - k * 0.22), m = new THREE.Mesh(new THREE.CylinderGeometry(rr * 0.8, rr, hh, 7, 1), k % 2 ? X.rockDark : X.rock);
+      m.position.set(x + (rnd() - 0.5) * 0.4, y + hh / 2, z + (rnd() - 0.5) * 0.4); m.rotation.y = rnd() * 3; m.castShadow = true; par.add(m); y += hh * 0.92;
+    }
+    return y;
+  }
+  // a fairy-tale castle: a keep and towers with pointed roofs, lit windows; built round (0, 0, 0) of its own group
+  function pkDvCastle(par, x, y, z, s, roofM, seed) {
+    var X = pkDvM(), rnd = pkRng(seed), c = new THREE.Group(); c.position.set(x, y, z); c.scale.setScalar(s); par.add(c);
+    box(2.2, 1.8, 1.8, X.stucco, 0, 0.9, 0, c); box(2.3, 0.2, 1.9, X.trim, 0, 1.85, 0, c);
+    for (var m = 0; m < 4; m++) box(0.3, 0.3, 0.3, X.stucco, -0.9 + m * 0.6, 2.1, 0.8, c);
+    [[-1.1, -0.9, 3.4], [1.1, -0.9, 2.8], [1.1, 0.9, 3.8], [-1.1, 0.9, 2.6], [0, 0, 4.6]].forEach(function (t, k) {
+      var tr = k === 4 ? 0.55 : 0.42; cyl(tr, t[2], X.stucco, t[0], t[2] / 2, t[1], c, 12);
+      var cone = new THREE.Mesh(new THREE.ConeGeometry(tr * 1.3, tr * 3.2, 12), roofM); cone.position.set(t[0], t[2] + tr * 1.6, t[1]); cone.castShadow = true; c.add(cone);
+      sphere(0.07, X.gold, t[0], t[2] + tr * 3.25, t[1], c);
+      for (var w = 0; w < 2; w++) { var wa = rnd() * 6.28; box(0.12, 0.22, 0.04, X.win, t[0] + Math.cos(wa) * tr, t[2] * (0.45 + w * 0.3), t[1] + Math.sin(wa) * tr, c).rotation.y = -wa + Math.PI / 2; }
+    });
+    for (var w2 = 0; w2 < 4; w2++) box(0.18, 0.3, 0.04, X.win, -0.75 + w2 * 0.5, 1.1, 0.92, c);
+    return c;
+  }
+  function pkDvTree(par, x, z, h, r, seed, canopyY) {
+    var X = pkDvM(), rnd = pkRng(seed);
+    cyl(r * 0.55, h, X.trunk, x, h / 2, z, par, 10, r);
+    for (var k = 0; k < 4; k++) { var a = k / 4 * 6.28 + rnd(); var rt = pkRod(x, 0.6, z, x + Math.cos(a) * r * 2.2, 0.0, z + Math.sin(a) * r * 2.2, r * 0.35, X.trunk, par, 6); }
+    for (var b = 0; b < 4; b++) { var ba = rnd() * 6.28, by = h * (0.55 + b * 0.1), bl = 2 + rnd() * 2; pkRod(x, by, z, x + Math.cos(ba) * bl, by + bl * 0.6, z + Math.sin(ba) * bl, r * 0.25, X.trunk, par, 6); }
+    for (var c = 0; c < 7; c++) { var ca = rnd() * 6.28, cr = 1.6 + rnd() * 1.6, m = new THREE.Mesh(cachedGeo('pkdvleaf', function () { return new THREE.IcosahedronGeometry(1, 1); }), X.leaf[c % 3]); m.scale.set(cr, cr * 0.7, cr); m.position.set(x + Math.cos(ca) * rnd() * 3, (canopyY || h) + rnd() * 2, z + Math.sin(ca) * rnd() * 3); m.castShadow = true; par.add(m); }
+  }
+  function pkDvFlower(par, x, z, h, headR, petalM, seed) {
+    var X = pkDvM(), rnd = pkRng(seed), f = new THREE.Group(); f.position.set(x, 0, z); par.add(f);
+    pkTube([[0, 0, 0], [0.2, h * 0.4, 0.1], [-0.1, h * 0.75, 0], [0, h, 0]], headR * 0.07, X.leaf[1], f, false, 16, 6);
+    var head = new THREE.Group(); head.position.y = h; head.rotation.x = -0.4 - rnd() * 0.4; head.rotation.y = rnd() * 6; f.add(head);
+    for (var p = 0; p < 8; p++) { var a = p / 8 * 6.28, pm = sphere(headR * 0.45, petalM, Math.cos(a) * headR * 0.6, 0, Math.sin(a) * headR * 0.6, head); pm.scale.set(1, 0.25, 0.55); pm.rotation.y = -a; }
+    sphere(headR * 0.3, X.win, 0, 0.05, 0, head).scale.set(1, 0.5, 1);
+    var leaf = sphere(headR * 0.5, X.leaf[0], 0.3, h * 0.35, 0, f); leaf.scale.set(1, 0.15, 0.4);
+    return f;
+  }
+  function pkDvHorse(par, x, y, z, ry, s, mat, horn) {
+    var X = pkDvM(), m = new THREE.Mesh(pkHorseGeo(), mat); m.position.set(x, y, z); m.rotation.y = ry; m.scale.setScalar(s); m.castShadow = true; par.add(m);
+    if (horn) { var hn = new THREE.Mesh(new THREE.ConeGeometry(0.03 * s, 0.35 * s, 8), X.gold); hn.position.set(x + Math.sin(ry) * 0.95 * s, y + 1.45 * s, z + Math.cos(ry) * 0.95 * s); hn.rotation.set(Math.cos(ry) * 0.7, 0, -Math.sin(ry) * 0.7); par.add(hn); }
+    return m;
+  }
+
+  // ── The building ─────────────────────────────────────────────────
+  // the great box: stucco walls with an arched frieze under a low slate roof, the night sky inside; its walls are solid
+  // but for the doors in the front
+  function pkDvShell(g) {
+    var D = PK_DV, X = pkDvM(), x0 = D.X0, x1 = D.X1, z0 = D.Z0, z1 = D.Z1, H = D.H, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, W = x1 - x0, L = z1 - z0, T = 0.6;
+    var doorAt = [[D.DOOR, 2.6, 4.2], [D.EXIT, 2.0, 3.0]];
+    // the front (east) wall, its two doorways
+    var front = [[z0, D.EXIT - 1.0], [D.EXIT + 1.0, D.DOOR - 1.3], [D.DOOR + 1.3, z1]];
+    front.forEach(function (r) { box(T, H, r[1] - r[0], X.stucco, x1 - T / 2, H / 2, (r[0] + r[1]) / 2, g); solid(x1 - T, x1, r[0], r[1], 0, H); });
+    doorAt.forEach(function (d) { box(T, H - d[2], d[1], X.stucco, x1 - T / 2, d[2] + (H - d[2]) / 2, d[0], g); });
+    box(T, H, L, X.stucco, x0 + T / 2, H / 2, cz, g); solid(x0, x0 + T, z0, z1, 0, H);
+    box(W, H, T, X.stucco, cx, H / 2, z0 + T / 2, g); solid(x0, x1, z0, z0 + T, 0, H);
+    box(W, H, T, X.stucco, cx, H / 2, z1 - T / 2, g); solid(x0, x1, z1 - T, z1, 0, H);
+    // inside: the night sky on the walls and the ceiling, a dark floor
+    box(0.04, H, L - 1.2, X.night, x0 + T + 0.02, H / 2, cz, g);
+    box(W - 1.2, H, 0.04, X.night, cx, H / 2, z0 + T + 0.02, g); box(W - 1.2, H, 0.04, X.night, cx, H / 2, z1 - T - 0.02, g);
+    [[z0 + 0.6, D.HALL.z0 - 0.3], [D.HALL.z1 + 0.3, z1 - 0.6]].forEach(function (r) { box(0.04, H, r[1] - r[0], X.night, x1 - T - 0.02, H / 2, (r[0] + r[1]) / 2, g); });   // (the hall lines its own stretch)
+    box(W, 0.3, L, X.night, cx, H + 0.15, cz, g);
+    box(W - 1.2, 0.04, L - 1.2, X.dark, cx, 0.02, cz, g);
+    // outside: a stone base, a string course, an arched frieze under the cornice, the roof
+    [[x1 + 0.05, z0 - 0.1, D.EXIT - 1.0], [x1 + 0.05, D.EXIT + 1.0, D.DOOR - 1.3], [x1 + 0.05, D.DOOR + 1.3, z1 + 0.1]].forEach(function (r) { box(0.12, 1.0, r[2] - r[1], X.base, r[0], 0.5, (r[1] + r[2]) / 2, g); });
+    [[x0 - 0.05, cz, 0.12, L + 0.2], [cx, z0 - 0.05, W + 0.2, 0.12], [cx, z1 + 0.05, W + 0.2, 0.12], [x1 + 0.05, cz, 0.12, L + 0.2]].forEach(function (b, bi) {
+      if (bi < 3) box(b[2], 1.0, b[3], X.base, b[0], 0.5, b[1], g); box(b[2] + 0.1, 0.25, b[3] + 0.1, X.trim, b[0], 8.0, b[1], g); box(b[2] + 0.2, 0.5, b[3] + 0.2, X.trim, b[0], H - 0.1, b[1], g);
+    });
+    for (var fz = z0 + 1.0; fz < z1 - 0.5; fz += 1.6) [x0 - 0.12, x1 + 0.12].forEach(function (fx) { pkDmFrame(pkDmArch(1.3, 0.3, 0.9), pkDmArch(1.0, 0.28, 0.75), 0.1, X.trim, g, fx, H - 1.4, fz).rotation.y = Math.PI / 2; });
+    for (var fx2 = x0 + 1.0; fx2 < x1 - 0.5; fx2 += 1.6) [z0 - 0.12, z1 + 0.12].forEach(function (fz2) { pkDmFrame(pkDmArch(1.3, 0.3, 0.9), pkDmArch(1.0, 0.28, 0.75), 0.1, X.trim, g, fx2, H - 1.4, fz2); });
+    pkHipRoof(W + 1.2, L + 1.2, 4.5, X.roofGrey, cx, H, cz, g);
+    // climbing roses up the walls
+    for (var r = 0; r < 10; r++) { var rz = z0 + 4 + r * 6; pkDmIvy(g, x0 - 0.02, 0.6, rz, 2.4, 5 + (r % 3), -1, 0, 60 + r); }
+  }
+  // the palace front: the gatehouse round the entrance, two slender towers, the flower medallions, the round corner tower,
+  // the exit porch and the lily ponds either side of the gatehouse, the slender towers standing in them
+  function pkDvFront(g) {
+    var D = PK_DV, X = pkDvM(), fx = D.X1, dz = D.DOOR;
+    // the gatehouse: forward of the wall, a pointed portal and the round dream window, a crown of three turrets
+    [-1, 1].forEach(function (s) { box(2.4, 13.0, 3.2, X.stucco, fx + 1.2, 6.5, dz + s * 2.9, g); box(2.6, 1.0, 3.3, X.base, fx + 1.3, 0.5, dz + s * 2.9, g); });
+    box(2.4, 13.0 - 5.6, 2.6, X.stucco, fx + 1.2, 5.6 + (13.0 - 5.6) / 2, dz, g);
+    [-1, 1].forEach(function (s) { box(2.4, 5.6, 0.06, X.night, fx + 1.2, 2.8, dz + s * 1.3, g); });
+    box(2.4, 0.06, 2.6, X.night, fx + 1.2, 5.57, dz, g);
+    box(2.6, 0.4, 9.4, X.trim, fx + 1.2, 13.1, dz, g);
+    for (var m = 0; m < 7; m++) box(0.6, 0.9, 0.8, X.stucco, fx + 2.1, 13.7, dz - 3.9 + m * 1.3, g);
+    solid(fx, fx + 2.4, dz - 4.5, dz - 1.4, 0, 13); solid(fx, fx + 2.4, dz + 1.4, dz + 4.5, 0, 13);
+    var pf = pkDmFrame(pkDmArch(4.0, 3.6, 6.4), pkDmArch(2.6, 3.4, 5.4), 0.5, X.trim, g, fx + 2.25, 0, dz); pf.rotation.y = Math.PI / 2;
+    box(0.2, 0.04, 2.6, X.trim, fx + 1.2, 0.02, dz, g);
+    pkDmRose(g, fx + 2.45, 9.7, dz, Math.PI / 2, 1.9, X.night, X.gold);
+    var moon = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.9, 24, 1, 0.6, 3.6), X.win); moon.position.set(fx + 2.5, 9.7, dz); moon.rotation.y = Math.PI / 2; g.add(moon);
+    sign(['DROOMVLUCHT'], 4.6, 0.7, fx + 2.52, 7.05, dz, Math.PI / 2, { bg: '#2a1f4a', fg: '#f0d8ff' }, g);
+    [-3.2, 0, 3.2].forEach(function (o, k) {
+      var tz = dz + o, th = k === 1 ? 3.0 : 2.0, tr = k === 1 ? 0.9 : 0.6;
+      cyl(tr, th, X.stucco, fx + 1.6, 13.4 + th / 2, tz, g, 14);
+      var c = new THREE.Mesh(new THREE.ConeGeometry(tr * 1.35, tr * 4.0, 14), k === 1 ? X.roof : X.roofBlue); c.position.set(fx + 1.6, 13.4 + th + tr * 2, tz); c.castShadow = true; g.add(c);
+      sphere(0.12, X.gold, fx + 1.6, 13.4 + th + tr * 4.05, tz, g);
+      box(0.06, 0.5, 0.25, X.win, fx + 1.6 + tr, 13.4 + th * 0.55, tz, g);
+    });
+    // the slender towers either side of the gatehouse
+    [-1, 1].forEach(function (s) {
+      var tz = dz + s * 5.6;
+      cyl(1.05, 17.0, X.stucco, fx + 1.0, 8.5, tz, g, 16); box(2.4, 1.0, 2.4, X.base, fx + 1.0, 0.5, tz, g);
+      pkRing(1.08, 0.08, X.trim, fx + 1.0, 8.0, tz, g, 24); pkRing(1.1, 0.1, X.trim, fx + 1.0, 16.6, tz, g, 24);
+      var c = new THREE.Mesh(new THREE.ConeGeometry(1.45, 6.0, 16), X.roof); c.position.set(fx + 1.0, 20.0, tz); c.castShadow = true; g.add(c);
+      pkRod(fx + 1.0, 22.9, tz, fx + 1.0, 24.0, tz, 0.04, X.gold, g, 6); sphere(0.16, X.gold, fx + 1.0, 23.4, tz, g);
+      [5, 9, 13].forEach(function (y) { pkDmLancet(g, fx + 2.06, y, tz, Math.PI / 2, 0.45, 1.5, X.win, X.trim); });
+      solid(fx, fx + 2.1, tz - 1.1, tz + 1.1, 0, 17);
+    });
+    // the flower medallions, great roses of eight petals, either side
+    [[D.DOOR - 10.5, 0], [D.DOOR + 10.0, 1]].forEach(function (fm) {
+      var f = new THREE.Group(); f.position.set(fx + 0.15, 8.5, fm[0]); f.rotation.y = Math.PI / 2; g.add(f);
+      for (var p = 0; p < 8; p++) { var a = p / 8 * 6.28, pm = sphere(0.9, X.petal[fm[1] ? 0 : 2], Math.cos(a) * 1.2, Math.sin(a) * 1.2, 0.15, f); pm.scale.set(1, 0.6, 0.25); pm.rotation.z = a; }
+      sphere(0.7, X.petal[1], 0, 0, 0.3, f).scale.set(1, 1, 0.4); pkRing(2.3, 0.1, X.gold, 0, 0, 0.1, f, 40, false);
+      for (var l = 0; l < 6; l++) { var la = l / 6 * 6.28 + 0.3; var lf = sphere(0.5, X.leaf[1], Math.cos(la) * 2.6, Math.sin(la) * 2.6, 0.05, f); lf.scale.set(1, 0.35, 0.15); lf.rotation.z = la; }
+    });
+    // the round corner tower at the north end of the front
+    var rx = fx + 1.0, rz = D.Z0 + 3.0;
+    cyl(3.2, 18.0, X.stucco, rx, 9.0, rz, g, 24); box(6.8, 1.0, 6.8, X.base, rx, 0.5, rz, g);
+    pkRing(3.25, 0.12, X.trim, rx, 8.0, rz, g, 40); pkRing(3.3, 0.16, X.trim, rx, 17.8, rz, g, 40);
+    for (var cr = 0; cr < 16; cr++) { var ca = cr / 16 * 6.28; box(0.6, 0.8, 0.5, X.stucco, rx + Math.cos(ca) * 3.15, 18.4, rz + Math.sin(ca) * 3.15, g).rotation.y = -ca; }
+    var tc = new THREE.Mesh(new THREE.ConeGeometry(3.8, 9.0, 24), X.roof); tc.position.set(rx, 23.0, rz); tc.castShadow = true; g.add(tc);
+    pkRod(rx, 27.4, rz, rx, 29.4, rz, 0.06, X.gold, g, 6); sphere(0.28, X.gold, rx, 28.0, rz, g);
+    var moonV = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.5, 16, 1, 0.6, 3.6), X.gold); moonV.position.set(rx, 29.2, rz); g.add(moonV);
+    [0.6, 1.4, 2.2].forEach(function (a) { [6, 11, 15].forEach(function (y) { pkDmLancet(g, rx + Math.cos(a) * 3.22, y, rz + Math.sin(a) * 3.22, Math.PI / 2 - a, 0.6, 1.8, X.win, X.trim); }); });
+    solid(rx - 3.2, rx + 3.2, rz - 3.2, rz + 3.2, 0, 18);
+    // the exit porch: a little gabled roof on posts over the door, its sign
+    var ez = D.EXIT;
+    [-1, 1].forEach(function (s) { cyl(0.12, 3.2, X.trim, fx + 2.0, 1.6, ez + s * 1.2, g, 10); });
+    var pr = new THREE.Group(); pr.position.set(fx + 1.1, 3.2, ez); pr.rotation.y = Math.PI / 2; g.add(pr); pkGableRoof(3.0, 2.4, 1.2, X.roof, X.stucco, 0, 0, 0, pr, 0.2);
+    sign(['UITGANG  *  DROMERIJEN'], 2.4, 0.36, fx + 2.15, 2.8, ez, Math.PI / 2, { bg: '#2a1f4a', fg: '#f0d8ff' }, g);
+    [[dz - 11.2, dz - 4.7], [dz + 4.7, dz + 11.2]].forEach(function (pz, k) {
+      var px0 = fx + 0.2, px1 = fx + 3.7, cz = (pz[0] + pz[1]) / 2, pw = pz[1] - pz[0];
+      var mx = (px0 + px1) / 2 + 0.25, mw = px1 - px0 + 0.5;
+      box(mw, 0.5, 0.3, X.base, mx, 0.25, pz[0] - 0.1, g); box(mw, 0.5, 0.3, X.base, mx, 0.25, pz[1] + 0.1, g); box(0.3, 0.5, pw + 0.5, X.base, px1 + 0.4, 0.25, cz, g);
+      box(mw - 0.3, 0.04, pw, X.dark, mx - 0.15, 0.04, cz, g);
+      var wtr = new THREE.Mesh(new THREE.PlaneGeometry(mw - 0.3, pw), X.water); wtr.rotation.x = -Math.PI / 2; wtr.position.set(mx - 0.15, 0.36, cz); g.add(wtr);
+      for (var lp = 0; lp < 6; lp++) { var lx = px0 + 0.8 + (lp % 2) * 1.6, lz = pz[0] + 0.9 + Math.floor(lp / 2) * 2.0; if (Math.abs(lz - (dz + (k ? 5.6 : -5.6))) < 1.4 && lx < fx + 2.2) continue; sphere(0.28, X.leaf[1], lx, 0.42, lz, g).scale.set(1, 0.1, 1); if (lp % 2) sphere(0.1, X.petal[0], lx, 0.48, lz, g); }
+      solid(px0, px1 + 0.5, pz[0] - 0.25, pz[1] + 0.25, 0, 0.8);
+    });
+    // light globes on posts along the front, and a little paved court before the gate
+    [-13.6, -3.6, 3.6, 13.6].forEach(function (o) { var lz2 = dz + o; cyl(0.06, 3.6, X.iron, fx + 4.4, 1.8, lz2, g, 8); sphere(0.24, X.globe, fx + 4.4, 3.8, lz2, g); });
+    box(4.0, 0.05, 9.0, pkPadMat(0xc9b0d9), fx + 4.0, 0.03, dz, g);
+    box(4.0, 0.05, 4.0, pkPadMat(0xc9b0d9), fx + 4.0, 0.03, D.EXIT, g);
+    box(2.5, 0.05, 2.6, pkPadMat(0xc9b0d9), fx + 1.2, 0.035, dz, g); box(2.2, 0.05, 2.6, pkPadMat(0xc9b0d9), fx + 1.1, 0.035, D.EXIT, g);
+    box(0.7, 0.05, 2.6, pkPadMat(0xc9b0d9), fx - 0.3, 0.035, dz, g); box(0.7, 0.05, 2.0, pkPadMat(0xc9b0d9), fx - 0.3, 0.035, D.EXIT, g);
+  }
+  // the station hall, as Efteling's is: the rail runs in a U, the gondolas come down one leg, round the bend and away up
+  // the other, the operator's booth standing in the middle of the U. Cream walls painted with gold stars over a gold
+  // stripe and a dark green dado, a tiled floor with the gondolas' guide slot in it and the moving walkway along the
+  // boarding side, black columns, small lamps in a dark ceiling. Walled off from the dream; the rail comes in and goes out
+  // through two low portals in the north wall.
+  function pkDvStarTex() {
+    return tex(256, 256, function (c, w, h) {
+      var rnd = pkRng(44); c.fillStyle = '#e9e1cc'; c.fillRect(0, 0, w, h);
+      for (var i = 0; i < 2000; i++) { c.fillStyle = 'rgba(120,100,70,' + (rnd() * 0.06).toFixed(3) + ')'; c.fillRect(rnd() * w, rnd() * h, 2, 2); }
+      for (var s = 0; s < 9; s++) { var x = rnd() * w, y = rnd() * h, r = 5 + rnd() * 5; c.fillStyle = '#7a6338'; c.beginPath(); for (var k = 0; k < 8; k++) { var a = k / 8 * 6.283, rr = k % 2 ? r * 0.25 : r; c.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr * 1.4); } c.closePath(); c.fill(); }
+    }, 1, 1);
+  }
+  function pkDvTileTex() {
+    return tex(256, 256, function (c, w, h) {
+      var rnd = pkRng(45); c.fillStyle = '#3a3630'; c.fillRect(0, 0, w, h);
+      for (var y = 0; y < 4; y++) for (var x = 0; x < 4; x++) { c.fillStyle = (x + y) % 2 ? pkDmShade('#a89c88', 0.92 + rnd() * 0.1) : pkDmShade('#8a7e6c', 0.92 + rnd() * 0.1); c.fillRect(x * 64 + 1, y * 64 + 1, 62, 62); }
+    }, 1, 1);
+  }
+  function pkDvHall(g) {
+    var D = PK_DV, X = pkDvM(), H = D.HALL, h = H.h, T = 0.3, legA = -91, legB = -85, U = { x: -88, z: -9, r: 3 };
+    var cream = std({ map: pkDvStarTex(), roughness: 0.85 }); cream.userData.tile = [3, 3];
+    var green = std({ color: 0x324a36, roughness: 0.7 }), stripe = std({ color: 0xc9962a, roughness: 0.5, metalness: 0.3 });
+    var tile = std({ map: pkDvTileTex(), roughness: 0.6 }); tile.userData.tile = [1.6, 1.6];
+    var wall = function (x0, x1, z0, z1, y0, y1) { box(x1 - x0, y1 - y0, z1 - z0, X.stucco, (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2, g); if (y0 < 1.6) solid(x0, x1, z0, z1, y0, y1); };
+    // the walls: the west wall, the south wall, the north wall with its two portals (the front wall is the building's)
+    wall(H.x0 - T, H.x0, H.z0 - T, H.z1 + T, 0, h);
+    wall(H.x0, H.x1, H.z1, H.z1 + T, 0, h);
+    [[H.x0, legA - 1.1], [legA + 1.1, legB - 1.1], [legB + 1.1, H.x1]].forEach(function (r) { wall(r[0], r[1], H.z0 - T, H.z0, 0, h); });
+    [legA, legB].forEach(function (x) { wall(x - 1.1, x + 1.1, H.z0 - T, H.z0, 4.2, h); });
+    // their inside face: the dado, the cream with its stars, the gold stripe; a run of these along a wall, with gaps
+    var line = function (ax, az, bx, bz, nx, nz, gaps) {
+      var L = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / L, uz = (bz - az) / L, cuts = [[0, L]];
+      (gaps || []).forEach(function (gp) { var out = []; cuts.forEach(function (c) { if (gp[1] <= c[0] || gp[0] >= c[1]) out.push(c); else { if (gp[0] > c[0]) out.push([c[0], gp[0]]); if (gp[1] < c[1]) out.push([gp[1], c[1]]); } }); cuts = out; });
+      cuts.forEach(function (c) {
+        var m = (c[0] + c[1]) / 2, len = c[1] - c[0], px = ax + ux * m + nx * 0.03, pz = az + uz * m + nz * 0.03, ry = Math.atan2(ux, uz) + Math.PI / 2;
+        [[0, 1.15, green], [1.15, h, cream]].forEach(function (b) { var bx2 = box(len, b[1] - b[0], 0.04, b[2], px, (b[0] + b[1]) / 2, pz, g); bx2.rotation.y = ry; });
+        var sb = box(len, 0.22, 0.06, stripe, px + nx * 0.02, 3.3, pz + nz * 0.02, g); sb.rotation.y = ry;
+        var cap = box(len, 0.06, 0.08, std({ color: 0x1e2a20, roughness: 0.6 }), px + nx * 0.02, 1.18, pz + nz * 0.02, g); cap.rotation.y = ry;
+      });
+    };
+    line(H.x0, H.z0, H.x0, H.z1, 1, 0);
+    line(H.x0, H.z1, H.x1 - 0.6, H.z1, 0, -1);
+    line(H.x1 - 0.6, H.z0, H.x0, H.z0, 0, 1, [[H.x1 - 0.6 - legB - 1.1, H.x1 - 0.6 - legB + 1.1], [H.x1 - 0.6 - legA - 1.1, H.x1 - 0.6 - legA + 1.1]]);
+    line(H.x1 - 0.6, H.z1, H.x1 - 0.6, H.z0, -1, 0, [[H.z1 - D.DOOR - 1.3, H.z1 - D.DOOR + 1.3], [H.z1 - D.EXIT - 1.0, H.z1 - D.EXIT + 1.0]]);
+    // the ceiling and its lamps, the tiled floor, the guide slot under the rail, the moving walkway on the boarding side
+    box(H.x1 - H.x0 + T, 0.3, H.z1 - H.z0 + 2 * T, X.dark, (H.x0 + H.x1) / 2, h + 0.15, (H.z0 + H.z1) / 2, g);
+    for (var k = 0; k < 12; k++) { var lx = H.x0 + 1.2 + (k % 2) * (H.x1 - H.x0 - 3.0), lz = H.z0 + 1.5 + Math.floor(k / 2) * 4.0; cyl(0.14, 0.06, X.globe, lx, h - 0.03, lz, g, 12); }
+    box(H.x1 - H.x0, 0.05, H.z1 - H.z0, tile, (H.x0 + H.x1) / 2, 0.03, (H.z0 + H.z1) / 2, g);
+    var slot = std({ color: 0x15171a, roughness: 0.4, metalness: 0.5 }), walk = std({ color: 0x2a2c30, roughness: 0.9 });
+    [legA, legB].forEach(function (x) { [-0.06, 0.06].forEach(function (o) { box(0.03, 0.02, H.z0 - U.z > 0 ? 0 : U.z - H.z0, slot, x + o, 0.065, (H.z0 + U.z) / 2, g); }); });
+    for (var a2 = 0; a2 < 12; a2++) { var t0 = a2 / 12 * Math.PI, t1 = (a2 + 1) / 12 * Math.PI, tm = (t0 + t1) / 2; var sg2 = box(0.1, 0.02, U.r * (t1 - t0) + 0.02, slot, U.x - Math.cos(tm) * U.r, 0.065, U.z + Math.sin(tm) * U.r, g); sg2.rotation.y = -tm; }
+    box(1.0, 0.04, U.z - H.z0 - 1.0, walk, legB + 1.25, 0.07, (H.z0 + 1.0 + U.z) / 2, g);
+    box(1.0, 0.05, U.z - H.z0 - 1.0, X.gold, legB + 0.72, 0.075, (H.z0 + 1.0 + U.z) / 2, g).scale.x = 0.06;
+    // the black columns in the U
+    [[U.x, -11.4]].forEach(function (c) { cyl(0.22, h, X.dark, c[0], h / 2, c[1], g, 14); box(0.8, 0.5, 0.8, X.dark, c[0], 0.25, c[1], g); solid(c[0] - 0.4, c[0] + 0.4, c[1] - 0.4, c[1] + 0.4, 0, h); });
+    sign(['UITGANG'], 1.2, 0.3, H.x1 - 0.7, 3.0, D.EXIT, -Math.PI / 2, { bg: '#123a22', fg: '#c8ffd8' }, g);
+    pkDvHallDress(g, legA, legB, U, h);
+    var lt = new THREE.PointLight(0xffe8c8, 1.2, 22, 1.6); lt.position.set(-87, 5.6, -13); g.add(lt);
+  }
+  // the station's dressing: the track's own band in the floor with its yellow safety edges, the moving walkway round the
+  // outside of the U, the railed way from the doors to the queue (kept apart from the platform and the riders leaving), a
+  // gilt arch round the doors, a planter round the column and a lit gilt star in the middle of the U, and along the walls
+  // the dreams in gilt frames, lamps on brackets, plants in pots and a bench by the way out
+  function pkDvHallDress(g, legA, legB, U, h) {
+    var D = PK_DV, X = pkDvM(), H = D.HALL, band = std({ color: 0x24262c, roughness: 0.8 }), yel = std({ color: 0xe0b020, roughness: 0.6 }), belt = std({ color: 0x1c1d20, roughness: 0.9 });
+    var run = function (ax, az, bx, bz, w, mat, y) { var L = Math.hypot(bx - ax, bz - az), b = box(w, 0.02, L, mat, (ax + bx) / 2, y, (az + bz) / 2, g); b.rotation.y = Math.atan2(bx - ax, bz - az); return b; };
+    var path = function (r, w, mat, y, also) {   // a strip that follows the rail: down a leg, round the bend, up the other, r out from it
+      run(legA - r, H.z0, legA - r, U.z, w, mat, y); run(legB + r, H.z0, legB + r, U.z, w, mat, y);
+      for (var k = 0; k < 16; k++) { var t0 = k / 16 * Math.PI, t1 = (k + 1) / 16 * Math.PI, R0 = U.r + r; run(U.x - Math.cos(t0) * R0, U.z + Math.sin(t0) * R0, U.x - Math.cos(t1) * R0, U.z + Math.sin(t1) * R0, w, mat, y); }
+    };
+    path(0, 1.7, band, 0.058); path(-0.9, 0.08, yel, 0.062); path(0.9, 0.08, yel, 0.062);
+    // the moving walkway along the outside, grooved, between gilt edges
+    path(1.15, 0.8, belt, 0.075); path(1.57, 0.05, X.gold, 0.085); path(0.73, 0.05, X.gold, 0.085);
+    for (var gz = H.z0 + 1.2; gz < U.z; gz += 0.5) [legA - 1.15, legB + 1.15].forEach(function (gx) { box(0.7, 0.012, 0.04, std({ color: 0x3a3c42, roughness: 0.8 }), gx, 0.088, gz, g); });
+    // the railed way in: the door, a rail on its platform side and one between it and the way out
+    var rail = function (ax, az, bx, bz) {
+      var L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(L / 1.2));
+      pkRod(ax, 1.0, az, bx, 1.0, bz, 0.035, X.gold, g, 8); pkRod(ax, 0.5, az, bx, 0.5, bz, 0.02, X.iron, g, 6);
+      for (var i = 0; i <= n; i++) { var f = i / n, px = ax + (bx - ax) * f, pz = az + (bz - az) * f; cyl(0.04, 1.0, std({ color: 0x1a2236, roughness: 0.5 }), px, 0.5, pz, g, 8); sphere(0.06, X.gold, px, 1.04, pz, g); }
+      solid(Math.min(ax, bx) - 0.06, Math.max(ax, bx) + 0.06, Math.min(az, bz) - 0.06, Math.max(az, bz) + 0.06, 0, 1.0);
+    };
+    rail(-83.3, D.DOOR - 1.5, -83.3, -7.95); rail(-83.3, -5.45, -83.3, -4.85); rail(-83.3, -4.85, D.X1 - 0.7, -4.85); rail(-83.3, D.DOOR - 1.5, D.X1 - 0.7, D.DOOR - 1.5);   // the gate is in the platform side, on the walkway
+    box(2.7, 0.04, 5.8, pkPadMat(0xc9b0d9), -81.95, 0.07, -7.6, g);
+    sign(['DROOMVLUCHT  >'], 1.4, 0.26, -83.24, 1.35, -9.25, Math.PI / 2, { bg: '#1a2236', fg: '#e8c870' }, g);
+    // the doors' gilt arch inside, and a globe either side
+    var arch = pkDmFrame(pkDmArch(3.4, 3.6, 5.0), pkDmArch(2.6, 3.4, 4.6), 0.12, X.gold, g, D.X1 - 0.66, 0, D.DOOR); arch.rotation.y = Math.PI / 2;
+    [-1.9, 1.9].forEach(function (o) { pkRod(D.X1 - 0.62, 2.8, D.DOOR + o, D.X1 - 0.95, 2.8, D.DOOR + o, 0.02, X.gold, g, 6); sphere(0.17, X.globe, D.X1 - 0.95, 2.62, D.DOOR + o, g); });
+    // the middle of the U: a planter round the column, a gilt star lit on a pedestal, low planters
+    cyl(1.0, 0.55, X.trim, U.x, 0.28, -11.4, g, 24); cyl(0.92, 0.06, X.soil, U.x, 0.56, -11.4, g, 24);
+    for (var f2 = 0; f2 < 10; f2++) { var fa = f2 / 10 * 6.283; sphere(0.2, X.petal[f2 % 4], U.x + Math.cos(fa) * 0.65, 0.68, -11.4 + Math.sin(fa) * 0.65, g).scale.set(1, 0.7, 1); }
+    solid(U.x - 1.0, U.x + 1.0, -12.4, -10.4, 0, 0.6);
+    cyl(0.32, 1.0, std({ color: 0x1a2236, roughness: 0.5 }), U.x, 0.5, -16.2, g, 16); pkRing(0.33, 0.03, X.gold, U.x, 1.0, -16.2, g, 24);
+    var starM = std({ color: 0x6a4a10, emissive: 0xffd070, emissiveIntensity: 0.8, roughness: 0.4, metalness: 0.6 });
+    var star = pkExtrude([[0, 0.5], [0.12, 0.16], [0.48, 0.16], [0.2, -0.06], [0.3, -0.42], [0, -0.2], [-0.3, -0.42], [-0.2, -0.06], [-0.48, 0.16], [-0.12, 0.16]], 0.1, starM, U.x, 1.6, -16.2, g, 0.02); star.rotation.y = Math.PI / 2;
+    solid(U.x - 0.35, U.x + 0.35, -16.55, -15.85, 0, 1.2);
+    // the walls: the dreams in gilt frames, lamps on brackets
+    var art = function (seed, sky, ground, moon) { return tex(256, 180, function (c, w, hh) { var rnd = pkRng(seed), gr = c.createLinearGradient(0, 0, 0, hh); gr.addColorStop(0, sky[0]); gr.addColorStop(1, sky[1]); c.fillStyle = gr; c.fillRect(0, 0, w, hh); for (var i = 0; i < 40; i++) { c.fillStyle = 'rgba(255,240,200,' + (0.3 + rnd() * 0.6).toFixed(2) + ')'; c.fillRect(rnd() * w, rnd() * hh * 0.6, 2, 2); } c.fillStyle = '#f0d890'; c.beginPath(); c.arc(moon[0], moon[1], 16, 0, 6.3); c.fill(); c.fillStyle = sky[0]; c.beginPath(); c.arc(moon[0] + 7, moon[1] - 4, 14, 0, 6.3); c.fill(); c.fillStyle = ground; c.beginPath(); c.moveTo(0, hh); for (var x = 0; x <= w; x += 16) c.lineTo(x, hh * 0.72 - Math.abs(Math.sin(x * 0.03 + seed)) * 30 - (x > w * 0.35 && x < w * 0.55 ? 40 : 0)); c.lineTo(w, hh); c.fill(); }, 1, 1); };
+    var pics = [[art(1, ['#1a2050', '#6a5aa0'], '#2a2040', [200, 40]), H.x0 + 0.06, -19.5, Math.PI / 2], [art(2, ['#20304a', '#6aa0b0'], '#1a3020', [60, 50]), H.x0 + 0.06, -12.5, Math.PI / 2], [art(3, ['#3a1a40', '#c08ab0'], '#3a2030', [170, 35]), H.x0 + 0.06, -5.5, Math.PI / 2], [art(4, ['#101a40', '#4060a0'], '#202848', [90, 40]), -91.5, H.z1 - 0.06, Math.PI], [art(5, ['#2a1a10', '#a07040'], '#3a2a18', [180, 45]), -87.0, H.z1 - 0.06, Math.PI]];
+    pics.forEach(function (pc) { var fr = new THREE.Group(); fr.position.set(pc[1], 2.25, pc[2]); fr.rotation.y = pc[3]; g.add(fr); box(1.62, 1.18, 0.06, X.gold, 0, 0, 0, fr); var cv = new THREE.Mesh(new THREE.PlaneGeometry(1.44, 1.0), std({ map: pc[0], roughness: 0.8 })); cv.position.z = 0.035; fr.add(cv); });
+    [[H.x0 + 0.1, -22.5, 1], [H.x0 + 0.1, -16, 1], [H.x0 + 0.1, -9, 1], [H.x0 + 0.1, -2.5, 1], [-89.5, H.z1 - 0.1, 0], [-84.5, H.z1 - 0.1, 0]].forEach(function (l) { var dx = l[2] ? 0.35 : 0, dz = l[2] ? 0 : -0.35; pkRod(l[0], 3.0, l[1], l[0] + dx, 3.0, l[1] + dz, 0.02, X.gold, g, 6); sphere(0.14, X.globe, l[0] + dx, 2.85, l[1] + dz, g); });
+    // plants in pots, and a bench by the way out
+    [[-93.4, -23.3], [-81.1, -23.4], [-93.4, -1.6], [-81.1, -12.4]].forEach(function (pp) { cyl(0.28, 0.55, X.lilac, pp[0], 0.28, pp[1], g, 14, 0.22); for (var lf = 0; lf < 5; lf++) sphere(0.26, X.leaf[lf % 3], pp[0] + Math.cos(lf * 1.3) * 0.15, 0.85 + (lf % 2) * 0.25, pp[1] + Math.sin(lf * 1.3) * 0.15, g); solid(pp[0] - 0.3, pp[0] + 0.3, pp[1] - 0.3, pp[1] + 0.3, 0, 1); });
+    var bw = std({ color: 0x6a4428, roughness: 0.7 }); box(0.45, 0.08, 1.6, bw, -81.0, 0.45, -18.0, g); box(0.06, 0.5, 1.6, bw, -80.8, 0.75, -18.0, g); [-0.7, 0.7].forEach(function (o) { box(0.4, 0.42, 0.06, X.iron, -81.0, 0.21, -18.0 + o, g); });
+  }
+  // the operator's booth in the middle of the U, built for the ride: dark navy panelling below, glass all round above,
+  // a navy roof band, a glazed door at its south end; the desk looks east over the boarding leg
+  function pkDvBooth(g, a) {
+    var X = pkDvM(), x0 = -90.1, x1 = -85.9, z0 = -23.95, z1 = -19.6, F = 0.12, Hb = 2.8;   // against the north wall, between the rail's way in and way out
+    var navy = std({ color: 0x1a2236, roughness: 0.5, metalness: 0.2 }), glass = std({ color: 0x9fb6cc, roughness: 0.08, metalness: 0.2, transparent: true, opacity: 0.25 });
+    box(x1 - x0, F, z1 - z0, std({ map: TEX.wood, color: 0x6a4a30, roughness: 0.6 }), (x0 + x1) / 2, F / 2, (z0 + z1) / 2, g);
+    for (var sl = 0; sl < 9; sl++) cyl(0.04, 0.02, X.globe, x0 + 0.5 + (sl % 3) * 1.1, Hb - 0.01, z0 + 0.8 + Math.floor(sl / 3) * 1.7, g, 10);
+    box(x1 - x0 - 0.2, 0.06, z1 - z0 - 0.2, X.gold, (x0 + x1) / 2, Hb - 0.02, (z0 + z1) / 2, g).scale.set(1, 1, 1);
+    var side = function (ax, az, bx, bz, gapA, gapB) {
+      var L = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / L, uz = (bz - az) / L, ry = Math.atan2(ux, uz) + Math.PI / 2, segs = gapA !== undefined ? [[0, gapA], [gapB, L]] : [[0, L]];
+      segs.forEach(function (s) {
+        if (s[1] - s[0] < 0.01) return; var m = (s[0] + s[1]) / 2, px = ax + ux * m, pz = az + uz * m, len = s[1] - s[0];
+        [[0, 1.0, navy, 0.1], [1.0, 2.4, glass, 0.04], [2.4, Hb, navy, 0.1]].forEach(function (b) { var bb = box(len, b[1] - b[0], b[3], b[2], px, (b[0] + b[1]) / 2, pz, g); bb.rotation.y = ry; if (b[2] === glass) bb.userData.noBake = true; });
+        solid(Math.min(ax + ux * s[0], ax + ux * s[1]) - 0.06, Math.max(ax + ux * s[0], ax + ux * s[1]) + 0.06, Math.min(az + uz * s[0], az + uz * s[1]) - 0.06, Math.max(az + uz * s[0], az + uz * s[1]) + 0.06, 0, Hb);
+      });
+      if (gapA !== undefined) { var gm = (gapA + gapB) / 2, bx3 = box(gapB - gapA, Hb - 2.1, 0.1, navy, ax + ux * gm, 2.1 + (Hb - 2.1) / 2, az + uz * gm, g); bx3.rotation.y = ry; }
+    };
+    // glass on the three sides that look over the station, the door in the west one; the back is a solid wall, and everything
+    // the room holds stands against it, so the glass is clear
+    side(x1, z0, x1, z1); side(x0, z0, x0, z1, 1.3, 2.25); side(x0, z1, x1, z1);
+    box(x1 - x0, Hb, 0.04, navy, (x0 + x1) / 2, Hb / 2, z0 + 0.02, g); solid(x0, x1, z0, z0 + 0.12, 0, Hb);
+    [[x0, z0], [x1, z0], [x0, z1], [x1, z1]].forEach(function (c) { box(0.12, Hb, 0.12, navy, c[0], Hb / 2, c[1], g); });
+    box(x1 - x0 + 0.3, 0.16, z1 - z0 + 0.3, navy, (x0 + x1) / 2, Hb + 0.08, (z0 + z1) / 2, g);
+    sign(['DROOMVLUCHT'], 1.8, 0.24, x1 + 0.08, 2.6, (z0 + z1) / 2, Math.PI / 2, { bg: '#1a2236', fg: '#e8c870' }, g);
+    // its door: navy, glazed above, swinging out to the west
+    var hinge = pkMover(g, x0, F, z0 + 1.3); hinge.rotation.y = 0;
+    box(0.06, 2.05, 0.93, navy, 0, 1.03, 0.47, hinge); var dg = box(0.07, 0.7, 0.6, glass, 0, 1.5, 0.47, hinge); dg.userData.noBake = true;
+    sphere(0.035, X.gold, 0.06, 1.0, 0.82, hinge);
+    pkRoomDoor(hinge, 0.95, 2.05, -Math.PI / 2 * 0.95, 'the booth door', a);
+    pkRoomKit(g, a, { x: (x0 + x1) / 2, z: (z0 + z1) / 2, y: 0, ry: Math.PI, W: x1 - x0, D: z1 - z0, H: Hb, cabBack: true, cabAt: [-1.5, 1.15], key: [-0.78, 1.9], clock: [0, 2.42], tc: [0.95, 1.3], sw: [(x1 - x0) / 2 - 0.35, (z1 - z0) / 2 - 0.06, Math.PI, 1.25], mon: [0, 2.15, -(z1 - z0) / 2 + 0.6, 0], console: 'droom' });
+  }
+  // the rail: an I-beam along the whole course, hung from the roof on rods (or from the swamp tree on arms in the spiral)
+  function pkDvRail(g) {
+    var D = PK_DV, X = pkDvM();
+    var tube = new THREE.Mesh(new THREE.TubeGeometry(D.curve, Math.ceil(D.L / 0.5), 0.09, 6, true), X.rail); tube.castShadow = true; g.add(tube);
+    var top = new THREE.CatmullRomCurve3(D.curve.points.map(function (p) { return new THREE.Vector3(p.x, p.y + 0.2, p.z); }), true, 'centripetal');
+    var web = new THREE.Mesh(new THREE.TubeGeometry(top, Math.ceil(D.L / 0.5), 0.05, 5, true), X.rail); g.add(web);
+    var P = D.P, n = D.n, step = Math.round(4.5 / (D.L / n));
+    for (var i = 0; i < n; i += step) {
+      var p = P[i], dsp = Math.hypot(p.x - D.SP.x, p.z - D.SP.z);
+      if (dsp < D.SP.r + 0.5 && p.y < D.SP.y0 + 0.5 && p.y > D.SP.y1 - 0.5) { var ax = D.SP.x + (p.x - D.SP.x) / dsp * 1.9, az = D.SP.z + (p.z - D.SP.z) / dsp * 1.9; pkRod(ax, p.y + 0.25, az, p.x, p.y + 0.25, p.z, 0.06, X.rail, g, 6); continue; }
+      var hit = false;
+      for (var j = 0; j < n && !hit; j += 4) { var q = P[j]; if (q.y > p.y + 1.0 && Math.abs(q.x - p.x) < 1.6 && Math.abs(q.z - p.z) < 1.6) hit = true; }
+      if (hit) continue;
+      var topY = (p.x > D.HALL.x0 && p.x < D.HALL.x1 && p.z > D.HALL.z0 && p.z < D.HALL.z1) ? D.HALL.h : D.H;
+      pkRod(p.x, p.y + 0.25, p.z, p.x, topY, p.z, 0.035, X.rail, g, 5);
+    }
+  }
+  // the seven dreams
+  function pkDvScenes(g, E) {
+    var D = PK_DV, X = pkDvM(), A = E.anim = { sway: [], bob: [], spin: [], comets: [], pend: [], wave: [] }, i;
+    var light = function (col, x, y, z, k, d) { var l = new THREE.PointLight(col, k, d || 16, 1.6); l.position.set(x, y, z); g.add(l); return l; };
+    // 1 Kastelenrijk: four castles on rock pillars, swaying, waterfalls between them, mist below
+    var castles = [[-102.5, -22.5, 4.5, 1.2, X.roof], [-108.4, -30.2, 5.5, 0.85, X.roofBlue], [-108.4, -15.5, 3.8, 0.85, X.roofBlue]];
+    castles.forEach(function (c, k) { var top = pkDvRockPillar(g, c[0], c[1], c[2], 2.2, 10 + k); var ca = pkDvCastle(g, c[0], top, c[1], c[3], c[4], 20 + k); A.sway.push({ o: ca, ph: k * 1.3 }); });
+    [[-105.6, -24.0, 6.5], [-100.2, -18.6, 4.5]].forEach(function (w) { var fp = new THREE.Mesh(new THREE.PlaneGeometry(1.6, w[2]), X.fall); fp.position.set(w[0], w[2] / 2, w[1]); fp.rotation.y = 0.6; fp.userData.noBake = true; g.add(fp); E.falls.push(fp); });
+    for (i = 0; i < 8; i++) { var mm = new THREE.Mesh(new THREE.PlaneGeometry(6, 6), X.fog); mm.rotation.x = -Math.PI / 2; mm.position.set(-108 + (i % 4) * 4, 0.6, -30 + Math.floor(i / 4) * 8); mm.userData.noBake = true; g.add(mm); }
+    E.lights.push(light(0xffc8e0, -103, 8, -23, 1.6, 18));
+    // 2 Wonderwoud: giant trees the gondolas fly through, glowing mushrooms, elves dancing round a bear, a flying elf, the
+    // babbling tree's face, a unicorn
+    [[-108, -10, 14, 1.0], [-100, -8.5, 13, 0.9], [-104, 3, 15, 1.1], [-99.6, 3.6, 12, 0.8], [-109, -2, 13, 0.9]].forEach(function (t, k) { pkDvTree(g, t[0], t[1], t[2], t[3], 30 + k, 14.6); });
+    for (i = 0; i < 16; i++) { var mx = -109 + (i % 6) * 2.4, mz = -11 + Math.floor(i / 6) * 5 + (i % 2); cyl(0.08, 0.5 + (i % 3) * 0.3, X.white, mx, 0.3, mz, g, 6); pkLathe([[0, 0], [0.4 + (i % 2) * 0.2, 0.05], [0.3, 0.2], [0, 0.3]], X.shroom, mx, 0.55 + (i % 3) * 0.3, mz, g, 12); }
+    var bear = new THREE.Group(); bear.position.set(-103, 0, -6); g.add(bear);
+    sphere(0.8, X.brown, 0, 0.9, 0, bear).scale.set(1, 1.2, 0.9); sphere(0.45, X.brown, 0, 2.1, 0.2, bear); [-1, 1].forEach(function (s) { sphere(0.15, X.brown, s * 0.32, 2.45, 0.15, bear); });
+    pkRing(0.55, 0.06, X.petal[0], 0, 1.75, 0.15, bear, 20);
+    for (i = 0; i < 5; i++) { var ea = i / 5 * 6.28, el = pkDmFigure(X.elf, { s: 0.55 }); el.g.position.set(-103 + Math.cos(ea) * 2.1, 0, -6 + Math.sin(ea) * 2.1); el.g.rotation.y = -ea - Math.PI / 2; g.add(el.g); el.armL.rotation.z = -2.4; el.armR.rotation.z = 2.4; A.bob.push({ o: el.g, ph: i, amp: 0.25, y: 0 }); }
+    var fly = pkDmFigure(X.elf, { s: 0.6 }); fly.g.position.set(-100, 7, -10); g.add(fly.g); fly.armL.rotation.z = -1.6; fly.armR.rotation.z = 1.6; A.bob.push({ o: fly.g, ph: 2, amp: 0.8, y: 7 });
+    var face = new THREE.Group(); face.position.set(-104 + 1.1, 4.5, 3); face.rotation.y = Math.PI / 2; g.add(face);
+    [-0.35, 0.35].forEach(function (x) { sphere(0.2, X.win, x, 0.4, 0, face); }); var mouth = box(0.6, 0.2, 0.1, X.dark, 0, -0.2, 0, face); A.wave.push({ o: mouth, mouth: true });
+    pkDvHorse(g, -100.6, 0, -1.2, -2.2, 1.2, X.white, true);
+    E.lights.push(light(0x9fe0a8, -103, 9, -4, 1.4, 16));
+    // 3 Elfentuin: the pond, giant flowers, King Oberon waving from his sunflower throne, the peacock, deer, fairies
+    var pond = new THREE.Mesh(new THREE.CircleGeometry(4.2, 32), X.water); pond.rotation.x = -Math.PI / 2; pond.position.set(-104, 0.06, 11); g.add(pond);
+    pkRing(4.2, 0.18, X.base, -104, 0.08, 11, g, 40);
+    [[-108.5, 6.5, 4.5, 0.9], [-108.5, 16, 5.5, 1.1], [-99, 16.5, 3.5, 0.8], [-97.5, 7, 4.0, 0.9], [-101, 18.5, 6.0, 1.2], [-107, 18.2, 3.0, 0.7]].forEach(function (f, k) { pkDvFlower(g, f[0], f[1], f[2], f[3], X.petal[k % 4], 40 + k); });
+    var sunF = new THREE.Group(); sunF.position.set(-107.2, 0, 12.5); sunF.scale.setScalar(0.85); g.add(sunF);
+    pkTube([[0, 0, 0], [0.3, 2.5, 0], [-0.2, 5.0, 0], [0, 6.2, 0]], 0.3, X.leaf[1], sunF, false, 20, 8);
+    var disc = new THREE.Group(); disc.position.set(0, 6.3, 0); sunF.add(disc);
+    cyl(1.4, 0.3, X.brown, 0, 0, 0, disc, 24);
+    for (i = 0; i < 18; i++) { var pa2 = i / 18 * 6.28, pt = sphere(0.7, X.sun, Math.cos(pa2) * 1.9, 0, Math.sin(pa2) * 1.9, disc); pt.scale.set(1, 0.12, 0.4); pt.rotation.y = -pa2; }
+    var ob = pkDmFigure(X.oberon, { seated: true, s: 1.4 }); ob.g.position.set(0, 0.15, -0.2); ob.g.rotation.y = Math.PI / 2 - 0.2; disc.add(ob.g);
+    var crown = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.13, 0.14, 8, 1, true), X.gold); crown.position.set(0, ob.top + 0.34, 0); ob.g.add(crown);
+    ob.armR.rotation.z = 2.5; A.wave.push({ o: ob.armR });
+    var peacock = new THREE.Group(); peacock.position.set(-99.5, 0, 9.5); peacock.rotation.y = -1.2; g.add(peacock);
+    sphere(0.3, X.petal[3], 0, 0.6, 0, peacock).scale.set(0.8, 1, 1.3); sphere(0.14, X.petal[3], 0, 1.05, 0.25, peacock);
+    for (i = 0; i < 13; i++) { var fa = -1.2 + i * 0.2, fe = box(0.12, 1.6, 0.02, X.petal[1], Math.sin(fa) * 0.6, 1.2 + Math.cos(fa) * 0.6, -0.35, peacock); fe.rotation.z = -fa; sphere(0.07, X.win, Math.sin(fa) * 1.25, 0.6 + Math.cos(fa) * 1.4 + 0.6, -0.36, peacock); }
+    [[-107, 14, 0.6], [-106, 15.2, 2.2]].forEach(function (d) { var dm = pkDvHorse(g, d[0], 0, d[1], d[2], 0.7, X.brown, false); pkRod(d[0], 1.25, d[1], d[0] + 0.2, 1.7, d[1] + 0.3, 0.02, X.brown, g, 4); });
+    for (i = 0; i < 14; i++) { var fy = sphere(0.09, X.fairy, -109 + (i % 7) * 1.8, 2.5 + (i % 4) * 1.2, 6 + Math.floor(i / 7) * 9 + (i % 3), g); A.bob.push({ o: fy, ph: i * 0.7, amp: 0.4, y: fy.position.y }); }
+    E.lights.push(light(0xffc0e8, -103, 7, 12, 1.5, 16));
+    // 4 Sterrentunnel: a long dark tube along the south wall, its inside full of twinkling stars
+    var tz0 = 20.5, tz1 = 29.4, tx0 = -109.4, tx1 = -91.0, tyT = 12.5, tyB = 4.5;
+    box(tx1 - tx0, 0.2, tz1 - tz0, X.dark, (tx0 + tx1) / 2, tyT, (tz0 + tz1) / 2, g);
+    box(tx1 - tx0, 0.2, tz1 - tz0, X.dark, (tx0 + tx1) / 2, tyB, (tz0 + tz1) / 2, g);
+    box(tx1 - tx0 - 6, tyT - tyB, 0.2, X.dark, (tx0 + tx1) / 2 + 3, (tyT + tyB) / 2, tz0, g);
+    var starGeo = new THREE.SphereGeometry(0.05, 6, 4), m4 = new THREE.Matrix4(), rs = pkRng(9);
+    [X.starA, X.starB].forEach(function (sm) {
+      var im = new THREE.InstancedMesh(starGeo, sm, 260);
+      for (var k = 0; k < 260; k++) { var face2 = k % 3, sx2 = tx0 + rs() * (tx1 - tx0), sy2, sz2; if (face2 === 0) { sy2 = tyT - 0.12; sz2 = tz0 + rs() * (tz1 - tz0); } else if (face2 === 1) { sy2 = tyB + 0.3 + rs() * (tyT - tyB - 0.6); sz2 = tz1 - 0.7; } else { sy2 = tyB + 0.3 + rs() * (tyT - tyB - 0.6); sz2 = tz0 + 0.12; } m4.makeTranslation(sx2, sy2, sz2); im.setMatrixAt(k, m4); }
+      im.instanceMatrix.needsUpdate = true; im.frustumCulled = false; im.userData.noBake = true; g.add(im);
+    });
+    // 5 Hemelburchten: castles floating on clouds, planets turning, comets crossing
+    [[-88.5, 19.5, 10.0, X.roofBlue], [-83.6, 27.4, 10.8, X.roof], [-92.0, 15.0, 9.8, X.roof]].forEach(function (c, k) {
+      var fl = new THREE.Group(); fl.position.set(c[0], c[2], c[1]); g.add(fl);
+      for (var cl = 0; cl < 6; cl++) sphere(0.7 + (cl % 3) * 0.2, X.cloud, Math.cos(cl) * 1.3, -0.4, Math.sin(cl * 1.7) * 1.1, fl).scale.set(1, 0.5, 1);
+      pkDvCastle(fl, 0, -0.1, 0, 0.6, c[3], 50 + k); A.bob.push({ o: fl, ph: k * 2, amp: 0.35, y: c[2] });
+    });
+    [[-82.0, 15.0, 18.5, 1.0, 0], [-91, 14.5, 26, 1.0, 1], [-82, 7.5, 18, 0.8, 2]].forEach(function (p, k) {
+      var pl = new THREE.Group(); pl.position.set(p[0], p[1], p[2]); g.add(pl);
+      sphere(p[3], X.planet[p[4]], 0, 0, 0, pl).geometry = new THREE.SphereGeometry(p[3], 24, 16);
+      if (k !== 2) { var rg = pkRing(p[3] * 1.6, 0.06, X.gold, 0, 0, 0, pl, 40); rg.rotation.x = 1.2; }
+      A.spin.push({ o: pl, w: 0.15 + k * 0.1 });
+    });
+    for (i = 0; i < 3; i++) { var cm = sphere(0.16, X.comet, 0, 0, 0, g); var tail = cyl(0.02, 1.6, X.comet, 0, 0, 0.9, cm, 6, 0.1); tail.rotation.x = Math.PI / 2; cm.userData.noBake = true; A.comets.push({ o: cm, ph: i * 2.1 }); }
+    E.lights.push(light(0x8aa0ff, -87, 12, 21, 1.6, 18));
+    // 6 Zompenwoud: the hollow swamp tree the spiral winds round, its roots in the mud, hanging moss, the swinging troll,
+    // the startle troll, will-o'-the-wisps
+    var S = D.SP;
+    cyl(1.6, D.H, X.swampTrunk, S.x, D.H / 2, S.z, g, 14, 2.2);
+    for (i = 0; i < 7; i++) { var ra = i / 7 * 6.28; pkRod(S.x + Math.cos(ra) * 1.4, 1.6, S.z + Math.sin(ra) * 1.4, S.x + Math.cos(ra) * 3.4, 0, S.z + Math.sin(ra) * 3.4, 0.35, X.swampTrunk, g, 6); }
+    var mudp = new THREE.Mesh(new THREE.CircleGeometry(5.4, 32), X.mud); mudp.rotation.x = -Math.PI / 2; mudp.position.set(S.x, 0.05, S.z); g.add(mudp);
+    for (i = 0; i < 18; i++) { var ma = i / 18 * 6.28, mr2 = 1.7 + (i % 3) * 0.15; var ms = box(0.25, 1.2 + (i % 4) * 0.4, 0.04, X.moss, S.x + Math.cos(ma) * mr2, 13.5 - (i % 5) * 1.8, S.z + Math.sin(ma) * mr2, g); ms.rotation.y = -ma; }
+    var rope = new THREE.Group(); rope.position.set(-81.0, 15.8, 10.0); rope.userData.dynamic = true; g.add(rope);
+    pkRod(0, 0, 0, 0, -6.5, 0, 0.03, X.brown, rope, 4);
+    var st = pkDmFigure(X.troll, { s: 1.3 }); st.g.position.y = -8.6; rope.add(st.g); st.armL.rotation.z = -2.8; st.armR.rotation.z = 2.8; sphere(0.13, X.troll, 0, st.top + 0.2, 0.18, st.g);
+    A.pend.push({ o: rope, ph: 0 });
+    var tr2 = pkDmFigure(X.troll, { s: 1.6 }); tr2.g.position.set(S.x - 4.0, 0, S.z + 5.4); tr2.g.rotation.y = -0.6; g.add(tr2.g); tr2.armL.rotation.x = tr2.armR.rotation.x = -1.6; sphere(0.15, X.troll, 0, tr2.top + 0.2, 0.18, tr2.g);
+    A.bob.push({ o: tr2.g, ph: 0, amp: 0.6, y: 0, jump: true });
+    for (i = 0; i < 10; i++) { var wa2 = i / 10 * 6.28, wp = sphere(0.12, X.wisp, S.x + Math.cos(wa2) * 6, 1.5 + (i % 4) * 2.5, S.z + Math.sin(wa2) * 5.5, g); A.bob.push({ o: wp, ph: i, amp: 0.6, y: wp.position.y }); }
+    E.lights.push(light(0x9aff9a, S.x, 7, S.z, 1.4, 16));
+    // 7 Droommoeras, the waking: rabbits, the troll lifting three singing elves, the fog wall with its blue lamps at the
+    // way home
+    for (i = 0; i < 4; i++) { var rb = new THREE.Group(); rb.position.set(-97.5 + (i % 2) * 1.2, 0, 2 + Math.floor(i / 2) * 2.2); g.add(rb); sphere(0.22, X.white, 0, 0.22, 0, rb).scale.set(1, 0.9, 1.3); sphere(0.14, X.white, 0, 0.42, 0.22, rb); [-1, 1].forEach(function (s) { sphere(0.05, X.white, s * 0.06, 0.65, 0.18, rb).scale.set(1, 3, 1); }); A.bob.push({ o: rb, ph: i * 1.3, amp: 0.15, y: 0, jump: true }); }
+    var lt2 = pkDmFigure(X.troll, { s: 1.5 }); lt2.g.position.set(-99, 0, 7); lt2.g.rotation.y = 1.0; g.add(lt2.g); lt2.armL.rotation.z = -2.9; lt2.armR.rotation.z = 2.9;
+    for (i = 0; i < 3; i++) { var se = pkDmFigure(X.elf, { s: 0.4 }); se.g.position.set(-99 + (i - 1) * 0.35, 3.6, 7); g.add(se.g); A.bob.push({ o: se.g, ph: i, amp: 0.08, y: 3.6 }); }
+    for (i = 0; i < 6; i++) { var fw = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 4.4), X.fog); fw.position.set(-95.5, 2.2, -15 - i * 0.35); fw.userData.noBake = true; fw.renderOrder = 3; g.add(fw); E.fogs.push(fw); }
+    [-97.5, -94.55].forEach(function (x) { cyl(0.18, 3.8, X.blueLamp, x, 1.9, -15.9, g, 12); });
+    E.lights.push(light(0x6aa0ff, -95.5, 3, -9, 1.3, 10));
+  }
+
+  // ── The tick ─────────────────────────────────────────────────────
+  var PK_DV_V = new THREE.Vector3(), PK_DV_T = new THREE.Vector3(), PK_DV_T2 = new THREE.Vector3();
+  function pkDvPlace(D, gd, s, dt, v) {
+    pkDvAt(D, s, PK_DV_V, PK_DV_T); pkDvAt(D, s + 1.0, PK_DV_T2, null);
+    gd.g.position.copy(PK_DV_V);
+    var yaw = Math.atan2(PK_DV_T.x, PK_DV_T.z), ahead = Math.atan2(PK_DV_T2.x - PK_DV_V.x, PK_DV_T2.z - PK_DV_V.z), turn = Math.atan2(Math.sin(ahead - yaw), Math.cos(ahead - yaw));
+    var want = clamp(-turn * v * v * 0.35, -0.32, 0.32);            // the tub swings out on the curves, more the faster it goes
+    gd.roll += (want - gd.roll) * Math.min(1, (dt || 0.016) * 3);
+    gd.g.rotation.y = yaw; gd.g.rotation.z = gd.roll;
+  }
+  function pkDvTick(a, dt) {
+    var D = PK_DV, E = a.extra, X = pkDvM(), run = a.state === 'running';
+    E.clock += dt; var ck = E.clock;
+    // every gondola where the system has it (pkDvSystem), its bar where it should be
+    for (var i = 0; i < E.gons.length; i++) { var gd0 = E.gons[i]; pkDvPlace(D, gd0, gd0.s, dt, gd0.v); gd0.bar.rotation.x = -1.4 * (1 - gd0.barT); }
+    // the dream's lights: lit through a ride (and dimmed when the house is empty), the stars twinkling, everything alive
+    var on = E.work ? 1.4 : (E.sys !== 'parked' ? 1 : 0.55);
+    E.lit += (on - E.lit) * Math.min(1, dt * 1.5);
+    var k = E.lit;
+    X.win.emissiveIntensity = 1.2 * k; X.fall.emissiveIntensity = 0.9 * k; X.shroom.emissiveIntensity = 1.3 * k; X.elf.emissiveIntensity = 1.1 * k;
+    X.fairy.emissiveIntensity = (1.2 + Math.sin(ck * 5) * 0.4) * k; X.petal.forEach(function (m) { m.emissiveIntensity = 0.35 * k; }); X.sun.emissiveIntensity = 0.6 * k;
+    X.starA.emissiveIntensity = (0.6 + Math.max(0, Math.sin(ck * 3.1)) * 1.4) * k; X.starB.emissiveIntensity = (0.6 + Math.max(0, Math.sin(ck * 2.3 + 1.7)) * 1.4) * k;
+    X.planet.forEach(function (m) { m.emissiveIntensity = 0.35 * k; }); X.comet.emissiveIntensity = 1.6 * k; X.wisp.emissiveIntensity = (1.0 + Math.sin(ck * 4) * 0.5) * k;
+    X.oberon.emissiveIntensity = 0.5 * k; X.globe.emissiveIntensity = 1.3; X.blueLamp.emissiveIntensity = 1.5 * k; X.white.emissiveIntensity = 0.3 * k;
+    E.lights.forEach(function (l, j) { l.intensity = (j === 6 ? 1.3 : 1.5) * k; });
+    E.falls.forEach(function (f) { if (f.material.map) f.material.map.offset.y = (ck * 0.6) % 1; });
+    if (E.fogBoost > 0) E.fogBoost -= dt;   // the console's FOG cue
+    E.fogs.forEach(function (f, j) { f.material.opacity = Math.min(0.9, 0.32 + Math.sin(ck * 0.8 + j) * 0.08 + (E.fogBoost > 0 ? 0.35 : 0)); });
+    var A = E.anim;
+    A.sway.forEach(function (s) { s.o.rotation.z = Math.sin(ck * 0.6 + s.ph) * 0.04; s.o.rotation.x = Math.cos(ck * 0.5 + s.ph) * 0.03; });
+    A.bob.forEach(function (b) { var w = Math.sin(ck * 1.6 + b.ph); b.o.position.y = b.y + (b.jump ? Math.max(0, w) : w) * b.amp; });
+    A.spin.forEach(function (s) { s.o.rotation.y += s.w * dt; });
+    A.pend.forEach(function (p) { p.o.rotation.x = Math.sin(ck * 1.1 + p.ph) * 0.3; });
+    A.wave.forEach(function (w) { if (w.mouth) w.o.scale.y = 1 + Math.max(0, Math.sin(ck * 9)) * 1.5; else w.o.rotation.x = -0.4 + Math.sin(ck * 2.2) * 0.5; });
+    A.comets.forEach(function (c) { var f = ((ck * 0.12 + c.ph) % 1); c.o.position.set(-81.5 - f * 12, 15.5 - f * 0.6, 14 + f * 14); c.o.rotation.y = -0.8; });
+  }
+
+  // ── The system ───────────────────────────────────────────────────
+  // Droomvlucht does not run in cycles: the gondolas go round all the time, crawling through the station at the walkway's
+  // pace (the riders get off on the arriving leg and on as the U swings them round), the bars lock on the leg out, and
+  // at the line each one goes when the one before it is far enough out on the course (AUTO), or when the operator pulls
+  // the release (MANUAL). START sets it going; STOP brings every gondola home: none passes the line again, they queue up
+  // in the station and the system parks. The E-stop freezes them where they are. On AUTO the system starts itself when
+  // a line forms and opens the gates, and parks at closing. Every booth still works the gates; the bars can be held open.
+  // its own line, too: the railed way in from the doors, its head at a gate onto the platform, and when it is long, out
+  // through the gatehouse and along the promenade (in place of the standard switchback lane, part 06)
+  var _pkQueueLaneDv = pkQueueLaneBetter;
+  pkQueueLaneBetter = function (a, th, parent) { if (a.ownLane) return a.ownLane(parent); return _pkQueueLaneDv(a, th, parent); };
+  var _pkAttrSlotDv = pkAttrSlot;
+  pkAttrSlot = function (a, i) { if (a.qSlot) return a.qSlot(i); return _pkAttrSlotDv(a, i); };
+  function pkDvSlot(i) {
+    if (i < 7) return [{ x: -82.5, z: -6.7 }, { x: -82.4, z: -7.6 }, { x: -82.3, z: -8.5 }, { x: -82.2, z: -9.4 }, { x: -81.7, z: -10.05 }, { x: -81.0, z: -9.6 }, { x: -80.6, z: -9.0 }][i];   // from the gate up the railed way to the doors
+    if (i === 7) return { x: -79.4, z: -9.0 };
+    if (i === 8) return { x: -76.9, z: -9.0 };
+    if (i < 32) return { x: -74.6, z: -8.1 + (i - 9) * 0.9 };
+    return { x: -73.3, z: 12.6 - (i - 32) * 0.9 };
+  }
+  function pkDvLane(a, parent) {
+    // the gate sits in the rail on the platform side, opening the line straight onto the moving walkway
+    var X = pkDvM(), C = pkCtl(a), navy = std({ color: 0x1a2236, roughness: 0.5 }), gx = -83.3, zn = -7.95, zs = -5.45, lw = (zs - zn) / 2 - 0.03;
+    var leaf = function (hz, s) {
+      var h = new THREE.Group(); h.position.set(gx, 0, hz); h.userData.dynamic = true; parent.add(h);
+      box(0.04, 0.8, lw, navy, 0, 0.55, s * lw / 2, h); box(0.07, 0.05, lw, X.gold, 0, 1.0, s * lw / 2, h); box(0.06, 0.04, lw, X.gold, 0, 0.15, s * lw / 2, h);
+      var st = pkExtrude([[0, 0.08], [0.025, 0.025], [0.08, 0.025], [0.035, -0.01], [0.05, -0.07], [0, -0.03], [-0.05, -0.07], [-0.035, -0.01], [-0.08, 0.025], [-0.025, 0.025]], 0.012, X.gold, -0.03, 0.6, s * lw / 2, h, 0); st.rotation.y = Math.PI / 2;
+      cyl(0.05, 1.1, navy, gx, 0.55, hz, parent, 8); sphere(0.07, X.gold, gx, 1.14, hz, parent);
+      return h;
+    };
+    var L = leaf(zn, 1), Rl = leaf(zs, -1);
+    C.gateObjs.push(function (t) { L.rotation.y = -t * 1.4; Rl.rotation.y = t * 1.4; });
+    var z = -4.85, xw = gx, xe = PK_DV.X1 - 0.65;
+    sign(['QUEUE'], 0.9, 0.22, -82.0, 1.5, -10.42, 0, { bg: '#1a2236', fg: '#e8c870' }, parent);
+    // the player's own way on: press E at the gate
+    hitBox(1.4, 2.2, 1.6, -82.4, 1.1, -6.7, { prompt: function () { if (!a.open || PK.playerRide) return ''; if (PK.playerWait && PK.playerWait.a === a) return 'Waiting for a gondola - press E to leave the line'; return 'Ride ' + a.name; }, use: function () { pkPlayerRideJoin(a); } }, parent);
+    PK.lanes.push({ a: a, x0: xw, x1: xe, zA: -10.5, zB: z, gx: 1e9, gz0: 0, gz1: 0, segs: [], rows: 1, leafL: L, leafR: Rl });
+  }
+  var _pkAttrTickDv = pkAttrTick;
+  pkAttrTick = function (a, dt) { if (a.tickOwn) return a.tickOwn(a, dt); return _pkAttrTickDv(a, dt); };
+  // the player rides it too (part 15), the continuous way: E at the gate takes the next free seat coming round the U (or
+  // waits for one), the flight carries you, and you are set down at the exit when your gondola gets home; E steps you off
+  // early only while your gondola is in the station
+  function pkDvFreeSeat(a) { var D = PK_DV, best = null; a.extra.gons.forEach(function (g) { if (g.s < D.sLoad0 || g.s > D.L - 4) return; g.seats.forEach(function (st) { if (!st.guest && !st.player && (!best || g.s > best.g.s)) best = { g: g, st: st }; }); }); return best && best.st; }
+  function pkDvSeatPlayer(a, seat) { seat.player = true; a.riders++; PK.playerRide = { kind: 'attr', a: a, seat: seat, started: true, dv: true, yaw0: player.yaw, pitch0: player.pitch, eye: 1.30, face: Math.PI + (seat.ry || 0) }; sfx('unlock'); toast('Riding ' + a.name + ' - look around with the mouse', 'good'); hudDirty = true; screenDirtyAll(); }
+  var _pkPlayerRideJoinDv = pkPlayerRideJoin;
+  pkPlayerRideJoin = function (a) {
+    if (!a || !a.continuous) return _pkPlayerRideJoinDv(a);
+    if (PK.playerRide) return false;
+    if (PK.playerWait && PK.playerWait.a === a) { PK.playerWait = null; sfx('click'); toast('You step out of the line', ''); return true; }
+    if (!a.open) return pkRefuse(a.name + ' is closed for the day');
+    if (pkCtl(a).fault) return pkRefuse('The ride is stopped');
+    if (a.extra.sys !== 'running') return pkRefuse(a.name + ' is not running - START it at the desk');
+    var st = pkDvFreeSeat(a);
+    if (!st) { PK.playerWait = { a: a, coaster: false, dv: true, x: player.x, z: player.z }; toast('Waiting for a gondola to come round', ''); return true; }
+    pkDvSeatPlayer(a, st); return true;
+  };
+  var _pkPlayerTickDv = pkPlayerTick;
+  pkPlayerTick = function (dt) {
+    var w = PK.playerWait, pr = PK.playerRide;
+    if (w && w.dv) { if (Math.abs(player.x - w.x) > 4.5 || Math.abs(player.z - w.z) > 4.5) PK.playerWait = null; else if (w.a.extra.sys === 'running') { var st = pkDvFreeSeat(w.a); if (st) { PK.playerWait = null; pkDvSeatPlayer(w.a, st); } } return; }
+    if (pr && pr.dv) return;   // the system sets you down when your gondola is home
+    return _pkPlayerTickDv(dt);
+  };
+  var _pkPlayerRideExitTryDv = pkPlayerRideExitTry;
+  pkPlayerRideExitTry = function () {
+    var pr = PK.playerRide; if (!pr || !pr.dv) return _pkPlayerRideExitTryDv();
+    var gd = pr.a.extra.gons.filter(function (g) { return g.seats.indexOf(pr.seat) >= 0; })[0];
+    if (gd && gd.s >= PK_DV.sStationIn) return pkPlayerRideStepOff();
+    toast('Wait until your gondola is back in the station', ''); sfx('bad'); return true;
+  };
+  function pkDvCourseSpeed(D, s) { if (s >= D.sStationIn) return null; if (s > D.sSpiral0 && s < D.sSpiral1) return 4.6; if (s < D.sClimb) return 1.8; if (s > D.sSpiral1) return 1.6; return 2.2; }
+  function pkDvUnseat(a, seat) {
+    var gu = seat.guest; if (!gu) return; seat.guest = null; gu.seat = null; gu.clap = false;
+    if (gu.state !== 'seated') { gu.state = 'off'; gu.rec.path = []; return; }
+    var sp = pkAttrSeatWorld(seat), sy = pkFloor(sp.x, sp.z);
+    scene.add(gu.g); gu.g.position.set(sp.x, sy, sp.z); gu.g.rotation.set(0, 0, 0); gu.g.userData.baseY = sy; gu.pose = 'sit';
+    var bl = pkBlobOf(gu.g); if (bl) bl.visible = true;
+    gu.rec.x = sp.x; gu.rec.z = sp.z; gu.rec.path = a.walkOut({ x: sp.x, z: sp.z });
+    gu.state = 'off'; gu.rides = (gu.rides || 0) + 1; gu.mood = 'happy';
+    a.riders = Math.max(0, a.riders - 1); PK.today.rides++; pkXp(1);
+  }
+  function pkDvSystem(a, dt) {
+    var D = PK_DV, E = a.extra, C = pkCtl(a), L = D.L, G = E.gons, i;
+    if (!a.open) return;
+    var live = !!C.key && !C.maint;
+    // AUTO: the system starts for a line and parks at closing; the key off or the park closed brings it home
+    if (C.auto && live && !C.fault && !PK.closed && E.sys === 'parked' && a.queue.length) { E.sys = 'running'; C.gates = true; }
+    // closing time brings it home once, as the park closes, if it is on AUTO; after that the operator can run it on AUTO or
+    // by hand whenever they like (a test run before opening). The key off always brings it home.
+    var closing = PK.closed && !E.wasClosed; E.wasClosed = !!PK.closed;
+    if (((closing && C.auto) || !live) && E.sys === 'running') { E.sys = 'stopping'; C.gates = false; }
+    if (E.sys !== 'running' && C.auto) C.gates = false;
+    if (E.sys === 'running' && C.auto && live && !C.fault && !PK.closed) C.gates = true;   // on AUTO the gates stand open while it runs
+    C.gateT += ((C.gates ? 1 : 0) - C.gateT) * Math.min(1, dt * 3.5);
+    for (var gi = 0; gi < C.gateObjs.length; gi++) C.gateObjs[gi](C.gateT);
+    pkCtlLamps(a);
+    // the gondolas, front of the queue at the line first: each eases to its speed and keeps its distance from the next
+    var order = G.slice().sort(function (p, q) { return q.s - p.s; });
+    var lastOut = E.last ? E.last.s : L;   // how far out the last one sent is
+    for (var k = 0; k < order.length; k++) {
+      var gd = order[k], ahead = order[(k - 1 + order.length) % order.length];
+      if (C.fault) { gd.v = 0; continue; }
+      var inStation = gd.s >= D.sStationIn, want = E.sys === 'parked' ? 0 : (inStation ? E.walk : pkDvCourseSpeed(D, gd.s));
+      gd.v += clamp(want - gd.v, -2.5 * dt, 1.2 * dt);
+      var ns = gd.s + gd.v * dt;
+      // the line: a gondola leaves only when the system runs, its bar is locked, nobody is still walking to it, and the
+      // last one out is far enough on (AUTO) or the release is pulled (MANUAL)
+      if (inStation && ns >= L - 0.02) {
+        var walking = gd.seats.some(function (st) { return st.guest && st.guest.state === 'walkSeat'; });
+        var spaced = !E.last || E.last === gd || E.last.s > D.DGAP;
+        var go = E.sys === 'running' && !E.barsHold && gd.barT > 0.95 && !walking && spaced && (C.auto || E.release);
+        if (walking) { gd.hold += dt; if (gd.hold > 10) gd.seats.forEach(function (st) { if (st.guest && st.guest.state === 'walkSeat') pkDvUnseat(a, st); }); }
+        if (!go) { ns = L - 0.02; gd.v = 0; }
+        else { ns = Math.max(ns, L + 0.001) - L; E.last = gd; E.release = false; gd.hold = 0; gd.unloaded = false; }   // over the line and out (never back behind it)
+      }
+      // no closer than GAP behind the one in front
+      if (ahead !== gd) { var room = ((ahead.s - gd.s) % L + L) % L; if (room < 1e-3) room = L; var mx = gd.s + Math.max(0, room - D.GAP); if (ns > mx && room < L - 1) { ns = mx; gd.v = Math.min(gd.v, ahead.v); } }
+      gd.s = ((ns % L) + L) % L;
+      // off at the arriving leg, the bars open through the station and locking on the way to the line
+      if (!gd.unloaded && gd.s >= D.sUnload && gd.s < L - 4) { gd.unloaded = true; gd.seats.forEach(function (st) { if (st.guest) pkDvUnseat(a, st); if (st.player) pkPlayerRideStepOff(); }); }
+      var barOpen = gd.s >= D.sStationIn + 0.5 && (gd.s < L - 3 || E.barsHold);
+      gd.barT += ((barOpen ? 0 : 1) - gd.barT) * Math.min(1, dt * 2.5);
+    }
+    // the riders get on: the front of the line walks to a free seat in a gondola on the U with time left to reach it
+    E.loadT -= dt;
+    if (E.loadT <= 0 && C.gates && E.sys === 'running' && live && !C.fault && !PK.closed && a.queue.length) {
+      var gu = a.queue[0];
+      if (gu.state === 'qwait' || gu.state === 'qmove') {
+        var best = null;
+        G.forEach(function (g2) { if (g2.s < D.sLoad0 || g2.s > L - 7) return; g2.seats.forEach(function (st) { if (!st.guest && !st.player && (!best || g2.s > best.g.s)) best = { g: g2, st: st }; }); });
+        if (best) {
+          a.queue.shift(); gu.seat = best.st; best.st.guest = gu; gu.slot = -1; gu.state = 'walkSeat';
+          var w = pkAttrSeatWorld(best.st); gu.rec.path = route({ x: gu.rec.x, z: gu.rec.z }, { x: w.x, z: w.z });
+          pkAttrReslot(a); screenDirtyAll(); E.loadT = 0.6;
+        }
+      }
+    }
+    // stopping or parked, nobody stays aboard a gondola that will not leave: they get off where they are
+    if (E.sys !== 'running') G.forEach(function (g4) { if (g4.s >= D.sStationIn) g4.seats.forEach(function (st) { if (st.guest) pkDvUnseat(a, st); if (st.player) pkPlayerRideStepOff(); }); });
+    // STOP: parked once every gondola is home and still
+    if (E.sys === 'stopping' && G.every(function (g3) { return g3.s >= D.sStationIn && g3.v < 0.02; })) { E.sys = 'parked'; E.last = null; }
+    a.state = E.sys === 'running' ? 'running' : E.sys === 'stopping' ? 'unloading' : 'idle';
+    a.t += dt;
+    pkDvTick(a, dt);
+  }
+  function pkDvStart(a) { var C = pkCtl(a), E = a.extra; if (!a.open) return pkBoothRefuse(a.name + ' has no power - the breaker is off'); if (!C.key) return pkBoothRefuse(a.name + ' is locked - turn the operator key on'); if (C.fault) return pkBoothRefuse('Reset ' + a.name + ' first'); if (E.sys === 'running') return; E.sys = 'running'; E.release = true; if (C.auto) C.gates = true; sfx('ok'); toast(a.name + (C.auto ? ': the system runs' : ': the system runs - MANUAL dispatch: pull the RELEASE for each gondola, or set DISPATCH to AUTO'), 'good'); logEvent(a.name + ' started', ''); screenDirtyAll(); }
+  function pkDvStop(a) { var E = a.extra; if (E.sys === 'parked') { sfx('click'); toast(a.name + ' is parked', ''); return; } E.sys = 'stopping'; pkCtl(a).gates = false; sfx('chime'); toast(a.name + ': stopping - the gondolas come home', ''); logEvent(a.name + ' stopping', ''); screenDirtyAll(); }
+
+  // ── Build ────────────────────────────────────────────────────────
+  function pkBuildDroom(p) {
+    var D = PK_DV, X = pkDvM(), g = new THREE.Group(); scene.add(g); D.g = g;
+    pkDvCourse();
+    var E = { gons: [], clock: 0, lit: 0.55, S: 0, lights: [], falls: [], fogs: [], anim: null, sys: 'parked', walk: 0.5, walkPos: 1, barsHold: false, work: false, release: false, last: null, loadT: 0, fogBoost: 0 };
+    pkDvShell(g); pkDvFront(g); pkDvHall(g); pkDvRail(g); pkDvScenes(g, E);
+    var seats = [], bars = [];
+    for (var i = 0; i < D.N; i++) E.gons.push(pkDvGondola(g, i, seats, bars));
+    E.gons.forEach(function (gd, k) { gd.s = D.L - 0.05 - k * D.GAP; pkDvPlace(D, gd, gd.s, 0.016, 0); });   // parked in the station, nose to tail back from the line
+    var a = pkAttr({
+      id: 'droom', name: 'Droomvlucht', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats,
+      board: 20, run: D.run, unload: 8, exit: [D.X1 + 6.0, D.EXIT], extra: E
+    });
+    a.stationGates = false; a.tickOwn = pkDvSystem; a.continuous = true;
+    a.laneGeo = { N: 9 }; a.qSlot = pkDvSlot; a.ownLane = function (parent) { pkDvLane(a, parent); };
+    // the riders' way out: round to the exit door at the north end of the front
+    a.walkOut = function (sp) { return route(sp, { x: D.X1 - 2.0, z: D.EXIT }).concat([{ x: D.X1 - 1.0, z: D.EXIT }, { x: D.X1 + 1.2, z: D.EXIT }], route({ x: D.X1 + 1.2, z: D.EXIT }, { x: a.exit[0], z: a.exit[1] })); };
+    pkDvBooth(g, a);
+    return a;
+  }
+  // ── Danse Macabre ────────────────────────────────────────────────
+  // Efteling's Danse Macabre at full scale, on the old manor's plot. A ruined Gothic abbey fronts the Dark Woods street: a
+  // broken gable over a deep pointed portal and a rose window, a bell tower with a slate spire, and behind them the ten-sided
+  // chapel under its steep roof, one bay of it fallen in to the rafters. The queue runs along the abbey's front between the
+  // graveyard (the orchestra's graves, Joseph Charlatan's mausoleum and his statue) and the ruined cloister with its herb
+  // garden, from two pillars carrying a monk and the black kitten. Through the doors is the entrance hall (the violin glowing
+  // under its cloth, the window into the control cabin); through the chapel door, the Dynamic Motion Stage: six oak choir
+  // stalls round the instrument crate and the kitten, on a floor that turns, tilts, rises and drops. Round the walls stand
+  // the organ (its middle turns to show Joseph conducting), three rose windows that light on the ghost orchestra and three
+  // scrims that clear on the monk choir; the crypt shows under the floor when it rises. The riders leave by the chapel's east
+  // door, out past the graveyard. Everything keeps east of the new viaduct's piers (part 46, the line at x -67) and south of
+  // the Arena's path (z -40, part 33).
+  var PK_DM = { CX: -54.6, CZ: -28, R: 8.4, T: 0.9, H: 12.5, RISE: 3.0,
+    FX: -46.2, BX: -52.2, NZ: -26.3, SZ: -15.1, WH: 10.5, DZ: -20.7, g: null };
+  PK_THEME.danse.noBunting = true; PK_THEME.danse.noDecor = true;
+  PK_THEME.danse.portal = function (p, side, g) { pkDmPortal(g); };
+  PK_KEEP.push([-54.6, -28, 11.5], [-49, -20, 8], [-40, -34, 6], [-41, -16, 6.5]);   // no forest through the abbey, its graveyard or its cloister
+
+  // ── Materials ────────────────────────────────────────────────────
+  var PK_DM_M = null;
+  function pkDmShade(hex, k) {
+    var n = parseInt(hex.slice(1), 16);
+    return 'rgb(' + Math.min(255, Math.round((n >> 16 & 255) * k)) + ',' + Math.min(255, Math.round((n >> 8 & 255) * k)) + ',' + Math.min(255, Math.round((n & 255) * k)) + ')';
+  }
+  // dressed stone in courses: blocks of every length and a little apart in shade, the joints, grime run down from the courses
+  // above and moss in the damp places. One tile is five metres of wall.
+  function pkDmAshlarTex(base, joint, seed) {
+    return tex(512, 512, function (c, w, h) {
+      var rnd = pkRng(seed), ch = 32;
+      c.fillStyle = joint; c.fillRect(0, 0, w, h);
+      for (var y = 0; y < h; y += ch) {
+        var x = -Math.floor(rnd() * 90);
+        while (x < w) {
+          var bw = 56 + Math.floor(rnd() * 80);
+          c.fillStyle = pkDmShade(base, 0.84 + rnd() * 0.28); c.fillRect(x + 2, y + 2, bw - 3, ch - 3);
+          c.fillStyle = 'rgba(255,255,255,0.06)'; c.fillRect(x + 2, y + 2, bw - 3, 3);
+          c.fillStyle = 'rgba(0,0,0,0.14)'; c.fillRect(x + 2, y + ch - 7, bw - 3, 5);
+          x += bw;
+        }
+      }
+      for (var i = 0; i < 3000; i++) { c.fillStyle = 'rgba(0,0,0,' + (rnd() * 0.14).toFixed(3) + ')'; c.fillRect(rnd() * w, rnd() * h, 1 + rnd() * 3, 1 + rnd() * 2); }
+      for (var s = 0; s < 16; s++) { var sx = rnd() * w, sy = rnd() * h * 0.6, gr = c.createLinearGradient(0, sy, 0, h); gr.addColorStop(0, 'rgba(24,28,20,0.24)'); gr.addColorStop(1, 'rgba(24,28,20,0)'); c.fillStyle = gr; c.fillRect(sx, sy, 4 + rnd() * 16, h - sy); }
+      for (var m = 0; m < 10; m++) { var mx = rnd() * w, my = rnd() * h, mr = 20 + rnd() * 50, rg = c.createRadialGradient(mx, my, 0, mx, my, mr); rg.addColorStop(0, 'rgba(52,70,40,0.3)'); rg.addColorStop(1, 'rgba(52,70,40,0)'); c.fillStyle = rg; c.fillRect(mx - mr, my - mr, mr * 2, mr * 2); }
+    }, 1, 1);
+  }
+  // the chapel floor: big worn flags, cracked here and there
+  function pkDmFlagTex() {
+    return tex(512, 512, function (c, w, h) {
+      var rnd = pkRng(77);
+      c.fillStyle = '#26231f'; c.fillRect(0, 0, w, h);
+      for (var y = 0; y < 4; y++) for (var x = 0; x < 4; x++) {
+        c.fillStyle = pkDmShade('#5d5850', 0.8 + rnd() * 0.3); c.fillRect(x * 128 + 3, y * 128 + 3, 122, 122);
+        c.strokeStyle = 'rgba(0,0,0,0.35)'; c.lineWidth = 1.5;
+        if (rnd() < 0.4) { c.beginPath(); var px = x * 128 + rnd() * 128, py = y * 128 + 4; c.moveTo(px, py); for (var k = 0; k < 5; k++) { px += (rnd() - 0.5) * 40; py += 24; c.lineTo(px, py); } c.stroke(); }
+      }
+      for (var i = 0; i < 2500; i++) { c.fillStyle = 'rgba(0,0,0,' + (rnd() * 0.15).toFixed(3) + ')'; c.fillRect(rnd() * w, rnd() * h, 2, 2); }
+    }, 1, 1);
+  }
+  // the stage floor: oak boards laid round the middle in rings, gilt bands, a ten-pointed star and the abbey's motto
+  function pkDmDeckTex() {
+    return tex(1024, 1024, function (c, w, h) {
+      var cx = w / 2, cy = h / 2, R = w / 2, rnd = pkRng(13);
+      c.fillStyle = '#1e140d'; c.fillRect(0, 0, w, h);
+      var bands = [[1.0, 0.86, 60], [0.86, 0.62, 48], [0.62, 0.3, 30]];
+      bands.forEach(function (b) {
+        for (var k = 0; k < b[2]; k++) {
+          var a0 = k / b[2] * Math.PI * 2, a1 = (k + 1) / b[2] * Math.PI * 2;
+          c.beginPath(); c.arc(cx, cy, R * b[0], a0, a1); c.arc(cx, cy, R * b[1], a1, a0, true); c.closePath();
+          c.fillStyle = pkDmShade('#5a3a22', 0.75 + rnd() * 0.35); c.fill(); c.strokeStyle = '#140c07'; c.lineWidth = 2; c.stroke();
+        }
+      });
+      c.fillStyle = '#2a1a10'; c.beginPath(); c.arc(cx, cy, R * 0.3, 0, Math.PI * 2); c.fill();
+      [[0.985, 8], [0.86, 5], [0.75, 3], [0.62, 6], [0.3, 5]].forEach(function (r) { c.strokeStyle = '#c9a050'; c.lineWidth = r[1]; c.beginPath(); c.arc(cx, cy, R * r[0], 0, Math.PI * 2); c.stroke(); });
+      // the ten-pointed star
+      c.beginPath();
+      for (var s = 0; s <= 20; s++) { var sa = s / 20 * Math.PI * 2 - Math.PI / 2, sr = (s % 2 ? 0.12 : 0.28) * R; c[s ? 'lineTo' : 'moveTo'](cx + Math.cos(sa) * sr, cy + Math.sin(sa) * sr); }
+      c.closePath(); c.fillStyle = '#8a6a2a'; c.fill(); c.strokeStyle = '#e0bf6a'; c.lineWidth = 4; c.stroke();
+      // the motto round the middle ring
+      var txt = 'DANSE MACABRE  *  ABDIJ VAN HUYVERWOUD  *  VRIJDAG DE DERTIENDE  *  MDCCCLXXVI  *  ';
+      c.fillStyle = '#d8b45a'; c.font = 'bold 34px serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      for (var i = 0; i < txt.length; i++) { var ta = i / txt.length * Math.PI * 2; c.save(); c.translate(cx + Math.cos(ta) * R * 0.685, cy + Math.sin(ta) * R * 0.685); c.rotate(ta + Math.PI / 2); c.fillText(txt[i], 0, 0); c.restore(); }
+    }, 1, 1);
+  }
+  // leaded glass: the tall windows in quarries and medallions, the roses in petals round a boss
+  function pkDmLancetTex() {
+    return tex(256, 512, function (c, w, h) {
+      var rnd = pkRng(5), cols = ['#5a2a8a', '#8a1f2a', '#d89a2a', '#2a4a9a', '#3a7a4a', '#b05a20', '#6a3aa0'];
+      c.fillStyle = '#100c10'; c.fillRect(0, 0, w, h);
+      for (var y = 0; y < h; y += 32) for (var x = 0; x < w; x += 32) { c.fillStyle = cols[Math.floor(rnd() * cols.length)]; c.fillRect(x + 3, y + 3, 26, 26); }
+      [[w / 2, h * 0.3], [w / 2, h * 0.68]].forEach(function (p, k) { c.fillStyle = k ? '#e0b040' : '#c03040'; c.beginPath(); c.arc(p[0], p[1], 70, 0, Math.PI * 2); c.fill(); c.lineWidth = 7; c.strokeStyle = '#100c10'; c.stroke(); c.fillStyle = k ? '#5a2a8a' : '#2a4a9a'; c.beginPath(); c.arc(p[0], p[1], 34, 0, Math.PI * 2); c.fill(); c.stroke(); });
+    }, 1, 1);
+  }
+  function pkDmRoseTex() {
+    return tex(512, 512, function (c, w, h) {
+      var cx = w / 2, cy = h / 2, cols = ['#7a2a9a', '#b02838', '#e0a030', '#2a52a8'];
+      c.fillStyle = '#100c10'; c.fillRect(0, 0, w, h);
+      for (var r = 5; r >= 1; r--) for (var k = 0; k < 12; k++) {
+        var a0 = (k + (r % 2) * 0.5) / 12 * Math.PI * 2, a1 = a0 + Math.PI * 2 / 12;
+        c.beginPath(); c.moveTo(cx, cy); c.arc(cx, cy, r * 50, a0, a1); c.closePath(); c.fillStyle = cols[(k + r) % 4]; c.fill(); c.lineWidth = 5; c.strokeStyle = '#100c10'; c.stroke();
+      }
+      c.fillStyle = '#f0d070'; c.beginPath(); c.arc(cx, cy, 30, 0, Math.PI * 2); c.fill();
+    }, 1, 1);
+  }
+  // a soft white puff for the mist that lies in the graveyard
+  function pkDmMistTex() {
+    return tex(128, 128, function (c, w, h) {
+      var g = c.createRadialGradient(64, 64, 4, 64, 64, 62); g.addColorStop(0, 'rgba(225,232,238,0.85)'); g.addColorStop(0.5, 'rgba(225,232,238,0.35)'); g.addColorStop(1, 'rgba(225,232,238,0)');
+      c.clearRect(0, 0, w, h); c.fillStyle = g; c.fillRect(0, 0, w, h);
+    }, 1, 1);
+  }
+  function pkDmM() {
+    if (PK_DM_M) return PK_DM_M;
+    var M = pkMats(), X = PK_DM_M = {};
+    var tiled = function (t, m, col) { var mat = std({ map: t, color: col || 0xffffff, roughness: 0.95 }); mat.userData.tile = [m, m]; return mat; };
+    var world = function (t, m, col, side) { var t2 = t.clone(); t2.needsUpdate = true; t2.repeat.set(1 / m, 1 / m); return std({ map: t2, color: col || 0xffffff, roughness: 0.95, side: side || THREE.FrontSide }); };
+    var out = pkDmAshlarTex('#8d867a', '#4a463f', 1876), inn = pkDmAshlarTex('#5a554d', '#2c2925', 1313), flags = pkDmFlagTex();
+    X.stone = tiled(out, 5); X.stoneW = world(out, 5);
+    X.stoneIn = tiled(inn, 4); X.vault = world(inn, 4, 0xbcb4a8, THREE.DoubleSide);
+    X.flags = tiled(flags, 3.2); X.flagsW = world(flags, 3.2);
+    var fd = flags.clone(); fd.needsUpdate = true; fd.repeat.set(4.6, 4.6); X.flagDisc = std({ map: fd, roughness: 0.95 });
+    X.carve = std({ map: TEX.plaster, color: 0xaaa293, roughness: 0.9 });
+    X.carveDark = std({ map: TEX.plaster, color: 0x6a645a, roughness: 0.92 });
+    X.slate = std({ map: M.slate.map, color: 0x7a7f8c, roughness: 0.8, side: THREE.DoubleSide });
+    X.lead = std({ color: 0x474c52, roughness: 0.55, metalness: 0.5 });
+    X.oak = std({ map: TEX.wood, color: 0x6a4428, roughness: 0.7 });
+    X.oakDark = std({ map: TEX.wood, color: 0x3a2416, roughness: 0.72 });
+    X.iron = M.iron; X.gold = M.gold; X.brass = M.brass; X.bark = M.bark; X.soil = M.soil;
+    X.tin = std({ color: 0xc9ccd2, roughness: 0.25, metalness: 0.9 });
+    X.velvet = std({ color: 0x4a0f1c, roughness: 0.9, side: THREE.DoubleSide });
+    X.black = std({ color: 0x0c0c0f, roughness: 0.5 });
+    X.bronze = std({ color: 0x4f6e5e, roughness: 0.45, metalness: 0.6 });
+    X.bone = std({ color: 0xd8d0b8, roughness: 0.7 });
+    X.grass = std({ map: TEX.grass, color: 0x6a7a52, roughness: 1 });
+    X.gravel = std({ map: TEX.asphalt, color: 0x9a9284, roughness: 1 });
+    X.ivy = [0x2f4a26, 0x3a5a2c, 0x263e20].map(function (c) { return std({ map: M.leafTex, color: c, roughness: 0.95 }); });
+    X.herbs = [0x4f7a3a, 0x6a8a4a, 0x8a7ab0, 0x5a6a3a].map(function (c) { return std({ map: M.leafTex, color: c, roughness: 0.95 }); });
+    var lt = pkDmLancetTex(), rt = pkDmRoseTex();
+    X.glass = std({ map: lt, emissive: 0xffffff, emissiveMap: lt, emissiveIntensity: 0.55, roughness: 0.3 });
+    X.roseOut = std({ map: rt, emissive: 0xffffff, emissiveMap: rt, emissiveIntensity: 0.6, roughness: 0.3 });
+    X.roseIn = std({ map: rt, emissive: 0xffffff, emissiveMap: rt, emissiveIntensity: 0.12, roughness: 0.3 });   // the show lights these
+    X.deck = std({ map: pkDmDeckTex(), roughness: 0.55, metalness: 0.05 });
+    // what the show turns up and down: kept below the park's lamp switches (part 01), so they answer to the show alone
+    X.flame = std({ color: 0x331100, emissive: 0xff7a1a, emissiveIntensity: 0.4, roughness: 1 });
+    X.candle = std({ color: 0x332200, emissive: 0xffc870, emissiveIntensity: 0.4, roughness: 1 });
+    X.eye = std({ color: 0x223300, emissive: 0xd8ff4a, emissiveIntensity: 0.4, roughness: 0.4 });
+    X.ghostJ = std({ color: 0x6a7a72, emissive: 0x8affd8, emissiveIntensity: 0, roughness: 0.6 });
+    X.ghostO = std({ color: 0x3a4440, emissive: 0x8affd8, emissiveIntensity: 0, roughness: 0.6, transparent: true, opacity: 0, depthWrite: false });   // not there until the show calls them up
+    X.undead = std({ color: 0x8a8a70, emissive: 0x9aff9a, emissiveIntensity: 0, roughness: 0.7 });
+    X.monk = std({ color: 0x2a2420, emissive: 0x6a5030, emissiveIntensity: 0, roughness: 0.9 });
+    X.organGlow = std({ color: 0x221100, emissive: 0xffa040, emissiveIntensity: 0.1, roughness: 1 });
+    X.violin = std({ color: 0x5a2a10, emissive: 0xffb050, emissiveIntensity: 0.45, roughness: 0.5 });
+    X.cloth = std({ color: 0xe8e0cc, roughness: 0.9, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false });
+    X.scrim = std({ color: 0x141118, roughness: 1, transparent: true, opacity: 0.96, side: THREE.DoubleSide, depthWrite: false });
+    X.mist = new THREE.MeshBasicMaterial({ map: pkDmMistTex(), transparent: true, opacity: 0.3, depthWrite: false, color: 0xd0d8de });
+    return X;
+  }
+
+  // ── Shapes ───────────────────────────────────────────────────────
+  // a pointed (lancet) arch w wide, springing at hs and meeting at ha: the outline from the left foot round to the right foot
+  function pkDmArch(w, hs, ha, n) {
+    n = n || 8; var d = ha - hs, cx = (d * d - w * w / 4) / w, r = cx + w / 2, top = Math.atan2(d, cx), pts = [[-w / 2, 0], [w / 2, 0], [w / 2, hs]];
+    for (var i = 1; i <= n; i++) { var t = top * i / n; pts.push([-cx + Math.cos(t) * r, hs + Math.sin(t) * r]); }
+    for (var j = n - 1; j >= 0; j--) { var t2 = top * j / n; pts.push([cx - Math.cos(t2) * r, hs + Math.sin(t2) * r]); }
+    return pts;
+  }
+  // only the curve of that arch, from the right springing over the top to the left, at y0 lifted: for mouldings
+  function pkDmArchCurve(w, hs, ha, y0) { return pkDmArch(w, hs, ha, 10).slice(2).map(function (p) { return [p[0], p[1] + (y0 || 0)]; }); }
+  function pkDmShape(pts) { var s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]); for (var i = 1; i < pts.length; i++) s.lineTo(pts[i][0], pts[i][1]); s.closePath(); return s; }
+  // the UVs of a flat shape stretched over its own bounds, so a texture fills it once whatever its size
+  function pkDmFitUV(geo) {
+    geo.computeBoundingBox(); var b = geo.boundingBox, uv = geo.attributes.uv, p = geo.attributes.position, w = (b.max.x - b.min.x) || 1, h = (b.max.y - b.min.y) || 1;
+    for (var i = 0; i < uv.count; i++) uv.setXY(i, (p.getX(i) - b.min.x) / w, (p.getY(i) - b.min.y) / h);
+    uv.needsUpdate = true; return geo;
+  }
+  // a flat outline with a hole through it, pulled out depth: a window's frame, a niche's surround
+  function pkDmFrame(outer, inner, depth, mat, parent, x, y, z) {
+    var s = pkDmShape(outer), hole = new THREE.Path(); hole.moveTo(inner[0][0], inner[0][1]); for (var i = 1; i < inner.length; i++) hole.lineTo(inner[i][0], inner[i][1]); hole.closePath(); s.holes.push(hole);
+    var geo = new THREE.ExtrudeGeometry(s, { depth: depth, bevelEnabled: false }); geo.translate(0, 0, -depth / 2);
+    var m = new THREE.Mesh(geo, mat); m.position.set(x || 0, y || 0, z || 0); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m;
+  }
+  function pkDmFlat(pts, mat, parent, x, y, z) {
+    var m = new THREE.Mesh(pkDmFitUV(new THREE.ShapeGeometry(pkDmShape(pts))), mat); m.position.set(x || 0, y || 0, z || 0); parent.add(m); return m;
+  }
+  // a tall pointed window: the leaded glass, a moulded frame, a mullion and a small round light in the head. Faces local +z.
+  function pkDmLancet(parent, x, y, z, ry, w, h, glass, frame) {
+    var X = pkDmM(), g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry || 0; parent.add(g);
+    var hs = h - w * 0.85;
+    pkDmFlat(pkDmArch(w, hs, h), glass, g, 0, 0, 0);
+    pkDmFrame(pkDmArch(w + 0.36, hs, h + 0.2).map(function (p) { return [p[0], p[1] - 0.12]; }), pkDmArch(w, hs, h), 0.22, frame || X.carve, g, 0, 0, 0.06);
+    box(0.08, hs, 0.1, frame || X.carve, 0, hs / 2, 0.03, g);
+    pkRing(w * 0.2, 0.035, frame || X.carve, 0, hs + w * 0.34, 0.03, g, 16, false);
+    box(w + 0.5, 0.14, 0.34, X.carveDark, 0, -0.16, 0.1, g);
+    return g;
+  }
+  // a rose window: the glass, a deep moulded ring, spokes and a ring of foils round a boss. Faces local +z.
+  function pkDmRose(parent, x, y, z, ry, r, glass, frame) {
+    var g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry || 0; parent.add(g);
+    var disc = new THREE.Mesh(new THREE.CircleGeometry(r, 48), glass); g.add(disc);
+    pkRing(r + 0.12, 0.15, frame, 0, 0, 0.05, g, 48, false); pkRing(r + 0.42, 0.11, frame, 0, 0, 0.02, g, 48, false);
+    pkRing(r * 0.42, 0.06, frame, 0, 0, 0.04, g, 32, false);
+    for (var k = 0; k < 12; k++) {
+      var a = k / 12 * Math.PI * 2, sp = box(0.07, r * 0.58, 0.08, frame, Math.cos(a) * r * 0.71, Math.sin(a) * r * 0.71, 0.04, g); sp.rotation.z = a - Math.PI / 2;
+      pkRing(r * 0.16, 0.03, frame, Math.cos(a + Math.PI / 12) * r * 0.74, Math.sin(a + Math.PI / 12) * r * 0.74, 0.04, g, 12, false);
+    }
+    sphere(r * 0.1, frame, 0, 0, 0.06, g);
+    return g;
+  }
+  // a dead tree: a leaning trunk and crooked branches, forked again at their ends
+  function pkDmDeadTree(parent, x, z, h, seed) {
+    var X = pkDmM(), rnd = pkRng(seed), lean = (rnd() - 0.5) * 0.3, tx = x + lean * h, tz = z + (rnd() - 0.5) * 0.4;
+    cyl(0.12, h, X.bark, (x + tx) / 2, h / 2, (z + tz) / 2, parent, 8, 0.26).rotation.z = -lean;
+    for (var b = 0; b < 5; b++) {
+      var by = h * (0.45 + b * 0.11), ba = rnd() * Math.PI * 2, bl = h * (0.32 - b * 0.03), bx0 = x + (tx - x) * by / h, bz0 = z + (tz - z) * by / h;
+      var ex = bx0 + Math.cos(ba) * bl, ey = by + bl * (0.35 + rnd() * 0.4), ez = bz0 + Math.sin(ba) * bl;
+      pkRod(bx0, by, bz0, ex, ey, ez, 0.07 - b * 0.008, X.bark, parent, 6);
+      for (var t = 0; t < 2; t++) { var ta = ba + (t ? 0.7 : -0.7), tl = bl * 0.45; pkRod(ex, ey, ez, ex + Math.cos(ta) * tl, ey + tl * 0.5, ez + Math.sin(ta) * tl, 0.03, X.bark, parent, 5); }
+    }
+  }
+  // ivy over a stretch of wall: leaf clusters scattered over w by h, set on the wall's face (nx, nz the way it looks)
+  function pkDmIvy(parent, x, y, z, w, h, nx, nz, seed) {
+    var X = pkDmM(), rnd = pkRng(seed), n = Math.round(w * h * 2.2), tx = -nz, tz = nx;
+    for (var i = 0; i < n; i++) {
+      var u = (rnd() - 0.5) * w, v = rnd() * h * (1 - Math.abs(u) / w * 0.6), r = 0.22 + rnd() * 0.25;
+      var m = new THREE.Mesh(cachedGeo('pkdmivy', function () { return new THREE.IcosahedronGeometry(1, 0); }), X.ivy[i % 3]);
+      m.scale.set(r, r * 0.8, r * 0.35); m.position.set(x + tx * u + nx * 0.12, y + v, z + tz * u + nz * 0.12); m.rotation.y = Math.atan2(nx, nz); m.castShadow = true; parent.add(m);
+    }
+  }
+  // a show figure facing local +z: a hooded monk, a conductor in his tailcoat, a musician standing or seated. A few turned
+  // shapes in one material. Returns the group and the two arms (pivots at the shoulders; rotation.x < 0 raises one forward).
+  function pkDmFigure(mat, o) {
+    o = o || {}; var X = pkDmM(), g = new THREE.Group(), seat = !!o.seated, hip = seat ? 0.5 : 0.9, top;
+    if (o.robe) { pkLathe([[0, 0], [0.34, 0], [0.31, 0.3], [0.25, 0.9], [0.22, 1.25], [0.16, 1.42], [0, 1.46]], mat, 0, 0, 0, g, 12); top = 1.44; }
+    else {
+      [-1, 1].forEach(function (s) {
+        if (seat) { pkRod(s * 0.1, hip, 0, s * 0.1, hip, 0.42, 0.075, mat, g, 6); pkRod(s * 0.1, hip, 0.42, s * 0.1, 0.05, 0.46, 0.065, mat, g, 6); }
+        else pkRod(s * 0.1, 0.04, 0, s * 0.1, hip, 0, 0.075, mat, g, 6);
+      });
+      pkLathe([[0, 0], [0.19, 0], [0.2, 0.2], [0.23, 0.45], [0.2, 0.58], [0.08, 0.64], [0, 0.64]], mat, 0, hip, 0, g, 10);
+      if (o.tails) { var tl = box(0.32, 0.62, 0.05, mat, 0, hip - 0.1, -0.18, g); tl.rotation.x = 0.22; }
+      top = hip + 0.64;
+    }
+    cyl(0.05, 0.12, mat, 0, top + 0.04, 0, g, 6);
+    var head = sphere(0.12, mat, 0, top + 0.19, 0.01, g); head.scale.set(0.9, 1.1, 1);
+    if (o.robe) { pkLathe([[0, 0], [0.18, 0], [0.19, 0.14], [0.15, 0.3], [0, 0.4]], mat, 0, top, -0.03, g, 10); sphere(0.1, X.black, 0, top + 0.17, 0.08, g); }
+    else { [-1, 1].forEach(function (s) { sphere(0.026, X.black, s * 0.045, top + 0.21, 0.115, g); }); if (o.hair) [-1, 0, 1].forEach(function (s) { sphere(0.075, mat, s * 0.1, top + 0.27 - Math.abs(s) * 0.04, -0.03, g); }); }
+    var arms = [-1, 1].map(function (s) {
+      var p = new THREE.Group(); p.position.set(s * 0.23, top - 0.08, 0); p.userData.keep = true; g.add(p);
+      pkRod(0, 0, 0, 0, -0.56, 0, 0.045, mat, p, 6); sphere(0.05, mat, 0, -0.58, 0, p);
+      return p;
+    });
+    if (o.s) g.scale.setScalar(o.s);
+    return { g: g, armL: arms[0], armR: arms[1], top: top };
+  }
+  // the black kitten (the Unnameable's own shape): sitting, tail round, its eyes lit
+  function pkDmKitten(parent, x, y, z, ry, s) {
+    var X = pkDmM(), g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry || 0; g.scale.setScalar(s || 1); parent.add(g);
+    sphere(0.16, X.black, 0, 0.17, -0.02, g).scale.set(0.85, 1.05, 1.15);
+    sphere(0.11, X.black, 0, 0.38, 0.06, g).scale.set(1.05, 0.95, 0.95);
+    [-1, 1].forEach(function (k) {
+      var e = new THREE.Mesh(new THREE.ConeGeometry(0.042, 0.1, 4), X.black); e.position.set(k * 0.062, 0.48, 0.05); e.rotation.z = -k * 0.3; e.castShadow = true; g.add(e);
+      sphere(0.023, X.eye, k * 0.043, 0.4, 0.155, g);
+      sphere(0.045, X.black, k * 0.06, 0.03, 0.13, g);
+    });
+    pkTube([[0, 0.05, -0.16], [0.13, 0.04, -0.24], [0.21, 0.12, -0.19], [0.22, 0.24, -0.1]], 0.026, X.black, g, false, 12, 6);
+    return g;
+  }
+  // a cat sitting, in outline: the weathervane and the reliefs
+  var PK_DM_CAT = [[-0.28, 0], [0.3, 0], [0.34, 0.2], [0.3, 0.48], [0.22, 0.66], [0.27, 0.92], [0.17, 0.82], [0.05, 0.84], [-0.04, 0.93], [-0.04, 0.7], [-0.14, 0.52], [-0.18, 0.28], [-0.34, 0.22], [-0.52, 0.34], [-0.58, 0.28], [-0.4, 0.1]];
+  // a violin in outline, length 1: the two bouts and the waist between them
+  function pkDmViolinPts() {
+    var right = [], left = [];
+    for (var i = 0; i <= 30; i++) {
+      var y = -0.5 + i / 30, lo = Math.abs(y + 0.22) < 0.28 ? 0.22 * Math.sqrt(1 - Math.pow((y + 0.22) / 0.28, 2)) : 0, up = Math.abs(y - 0.25) < 0.25 ? 0.17 * Math.sqrt(1 - Math.pow((y - 0.25) / 0.25, 2)) : 0;
+      var hw = Math.max(lo, up, 0.01); right.push([hw, y]); left.unshift([-hw, y]);
+    }
+    return right.concat(left);
+  }
+  function pkDmViolin(parent, x, y, z, s, mat, rx, ry, rz) {
+    var X = pkDmM(), g = new THREE.Group(); g.position.set(x, y, z); g.rotation.set(rx || 0, ry || 0, rz || 0); g.scale.setScalar(s); parent.add(g);
+    var body = new THREE.Mesh(pkExtrudeGeo(pkDmViolinPts(), 0.12, 0.015), mat || X.oak); body.castShadow = true; g.add(body);
+    box(0.06, 0.42, 0.05, X.black, 0, 0.66, 0.02, g); sphere(0.045, X.black, 0, 0.9, 0.02, g);
+    [-0.04, 0.04].forEach(function (k) { box(0.012, 0.16, 0.02, X.black, k, 0.02, 0.07, g); });
+    return g;
+  }
+
+  // ── The chapel ───────────────────────────────────────────────────
+  // face k of the ten (its middle at 18 + 36k degrees from +x toward +z): a group on the outer face, local x along it, +z out
+  function pkDmFace(k) {
+    var D = PK_DM, phi = (18 + 36 * k) * Math.PI / 180, a = D.R * Math.cos(Math.PI / 10), L = 2 * D.R * Math.sin(Math.PI / 10);
+    var g = new THREE.Group(); g.position.set(D.CX + Math.cos(phi) * a, 0, D.CZ + Math.sin(phi) * a); g.rotation.y = Math.PI / 2 - phi; D.g.add(g);
+    return { g: g, k: k, phi: phi, a: a, L: L, Lin: L * (a - D.T) / a,
+      at: function (u, v) { return { x: g.position.x + u * Math.sin(phi) + v * Math.cos(phi), z: g.position.z - u * Math.cos(phi) + v * Math.sin(phi) }; } };
+  }
+  // the wall of a face, outer stone and the darker lining inside, with a hole (u0..u1, from y0 or the floor up to y1) for a
+  // door or the cabin's spyhole; the solids follow the wall in short squares and leave a doorway open
+  function pkDmWall(f, hole) {
+    var D = PK_DM, X = pkDmM(), T = D.T, H = D.H, L = f.L + 0.04, Li = f.Lin;
+    var piece = function (u0, u1, y0, y1) {
+      if (u1 - u0 < 0.01 || y1 - y0 < 0.01) return;
+      box(u1 - u0, y1 - y0, T, X.stone, (u0 + u1) / 2, (y0 + y1) / 2, -T / 2, f.g);
+      var a0 = Math.max(u0, -Li / 2), a1 = Math.min(u1, Li / 2);
+      if (a1 > a0) box(a1 - a0, y1 - y0, 0.04, X.stoneIn, (a0 + a1) / 2, (y0 + y1) / 2, -T - 0.02, f.g);
+    };
+    if (hole) { piece(-L / 2, hole.u0, 0, H); piece(hole.u1, L / 2, 0, H); piece(hole.u0, hole.u1, hole.y1, H); if (hole.y0) piece(hole.u0, hole.u1, 0, hole.y0); }
+    else piece(-L / 2, L / 2, 0, H);
+    for (var u = -L / 2 + 0.25; u <= L / 2 - 0.2; u += 0.5) {
+      if (hole && !hole.y0 && u > hole.u0 - 0.45 && u < hole.u1 + 0.45) continue;
+      var p = f.at(u, -T / 2); solid(p.x - 0.42, p.x + 0.42, p.z - 0.42, p.z + 0.42, 0, H);
+    }
+    // inside: a dado (not across a doorway) and the cornice under the vault
+    if (!hole || hole.y1 < 3.2) box(Li, 0.22, 0.16, X.carveDark, 0, 3.4, -T - 0.1, f.g);
+    box(Li, 0.4, 0.32, X.carveDark, 0, H - 0.3, -T - 0.18, f.g);
+  }
+  // outside: the plinth, a string course, the cornice and (if the face is free) a tall window high up
+  function pkDmWallOut(f, hole) {
+    var X = pkDmM(), L = f.L;
+    if (hole) [[-L / 2 - 0.15, hole.u0 - 0.05], [hole.u1 + 0.05, L / 2 + 0.15]].forEach(function (r) { box(r[1] - r[0], 0.8, 0.4, X.carveDark, (r[0] + r[1]) / 2, 0.4, 0.1, f.g); });
+    else box(L + 0.3, 0.8, 0.4, X.carveDark, 0, 0.4, 0.1, f.g);
+    box(L + 0.1, 0.24, 0.24, X.carve, 0, 6.5, 0.1, f.g);
+    box(L + 0.6, 0.5, 0.55, X.carve, 0, PK_DM.H - 0.15, 0.2, f.g);
+    pkDmLancet(f.g, 0, 7.1, 0.04, 0, 1.5, 4.6, X.glass, X.carve);
+  }
+  // a buttress at vertex j (36j degrees), d deep: stepped, a weathering slope, a pinnacle on top with its finial
+  function pkDmButtress(j, d) {
+    var D = PK_DM, X = pkDmM(), psi = j * Math.PI / 5, vx = D.CX + Math.cos(psi) * D.R, vz = D.CZ + Math.sin(psi) * D.R;
+    var g = new THREE.Group(); g.position.set(vx, 0, vz); g.rotation.y = Math.PI / 2 - psi; D.g.add(g);
+    box(1.3, 0.9, d + 0.4, X.carveDark, 0, 0.45, d / 2 - 0.15, g);
+    box(1.05, 7.6, d, X.stone, 0, 3.8, d / 2 - 0.3, g);
+    var sl = box(1.1, 0.24, d * 0.62, X.carve, 0, 7.75, d * 0.62 - 0.25, g); sl.rotation.x = 0.6;
+    box(0.85, 5.0, d * 0.5, X.stone, 0, 10.1, d * 0.25 - 0.3, g);
+    box(0.95, 0.22, d * 0.5 + 0.12, X.carve, 0, 12.6, d * 0.25 - 0.3, g);
+    box(0.62, 1.3, 0.62, X.stone, 0, 13.35, d * 0.25 - 0.3, g);
+    pkHipRoof(0.72, 0.72, 2.4, X.carve, 0, 14.0, d * 0.25 - 0.3, g);
+    sphere(0.13, X.carve, 0, 16.5, d * 0.25 - 0.3, g);
+    for (var c = 0; c < 3; c++) [-1, 1].forEach(function (s) { sphere(0.07, X.carve, s * (0.3 - c * 0.08), 14.4 + c * 0.6, d * 0.25 - 0.3, g); });
+    if (d > 0.6) { var px = vx + Math.cos(psi) * (d / 2 - 0.3), pz = vz + Math.sin(psi) * (d / 2 - 0.3); solid(px - 0.55, px + 0.55, pz - 0.55, pz + 0.55, 0, 12); }
+  }
+  // a decagon in the chapel's own turn (its vertices at 36j degrees), for the cornices and the roof
+  function pkDmDeca(rTop, rBot, h, mat, y, parent, open, len) {
+    var D = PK_DM, m = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, h, len ? Math.round(10 * len / (Math.PI * 2)) : 10, 1, !!open, Math.PI / 10, len || Math.PI * 2), mat);
+    m.position.set(D.CX, y, D.CZ); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m;
+  }
+  // a rose window high on a face, a balcony under it and the ghost musicians on the balcony (who: piano, harp or triangles)
+  function pkDmRoseNiche(f, who) {
+    var X = pkDmM(), z0 = -PK_DM.T - 0.04, gm = X.ghostO;
+    pkDmRose(f.g, 0, 7.4, z0 - 0.02, Math.PI, 1.45, X.roseIn, X.carve);
+    box(2.9, 0.3, 1.5, X.carve, 0, 4.85, z0 - 0.75, f.g);
+    box(3.0, 0.1, 1.6, X.carveDark, 0, 5.05, z0 - 0.78, f.g);
+    [-1.1, 0, 1.1].forEach(function (u) { box(0.28, 0.8, 0.9, X.carveDark, u, 4.3, z0 - 0.45, f.g); });
+    for (var b = -1.35; b <= 1.36; b += 0.27) cyl(0.035, 0.7, X.carve, b, 5.45, z0 - 1.46, f.g, 6);
+    box(2.9, 0.1, 0.12, X.carve, 0, 5.82, z0 - 1.46, f.g);
+    var stand = new THREE.Group(); stand.position.set(0, 5.1, z0 - 0.75); stand.rotation.y = Math.PI; f.g.add(stand);   // local +z looks into the chapel
+    if (who === 'piano') {
+      box(1.5, 0.32, 0.95, X.black, 0.15, 0.78, 0.15, stand); var lid = box(1.4, 0.04, 0.9, X.black, 0.2, 1.1, 0.0, stand); lid.rotation.z = 0.5;
+      [[-0.45, -0.2], [0.75, -0.2], [0.15, 0.5]].forEach(function (l) { cyl(0.04, 0.62, X.black, l[0], 0.31, l[1], stand, 6); });
+      box(0.9, 0.06, 0.18, X.bone, -0.1, 0.92, 0.66, stand);   // the piano plays itself
+    } else if (who === 'harp') {
+      pkTube([[0.3, 0.05, 0], [0.38, 0.9, 0], [0.1, 1.55, 0], [-0.35, 1.25, 0]], 0.05, X.gold, stand, false, 24, 6);
+      pkRod(0.3, 0.05, 0, -0.35, 1.25, 0, 0.04, X.gold, stand, 6);
+      for (var st = 0; st < 7; st++) { var f2 = st / 7; pkRod(0.3 - f2 * 0.6, 0.1 + f2 * 1.15, 0, 0.3 - f2 * 0.6, 0.15 + f2 * 1.15 + (1 - f2) * 0.9, 0, 0.006, X.tin, stand, 4); }
+      var hp = pkDmFigure(gm, { seated: true }); hp.g.position.set(-0.2, 0, -0.45); stand.add(hp.g); hp.armL.rotation.x = -0.9; hp.armR.rotation.x = -1.2;
+    } else {
+      [-0.8, 0, 0.8].forEach(function (u, i) {
+        var t = pkDmFigure(gm, { s: 0.92 + i * 0.05 }); t.g.position.set(u, 0, 0); stand.add(t.g); t.armR.rotation.x = -1.3; t.armL.rotation.x = -1.0;
+        pkTube([[0, -0.05, 0], [0.12, -0.25, 0], [-0.12, -0.25, 0]], 0.012, X.tin, t.armR, true, 12, 4).position.set(0, -0.62, 0.05);
+      });
+    }
+  }
+  // an arch-headed niche with three monks of the choir on its step, a candle in each pair of hands, behind a scrim that the
+  // show turns clear
+  function pkDmScrimNiche(f) {
+    var X = pkDmM(), z0 = -PK_DM.T - 0.04;
+    pkDmFrame(pkDmArch(3.7, 4.4, 6.3), pkDmArch(3.1, 4.3, 5.9), 0.2, X.carve, f.g, 0, 0, z0 - 0.08).rotation.y = Math.PI;
+    box(3.1, 0.5, 0.7, X.carveDark, 0, 0.25, z0 - 0.35, f.g);
+    var choir = new THREE.Group(); choir.position.set(0, 0.5, z0 - 0.35); choir.rotation.y = Math.PI; f.g.add(choir);
+    [-0.95, 0, 0.95].forEach(function (u, i) {
+      var m = pkDmFigure(X.monk, { robe: true, s: 1.0 + (i === 1 ? 0.06 : 0) }); m.g.position.set(u, 0, 0); choir.add(m.g);
+      m.armL.rotation.x = m.armR.rotation.x = -0.9; m.armL.rotation.z = -0.35; m.armR.rotation.z = 0.35;
+      cyl(0.035, 0.24, X.bone, 0, 1.12, 0.36, m.g, 8); sphere(0.05, X.candle, 0, 1.28, 0.36, m.g).scale.set(0.8, 1.5, 0.8);
+    });
+    var scrim = pkDmFlat(pkDmArch(3.2, 4.4, 6.0), X.scrim, f.g, 0, 0.05, z0 - 0.78); scrim.userData.noBake = true; scrim.renderOrder = 2;
+  }
+  // the organ on the north face: a cased lower stage with the console, two pipe towers, the gallery, and in the middle a
+  // section that turns round on its post, pipes on one side and Joseph Charlatan conducting on the other
+  function pkDmOrgan(f) {
+    var X = pkDmM(), og = new THREE.Group(); og.position.set(0, 0, -PK_DM.T - 0.04); og.rotation.y = Math.PI; f.g.add(og);   // +z looks into the chapel
+    box(4.8, 3.0, 1.0, X.oakDark, 0, 1.5, 0.5, og);
+    [-1.6, 0, 1.6].forEach(function (u) { box(1.3, 2.2, 0.04, X.oak, u, 1.5, 1.01, og); box(1.36, 0.06, 0.06, X.gold, u, 2.62, 1.02, og); });
+    box(1.9, 0.9, 0.3, X.oakDark, 0, 0.95, 1.15, og);
+    box(1.6, 0.05, 0.16, X.bone, 0, 1.12, 1.26, og); box(1.6, 0.05, 0.14, X.bone, 0, 1.24, 1.18, og);
+    box(5.0, 0.22, 0.3, X.gold, 0, 3.05, 0.95, og);
+    box(4.4, 6.0, 0.05, X.organGlow, 0, 6.1, 0.05, og);
+    [-1, 1].forEach(function (s) {
+      box(1.2, 6.2, 1.0, X.oakDark, s * 1.75, 6.1, 0.5, og);
+      pkHipRoof(1.35, 1.1, 1.8, X.oakDark, s * 1.75, 9.2, 0.5, og); sphere(0.12, X.gold, s * 1.75, 11.1, 0.5, og);
+      for (var p = 0; p < 5; p++) { var ph = 3.0 + Math.abs(p - 2) * -0.4 + 1.6, px = s * 1.75 + (p - 2) * 0.2; cyl(0.08, ph, X.tin, px, 3.3 + ph / 2, 1.08, og, 10); box(0.09, 0.08, 0.02, X.black, px, 3.55, 1.16, og); }
+      box(1.25, 0.16, 1.05, X.gold, s * 1.75, 3.15, 0.5, og);
+    });
+    // the middle turns: pipes toward the chapel to begin with, Joseph behind them
+    var mid = pkMover(og, 0, 3.3, 0.75);
+    box(1.5, 4.2, 0.06, X.oakDark, 0, 2.1, 0, mid);
+    for (var q = 0; q < 7; q++) { var qh = 3.6 - Math.abs(q - 3) * 0.35; cyl(0.07, qh, X.tin, (q - 3) * 0.19, 0.15 + qh / 2, 0.12, mid, 10); }
+    box(1.55, 0.12, 0.7, X.gold, 0, 4.25, 0, mid);
+    box(1.2, 0.1, 0.5, X.oakDark, 0, 0.05, -0.32, mid);
+    var jo = pkDmFigure(X.ghostJ, { tails: true, hair: true }); jo.g.position.set(0, 0.1, -0.32); jo.g.rotation.y = Math.PI; mid.add(jo.g);
+    jo.armR.rotation.x = -2.2; jo.armL.rotation.x = -1.4; jo.armL.rotation.z = 0.4;
+    pkRod(0, -0.58, 0, 0, -0.98, 0.1, 0.012, X.bone, jo.armR, 4);
+    pkSign3D(['DANSE MACABRE'], 2.2, 0.36, 0, 9.7, 1.05, 0, { bg: '#1b1410', fg: '#d8b45a' }, og);
+    return { mid: mid, arm: jo.armR, armL: jo.armL };
+  }
+  // the operator's spyhole through the south face (the cabin stands behind the wall): from the chapel an old barred window
+  // in a carved surround, its glass painted dark on this side (a sheet that faces the chapel only, so the operator sees out
+  // clearly), a skull and two candle stubs on the sill and a hanging lantern beside it
+  function pkDmSpyhole(f, u) {
+    var X = pkDmM(), z0 = -PK_DM.T - 0.04, w = 1.8, y0 = 1.2, h = 1.1;
+    var fr = pkDmFrame(pkDmArch(w + 0.5, 0.75, 1.5).map(function (q) { return [q[0], q[1] - 0.18]; }), pkDmArch(w, 0.7, h), 0.2, X.carve, f.g, u, y0, z0 - 0.08); fr.rotation.y = Math.PI;
+    var tint = std({ color: 0x07070a, roughness: 0.15, metalness: 0.6, transparent: true, opacity: 0.86 });
+    var pane = pkDmFlat(pkDmArch(w, 0.7, h), tint, f.g, u, y0, z0 + 0.02); pane.rotation.y = Math.PI; pane.userData.noBake = true;
+    for (var b = 0; b < 6; b++) cyl(0.022, h - 0.05, X.iron, u - w / 2 + 0.17 + b * (w - 0.34) / 5, y0 + (h - 0.05) / 2, z0 - 0.12, f.g, 6);
+    box(w, 0.05, 0.05, X.iron, u, y0 + 0.55, z0 - 0.12, f.g);
+    box(w + 0.7, 0.14, 0.45, X.carveDark, u, y0 - 0.07, z0 - 0.2, f.g);
+    box(w + 0.3, 0.9, 0.12, X.carveDark, u, y0 - 0.6, z0 - 0.08, f.g);
+    var sk = new THREE.Group(); sk.position.set(u - 0.55, y0 + 0.12, z0 - 0.25); sk.rotation.y = Math.PI + 0.3; f.g.add(sk);
+    sphere(0.11, X.bone, 0, 0, 0, sk).scale.set(0.9, 1, 1.1); box(0.13, 0.06, 0.09, X.bone, 0, -0.08, 0.06, sk);
+    [-1, 1].forEach(function (s) { sphere(0.028, X.black, s * 0.04, 0.01, 0.095, sk); });
+    [[0.5, 0.18], [0.72, 0.11]].forEach(function (c) { cyl(0.04, c[1], X.bone, u + c[0], y0 + c[1] / 2, z0 - 0.25, f.g, 8); sphere(0.035, X.candle, u + c[0], y0 + c[1] + 0.05, z0 - 0.25, f.g).scale.set(0.8, 1.5, 0.8); });
+    pkRod(u + 1.35, 2.7, z0, u + 1.35, 2.7, z0 - 0.4, 0.02, X.iron, f.g, 4);
+    pkRod(u + 1.35, 2.7, z0 - 0.4, u + 1.35, 2.4, z0 - 0.4, 0.01, X.iron, f.g, 4);
+    box(0.18, 0.26, 0.18, X.candle, u + 1.35, 2.25, z0 - 0.4, f.g); pkHipRoof(0.24, 0.24, 0.16, X.iron, u + 1.35, 2.38, z0 - 0.4, f.g);
+  }
+  // ── The stage ────────────────────────────────────────────────────
+  // a choir stall for six on its own turntable (the stalls waltz on the turning floor): two raked rows of three on velvet
+  // cushions, a low carved back with gilt arches under a turned rail, scrolled arm ends, and a lap bar for each row that
+  // stands up when open. Kept inside a 1.6 m circle, so turning it never touches its neighbours or the crate. Local +z
+  // faces the middle of the stage; the stall turns about its own middle.
+  function pkDmStall(parent, ang, seats, bars) {
+    var X = pkDmM(), rr = 3.9, st = pkMover(parent, Math.cos(ang) * rr, 0.13, Math.sin(ang) * rr);
+    var base = Math.atan2(-Math.cos(ang), -Math.sin(ang)); st.rotation.y = base;
+    var tt = new THREE.Mesh(new THREE.CircleGeometry(1.6, 40), X.oakDark); tt.rotation.x = -Math.PI / 2; tt.position.y = 0.006; tt.receiveShadow = true; st.add(tt);
+    pkRing(1.6, 0.035, X.gold, 0, 0.01, 0, st, 48);
+    box(2.7, 0.12, 1.55, X.oakDark, 0, 0.07, -0.05, { parent: st, r: 0.03 });
+    box(2.55, 0.06, 0.04, X.gold, 0, 0.1, 0.73, st);
+    // the front row, its backrest the riser of the row behind
+    box(2.5, 0.34, 0.5, X.oak, 0, 0.3, 0.42, { parent: st, r: 0.02 });
+    box(2.42, 0.1, 0.48, X.velvet, 0, 0.53, 0.42, { parent: st, r: 0.04 });
+    box(2.6, 0.78, 0.7, X.oakDark, 0, 0.51, -0.33, { parent: st, r: 0.02 });
+    box(2.42, 0.42, 0.08, X.velvet, 0, 1.05, 0.06, { parent: st, r: 0.03 });
+    box(2.42, 0.1, 0.5, X.velvet, 0, 0.95, -0.36, { parent: st, r: 0.04 });
+    // the back: carved, gilt arches, a turned rail and finials
+    box(2.6, 1.05, 0.1, X.oakDark, 0, 1.42, -0.72, { parent: st, r: 0.02 });
+    [-0.85, 0, 0.85].forEach(function (u) { pkDmFrame(pkDmArch(0.62, 0.45, 0.8), pkDmArch(0.44, 0.42, 0.68), 0.04, X.gold, st, u, 1.03, -0.66); });
+    pkRod(-1.32, 1.98, -0.72, 1.32, 1.98, -0.72, 0.065, X.oak, st, 10);
+    [-1, 1].forEach(function (s) {
+      sphere(0.1, X.gold, s * 1.36, 2.02, -0.72, st);
+      // the arm ends, low and scrolled
+      box(0.1, 0.62, 1.3, X.oakDark, s * 1.3, 0.44, 0.05, { parent: st, r: 0.02 });
+      pkRod(s * 1.3, 0.8, -0.6, s * 1.3, 0.8, 0.62, 0.06, X.oak, st, 8);
+      sphere(0.09, X.oak, s * 1.3, 0.8, 0.66, st); pkRing(0.09, 0.02, X.gold, s * 1.3, 0.8, 0.66, st, 16, false).rotation.y = Math.PI / 2;
+    });
+    [-0.8, 0, 0.8].forEach(function (u) {
+      seats.push({ par: st, x: u, y: -0.18, z: 0.42, ry: 0, guest: null });
+      seats.push({ par: st, x: u, y: 0.24, z: -0.36, ry: 0, guest: null });
+    });
+    [[0.86, 0.18], [1.26, -0.6]].forEach(function (r) {
+      var bar = pkMover(st, 0, r[0], r[1]);
+      pkTube([[-1.22, 0, 0], [-1.22, 0, 0.42], [1.22, 0, 0.42], [1.22, 0, 0]], 0.035, X.iron, bar, false, 20, 6);
+      box(2.3, 0.08, 0.1, X.velvet, 0, 0, 0.42, { parent: bar, r: 0.03 });
+      bars.push(bar);
+    });
+    return { o: st, base: base };
+  }
+  // the instrument crate in the middle: banded oak with its lid ajar, a double bass leaning on it, a drum, a horn, a violin
+  // and its bow, and the kitten on the lid
+  function pkDmCrate(parent) {
+    var X = pkDmM(), c = new THREE.Group(); c.position.y = 0.13; parent.add(c);
+    box(1.7, 0.95, 1.1, X.oak, 0, 0.48, 0, c);
+    [-0.6, 0, 0.6].forEach(function (u) { box(0.08, 0.97, 1.12, X.iron, u, 0.48, 0, c); });
+    var lid = box(1.75, 0.08, 1.15, X.oakDark, 0, 1.02, -0.12, c); lid.rotation.x = -0.28;
+    pkDmViolin(c, 1.05, 0.95, 0.15, 1.9, X.oak, 0, 0.2, -0.22);
+    cyl(0.4, 0.5, std({ color: 0x6a1a1a, roughness: 0.6 }), -1.15, 0.25, 0.25, c, 18); pkRing(0.4, 0.03, X.gold, -1.15, 0.5, 0.25, c, 24); pkRing(0.4, 0.03, X.gold, -1.15, 0.02, 0.25, c, 24);
+    pkTube([[-0.3, 1.05, 0.35], [-0.1, 1.2, 0.45], [0.15, 1.12, 0.38], [0.2, 0.98, 0.2], [0.0, 0.98, 0.1]], 0.045, X.brass, c, false, 20, 8);
+    var bell = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.04, 0.3, 16, 1, true), X.brass); bell.position.set(-0.4, 1.12, 0.38); bell.rotation.z = 1.2; c.add(bell);
+    pkDmViolin(c, 0.35, 1.12, -0.05, 0.6, X.oak, -1.35, 0, 0.5);
+    pkDmKitten(c, -0.2, 1.06, -0.1, 0.3, 1.0);
+    return c;
+  }
+  // the crypt under the floor, seen only when it rises: the sarcophagus with its lid pushed aside and the undead figure half
+  // out of it, candles round. It rides up out of the ground with the floor.
+  function pkDmCrypt(g) {
+    var D = PK_DM, X = pkDmM(), cr = pkMover(g, D.CX, -1.8, D.CZ), a = 0.5;
+    var s = new THREE.Group(); s.position.set(Math.cos(a) * 1.7, 0, Math.sin(a) * 1.7); s.rotation.y = -a; cr.add(s);
+    box(0.95, 0.7, 2.1, X.carveDark, 0, 0.35, 0, s);
+    var lid = box(1.0, 0.14, 2.15, X.carve, 0.35, 0.78, 0.35, s); lid.rotation.y = 0.35;
+    var u = pkDmFigure(X.undead, { seated: true }); u.g.position.set(0, 0.25, -0.55); s.add(u.g); u.armL.rotation.x = u.armR.rotation.x = -1.4;
+    for (var k = 0; k < 6; k++) { var ca = k / 6 * Math.PI * 2; cyl(0.04, 0.3, X.bone, Math.cos(ca) * 2.6, 0.15, Math.sin(ca) * 2.6, cr, 6); sphere(0.045, X.candle, Math.cos(ca) * 2.6, 0.35, Math.sin(ca) * 2.6, cr).scale.set(0.8, 1.5, 0.8); }
+    cyl(0.6, 0.1, X.carveDark, 0, 0.05, 0, cr, 16);
+    return cr;
+  }
+
+  // ── The front: the west-work, the hall, the lower range, the tower ──
+  function pkDmFront(g, doors) {
+    var D = PK_DM, X = pkDmM(), FX = D.FX, BX = D.BX, NZ = D.NZ, SZ = D.SZ, WH = D.WH, DZ = D.DZ, zc = (NZ + SZ) / 2;
+    // the front wall with the doorway (2.6 wide, 4.6 high) in it
+    box(0.8, WH, -22.0 - NZ, X.stone, FX - 0.4, WH / 2, (NZ - 22.0) / 2, g);
+    box(0.8, WH, SZ + 19.4, X.stone, FX - 0.4, WH / 2, (SZ - 19.4) / 2, g);
+    box(0.8, WH - 4.6, 2.62, X.stone, FX - 0.4, 4.6 + (WH - 4.6) / 2, DZ, g);
+    box(0.4, 1.2, 2.62, X.carve, FX - 0.5, 4.0, DZ, g);                                                     // the tympanum over the doors
+    pkExtrude(PK_DM_CAT, 0.08, X.gold, FX - 0.28, 3.55, DZ - 0.05, g, 0.01).rotation.y = Math.PI / 2;
+    box(0.9, 0.06, 2.62, X.flags, FX - 0.4, 0.03, DZ, g);
+    solid(FX - 0.8, FX, NZ, -21.95, 0, WH); solid(FX - 0.8, FX, -19.45, SZ, 0, WH);
+    // the north return to the chapel, the south wall, the hall's west wall (behind the cabin it is the cabin's own)
+    box(FX + 46.75, WH, 0.8, X.stone, (-46.75 + FX) / 2, WH / 2, NZ + 0.4, g);
+    solid(-46.75, FX, NZ, NZ + 0.8, 0, WH);
+    box(FX - BX, WH, 0.8, X.stone, (FX + BX) / 2, WH / 2, SZ - 0.4, g); solid(BX, FX, SZ - 0.8, SZ, 0, WH);
+    box(0.4, 5.0, SZ - 0.8 + 16.8, X.stoneIn, BX + 0.2, 2.5, (-16.8 + SZ - 0.8) / 2, g); solid(BX, BX + 0.4, -16.8, SZ - 0.8, 0, 5);
+    // the hall: a ceiling at 5 m over its whole shape (the wedge against the chapel's wall too) and a flagged floor
+    var hallN = [[-52.05, -20.0], [-47.8, -23.06], [-46.75, -26.3], [FX, -26.3], [FX, -20.0]];
+    box(FX - BX, 0.3, SZ + 20.0, X.carveDark, (FX + BX) / 2, 5.15, (SZ - 20.0) / 2, g);
+    var ceilN = new THREE.Mesh(pkExtrudeGeo(hallN, 0.3, 0), X.carveDark); ceilN.rotation.x = Math.PI / 2; ceilN.position.y = 5.15; g.add(ceilN);
+    box(FX - BX, 0.06, SZ + 20.0, X.flags, (FX + BX) / 2, 0.03, (SZ - 20.0) / 2, g);
+    var floorN = new THREE.Mesh(pkExtrudeGeo(hallN, 0.06, 0), X.flagsW); floorN.rotation.x = Math.PI / 2; floorN.position.y = 0.03; floorN.receiveShadow = true; g.add(floorN);
+    pkDmSecretWall(g);
+    // the roof over the west-work, and its broken front gable standing proud of it
+    pkGableRoof(5.6, SZ - NZ + 0.2, 6.6, X.slate, X.stoneW, (FX + BX) / 2 - 0.1, WH, zc, g, 0.35);
+    var G = 7.2, hw = (SZ - NZ) / 2 + 0.05, gp = [[-hw, 0], [hw, 0], [1.6, G * (1 - 1.6 / hw)], [1.15, 4.95], [0.75, 5.6], [0.25, 4.5], [-0.35, 5.15], [-0.85, 4.35], [-1.7, G * (1 - 1.7 / hw)]];
+    var gab = new THREE.Mesh(pkExtrudeGeo(gp, 0.8, 0), X.stoneW); gab.rotation.y = Math.PI / 2; gab.position.set(FX - 0.4, WH, zc); gab.castShadow = true; g.add(gab);
+    [-1, 1].forEach(function (s) {
+      var L = Math.hypot(hw - 1.65, G * (1 - 1.65 / hw)), cp = box(0.95, 0.2, L, X.carve, FX - 0.4, WH + G * (1 - 1.65 / hw) / 2 + 0.12, zc - s * (hw + 1.65) / 2, g);
+      cp.rotation.x = -s * Math.atan2(G * (1 - 1.65 / hw), hw - 1.65);
+      for (var k = 1; k < 7; k++) { var f = k / 7, cz = zc - s * (hw - f * (hw - 1.65)), cy = WH + f * G * (1 - 1.65 / hw) + 0.3; sphere(0.13, X.carve, FX - 0.1, cy, cz, g); }
+      // the gable's shoulders: a pinnacle each side
+      box(0.8, 1.6, 0.8, X.stone, FX - 0.4, WH + 0.8, zc - s * (hw - 0.2), g);
+      pkHipRoof(0.9, 0.9, 2.4, X.carve, FX - 0.4, WH + 1.6, zc - s * (hw - 0.2), g); sphere(0.14, X.carve, FX - 0.4, WH + 4.1, zc - s * (hw - 0.2), g);
+    });
+    for (var rb = 0; rb < 7; rb++) pkBoulder(FX + 0.6 + (rb % 3) * 0.4, NZ + 0.4 + rb * 0.35, 0.18 + (rb % 3) * 0.08, g, 0.3);   // what came down off the gable
+    // the corner buttress at the north end (the tower holds the south)
+    box(1.0, 0.9, 1.6, X.carveDark, FX + 0.45, 0.45, NZ + 0.55, g);
+    box(0.85, 8.0, 1.3, X.stone, FX + 0.3, 4.0, NZ + 0.55, g);
+    var bs = box(0.9, 0.24, 1.4, X.carve, FX + 0.35, 8.1, NZ + 0.55, g); bs.rotation.z = -0.55;
+    box(0.6, 3.6, 1.0, X.stone, FX + 0.05, 9.8, NZ + 0.55, g);
+    pkHipRoof(0.8, 1.1, 2.2, X.carve, FX + 0.05, 11.6, NZ + 0.55, g); sphere(0.12, X.carve, FX + 0.05, 13.9, NZ + 0.55, g);
+    solid(FX, FX + 0.95, NZ - 0.2, NZ + 1.3, 0, 8);
+    // plinth and string course along the front
+    box(0.35, 0.8, -22.0 - NZ, X.carveDark, FX + 0.1, 0.4, (NZ - 22.0) / 2, g);
+    box(0.35, 0.8, SZ + 19.4, X.carveDark, FX + 0.1, 0.4, (SZ - 19.4) / 2, g);
+    box(0.25, 0.24, SZ - NZ, X.carve, FX + 0.08, 10.2, zc, g);
+    // the portal: clustered shafts either side, three pointed archivolts stepping out, the gable (wimperg) over them with its
+    // crockets and finial, and the name over all
+    [0, 1, 2].forEach(function (i) {
+      var w = 2.9 + i * 0.55, off = 0.1 + i * 0.16;
+      [-1, 1].forEach(function (s) {
+        cyl(0.13, 3.0, X.carve, FX + off, 0.5 + 1.5, DZ + s * w / 2, g, 10);
+        box(0.36, 0.22, 0.36, X.carve, FX + off, 3.55, DZ + s * w / 2, g); box(0.36, 0.5, 0.36, X.carveDark, FX + off, 0.25, DZ + s * w / 2, g);
+      });
+      var arc = pkDmArchCurve(w, 0, 1.55 + i * 0.35, 3.65).map(function (p) { return [FX + off, p[1], DZ + p[0]]; });
+      pkTube(arc, 0.12, i === 1 ? X.carveDark : X.carve, g, false, 40, 8);
+    });
+    var wp = new THREE.Mesh(pkExtrudeGeo([[-2.5, 0], [2.5, 0], [0, 3.0]], 0.25, 0.02), X.carve); wp.rotation.y = Math.PI / 2; wp.position.set(FX + 0.5, 5.0, DZ); wp.castShadow = true; g.add(wp);
+    var tre = new THREE.Mesh(pkExtrudeGeo(pkDmArch(1.3, 0.5, 1.4), 0.1, 0), X.carveDark); tre.rotation.y = Math.PI / 2; tre.position.set(FX + 0.6, 5.5, DZ); g.add(tre);
+    for (var ck = 1; ck < 6; ck++) [-1, 1].forEach(function (s) { sphere(0.11, X.carve, FX + 0.55, 5.0 + ck * 0.5, DZ + s * (2.5 - ck * 0.42), g); });
+    box(0.3, 0.6, 0.3, X.carve, FX + 0.5, 8.2, DZ, g); sphere(0.18, X.carve, FX + 0.5, 8.6, DZ, g);
+    pkSign3D(['DANSE MACABRE'], 5.2, 0.8, FX + 0.12, 9.3, zc + 0.2, Math.PI / 2, { bg: '#1b232c', fg: '#ff8a3d' }, g);
+    // the windows: a lancet each side of the portal, the rose in the gable
+    pkDmLancet(g, FX + 0.02, 4.2, -24.6, Math.PI / 2, 1.3, 4.8, X.glass, X.carve);
+    pkDmLancet(g, FX + 0.02, 4.2, -16.8, Math.PI / 2, 1.0, 4.4, X.glass, X.carve);
+    pkDmRose(g, FX + 0.02, 12.6, zc, Math.PI / 2, 1.75, X.roseOut, X.carve);
+    // the torches either side of the doors
+    [-1, 1].forEach(function (s) {
+      var tz = DZ + s * 2.25;
+      pkRod(FX, 2.6, tz, FX + 0.45, 2.95, tz, 0.035, X.iron, g, 6);
+      cyl(0.11, 0.2, X.iron, FX + 0.45, 3.05, tz, g, 8, 0.07);
+      sphere(0.13, X.flame, FX + 0.45, 3.28, tz, g).scale.set(0.8, 1.6, 0.8);
+    });
+    // the doors: studded oak on iron straps, a lit grille in each, swinging in when the ride boards
+    [-1, 1].forEach(function (s) {
+      var hz = DZ + s * 1.29, hinge = pkMover(g, FX - 0.5, 0, hz);
+      box(0.1, 3.4, 1.28, X.oakDark, 0, 1.7, -s * 0.64, hinge);
+      [0.5, 1.7, 2.9].forEach(function (y) { box(0.13, 0.1, 1.2, X.iron, 0.02, y, -s * 0.62, hinge); });
+      for (var st = 0; st < 5; st++) sphere(0.03, X.iron, 0.07, 0.4 + st * 0.62, -s * 1.1, hinge);
+      box(0.12, 0.42, 0.34, X.candle, 0.01, 2.25, -s * 0.66, hinge);
+      for (var gb = 0; gb < 3; gb++) box(0.14, 0.44, 0.03, X.iron, 0.02, 2.25, -s * (0.55 + gb * 0.11), hinge);
+      sphere(0.07, X.iron, 0.08, 1.35, -s * 1.12, hinge);
+      pkFuse(hinge); doors.push({ h: hinge, s: s });
+    });
+    // the lower range behind the west-work, where the cabin is: lower walls, a lead flat behind a battlemented parapet
+    var LX = -58.0;
+    box(BX - LX, 6.6, 0.8, X.stone, (LX + BX) / 2, 3.3, SZ - 0.4, g);
+    box(0.8, 6.6, SZ + 20.0, X.stone, LX + 0.4, 3.3, (SZ - 20.0) / 2, g);
+    box(BX - LX + 0.1, 0.3, SZ + 20.0, X.lead, (LX + BX) / 2, 6.55, (SZ - 20.0) / 2, g);
+    for (var cr = 0; cr < 7; cr++) box(0.55, 0.7, 0.85, X.stone, LX + 0.4 + cr * 0.95, 7.05, SZ - 0.4, g);
+    for (var cw = 0; cw < 5; cw++) box(0.85, 0.7, 0.55, X.stone, LX + 0.4, 7.05, SZ - 0.6 - cw * 0.95, g);
+    box(BX - LX + 0.4, 0.8, 0.35, X.carveDark, (LX + BX) / 2, 0.4, SZ + 0.1, g);
+    [-56.6, -54.0].forEach(function (x) { pkDmLancet(g, x, 2.0, SZ + 0.02, 0, 0.8, 3.0, X.glass, X.carve); });
+    solid(LX, LX + 0.8, -20.0, SZ, 0, 6.6); solid(LX, BX, SZ - 0.8, SZ, 0, 6.6);   // the sacristy (the operator's room) is inside
+    pkDmIvy(g, (LX + BX) / 2 - 1.5, 0.3, SZ + 0.05, 4.0, 4.5, 0, 1, 31);
+    pkDmIvy(g, FX + 0.05, 0.4, -25.8, 2.4, 6.0, 1, 0, 32);
+  }
+  // the cabin's side onto the hall, walled up in the hall's own stone: a secret door in it where the cabin's door is, the
+  // same ashlar on its face and no frame, that swings in on E (it works and blocks like the booths' doors, part 17)
+  function pkDmSecretWall(g) {
+    var X = pkDmM(), x0 = -52.2, x1 = -51.8, za = -20.05, zd0 = -18.25, zd1 = -17.2, zb = -16.8, H = 5.0, DH = 2.3;
+    box(x1 - x0, H, zd0 - za, X.stoneIn, (x0 + x1) / 2, H / 2, (za + zd0) / 2, g);
+    box(x1 - x0, H, zb - zd1, X.stoneIn, (x0 + x1) / 2, H / 2, (zd1 + zb) / 2, g);
+    box(x1 - x0, H - DH, zd1 - zd0, X.stoneIn, (x0 + x1) / 2, DH + (H - DH) / 2, (zd0 + zd1) / 2, g);
+    box(0.16, 0.22, zb - za, X.carveDark, x1 + 0.06, 3.4, (za + zb) / 2, g);
+    solid(x0, x1, za, zd0, 0, H); solid(x0, x1, zd1, zb, 0, H);
+    var hinge = pkMover(g, (x0 + x1) / 2, 0, zd0), w = zd1 - zd0;
+    box(x1 - x0 - 0.02, DH - 0.01, w - 0.01, X.stoneIn, 0, DH / 2, w / 2, hinge);
+    var d = { hinge: hinge, w: w, closedRy: 0, openDelta: 1.45, open: 0, want: 0, label: 'the hidden door',
+      setNow: function (v) { d.want = d.open = v ? 1 : 0; hinge.rotation.y = d.openDelta * d.open; } };
+    hitBox(0.5, DH, w, 0.1, DH / 2, w / 2, { prompt: function () { return d.want > 0.5 ? 'Shut the hidden door' : 'Push the loose stone'; }, use: function () { d.want = d.want > 0.5 ? 0 : 1; sfx('door'); } }, hinge);
+    pkCtlLive({ tick: function (dt) { var k = d.open + (d.want - d.open) * Math.min(1, dt * 3); if (Math.abs(k - d.open) > 1e-4) { d.open = k; hinge.rotation.y = d.openDelta * k; } } });
+    PK_BK_DOORS.push(d); PK_DM.secret = d;
+    // a sconce beside it, the only tell
+    pkRod(x1, 1.9, zd1 + 0.35, x1 + 0.3, 2.0, zd1 + 0.35, 0.025, X.iron, g, 4); cyl(0.07, 0.12, X.iron, x1 + 0.3, 2.06, zd1 + 0.35, g, 8, 0.05); sphere(0.06, X.flame, x1 + 0.3, 2.18, zd1 + 0.35, g).scale.set(0.8, 1.6, 0.8);
+  }
+  // the bell tower on the front's south corner: corner buttresses, slit windows, an open belfry with its bell, pinnacles,
+  // and an eight-sided slate spire with dormers and the kitten weathervane
+  function pkDmTower(g) {
+    var X = pkDmM(), x0 = -50.0, x1 = -46.2, z0 = PK_DM.SZ, z1 = -11.3, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, W = x1 - x0, SH = 18.5;
+    box(W + 0.4, 0.9, z1 - z0 + 0.4, X.carveDark, cx, 0.45, cz, g);
+    box(W, SH, z1 - z0, X.stone, cx, SH / 2, cz, g);
+    [6.4, 12.4].forEach(function (y) { box(W + 0.24, 0.22, z1 - z0 + 0.24, X.carve, cx, y, cz, g); });
+    [[x0, z0], [x1, z0], [x0, z1], [x1, z1]].forEach(function (c) {
+      var ox = c[0] === x0 ? -1 : 1, oz = c[1] === z0 ? -1 : 1;
+      box(0.7, 15.0, 0.7, X.stone, c[0] + ox * 0.15, 7.5, c[1] + oz * 0.15, g);
+      var sl = box(0.75, 0.22, 0.75, X.carve, c[0] + ox * 0.15, 15.1, c[1] + oz * 0.15, g); sl.rotation.set(oz * 0.4, 0, -ox * 0.4);
+    });
+    [[cx, z1 + 0.02, 0], [x1 + 0.02, cz, Math.PI / 2]].forEach(function (w) { [3.0, 8.4, 13.4].forEach(function (y) { pkDmLancet(g, w[0], y, w[1], w[2], 0.45, 1.9, X.glass, X.carve); }); });
+    // the belfry: open arches on all four sides, the bell on its beam
+    var B0 = SH, BH = 4.2;
+    [[x0, z0], [x1, z0], [x0, z1], [x1, z1]].forEach(function (c) { box(0.9, BH, 0.9, X.stone, c[0] + (c[0] === x0 ? 0.45 : -0.45), B0 + BH / 2, c[1] + (c[1] === z0 ? 0.45 : -0.45), g); });
+    [[cx, z0, 0], [cx, z1, 0], [x0, cz, Math.PI / 2], [x1, cz, Math.PI / 2]].forEach(function (s) {
+      var fr = pkDmFrame([[-W / 2, 0], [W / 2, 0], [W / 2, BH], [-W / 2, BH]], pkDmArch(1.6, 2.2, 3.5), 0.5, X.stone, g, s[0], B0, s[1]); fr.rotation.y = s[2];
+      for (var lv = 0; lv < 5; lv++) { var lb = box(1.5, 0.06, 0.32, X.oakDark, s[0], B0 + 0.6 + lv * 0.42, s[1], g); lb.rotation.y = s[2]; lb.rotation.x = 0.5; }
+    });
+    box(W - 0.6, 0.2, 0.25, X.oakDark, cx, B0 + 3.2, cz, g);
+    pkLathe([[0, 0], [0.62, 0], [0.55, 0.12], [0.42, 0.5], [0.36, 0.9], [0.2, 1.05], [0, 1.08]], std({ color: 0x6a5a3a, roughness: 0.35, metalness: 0.8 }), cx, B0 + 1.95, cz, g, 20);
+    box(W + 0.5, 0.5, z1 - z0 + 0.5, X.carve, cx, B0 + BH + 0.25, cz, g);
+    [[x0, z0], [x1, z0], [x0, z1], [x1, z1]].forEach(function (c) {
+      var px = c[0] + (c[0] === x0 ? 0.25 : -0.25), pz = c[1] + (c[1] === z0 ? 0.25 : -0.25);
+      box(0.55, 1.3, 0.55, X.stone, px, B0 + BH + 1.15, pz, g); pkHipRoof(0.65, 0.65, 2.0, X.carve, px, B0 + BH + 1.8, pz, g); sphere(0.1, X.carve, px, B0 + BH + 3.85, pz, g);
+    });
+    var sp = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 2.15, 9.5, 8, 1, false, Math.PI / 8), X.slate); sp.position.set(cx, B0 + BH + 0.5 + 4.75, cz); sp.castShadow = true; g.add(sp);
+    [[cx, z0 - 0.2, 0], [cx, z1 + 0.2, Math.PI], [x0 - 0.2, cz, -Math.PI / 2], [x1 + 0.2, cz, Math.PI / 2]].forEach(function (d) {
+      var dg = new THREE.Group(); dg.position.set(d[0], B0 + BH + 1.2, d[1]); dg.rotation.y = d[2]; g.add(dg);
+      box(0.7, 1.0, 0.6, X.stone, 0, 0.5, 0.2, dg); box(0.4, 0.6, 0.05, X.candle, 0, 0.45, 0.51, dg);
+      var dr = new THREE.Group(); dr.rotation.y = Math.PI / 2; dg.add(dr); pkGableRoof(0.8, 0.9, 0.55, X.slate, X.stoneW, -0.2, 1.0, 0, dr, 0.08);
+    });
+    var top = B0 + BH + 0.5 + 9.5;
+    pkRod(cx, top - 0.2, cz, cx, top + 1.6, cz, 0.04, X.iron, g, 6); sphere(0.14, X.gold, cx, top + 0.2, cz, g);
+    pkExtrude(PK_DM_CAT, 0.03, X.iron, cx, top + 1.0, cz, g, 0).scale.setScalar(1.3);
+    solid(x0 - 0.3, x1 + 0.3, z0, z1 + 0.3, 0, SH);
+    pkDmIvy(g, x0 + 1.0, 0.4, z1 + 0.05, 2.4, 5.0, 0, 1, 33);
+  }
+
+  // ── Outside: the graveyard, the cloister, the entry pillars ─────
+  // the graveyard: iron railings on stone posts, the orchestra's graves, Joseph Charlatan's mausoleum (its door shudders
+  // when knocked on) and his statue, dead trees and crows, grave lights, the squirting fountain and the mist
+  function pkDmGraveyard(g, E) {
+    var X = pkDmM(), x0 = -45.8, x1 = -33.6, z0 = -37.4, z1 = -32.2;
+    var ground = box(x1 - x0 + 0.6, 0.04, z1 - z0, X.grass, (x0 + x1) / 2, 0.02, (z0 + z1) / 2, g); ground.receiveShadow = true;
+    box(15.0, 0.05, 2.0, X.flags, -40.4, 0.035, -31.0, g);   // the riders' way out to the street, along the graveyard
+    // the railings, broken at both ends of the path
+    var rail = function (ax, az, bx, bz) {
+      var L = Math.hypot(bx - ax, bz - az), n = Math.max(2, Math.round(L / 0.16));
+      pkRod(ax, 1.05, az, bx, 1.05, bz, 0.025, X.iron, g, 6); pkRod(ax, 0.25, az, bx, 0.25, bz, 0.025, X.iron, g, 6);
+      for (var i = 0; i <= n; i++) { var f = i / n, px = ax + (bx - ax) * f, pz = az + (bz - az) * f; box(0.025, 1.15, 0.025, X.iron, px, 0.58, pz, g); if (i % 2 === 0) { var tip = new THREE.Mesh(cachedGeo('pkdmspear', function () { return new THREE.ConeGeometry(0.03, 0.12, 4); }), X.iron); tip.position.set(px, 1.2, pz); g.add(tip); } }
+      solid(Math.min(ax, bx) - 0.08, Math.max(ax, bx) + 0.08, Math.min(az, bz) - 0.08, Math.max(az, bz) + 0.08, 0, 1.2);
+    };
+    var post = function (x, z) { box(0.38, 1.5, 0.38, X.stone, x, 0.75, z, g); pkHipRoof(0.46, 0.46, 0.35, X.carve, x, 1.5, z, g); solid(x - 0.2, x + 0.2, z - 0.2, z + 0.2, 0, 1.5); };
+    rail(x0, z1, -41.3, z1); rail(-39.5, z1, x1, z1); rail(x1, z1, x1, z0); rail(x1, z0, -48.0, z0);   // a gap in front of the tomb
+    [[x0, z1], [-41.3, z1], [-39.5, z1], [x1, z1], [x1, z0], [-41.0, z0], [-48.0, z0]].forEach(function (p) { post(p[0], p[1]); });
+    // Joseph Charlatan's mausoleum, its doors to the queue
+    var mx = -40.4, mz = -35.0, ma = new THREE.Group(); ma.position.set(mx, 0, mz); g.add(ma);
+    box(3.6, 0.4, 3.2, X.carveDark, 0, 0.2, 0, ma);
+    box(3.0, 3.4, 2.6, X.stoneIn, 0, 2.1, 0, ma);
+    [[-1.5, -1.3], [1.5, -1.3], [-1.5, 1.3], [1.5, 1.3]].forEach(function (c) { box(0.42, 3.6, 0.42, X.carve, c[0], 2.2, c[1], ma); pkHipRoof(0.5, 0.5, 0.9, X.carve, c[0], 4.0, c[1], ma); sphere(0.08, X.carve, c[0], 4.95, c[1], ma); });
+    var mr = new THREE.Group(); mr.rotation.y = Math.PI / 2; mr.position.y = 3.8; ma.add(mr); pkGableRoof(2.8, 3.2, 1.7, X.slate, X.stoneW, 0, 0, 0, mr, 0.25);
+    pkDmFrame(pkDmArch(1.9, 1.9, 3.3), pkDmArch(1.3, 1.8, 2.8), 0.3, X.carve, ma, 0, 0.4, 1.32);
+    var md = pkMover(ma, 0, 0.4, 1.28);
+    box(1.28, 2.3, 0.1, X.bronze, 0, 1.15, 0, md); box(0.03, 2.3, 0.12, X.black, 0, 1.15, 0, md);
+    [-0.3, 0.3].forEach(function (u) { sphere(0.06, X.brass, u, 1.2, 0.07, md); });
+    pkFuse(md);
+    sign(['JOSEPH CHARLATAN', 'DIRIGENT  *  1876'], 1.9, 0.42, 0, 3.2, 1.33, 0, { bg: 'transparent', fg: '#2b2620' }, ma);
+    pkDmKitten(ma, 0.0, 5.55, 0, 0, 0.9);
+    solid(mx - 1.8, mx + 1.8, mz - 1.6, mz + 1.6, 0, 4);
+    hitBox(1.4, 2.4, 0.5, mx, 1.6, mz + 1.6, { prompt: function () { return 'Knock on the mausoleum door'; }, use: function () { E.shake = 1.0; sfx('door'); toast('Something inside the tomb knocks back...', ''); } });
+    E.mdoor = md;
+    // his statue, baton raised, on a plinth beside it
+    var stx = -36.4, stz = -34.6;
+    box(1.1, 1.4, 1.1, X.carve, stx, 0.7, stz, g); box(1.3, 0.2, 1.3, X.carveDark, stx, 1.5, stz, g);
+    sign(['J. CHARLATAN'], 0.9, 0.2, stx, 0.9, stz + 0.56, 0, { bg: 'transparent', fg: '#2b2620' }, g);
+    var jf = pkDmFigure(X.bronze, { tails: true, hair: true, s: 1.1 }); jf.g.position.set(stx, 1.6, stz); jf.g.rotation.y = 0.4; g.add(jf.g);
+    jf.armR.rotation.x = -2.5; jf.armL.rotation.x = -1.2; jf.armL.rotation.z = 0.5; pkRod(0, -0.58, 0, 0, -1.0, 0.12, 0.012, X.bronze, jf.armR, 4);
+    solid(stx - 0.6, stx + 0.6, stz - 0.6, stz + 0.6, 0, 3);
+    // the graves: rows north of the path and along the railing by the queue, the front ones carrying the musicians' names
+    var rnd = pkRng(1876), names = [['A. DUVAL', 'VIOLON'], ['M. ROSIER', 'VIOLONCELLE'], ['E. VAN DAM', 'HARPE'], ['L. BRUNO', 'PIANO'], ['H. KLEIN', 'HAUTBOIS'], ['P. MOREAU', 'TRIANGLE'], ['C. JANSSEN', 'CONTREBASSE']], ni = 0;
+    var round = [[-0.3, 0], [0.3, 0], [0.3, 0.68], [0.22, 0.84], [0, 0.9], [-0.22, 0.84], [-0.3, 0.68]];
+    var spots = [];
+    [-45.1, -44.0, -42.9].forEach(function (gx, i) { spots.push([gx, -35.9], [gx + 0.3, -33.6]); });
+    spots.push([-37.75, -36.0], [-34.6, -36.0], [-34.6, -33.4]);
+    spots.forEach(function (s, i) {
+      var x = s[0] + (rnd() - 0.5) * 0.3, z = s[1] + (rnd() - 0.5) * 0.3, kind = i % 5, tilt = (rnd() - 0.5) * 0.18, ry = (rnd() - 0.5) * 0.25, stoneM = rnd() < 0.5 ? X.carve : X.carveDark;
+      var gs = new THREE.Group(); gs.position.set(x, 0, z); gs.rotation.set(0, ry, tilt); g.add(gs);
+      if (kind === 0 || kind === 3) pkExtrude(round, 0.15, stoneM, 0, 0, 0, gs, 0.02);
+      else if (kind === 1) { pkExtrude(pkDmArch(0.55, 0.65, 1.05), 0.14, stoneM, 0, 0, 0, gs, 0.015); }
+      else if (kind === 2) { box(0.12, 1.1, 0.12, stoneM, 0, 0.55, 0, gs); box(0.55, 0.12, 0.12, stoneM, 0, 0.8, 0, gs); }
+      else { box(0.32, 1.3, 0.32, stoneM, 0, 0.65, 0, gs); pkHipRoof(0.34, 0.34, 0.4, stoneM, 0, 1.3, 0, gs); }
+      box(0.75, 0.1, 1.4, X.soil, x, 0.05, z - 0.8, g);
+      if (i % 2 === 0 && ni < names.length && kind !== 2) { var n = names[ni++]; sign([n[0], n[1], '1876'], 0.44, 0.32, 0, 0.45, 0.085, 0, { bg: 'transparent', fg: '#24201b' }, gs); }
+      if (i % 6 === 2) { box(0.16, 0.22, 0.16, X.iron, x + 0.35, 0.11, z + 0.05, g); sphere(0.045, X.candle, x + 0.35, 0.16, z + 0.05, g); }
+    });
+    // dead trees, crows on them, the fountain that squirts
+    [[-45.3, -37.0, 7.0, 3], [-33.9, -37.0, 6.4, 4], [-34.6, -29.1, 5.8, 5]].forEach(function (t) { pkDmDeadTree(g, t[0], t[1], t[2], t[3]); solid(t[0] - 0.3, t[0] + 0.3, t[1] - 0.3, t[1] + 0.3, 0, 4); });
+    [[-45.0, 5.0, -36.7, 0.5], [-34.1, 4.6, -36.7, 2.2], [-39.8, 5.55, -35.0, -0.4]].forEach(function (c) {
+      var cw = new THREE.Group(); cw.position.set(c[0], c[1], c[2]); cw.rotation.y = c[3]; g.add(cw);
+      sphere(0.12, X.black, 0, 0.12, 0, cw).scale.set(0.8, 0.9, 1.4); sphere(0.07, X.black, 0, 0.24, 0.13, cw);
+      var bk = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.09, 4), X.black); bk.rotation.x = Math.PI / 2; bk.position.set(0, 0.23, 0.22); cw.add(bk);
+      box(0.12, 0.03, 0.2, X.black, 0, 0.1, -0.2, cw);
+    });
+    var fx = -42.5, fz = -29.2;
+    pkLathe([[0, 0], [0.5, 0], [0.5, 0.15], [0.42, 0.2], [0.2, 0.3], [0.2, 0.75], [0.45, 0.8], [0.5, 0.95], [0.4, 0.95], [0, 0.9]], X.carve, fx, 0, fz, g, 16);
+    box(0.3, 1.5, 0.3, X.carveDark, fx + 0.42, 0.75, fz, g); sphere(0.14, X.carve, fx + 0.42, 1.55, fz, g);
+    pkRod(fx + 0.4, 1.3, fz, fx + 0.15, 1.25, fz, 0.03, X.brass, g, 6);
+    solid(fx - 0.5, fx + 0.6, fz - 0.5, fz + 0.5, 0, 1.2);
+    hitBox(1.0, 1.2, 1.0, fx, 0.7, fz, { prompt: function () { return 'Drink from the fountain'; }, use: function () { burst(fx + 0.1, 1.25, fz, 0x9fd8ff, 40, 'up'); burst(fx - 0.4, 1.0, fz, 0x9fd8ff, 30, 'up'); sfx('click'); toast('The fountain squirts you right in the face!', ''); } });
+  }
+  // the ruined cloister (de Kruysgang) south of the queue: an arcade of pointed arches on columns, two of them fallen, a
+  // broken back wall with its blind arches, and the herb garden (de Kruydentuyn) with its tombstone labels
+  function pkDmCloister(g) {
+    var X = pkDmM(), z = -19.15, xs = [], i;
+    box(10.4, 0.04, 6.9, X.gravel, -41.0, 0.02, -16.05, g);
+    for (i = 0; i < 8; i++) xs.push(-45.3 + i * 1.25);
+    xs.forEach(function (x, k) {
+      var h = k === 5 ? 1.1 : 2.3;
+      box(0.42, 0.3, 0.42, X.carveDark, x, 0.15, z, g); cyl(0.14, h, X.carve, x, 0.3 + h / 2, z, g, 10);
+      if (k !== 5) box(0.38, 0.2, 0.38, X.carve, x, 2.7, z, g);
+      solid(x - 0.22, x + 0.22, z - 0.22, z + 0.22, 0, 2.6);
+    });
+    for (i = 0; i < xs.length - 1; i++) {
+      if (i === 2 || i === 4 || i === 5) continue;
+      var arc = pkDmArchCurve(1.25, 0, 0.75, 2.8).map(function (p) { return [xs[i] + 0.625 + p[0], p[1], z]; });
+      pkTube(arc, 0.11, X.carve, g, false, 24, 6);
+      box(1.25, 0.32, 0.36, X.stone, xs[i] + 0.625, 3.75, z, g);
+    }
+    for (i = 0; i < 9; i++) pkBoulder(-40.3 + (i % 3) * 0.6 - 1.0, -18.4 + Math.floor(i / 3) * 0.45, 0.2 + (i % 2) * 0.12, g, 0.3);
+    // the back wall: its top broken to different heights, blind arches along it
+    var bz = -12.8, rnd = pkRng(99);
+    for (var bx = -45.8; bx < -36.2; bx += 1.2) {
+      var hh = 1.4 + rnd() * 2.6;
+      box(1.22, hh, 0.6, X.stone, bx + 0.6, hh / 2, bz, g);
+      if (hh > 2.6) pkDmFrame(pkDmArch(0.9, 1.3, 2.1), pkDmArch(0.66, 1.25, 1.9), 0.08, X.carve, g, bx + 0.6, 0.3, bz - 0.33);
+    }
+    solid(-45.8, -36.2, bz - 0.3, bz + 0.3, 0, 3);
+    pkDmIvy(g, -43.2, 0.2, bz - 0.32, 3.4, 2.2, 0, -1, 34);
+    // the herb garden: raised beds, the herbs, labels shaped like headstones
+    [-44.2, -40.8, -37.4].forEach(function (x, k) {
+      box(2.6, 0.32, 1.5, X.carveDark, x, 0.16, -15.9, g); box(2.4, 0.06, 1.3, X.soil, x, 0.33, -15.9, g);
+      for (var h = 0; h < 14; h++) { var hx = x - 1.0 + (h % 7) * 0.33, hz = -16.3 + Math.floor(h / 7) * 0.7; sphere(0.15 + (h % 3) * 0.04, X.herbs[(h + k) % 4], hx, 0.42, hz, g).scale.set(1, 0.8, 1); }
+      for (var lb = 0; lb < 3; lb++) pkExtrude([[-0.08, 0], [0.08, 0], [0.08, 0.14], [0, 0.2], [-0.08, 0.14]], 0.03, X.bone, x - 0.8 + lb * 0.8, 0.34, -15.12, g, 0);
+      solid(x - 1.3, x + 1.3, -16.65, -15.15, 0, 0.5);
+    });
+  }
+  // the entry, where the queue begins at the street end: two stone pillars, a monk on one and the black kitten on the other,
+  // an iron arch between them with the ride's name, and a lantern on each
+  function pkDmPortal(g) {
+    var X = pkDmM(), x = -37.3, zs = [-28.55, -26.05];
+    zs.forEach(function (z, k) {
+      box(1.2, 0.5, 1.2, X.carveDark, x, 0.25, z, g); box(1.0, 2.8, 1.0, X.stone, x, 1.9, z, g); box(1.2, 0.3, 1.2, X.carve, x, 3.45, z, g);
+      solid(x - 0.55, x + 0.55, z - 0.55, z + 0.55, 0, 3.6);
+      pkRod(x + 0.5, 2.7, z, x + 0.85, 2.8, z, 0.03, X.iron, g, 6); box(0.18, 0.28, 0.18, X.candle, x + 0.85, 2.6, z, g); pkHipRoof(0.26, 0.26, 0.18, X.iron, x + 0.85, 2.74, z, g);
+      if (k === 0) { var mk = pkDmFigure(X.carve, { robe: true, s: 0.85 }); mk.g.position.set(x, 3.6, z); mk.g.rotation.y = Math.PI / 2; g.add(mk.g); mk.armL.rotation.x = mk.armR.rotation.x = -0.8; }
+      else pkDmKitten(g, x, 3.6, z, Math.PI / 2, 1.3);
+    });
+    var arc = pkDmArchCurve(2.5, 0, 1.4, 3.6).map(function (p) { return [x, p[1], -27.3 + p[0]]; });
+    pkTube(arc, 0.05, X.iron, g, false, 30, 6);
+    pkTube(pkDmArchCurve(2.2, 0, 1.15, 3.6).map(function (p) { return [x, p[1], -27.3 + p[0]]; }), 0.03, X.iron, g, false, 30, 6);
+    sign(['DANSE MACABRE'], 2.0, 0.4, x + 0.06, 4.3, -27.3, Math.PI / 2, { bg: '#1b232c', fg: '#ff8a3d' }, g);
+    sign(['DANSE MACABRE'], 2.0, 0.4, x - 0.06, 4.3, -27.3, -Math.PI / 2, { bg: '#1b232c', fg: '#ff8a3d' }, g);
+  }
+
+  // ── Sounds ───────────────────────────────────────────────────────
+  // the show's own: thunder, the kitten, Death's fiddle tuned to the devil's interval, a bar of the waltz (the bass, the chords
+  // and the xylophone's bones), the monk choir, and "Vade retro"
+  SFX.pkDanseThunder = function (t) { sNoise(t, 1.8, 0.4, { type: 'lowpass', freq: 420, fade: true }); sNoise(t, 0.2, 0.22, { type: 'highpass', freq: 1800, fade: true }); sTone('sine', 58, t, 1.6, 0.14, { f1: 32 }); };
+  SFX.pkDanseGrowl = function (t) { sTone('sawtooth', 92, t, 1.1, 0.05, { f1: 66, lp: 380 }); sNoise(t, 1.1, 0.05, { type: 'lowpass', freq: 300, shape: 'swell' }); };
+  SFX.pkDanseMeow = function (t) { sTone('sine', 650, t, 0.28, 0.06, { f1: 1050 }); sTone('sine', 1050, t + 0.26, 0.42, 0.05, { f1: 520 }); sTone('triangle', 1300, t + 0.05, 0.5, 0.012, { f1: 900 }); };
+  SFX.pkDanseFiddle = function (t) { [0, 0.55, 1.1].forEach(function (d) { sTone('sawtooth', 880, t + d, 0.46, 0.03, { lp: 3200 }); sTone('sawtooth', 622.25, t + d, 0.46, 0.03, { lp: 3200 }); }); };
+  SFX.pkDanseWaltz = function (t, o) {
+    var n = (o && o.n) || 0, mel = [[392, 392, 392], [392, 370, 392], [466, 440, 392], [349, 392, 466]][n % 4], bass = [98, 98, 117, 87][n % 4];
+    sTone('triangle', bass, t, 0.55, 0.08);
+    [0.6, 1.2].forEach(function (b) { sTone('triangle', bass * 2.5, t + b, 0.25, 0.03); sTone('triangle', bass * 3, t + b, 0.25, 0.026); });
+    mel.forEach(function (f, i) { sTone('sawtooth', f, t + i * 0.6, 0.56, 0.026, { lp: 2400 }); sTone('sine', f * 4, t + i * 0.6 + 0.3, 0.07, 0.022); });
+  };
+  SFX.pkDanseChoir = function (t) { [196, 233, 294, 392].forEach(function (f, i) { sTone('sine', f, t + i * 0.05, 3.4, 0.03, { attack: 0.9 }); sTone('sawtooth', f, t, 3.4, 0.01, { attack: 1.0, lp: 900 }); }); };
+  SFX.pkDanseVade = function (t) { [65, 98, 131].forEach(function (f) { sTone('sawtooth', f, t, 2.4, 0.05, { lp: 520, attack: 0.15 }); }); sNoise(t, 1.2, 0.25, { type: 'lowpass', freq: 200, fade: true }); };
+
+  // ── The show ─────────────────────────────────────────────────────
+  // the beats, in seconds: 0 lightning on the crate, 1 blackout and the kitten's growl, 3 the organ lights, 6 its middle
+  // turns to show Joseph, 8 the waltz (the floor turns, rises and sways), 30 the intermezzo (all stops, a lone fiddle), 36
+  // the build (faster, higher, the orchestra lit in the roses), 50 the scrims clear on the choir, 54 the climax at full
+  // height ("Vade retro"), 57 lightning and the 3 m drop, 58.5 the end: the ghosts gone, the kitten mews.
+  var PK_DM_BEATS = [0, 1, 3, 6, 8, 30, 36, 50, 54, 57, 58.5];
+  function pkDmNear() { return typeof player !== 'undefined' && player && Math.hypot(player.x - PK_DM.CX, player.z - PK_DM.CZ) < 28; }
+  function pkDmEase(x) { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); }
+  function pkDmTick(a, dt) {
+    var D = PK_DM, E = a.extra, X = pkDmM(), t = a.t, run = a.state === 'running';
+    E.clock += dt;
+    var ck = E.clock, near = Math.hypot(player.x - D.CX, player.z - D.CZ) < 28;
+    // the flames and the mist whatever the ride is doing; the mausoleum door when knocked on
+    X.flame.emissiveIntensity = 1.5 + Math.sin(ck * 17) * 0.2 + Math.sin(ck * 7.3) * 0.25;
+    X.candle.emissiveIntensity = 1.2 + Math.sin(ck * 11 + 1) * 0.15;
+    E.mist.forEach(function (m, i) { m.o.position.x = m.x + Math.sin(ck * 0.09 + i * 1.7) * 1.4; m.o.position.z = m.z + Math.cos(ck * 0.07 + i * 2.3) * 1.1; m.o.material.opacity = (0.22 + Math.sin(ck * 0.3 + i) * 0.08) * (E.mistOn ? 1 : 0); });
+    if (E.shake > 0) { E.shake -= dt; E.mdoor.position.x = Math.sin(E.shake * 70) * 0.02 * Math.min(1, E.shake * 2); if (E.shake <= 0) E.mdoor.position.x = 0; }
+    // where each part of the show wants to be at this moment
+    var h = 0, tiltA = 0, spinW = 0, stallW = 0, room = 0.9, flash = 0, organ = 0, josephT = 0, orch = 0, choir = 0, eyes = 0.5, beat = -1;
+    if (run) {
+      for (var b = 0; b < PK_DM_BEATS.length; b++) if (t >= PK_DM_BEATS[b]) beat = b;
+      var lilt = Math.sin(t * Math.PI * 2 / 1.8);
+      if (t < 1) { room = 0.4; flash = (t < 0.12 || (t > 0.28 && t < 0.38) || (t > 0.6 && t < 0.66)) ? 9 : 0; }
+      else if (t < 3) { room = 0.06; eyes = 2.4; }
+      else if (t < 8) { room = 0.18; organ = pkDmEase((t - 3) / 1.5); spinW = 0.25; josephT = pkDmEase((t - 6) / 1.6); eyes = 1.0; }
+      else if (t < 30) { room = 0.5 + lilt * 0.12; organ = 1; josephT = 1; h = pkDmEase((t - 8) / 6) * 1.4 + lilt * 0.22 * pkDmEase((t - 9) / 3); tiltA = 0.12 * pkDmEase((t - 9) / 4); spinW = 0.5 + 0.22 * lilt; stallW = 1.1 * Math.sin(t * Math.PI * 2 / 3.6) * pkDmEase((t - 9) / 3); }
+      else if (t < 36) { room = 1.0; organ = 0.6; josephT = 1; h = 1.4 - pkDmEase((t - 30) / 3) * 0.6; tiltA = 0.12 * (1 - pkDmEase((t - 30) / 2.5)); spinW = 0; }
+      else if (t < 50) { room = 0.45 + Math.max(0, Math.sin(t * 5.2)) * 0.3; organ = 1; josephT = 1; orch = pkDmEase((t - 36.5) / 4); h = 0.8 + pkDmEase((t - 36) / 6) * 1.3 + lilt * 0.25; tiltA = 0.2 * pkDmEase((t - 36) / 3); spinW = 0.95; stallW = 1.5 * pkDmEase((t - 37) / 3); }
+      else if (t < 54) { room = 0.35; organ = 1; josephT = 1; orch = 1; choir = pkDmEase((t - 50) / 2); h = 2.2; tiltA = 0.12; spinW = 0.6; stallW = 0.9; }
+      else if (t < 57) { room = 0.12; organ = 0.8; josephT = 1; orch = 1; choir = 1; h = 2.2 + pkDmEase((t - 54) / 2.2) * (D.RISE - 2.2); tiltA = 0.06 * (1 - pkDmEase((t - 54) / 2)); spinW = 0.3; }
+      else if (t < 58.5) { var fd = (t - 57) / 0.65; room = 0.08; flash = (t < 57.2 || (t > 57.35 && t < 57.45)) ? 9 : 0; organ = 0.4; josephT = 1; orch = 1 - fd; choir = 1; h = fd < 1 ? D.RISE * (1 - fd * fd) : Math.abs(Math.sin((t - 57.65) * 6)) * 0.12 * (1 - (t - 57.65) / 0.85); spinW = 0; eyes = 1.5; }
+      else { room = 0.3 + pkDmEase((t - 58.5) / 1.2) * 0.6; eyes = 2.6; }
+    }
+    // what the cabin's show switches override: the lift and the turntables off, the house lights up
+    if (!E.liftOn) { h = 0; tiltA = 0; }
+    if (!E.turnOn) stallW = 0;
+    if (E.house) room = Math.max(room, 1.15);
+    // the exit doors open while the riders get off, or while the switch holds them
+    var exitWant = (a.state === 'unloading' || E.exitHold) ? 1 : 0;
+    E.exitDoors.forEach(function (d) { d.want = exitWant; d.open += (exitWant - d.open) * Math.min(1, dt * 2.2); d.hinge.rotation.y = d.closedRy + d.openDelta * d.open; });
+    // the floor: its height eased (except in the drop, which is the point), the sway, the turn
+    var k = Math.min(1, dt * 3);
+    E.h = (run && t >= 57 && t < 58.5) ? h : E.h + (h - E.h) * k;
+    E.tiltA += (tiltA - E.tiltA) * Math.min(1, dt * 1.5);
+    E.spinW += (spinW - E.spinW) * Math.min(1, dt * 1.2);
+    E.lift.position.y = E.h;
+    E.tilt.rotation.x = E.tiltA * Math.sin(ck * Math.PI * 2 / 3.6); E.tilt.rotation.z = E.tiltA * Math.cos(ck * Math.PI * 2 / 3.6) * 0.8;
+    E.spin.rotation.y += E.spinW * dt;
+    // each stall on its turntable: back and forth in the waltz, round and round in the build, alternate stalls the other
+    // way; at rest they come back round to face the crate for boarding
+    E.stallW += (stallW - E.stallW) * Math.min(1, dt * 1.6);
+    if (run && t < 54) E.stallA += E.stallW * dt;
+    else { var home = Math.round(E.stallA / (Math.PI * 2)) * Math.PI * 2; E.stallA += (home - E.stallA) * Math.min(1, dt * 0.9); }
+    for (var si = 0; si < E.stalls.length; si++) E.stalls[si].o.rotation.y = E.stalls[si].base + (si % 2 ? -1 : 1) * E.stallA;
+    E.crypt.position.y = -1.8 + pkDmEase((E.h - 0.6) / 1.4) * 1.8;
+    X.undead.emissiveIntensity = pkDmEase((E.h - 1.2) / 1.2) * 0.9;
+    // the room and its lights
+    E.room += (room - E.room) * Math.min(1, dt * 4);
+    if (E.mflash > 0) { E.mflash -= dt; flash = 9; }   // the console's LIGHTNING cue
+    E.roomLight.intensity = E.room * 1.6; E.flash.intensity = flash; E.candleK = 0.35 + E.room * 0.9;
+    X.candle.emissiveIntensity *= E.candleK;
+    E.organ += (organ - E.organ) * Math.min(1, dt * 2.5);
+    X.organGlow.emissiveIntensity = 0.1 + E.organ * 1.4; E.organLight.intensity = E.organ * 2.4;
+    // Joseph: the organ's middle turns round, and he conducts while he is out
+    E.jo += (josephT - E.jo) * Math.min(1, dt * 2.2);
+    E.organMid.rotation.y = E.jo * Math.PI;
+    X.ghostJ.emissiveIntensity = E.jo * (1.2 + Math.sin(ck * 3) * 0.2);
+    E.jArm.rotation.x = -2.2 + (run && t > 8 && t < 57 ? Math.sin(t * Math.PI * 2 / 0.6) * 0.45 : 0);
+    E.jArm.rotation.z = run && t > 8 && t < 57 ? Math.sin(t * Math.PI * 2 / 1.8) * 0.35 : 0;
+    E.ghostLight.intensity = Math.max(E.jo * 0.8, orch * 1.6, choir * 1.2);
+    // the orchestra in the roses, the choir behind the scrims
+    E.orch += (orch - E.orch) * Math.min(1, dt * 2);
+    X.roseIn.emissiveIntensity = 0.12 + E.orch * 1.5; X.ghostO.emissiveIntensity = E.orch * 1.3; X.ghostO.opacity = E.orch * 0.85;
+    E.choir += (choir - E.choir) * Math.min(1, dt * 2);
+    X.scrim.opacity = 0.96 - E.choir * 0.84; X.monk.emissiveIntensity = E.choir * 0.7;
+    E.eyes += (eyes - E.eyes) * Math.min(1, dt * 3);
+    X.eye.emissiveIntensity = E.eyes * (Math.sin(ck * 0.7) > 0.97 ? 0.1 : 1);
+    // what the desk reads (part 14): the floor's height, its tilt and the beat
+    E.show.h = E.h + 1.3; E.show.tilt = E.tiltA * 180 / Math.PI; E.show.beat = beat;
+    // the lightning's smoke, and the sounds, each once a cycle (heard only near the abbey)
+    if (!run) return;
+    var cue = function (id, at, fn) { if (t >= at && !E.cues[id]) { E.cues[id] = true; fn(); } };
+    var play = function (s, o) { if (near) sfx(s, o); };
+    cue('l0', 0, function () { burst(D.CX, 1.9, D.CZ, 0xdfe8ff, 40, 'smoke'); play('pkDanseThunder'); });
+    cue('gr', 1.0, function () { play('pkDanseGrowl'); });
+    cue('or', 3.0, function () { play('pkDanseOrgan'); });
+    cue('fi', 6.2, function () { play('pkDanseFiddle'); });
+    cue('in', 30.5, function () { play('pkDanseFiddle'); });
+    cue('ch', 50.0, function () { play('pkDanseChoir'); });
+    cue('va', 54.0, function () { play('pkDanseVade'); });
+    cue('l1', 57.0, function () { burst(D.CX, 3.4, D.CZ, 0xdfe8ff, 50, 'smoke'); play('pkDanseThunder'); });
+    cue('me', 58.8, function () { play('pkDanseMeow'); });
+    if ((t >= 8 && t < 30) || (t >= 36 && t < 50)) { var bar = Math.floor((t - 8) / 1.8); if (bar !== E.bar) { E.bar = bar; play('pkDanseWaltz', { n: bar }); } }
+  }
+
+  // ── A built-in operator room ─────────────────────────────────────
+  // The working kit of a control room (the desk with the ride's own panel, the cabinet, the hanging monitors, the clocks,
+  // the key box, the chair, the lights and their switch, the status board, the stack lamp) without the glazed cabin round
+  // it, for a ride whose room is built into its own building in its own style (Danse Macabre's sacristy, Droomvlucht's
+  // booth in the U). o: { x, z, y, ry, W, D, H, cab (-1 or 1: the side wall the cabinet stands on) or cabBack (on the back wall), sw: [x, z, ry] the light
+  // switch by the door, mon: [x, y, z, ry] the monitors, stack: false to leave the lamp off }. In the room's own frame local
+  // -z is the window the operator looks out of over the desk, +z the back wall.
+  function pkRoomKit(g, a, o) {
+    var R = new THREE.Group(); R.position.set(o.x, o.y || 0, o.z); R.rotation.y = o.ry || 0; g.add(R);
+    var W = o.W, D = o.D, H = o.H || 2.9, c = o.cab || -1;
+    var con = new THREE.Group(); con.position.set(0, 0.12, -D / 2 + 0.5); R.add(con);
+    if (o.console) pkRideConsole(a, con, o.console); else { pkBkDesk(con, 2.1); pkBoothPanel(a, con); }   // a ride with its own console (part 50)
+    pkLocalSolid(R, -1.14, 1.14, -D / 2 + 0.05, -D / 2 + 0.88, 0, 0.95);
+    var k = new THREE.Group(); k.position.set(0, 0.12, 0); R.add(k);
+    if (o.cabBack) { var cb = o.cabAt || [-W / 2 + 0.55, 1.42]; pkBkCabinet(a, k, cb[0], cb[1], D / 2 - 0.2, Math.PI); pkLocalSolid(R, cb[0] - 0.45, cb[0] + 0.45, D / 2 - 0.45, D / 2, 0, 2.0); }   // against the back wall
+    else { pkBkCabinet(a, k, c * (W / 2 - 0.17), 1.42, 0.2, -c * Math.PI / 2); pkLocalSolid(R, Math.min(c * W / 2, c * (W / 2 - 0.36)), Math.max(c * W / 2, c * (W / 2 - 0.36)), -0.3, 0.7, 0, 2.0); }
+    var m = o.mon || [0, 1.95, -D / 2 + 0.36, 0];
+    pkBkMonitors(a, k, m[0], m[1], m[2], m[3], 0.32);
+    var cl = o.clock || [-1.15, 2.2], tc = o.tc || [1.2, 1.5], kb = o.key || [-1.2, 2.05];
+    pkBkClock(k, cl[0], cl[1], D / 2 - 0.09, Math.PI, 0.14);
+    a.boothClock = pkBkTimeClock(k, tc[0], tc[1], D / 2 - 0.08, Math.PI, a.id, a.name);
+    pkBkKeyBox(k, kb[0], kb[1], D / 2 - 0.08, Math.PI);
+    pkBkChair(k, 0.1, -D / 2 + 1.2, Math.PI, 0);
+    var bat = pkBkBatten(k, 0, H - 0.17, 0.2, 0, 1.4);
+    a.boothLights = pkBkLights(a.id, k, [bat], 0, H - 0.5, 0.2);
+    a.boothLights.setPower(!!a.open);
+    if (o.sw) pkBkSwitch(k, o.sw[0], o.sw[3] || 1.2, o.sw[1], o.sw[2], a.boothLights, a.name);
+    if (o.stack !== false) pkBkStack(a, k, -c * 1.3, H + 0.02, 0.9);
+    var screen = touchScreen({
+      w: 380, h: 320, pw: 0.94, ph: 0.80, x: 0, y: 1.62, z: D / 2 - 0.1, ry: Math.PI, parent: R, title: a.name,
+      draw: function (ctx, sc) {
+        var C = pkCtl(a), waiting = pkAttrWaiting(a);
+        scBg(ctx, sc.w, sc.h);
+        scHead(ctx, sc.w, a.name.toUpperCase(), pkBoothStatus(a, C));
+        scText(ctx, 16, 62, 'ON RIDE', '#a0acb8'); scText(ctx, 16, 88, a.riders + ' / ' + a.seats.length, a.riders ? '#5fd38d' : '#eef1f5');
+        scText(ctx, 200, 62, 'QUEUE', '#a0acb8'); scText(ctx, 200, 88, String(waiting), waiting ? '#f0c04a' : '#eef1f5');
+        scText(ctx, 16, 122, 'GATES  ' + (C.gates ? 'OPEN' : 'CLOSED'), C.gates ? '#5fd38d' : '#a0acb8');
+        scText(ctx, 16, 152, 'RESTRAINTS  ' + (C.barsWant > 0.5 ? 'DOWN' : 'UP'), C.barsWant > 0.5 ? '#5fd38d' : '#a0acb8');
+        scText(ctx, 16, 182, 'AUTO  ' + (C.auto ? 'ON' : 'OFF'), C.auto ? '#5fd38d' : '#a0acb8');
+        scText(ctx, 16, 212, 'CYCLE  ' + a.run.toFixed(1) + 's', '#eef1f5');
+        scText(ctx, 16, 242, 'CONTROL ROOM  ' + (C.fault ? 'RESET' : (C.maint ? 'MAINT' : 'READY')), C.fault || C.maint ? '#ff6b5e' : '#8f98a4');
+        scText(ctx, 16, 272, 'WAIT  ' + pkBkWait(a) + ' MIN', '#eef1f5');
+      }
+    });
+    pkPowerScreen(screen, function () { return !!a.open; });
+    var anchor = new THREE.Group(); anchor.position.copy(R.position); g.add(anchor);   // in the building's frame, where the room is
+    a.booth = anchor; a.boothScreen = screen;
+    return R;
+  }
+  // a door of the room's own making that works and blocks like the booths' doors (part 17): a leaf built by the caller
+  // on a hinge group, swinging openDelta on E
+  function pkRoomDoor(hinge, w, h, openDelta, label, a) {
+    var d = { hinge: hinge, w: w, closedRy: hinge.rotation.y, openDelta: openDelta, open: 0, want: 0, label: label,
+      setNow: function (v) { d.want = d.open = v ? 1 : 0; hinge.rotation.y = d.closedRy + d.openDelta * d.open; } };
+    hitBox(0.3, h, w, 0.05, h / 2, w / 2, { prompt: function () { return (d.want > 0.5 ? 'Shut ' : 'Open ') + label; }, use: function () { d.want = d.want > 0.5 ? 0 : 1; sfx('door'); } }, hinge);
+    pkCtlLive({ tick: function (dt) { var k = d.open + (d.want - d.open) * Math.min(1, dt * 3); if (Math.abs(k - d.open) > 1e-4) { d.open = k; hinge.rotation.y = d.closedRy + d.openDelta * k; } } });
+    PK_BK_DOORS.push(d);
+    if (a) a.boothDoor = d;
+    return d;
+  }
+
+  // ── The sacristy ─────────────────────────────────────────────────
+  // the operator's room, built into the lower range behind the chapel's south wall: flagstones, oak panelling to the dado
+  // with the stone above, an oak-beamed ceiling, a candle sconce and a tapestry of the Danse; the barred spyhole looks
+  // onto the stage over the desk, and the way in is the secret door from the hall
+  function pkDmSacristy(g, a) {
+    var X = pkDmM(), x0 = -57.2, x1 = -52.2, z0 = -20.0, z1 = -15.9, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, H = 3.3;
+    box(x1 - x0, 0.12, z1 - z0, X.flags, cx, 0.06, cz, g);
+    box(x1 - x0, 0.14, z1 - z0, X.oakDark, cx, H + 0.07, cz, g);
+    for (var b = 0; b < 4; b++) box(0.18, 0.24, z1 - z0, X.oak, x0 + 0.6 + b * 1.25, H - 0.12, cz, g);
+    var panel = function (ax, az, bx, bz, nx, nz) {
+      var L = Math.hypot(bx - ax, bz - az), mx = (ax + bx) / 2 + nx * 0.03, mz = (az + bz) / 2 + nz * 0.03, ry = Math.atan2(bx - ax, bz - az) + Math.PI / 2;
+      box(L, H - 1.15, 0.04, X.stoneIn, mx, 1.15 + (H - 1.15) / 2, mz, g).rotation.y = ry;
+      box(L, 1.05, 0.06, X.oakDark, mx + nx * 0.01, 0.65, mz + nz * 0.01, g).rotation.y = ry;
+      box(L, 0.08, 0.1, X.oak, mx + nx * 0.03, 1.18, mz + nz * 0.03, g).rotation.y = ry;
+    };
+    panel(x0, z0, x0, z1, 1, 0); panel(x0, z1, x1, z1, 0, -1);
+    panel(x0, z0, -55.6, z0, 0, 1); panel(-53.8, z0, x1, z0, 0, 1);
+    // a sconce each side of the spyhole, the tapestry on the west wall
+    [-56.3, -53.1].forEach(function (x) { pkRod(x, 2.2, z0 + 0.05, x, 2.2, z0 + 0.3, 0.02, X.iron, g, 4); cyl(0.05, 0.12, X.iron, x, 2.25, z0 + 0.3, g, 8); sphere(0.05, X.flame, x, 2.36, z0 + 0.3, g).scale.set(0.8, 1.6, 0.8); });
+    var tp = tex(128, 192, function (c, w, h) { c.fillStyle = '#3a0f18'; c.fillRect(0, 0, w, h); c.strokeStyle = '#c9a050'; c.lineWidth = 4; c.strokeRect(6, 6, w - 12, h - 12); c.fillStyle = '#d8d0b8'; for (var k = 0; k < 3; k++) { var x = 30 + k * 34, y = 120 - (k % 2) * 16; c.beginPath(); c.arc(x, y - 30, 7, 0, 6.3); c.fill(); c.fillRect(x - 3, y - 22, 6, 26); c.fillRect(x - 12, y - 18 + k * 4, 24, 3); } c.fillStyle = '#0c0c0f'; c.beginPath(); c.arc(64, 160, 9, 0, 6.3); c.fill(); }, 1, 1);
+    var tap = box(0.02, 1.4, 0.95, std({ map: tp, roughness: 0.9 }), x0 + 0.06, 2.1, -16.8, g);
+    pkRoomKit(g, a, { x: cx, z: cz, y: 0, ry: 0, W: x1 - x0, D: z1 - z0, H: H, cab: -1, sw: [(x1 - x0) / 2 - 0.08, 0.85, -Math.PI / 2], mon: [-1.55, 2.0, -1.25, 0.55], stack: false, console: 'danse' });
+    if (PK_DM.secret) a.boothDoor = PK_DM.secret;
+  }
+
+  // ── The cabin's extras ───────────────────────────────────────────
+  // the show's own switches, on a panel on the cabin's back wall under the key box: the exit doors held open, the house
+  // lights up (to walk the chapel), the stalls' turntables, the lift, and the graveyard mist
+  function pkDmSwitches(g, a) {
+    var E = a.extra, X = pkDmM(), p = new THREE.Group(); p.position.set(-57.14, 1.3, -19.15); p.rotation.y = Math.PI / 2; g.add(p);
+    pkCtlSetPower(p, function () { return !!a.open; });
+    box(0.8, 0.52, 0.03, X.oakDark, 0, 0, -0.016, p);
+    box(0.84, 0.03, 0.05, X.gold, 0, 0.27, -0.01, p); box(0.84, 0.03, 0.05, X.gold, 0, -0.27, -0.01, p);
+    sign(['SHOW SWITCHES'], 0.56, 0.07, 0, 0.19, 0.002, 0, { bg: 'transparent', fg: '#d8b45a' }, p);
+    [['EXIT DOORS', 'exitHold', 'HELD OPEN', 'AUTO'], ['HOUSE LIGHTS', 'house', 'UP', 'SHOW'], ['TURNTABLES', 'turnOn', 'ON', 'OFF'], ['LIFT', 'liftOn', 'ON', 'OFF'], ['MIST', 'mistOn', 'ON', 'OFF']].forEach(function (d, i) {
+      var x = -0.3 + i * 0.15;
+      pkCtlToggle(p, x, 0.02, { id: 'dm-' + d[1], on: !!E[d[1]], prompt: d[0], onName: d[2], offName: d[3], act: function (want) { E[d[1]] = want; sfx('click'); return true; } });
+      sign([d[0]], 0.145, 0.045, x, -0.11, 0.002, 0, { bg: 'transparent', fg: '#e8e0cc' }, p);
+    });
+  }
+  // the third screen, hung to the operator's right: the stage seen three ways at once, the floor turning in plan with every
+  // stall on it, each stall's own turn on a dial, and the lift and tilt from the side
+  var PK_DM_BEAT_NAMES = ['LIGHTNING', 'BLACKOUT', 'THE ORGAN', 'JOSEPH', 'THE WALTZ', 'INTERMEZZO', 'CRESCENDO', 'THE CHOIR', 'VADE RETRO', 'THE DROP', 'THE END'];
+  var PK_DM_V = new THREE.Vector3(), PK_DM_V2 = new THREE.Vector3();
+  function pkDmStageDraw(a, c, s) {
+    var E = a.extra, D = PK_DM, W = s.w, H = s.h, green = '#8fe0a0', dim = 'rgba(143,224,160,0.32)', amber = '#f0c04a';
+    c.fillStyle = '#060c09'; c.fillRect(0, 0, W, H);
+    c.font = 'bold 13px monospace'; c.textBaseline = 'alphabetic'; c.textAlign = 'left'; c.fillStyle = green;
+    c.fillText('CAM 3  STAGE MOTION', 8, 16);
+    c.textAlign = 'right'; c.fillStyle = a.state === 'running' ? amber : green;
+    c.fillText(a.state === 'running' ? PK_DM_BEAT_NAMES[Math.max(0, E.show.beat)] + '  ' + Math.floor(a.t) + 's' : a.state.toUpperCase(), W - 8, 16);
+    var panes = [[6, 24, 156, 222, 'PLAN  FLOOR'], [166, 24, 120, 222, 'STALLS'], [290, 24, 124, 222, 'LIFT  TILT']];
+    c.lineWidth = 1; c.font = '10px monospace'; c.textAlign = 'left';
+    panes.forEach(function (p) { c.strokeStyle = dim; c.strokeRect(p[0], p[1], p[2], p[3]); c.fillStyle = green; c.fillText(p[4], p[0] + 5, p[1] + 13); });
+    // 1: the floor in plan, a mark on its rim so the turn shows, every stall where it is and the way it faces (its front
+    // edge in amber, filled when someone sits in it)
+    var px = 84, py = 140, R = 66, k = R / 5.6, th = E.spin.rotation.y;
+    c.strokeStyle = green; c.lineWidth = 1.5; c.beginPath(); c.arc(px, py, R, 0, 6.283); c.stroke();
+    c.fillStyle = amber; c.beginPath(); c.arc(px + Math.cos(th) * R, py - Math.sin(th) * R, 4, 0, 6.283); c.fill();
+    c.fillStyle = dim; c.beginPath(); c.arc(px, py, 9, 0, 6.283); c.fill();
+    E.stalls.forEach(function (st, i) {
+      st.o.getWorldPosition(PK_DM_V); PK_DM_V2.set(0, 0, 1); st.o.localToWorld(PK_DM_V2); PK_DM_V2.sub(PK_DM_V);
+      var sx = px + (PK_DM_V.x - D.CX) * k, sy = py + (PK_DM_V.z - D.CZ) * k, full = false;
+      for (var q = 0; q < a.seats.length; q++) if (a.seats[q].par === st.o && a.seats[q].guest) { full = true; break; }
+      c.save(); c.translate(sx, sy); c.rotate(Math.atan2(-PK_DM_V2.x, PK_DM_V2.z));
+      c.fillStyle = full ? 'rgba(240,192,74,0.55)' : 'rgba(143,224,160,0.12)'; c.fillRect(-15, -8.5, 30, 17);
+      c.strokeStyle = green; c.lineWidth = 1.2; c.strokeRect(-15, -8.5, 30, 17);
+      c.strokeStyle = amber; c.lineWidth = 2.5; c.beginPath(); c.moveTo(-13, 8.5); c.lineTo(13, 8.5); c.stroke();
+      c.restore();
+      c.fillStyle = green; c.font = '9px monospace'; c.textAlign = 'center'; c.fillText(String(i + 1), sx, sy + 3);
+    });
+    // 2: each stall's own turn on the floor, a dial apiece
+    E.stalls.forEach(function (st, i) {
+      var cx = 196 + (i % 2) * 60, cy = 68 + Math.floor(i / 2) * 64, turn = (i % 2 ? -1 : 1) * E.stallA, deg = ((turn * 180 / Math.PI) % 360 + 360) % 360;
+      c.strokeStyle = dim; c.lineWidth = 1; c.beginPath(); c.arc(cx, cy, 20, 0, 6.283); c.stroke();
+      for (var tk = 0; tk < 8; tk++) { var ta = tk / 8 * 6.283; c.beginPath(); c.moveTo(cx + Math.cos(ta) * 17, cy + Math.sin(ta) * 17); c.lineTo(cx + Math.cos(ta) * 20, cy + Math.sin(ta) * 20); c.stroke(); }
+      c.strokeStyle = amber; c.lineWidth = 2.5; c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.sin(turn) * 17, cy - Math.cos(turn) * 17); c.stroke();
+      c.fillStyle = green; c.font = '9px monospace'; c.textAlign = 'center'; c.fillText('S' + (i + 1) + ' ' + Math.round(deg) + ' DEG', cx, cy + 32);
+    });
+    // 3: the lift and the tilt from the side: the chapel floor, the ram, the floor and its stalls at their height and angle
+    var gx = 356, gy = 222, km = 40, hh = E.h, roll = E.tilt.rotation.z;
+    c.strokeStyle = dim; c.lineWidth = 1; c.beginPath(); c.moveTo(296, gy); c.lineTo(408, gy); c.stroke();
+    c.fillStyle = green; c.font = '9px monospace'; c.textAlign = 'right';
+    for (var m = 0; m <= 3; m++) { var my = gy - 6 - m * km; c.strokeStyle = dim; c.beginPath(); c.moveTo(300, my); c.lineTo(306, my); c.stroke(); c.fillText(m + 'M', 320, my + 3); }
+    var ty = gy - 6 - hh * km;
+    c.fillStyle = 'rgba(143,224,160,0.25)'; c.fillRect(gx - 6, ty, 12, gy - ty);
+    c.save(); c.translate(gx, ty); c.rotate(-roll);
+    c.fillStyle = green; c.fillRect(-44, -3, 88, 6);
+    [-32, -11, 11, 32].forEach(function (u) { c.fillStyle = 'rgba(240,192,74,0.7)'; c.fillRect(u - 7, -15, 14, 12); });
+    c.restore();
+    c.strokeStyle = amber; c.lineWidth = 1; c.beginPath(); c.moveTo(322, ty); c.lineTo(330, ty); c.stroke();
+    c.fillStyle = green; c.font = '10px monospace'; c.textAlign = 'left';
+    c.fillText('H ' + hh.toFixed(2) + ' M', 296, 52); c.fillText('TILT ' + (E.tiltA * 180 / Math.PI).toFixed(0), 360, 52);
+    // the footer: the two speeds and who is aboard
+    var rpm = function (w) { return (Math.abs(w) * 60 / 6.283).toFixed(1); };
+    c.font = '11px monospace'; c.textAlign = 'left'; c.fillStyle = green;
+    c.fillText('FLOOR ' + rpm(E.spinW) + ' RPM   STALLS ' + rpm(E.stallW) + ' RPM   ON RIDE ' + a.riders + '/' + a.seats.length, 8, 266);
+    pkBkScanlines(c, W, H);
+  }
+  function pkDmStageScreen(g, a) {
+    var X = pkDmM(), m = new THREE.Group(); m.rotation.order = 'YXZ'; m.position.set(-52.86, 2.06, -19.4); m.rotation.y = -0.85; m.rotation.x = 0.18; g.add(m);
+    pkRod(0, 0.28, -0.06, 0, 0.98, -0.06, 0.02, X.iron, m, 6);
+    pkBevelBox(0.86, 0.58, 0.12, std({ color: 0x23292e, roughness: 0.5, metalness: 0.3 }), 0, 0, -0.065, m, 0.02);
+    var sc = touchScreen({ w: 420, h: 280, pw: 0.79, ph: 0.53, x: 0, y: 0, z: 0, parent: m, title: 'CAM 3 - the stage', draw: function (c, s) { pkDmStageDraw(a, c, s); } });
+    PK_BK_LIVE.push({ sc: sc, g: m, every: 0.08 });
+    pkPowerScreen(sc, function () { return !!a.open; });
+  }
+
+  // ── Build ────────────────────────────────────────────────────────
+  function pkBuildDanse(p, open) {
+    var D = PK_DM, X = pkDmM(), g = new THREE.Group(); scene.add(g); D.g = g;
+    var CX = D.CX, CZ = D.CZ, E = { show: { h: 1.3, tilt: 0, beat: -1 }, mist: [], cues: {}, bar: -1, clock: 0, shake: 0, h: 0, tiltA: 0, spinW: 0, room: 0.9, organ: 0, jo: 0, orch: 0, choir: 0, eyes: 0.5, candleK: 1, stallW: 0, stallA: 0, exitHold: false, house: false, turnOn: true, liftOn: true, mistOn: true };
+    // the chapel: ten faces, each with its job inside
+    var faces = [];
+    for (var k = 0; k < 10; k++) faces.push(pkDmFace(k));
+    var door = { u0: -1.1, u1: 1.1, y1: 4.1 };
+    faces.forEach(function (f) {
+      if (f.k === 1 || f.k === 9) pkDmWall(f, door);
+      else if (f.k === 2) { pkDmWall(f, { u0: -1.0, u1: 0.8, y0: 1.2, y1: 2.3 }); pkDmSpyhole(f, -0.1); }
+      else pkDmWall(f);
+      if (f.k !== 1 && f.k !== 2) pkDmWallOut(f, f.k === 9 ? door : null);
+    });
+    pkDmRoseNiche(faces[0], 'piano'); pkDmRoseNiche(faces[3], 'harp'); pkDmRoseNiche(faces[5], 'triangle');
+    pkDmScrimNiche(faces[4]); pkDmScrimNiche(faces[6]); pkDmScrimNiche(faces[8]);
+    var organ = pkDmOrgan(faces[7]);
+    // the doors through the chapel wall: a carved arch each side, the drapes at the way in, the exit's iron gates and sign
+    // (the opening is a true pointed arch right through the wall: the spandrels over it are filled the wall's full depth)
+    [faces[1], faces[9]].forEach(function (f) {
+      pkDmFrame([[-1.13, 0], [1.13, 0], [1.13, 4.13], [-1.13, 4.13]], pkDmArch(2.2, 2.7, 4.0), PK_DM.T, X.stone, f.g, 0, 0, -PK_DM.T / 2);
+      [0.04, -PK_DM.T - 0.06].forEach(function (zz, side) { var fr = pkDmFrame(pkDmArch(2.75, 2.75, 4.35), pkDmArch(2.2, 2.7, 4.0), 0.16, X.carve, f.g, 0, 0, zz); if (side) fr.rotation.y = Math.PI; });
+    });
+    pkRod(1.75, 3.3, 0.0, 1.75, 3.3, 0.5, 0.025, X.iron, faces[9].g, 4); pkRod(1.75, 3.3, 0.5, 1.75, 3.0, 0.5, 0.01, X.iron, faces[9].g, 4);
+    box(0.2, 0.3, 0.2, X.candle, 1.75, 2.82, 0.5, faces[9].g); pkHipRoof(0.26, 0.26, 0.18, X.iron, 1.75, 2.97, 0.5, faces[9].g);
+    [-1, 1].forEach(function (s) { var dr = box(0.5, 3.4, 0.25, X.velvet, s * 1.05, 1.75, -PK_DM.T - 0.3, faces[1].g); dr.rotation.y = s * 0.2; });
+    // the exit doors: oak on iron straps under a fixed lunette in the arch. Shut through the show, they swing out to the
+    // graveyard when the riders get off (or while the cabin's EXIT DOORS switch holds them), and only ever outward
+    var lun = new THREE.Mesh(pkExtrudeGeo(pkDmArch(2.2, 0, 1.3), 0.08, 0), X.oakDark); lun.position.set(0, 2.7, -0.16); faces[9].g.add(lun);
+    pkDmKitten(faces[9].g, 0, 3.0, -0.08, 0, 0.7);
+    var exitDoors = [];
+    [-1, 1].forEach(function (s) {
+      var cr = -s * Math.PI / 2, hg = pkMover(faces[9].g, s * 1.1, 0, -0.16); hg.rotation.y = cr;
+      box(0.08, 2.68, 1.08, X.oakDark, 0, 1.34, 0.55, hg);
+      [0.45, 1.35, 2.25].forEach(function (y) { box(0.11, 0.08, 1.0, X.iron, 0, y, 0.54, hg); });
+      [-1, 1].forEach(function (k) { sphere(0.06, X.iron, k * 0.07, 1.3, 0.95, hg); });
+      pkFuse(hg);
+      var dd = { hinge: hg, w: 1.08, closedRy: cr, openDelta: s * Math.PI / 2 * 0.95, open: 0, want: 0, label: 'the exit door', setNow: function () {} };
+      exitDoors.push(dd); PK_BK_DOORS.push(dd);
+    });
+    sign(['EXIT'], 0.8, 0.28, 0, 4.62, 0.14, 0, { bg: '#123a22', fg: '#c8ffd8' }, faces[9].g);
+    sign(['EXIT'], 0.8, 0.28, 0, 4.62, -PK_DM.T - 0.16, Math.PI, { bg: '#123a22', fg: '#c8ffd8' }, faces[9].g);
+    // the buttresses (shallow on the west, toward the viaduct, and on the north, along the Arena path), the roof with its fallen bay, the vault inside
+    [[0, 1.6], [4, 1.5], [5, 0.5], [6, 1.5], [7, 0.5], [8, 0.5], [9, 1.6]].forEach(function (b) { pkDmButtress(b[0], b[1]); });
+    pkDmDeca(D.R + 0.55, D.R + 0.55, 0.5, X.lead, D.H + 0.25, g, true);
+    var gap = Math.PI * 2 / 10, roof = new THREE.Mesh(new THREE.CylinderGeometry(0.12, D.R + 0.6, 9.5, 9, 1, true, Math.PI * 0.9, gap * 9), X.slate);
+    roof.position.set(CX, D.H + 0.5 + 4.75, CZ); roof.castShadow = true; g.add(roof);
+    for (var r = 0; r <= 5; r++) {
+      var ta = 1.6 * Math.PI + r / 5 * gap * 1.0 + 0.0, ex = CX + Math.cos(ta) * (D.R + 0.4), ez = CZ + Math.sin(ta) * (D.R + 0.4), reach = r % 2 ? 0.55 : 0.92;
+      pkRod(ex, D.H + 0.5, ez, ex + (CX - ex) * reach, D.H + 0.5 + 9.3 * reach, ez + (CZ - ez) * reach, 0.09, X.oakDark, g, 6);
+    }
+    [0.3, 0.55].forEach(function (f) { var p0a = 1.6 * Math.PI, p1a = 1.6 * Math.PI + gap, rr = (D.R + 0.4) * (1 - f); pkRod(CX + Math.cos(p0a) * rr, D.H + 0.5 + 9.3 * f, CZ + Math.sin(p0a) * rr, CX + Math.cos(p1a) * rr, D.H + 0.5 + 9.3 * f, CZ + Math.sin(p1a) * rr, 0.07, X.oakDark, g, 6); });
+    var lan = D.H + 0.5 + 9.5;
+    pkRod(CX, lan - 0.4, CZ, CX, lan + 1.6, CZ, 0.05, X.iron, g, 6); pkRod(CX - 0.4, lan + 1.1, CZ, CX + 0.4, lan + 1.1, CZ, 0.04, X.iron, g, 6); sphere(0.16, X.gold, CX, lan, CZ, g);
+    var vR = (D.R * Math.cos(Math.PI / 10) - D.T) / Math.cos(Math.PI / 10);
+    pkDmDeca(0.35, vR, 5.2, X.vault, D.H + 2.6, g, true);
+    for (var j = 0; j < 10; j++) {
+      var ps = j * Math.PI / 5, rx = CX + Math.cos(ps) * (vR - 0.15), rz = CZ + Math.sin(ps) * (vR - 0.15);
+      cyl(0.14, D.H - 3.0, X.carve, rx, 3.0 + (D.H - 3.0) / 2, rz, g, 8);
+      box(0.4, 0.3, 0.4, X.carveDark, rx, D.H - 0.15, rz, g);
+      pkRod(rx, D.H, rz, CX, D.H + 5.0, CZ, 0.1, X.carve, g, 6);
+      // a torch on each pier (the Catacomben's torches)
+      var tx = CX + Math.cos(ps) * (vR - 0.45), tz = CZ + Math.sin(ps) * (vR - 0.45);
+      cyl(0.08, 0.3, X.iron, tx, 3.6, tz, g, 8, 0.05); sphere(0.11, X.flame, tx, 3.85, tz, g).scale.set(0.8, 1.6, 0.8);
+    }
+    sphere(0.5, X.gold, CX, D.H + 5.0, CZ, g);
+    // the chandelier
+    pkRing(1.9, 0.06, X.iron, CX, 9.4, CZ, g, 40); pkRing(1.0, 0.05, X.iron, CX, 9.1, CZ, g, 30);
+    for (var c = 0; c < 3; c++) { var ca = c / 3 * Math.PI * 2; pkRod(CX + Math.cos(ca) * 1.9, 9.4, CZ + Math.sin(ca) * 1.9, CX, D.H + 4.9, CZ, 0.025, X.iron, g, 4); }
+    for (var cd = 0; cd < 12; cd++) { var cda = cd / 12 * Math.PI * 2; cyl(0.04, 0.28, X.bone, CX + Math.cos(cda) * 1.9, 9.6, CZ + Math.sin(cda) * 1.9, g, 6); sphere(0.05, X.candle, CX + Math.cos(cda) * 1.9, 9.8, CZ + Math.sin(cda) * 1.9, g).scale.set(0.8, 1.6, 0.8); }
+    // the floor
+    var fl = new THREE.Mesh(new THREE.CircleGeometry(D.R - 0.2, 10), X.flagDisc); fl.rotation.x = -Math.PI / 2; fl.position.set(CX, 0.02, CZ); fl.receiveShadow = true; g.add(fl);
+    // the Dynamic Motion Stage: the lift (height), the tilt, the turn; under it the rams, only seen when it is up
+    var lift = pkMover(g, CX, 0, CZ), tilt = pkMover(lift, 0, 0, 0), spin = pkMover(tilt, 0, 0, 0);
+    var deck = new THREE.Mesh(new THREE.CircleGeometry(5.6, 64), X.deck); deck.rotation.x = -Math.PI / 2; deck.position.y = 0.13; deck.receiveShadow = true; spin.add(deck);
+    var rim = new THREE.Mesh(new THREE.CylinderGeometry(5.6, 5.6, 0.26, 64, 1, true), X.oakDark); rim.castShadow = true; spin.add(rim);
+    pkRing(5.6, 0.045, X.gold, 0, 0.13, 0, spin, 64);
+    var under = new THREE.Mesh(new THREE.CircleGeometry(5.6, 48), X.iron); under.rotation.x = Math.PI / 2; under.position.y = -0.13; tilt.add(under);
+    var skirt = new THREE.Mesh(new THREE.CylinderGeometry(5.3, 5.3, 0.6, 40, 1, true), X.iron); skirt.position.y = -0.4; tilt.add(skirt);
+    cyl(0.5, 3.6, X.tin, 0, -1.8, 0, lift, 16);
+    for (var rm = 0; rm < 6; rm++) { var ra = rm / 6 * Math.PI * 2 + 0.26; cyl(0.16, 3.6, X.iron, Math.cos(ra) * 3.3, -1.8, Math.sin(ra) * 3.3, lift, 10); }
+    var seats = [], bars = [];
+    var stalls = [];
+    for (var si = 0; si < 6; si++) stalls.push(pkDmStall(spin, si / 6 * Math.PI * 2 + Math.PI / 6, seats, bars));
+    pkDmCrate(spin);
+    pkFuse(spin); stalls.forEach(function (s) { pkFuse(s.o); });
+    var crypt = pkDmCrypt(g);
+    // the lights inside: the room, the lightning, the organ's glow, the ghosts' green
+    var roomLight = new THREE.PointLight(0xffc890, 1.4, 24, 1.6); roomLight.position.set(CX, 10.5, CZ); g.add(roomLight);
+    var flash = new THREE.PointLight(0xdfe8ff, 0, 30, 1.2); flash.position.set(CX, 12.5, CZ); g.add(flash);
+    var organLight = new THREE.PointLight(0xff9a40, 0, 14, 1.5); organLight.position.set(CX, 6, CZ - 5.6); g.add(organLight);
+    var ghostLight = new THREE.PointLight(0x7fffd0, 0, 20, 1.5); ghostLight.position.set(CX, 7.5, CZ); g.add(ghostLight);
+    // the front, the tower, and everything outside
+    var doors = [];
+    pkDmFront(g, doors);
+    pkDmTower(g);
+    pkDmGraveyard(g, E);
+    pkDmCloister(g);
+    // the hall inside the doors: the violin glowing under its cloth on a pedestal, candelabra, a drape or two
+    var vx = -48.6, vz = -17.6;
+    box(0.7, 1.1, 0.7, X.carve, vx, 0.55, vz, g); box(0.85, 0.1, 0.85, X.carveDark, vx, 1.12, vz, g);
+    pkDmViolin(g, vx, 1.45, vz, 0.55, X.violin, -1.35, 0.3, 0);
+    var cl = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.75, 14, 1, true), X.cloth); cl.position.set(vx, 1.55, vz); cl.userData.noBake = true; g.add(cl);
+    solid(vx - 0.4, vx + 0.4, vz - 0.4, vz + 0.4, 0, 1.6);
+    [[-51.3, -16.6], [-47.6, -16.3]].forEach(function (q) {
+      cyl(0.04, 1.7, X.iron, q[0], 0.85, q[1], g, 6); pkRing(0.25, 0.02, X.iron, q[0], 1.7, q[1], g, 16);
+      for (var cn = 0; cn < 5; cn++) { var cna = cn / 5 * Math.PI * 2; cyl(0.03, 0.2, X.bone, q[0] + Math.cos(cna) * 0.25, 1.8, q[1] + Math.sin(cna) * 0.25, g, 6); sphere(0.035, X.candle, q[0] + Math.cos(cna) * 0.25, 1.94, q[1] + Math.sin(cna) * 0.25, g); }
+    });
+    [[-47.04, -23.6, -Math.PI / 2], [-47.04, -17.6, -Math.PI / 2]].forEach(function (q) { var dr = box(1.4, 4.4, 0.06, X.velvet, q[0], 2.6, q[1], g); dr.rotation.y = q[2]; });
+    // the mist: soft sheets low over the graveyard and round the abbey's foot
+    [[-42.6, -35.0, 6], [-36.0, -35.4, 5], [-44.0, -29.2, 4], [-38.0, -29.3, 4], [-47.4, -34.8, 4], [-41.0, -16.0, 6], [-45.3, -13.5, 5]].forEach(function (m) {
+      var mm = new THREE.Mesh(new THREE.PlaneGeometry(m[2], m[2]), X.mist.clone()); mm.rotation.x = -Math.PI / 2; mm.position.set(m[0], 0.35, m[1]); mm.userData.noBake = true; mm.renderOrder = 3;
+      var mv = pkMover(g, 0, 0, 0); mv.add(mm); E.mist.push({ o: mm, x: m[0], z: m[1] });
+    });
+    E.lift = lift; E.tilt = tilt; E.spin = spin; E.stalls = stalls; E.exitDoors = exitDoors; E.crypt = crypt; E.organMid = organ.mid; E.jArm = organ.arm;
+    E.roomLight = roomLight; E.flash = flash; E.organLight = organLight; E.ghostLight = ghostLight;
+    var a = pkAttr({
+      id: 'danse', name: 'Danse Macabre', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats,
+      board: 22, run: 60, unload: 8, exit: [-35.5, -31.0], extra: E,
+      start: function (at) { at.extra.cues = {}; at.extra.bar = -1; },
+      tickRun: pkDmTick
+    });
+    a.boardMin = 12;
+    var C = pkCtl(a);
+    C.gateObjs.push(function (t) { doors.forEach(function (d) { d.h.rotation.y = d.s * 1.4 * t; }); });
+    C.barObjs.push(function (b) { bars.forEach(function (bb) { bb.rotation.x = -1.5 * (1 - b); }); });
+    // the riders' way: in at the doors, across the hall, through the chapel door to their stall; out by the east door and
+    // through the graveyard to the street
+    var ph = function (r, deg) { var q = deg * Math.PI / 180; return { x: CX + Math.cos(q) * r, z: CZ + Math.sin(q) * r }; };
+    var inA = { x: D.FX + 1.1, z: D.DZ }, inB = { x: D.FX - 1.6, z: D.DZ }, inC = ph(9.25, 54), inD = ph(6.8, 54);
+    var outA = ph(6.8, 342), outB = ph(9.6, 342);
+    a.seatPath = function (from, w) { return route(from, inA).concat([inB, inC, inD], route(inD, { x: w.x, z: w.z })); };
+    a.walkOut = function (sp) { return route(sp, outA).concat([outB], route(outB, { x: a.exit[0], z: a.exit[1] })); };
+    // the control cabin, glazed onto the chapel through its south face, its side window and door onto the hall
+    pkDmSwitches(g, a);
+    pkDmStageScreen(g, a);
+    pkDmSacristy(g, a);
+    return a;
+  }
+  // ── Custom consoles ──────────────────────────────────────────────
+  // Each of the two is its own piece of furniture, built for its ride, with the same working parts as every booth panel
+  // (part 14): the operator key, AUTO, the gates, the restraints, the station gates, TEST, the E-stop and RESET, the
+  // interlock chain and READY, the dispatch lever, the voice, the two dials, the annunciator bank and the readouts, all
+  // driving the same booth functions (part 09). Danse Macabre's is an organ console: carved dark oak, two manuals of
+  // ivory and ebony, its buttons set as brass-ringed ivory stops and gilt pipes crowning the bank, with a LIGHTNING cue.
+  // Droomvlucht's is a dream desk: navy lacquer edged in gilt, its face a chart of the night sky, jewel buttons, a crescent
+  // moon over the bank, with a FOG cue and a readout of which dream the leading gondola is in.
+  var PK_CON = {
+    danse: { body: 0x2e1c10, trim: 0xc9a050, face: ['#3a2416', '#1f130b'], ink: '#e8cf8a', dim: '#a88a5a', font: 'Georgia, serif',
+      btnCol: 'white', collar: 'brass', g2: { unit: 'tilt deg', min: 0, max: 14, red: 0.86, ticks: 7, get: function (a) { return a.extra.tiltA * 180 / Math.PI / 14; } },
+      cue: { label: 'LIGHTNING', col: 'blue', prompt: 'Strike the lightning', act: function (a) { a.extra.mflash = 0.45; if (typeof pkDmNear === 'function' && pkDmNear()) sfx('pkDanseThunder'); } },
+      title: 'DANSE MACABRE', sub: 'ORGEL-CONSOLE  *  ABDIJ VAN HUYVERWOUD' },
+    droom: { body: 0x18213a, trim: 0xd8b45a, face: ['#141c38', '#0a0f22'], ink: '#f0dcae', dim: '#9aa6d0', font: 'Georgia, serif',
+      btnCol: 'purple', collar: 'gold', g2: { unit: 'height m', min: 0, max: 14, red: 0, ticks: 7, get: function (a) { var g0 = a.extra.gons && a.extra.gons[0]; return g0 ? g0.g.position.y / 14 : 0; } },
+      cue: { label: 'FOG', col: 'sky', prompt: 'Fog the wall', act: function (a) { a.extra.fogBoost = 5; sfx('click'); } },
+      title: 'DROOMVLUCHT', sub: 'DROOMLESSENAAR  *  MARERIJK' }
+  };
+  function pkConMat(c, r, m) { return std({ color: c, roughness: r === undefined ? 0.5 : r, metalness: m === undefined ? 0.2 : m }); }
+  // the face: a gradient in the console's colours, engraved fields and every label, and (the dream desk) a sky of stars
+  function pkConFace(id, K, PW, PH) {
+    return function (c, W, H) {
+      var R = pkCtlRuler(W, H, PW, PH), gr = c.createLinearGradient(0, 0, 0, H);
+      gr.addColorStop(0, K.face[0]); gr.addColorStop(1, K.face[1]); c.fillStyle = gr; c.fillRect(0, 0, W, H);
+      var rnd = pkRng(id === 'danse' ? 3 : 4);
+      if (id === 'droom') { for (var s = 0; s < 120; s++) { c.fillStyle = 'rgba(240,226,180,' + (0.2 + rnd() * 0.6).toFixed(2) + ')'; var sx = rnd() * W, sy = rnd() * H, sr = rnd() < 0.85 ? 1 : 2.4; c.beginPath(); c.arc(sx, sy, sr, 0, 6.283); c.fill(); } }
+      else { for (var b = 0; b < 40; b++) { c.strokeStyle = 'rgba(0,0,0,' + (0.08 + rnd() * 0.12).toFixed(2) + ')'; c.lineWidth = 1 + rnd() * 3; c.beginPath(); var by = rnd() * H; c.moveTo(0, by); c.bezierCurveTo(W * 0.3, by + (rnd() - 0.5) * 60, W * 0.7, by + (rnd() - 0.5) * 60, W, by + (rnd() - 0.5) * 40); c.stroke(); } }
+      var frame = function (x0, y0, x1, y1, label) {
+        c.strokeStyle = K.trim2 || K.ink; c.globalAlpha = 0.55; c.lineWidth = R.L(0.003); c.strokeRect(R.X(x0), R.Y(y1), R.X(x1) - R.X(x0), R.Y(y0) - R.Y(y1)); c.globalAlpha = 1;
+        if (label) txt(label, (x0 + x1) / 2, y1 - 0.022, 0.013, K.dim);
+      };
+      var txt = function (t, x, y, sz, col, weight) { c.fillStyle = col || K.ink; c.font = (weight || '700') + ' ' + Math.round(R.L(sz)) + 'px ' + K.font; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(t, R.X(x), R.Y(y)); };
+      frame(-0.88, -0.2, -0.36, 0.2, 'OPERATOR'); frame(-0.34, -0.2, 0.34, 0.2, 'SEQUENCE'); frame(0.36, -0.2, 0.88, 0.2, 'SHOW');
+      txt('LOAD', -0.74, -0.005, 0.012); txt(K.g2.unit.toUpperCase(), -0.5, -0.005, 0.012);
+      txt('KEY', -0.74, -0.178, 0.011, K.dim); txt('VOICE', -0.5, -0.178, 0.011, K.dim);
+      var sig = PK_PANEL[id] && PK_PANEL[id].sig ? PK_PANEL[id].sig.label : 'VOICE';
+      if (id === 'droom') {
+        // the continuous system: no cycle to send, a line to run
+        [['GATES', -0.255], ['BARS HOLD', -0.085], ['WALKWAY', 0.085], ['DISPATCH', 0.255]].forEach(function (l) { txt(l[0], l[1], 0.155, 0.012); });
+        txt('SLOW  NORM  FAST', 0.085, 0.045, 0.0075, K.dim); txt('AUTO / MANUAL', 0.255, 0.045, 0.0075, K.dim);
+        [['KEY', -0.255], ['SYSTEM', -0.085], ['BARS', 0.085], ['SPACING', 0.255]].forEach(function (l) { txt(l[0], l[1], -0.025, 0.0085, K.dim); });
+        txt('INTERLOCK', 0, 0.0, 0.009, K.dim);
+        txt('WORK LIGHTS', -0.22, -0.185, 0.01); txt('E-STOP', 0, -0.188, 0.012, '#ff8a7a'); txt('RESET', 0.22, -0.185, 0.011);
+        txt(sig, 0.46, 0.155, 0.011); txt(K.cue.label, 0.58, 0.155, 0.011); txt('NEXT', 0.72, 0.155, 0.011, '#8fe0a0');
+        txt('START', 0.46, -0.188, 0.012, '#8fe0a0'); txt('STOP', 0.6, -0.188, 0.012, '#f0c04a'); txt('RELEASE', 0.78, -0.188, 0.011); txt('PULL', 0.83, -0.11, 0.009, K.dim);
+        return;
+      }
+      [['GATES', -0.255], ['BARS', -0.085], ['STN GATES', 0.085], ['TEST', 0.255]].forEach(function (l) { txt(l[0], l[1], 0.155, 0.012); });
+      txt('INTERLOCK', 0, 0.0, 0.009, K.dim);
+      txt('AUTO', -0.22, -0.185, 0.011); txt('E-STOP', 0, -0.188, 0.012, '#ff8a7a'); txt('RESET', 0.22, -0.185, 0.011);
+      txt(sig, 0.48, 0.155, 0.011); txt(K.cue.label, 0.62, 0.155, 0.011);
+      txt('READY', 0.48, -0.04, 0.01, '#8fe0a0'); txt('DISPATCH', 0.74, -0.188, 0.012); txt('PULL', 0.80, -0.11, 0.009, K.dim);
+    };
+  }
+  // Droomvlucht's controls, for a system that runs continuously (part 48): the gates and the bars' hold, the walkway's
+  // speed, the dispatch AUTO or MANUAL, START and STOP, the release lever, the work lights, the chime and the fog
+  function pkDvControls(a, con, P, K, sh, trim, top, hz) {
+    var C = pkCtl(a), E = a.extra, D = PK_DV, parts = { buttons: {}, sheet: sh, panel: P }, BX = [-0.255, -0.085, 0.085, 0.255];
+    var refuse = function () { if (!C.key) { pkBoothRefuse(a.name + ' is locked - turn the operator key on'); return true; } if (C.fault) { pkBoothRefuse('Reset ' + a.name + ' first'); return true; } return false; };
+    parts.buttons.gates = pkCtlBtn(P, BX[0], 0.095, { id: 'gates', label: 'GATES', col: 'green', r: 0.028, collar: trim, lampCol: 0x5fd38d, prompt: 'Open or shut the station gates',
+      act: function () { if (refuse()) return; C.gates = !C.gates; sfx('click'); toast(a.name + ': gates ' + (C.gates ? 'open' : 'shut'), ''); screenDirtyAll(); } });
+    parts.buttons.bars = pkCtlBtn(P, BX[1], 0.095, { id: 'bars', label: 'BARS HOLD', col: 'amber', r: 0.028, collar: trim, lampCol: 0xf0c04a, prompt: 'Hold the bars open (no gondola leaves)',
+      act: function () { if (!C.key) return pkBoothRefuse(a.name + ' is locked - turn the operator key on'); E.barsHold = !E.barsHold; sfx('click'); toast(a.name + ': bars ' + (E.barsHold ? 'held open - dispatch held' : 'on automatic'), ''); } });
+    parts.walk = pkCtlRotary(P, BX[2], 0.095, { id: 'walk', n: 3, pos: E.walkPos, r: 0.03, prompt: 'Walkway speed', names: ['SLOW', 'NORMAL', 'FAST'], act: function (p) { E.walkPos = p; E.walk = [0.35, 0.5, 0.7][p]; } });
+    parts.auto = pkCtlToggle(P, BX[3], 0.095, { id: 'auto', on: C.auto, prompt: 'Dispatch', onName: 'AUTO', offName: 'MANUAL', act: function (on) { C.auto = !!on; if (!S.ctlAuto) S.ctlAuto = {}; S.ctlAuto[a.id] = C.auto; sfx('click'); toast(a.name + ': dispatch ' + (C.auto ? 'AUTO - the gondolas go on their own' : 'MANUAL - pull the release for each'), ''); } });
+    parts.chain = BX.map(function (x) { return pkPnLed(P, x, 0.008, { col: 0x5fd38d, r: 0.009 }); });
+    parts.work = pkCtlToggle(P, -0.22, -0.11, { id: 'work', on: !!E.work, prompt: 'Work lights in the dream', onName: 'ON', offName: 'OFF', act: function (on) { E.work = !!on; sfx('click'); } });
+    parts.stop = pkCtlMushroom(P, 0, -0.1, { id: 'stop', r: 0.044, prompt: 'Emergency stop', act: function () { pkBoothStop(a); } });
+    parts.reset = pkCtlBtn(P, 0.22, -0.11, { id: 'reset', label: 'RESET', col: 'white', r: 0.026, collar: trim, lampCol: 0xe8e4d8, prompt: 'Reset after a stop', act: function () { if (C.fault) pkBoothStop(a); else { sfx('click'); toast(a.name + ': nothing to reset', ''); } } });
+    parts.key = pkCtlKey(P, -0.74, -0.12, { id: 'opKey', on: !!C.key, label: a.name + ' operator key', tag: 'red', act: function (on) { return pkSetRideKey(a, on); } });
+    parts.voice = pkCtlToggle(P, -0.5, -0.12, { id: 'voice', on: pkPnVoice(a.id), prompt: a.name + ': the music box on dispatch', onName: 'ON', offName: 'OFF', act: function (on) { pkPnSetVoice(a.id, on); sfx('click'); } });
+    var gO = { dial: 'cream', bezel: trim, r: 0.058 };
+    parts.load = pkCtlGauge(P, -0.74, 0.085, Object.assign({}, gO, { id: 'load', label: '', unit: 'riders', min: 0, max: a.seats.length, red: 0.92, ticks: 6, get: function () { return a.riders / a.seats.length; } }));
+    parts.g2 = pkCtlGauge(P, -0.5, 0.085, Object.assign({}, gO, { id: 'g2', label: '', unit: 'line m/s', min: 0, max: 1, red: 0.8, ticks: 5, ease: 3, get: function () { var v = 0, n = 0; E.gons.forEach(function (g) { if (g.s >= D.sStationIn) { v += g.v; n++; } }); return n ? v / n : 0; } }));
+    parts.sig = pkCtlBtn(P, 0.46, 0.09, { id: 'sig', label: sh.sig.label, col: 'sky', r: 0.026, collar: trim, lampCol: 0x9fd0ff, prompt: 'Press ' + sh.sig.label, act: function () { pkPnVoiceNow(a, sh, true); } });
+    parts.cue = pkCtlBtn(P, 0.58, 0.09, { id: 'cue', label: K.cue.label, col: K.cue.col, r: 0.026, collar: trim, lampCol: 0x9fd0ff, prompt: K.cue.prompt, act: function () { if (pkCtlDead(P)) return; K.cue.act(a); } });
+    parts.ready = pkPnLed(P, 0.72, 0.09, { col: 0x5fd38d, r: 0.015 });
+    parts.start = pkCtlBtn(P, 0.46, -0.1, { id: 'start', label: 'START', col: 'green', r: 0.036, collar: trim, lampCol: 0x9fef6a, prompt: 'Start the system', act: function () { pkDvStart(a); } });
+    parts.halt = pkCtlBtn(P, 0.6, -0.1, { id: 'halt', label: 'STOP', col: 'amber', r: 0.036, collar: trim, lampCol: 0xf0c04a, prompt: 'Stop: bring every gondola home and park', act: function () { pkDvStop(a); } });
+    parts.lever = pkCtlLever(P, 0.78, -0.06, { id: 'release', len: 0.13, col: 'purple', prompt: 'Pull the release: the next gondola goes', act: function () { if (refuse()) return; if (E.sys !== 'running') return pkBoothRefuse(a.name + ' is not running - press START'); E.release = true; sfx('click'); } });
+    var HB = pkCtlHood(con, 0, top + 0.15, hz, 1.56, 0.2, 0.22);
+    var ANN = [['key', 'KEY\nON', '#5fd38d'], ['auto', 'AUTO\nDISPATCH', '#8fc3ff'], ['gates', 'GATES\nOPEN', '#f0c04a'], ['hold', 'BARS\nHELD', '#f0c04a'], ['run', 'SYSTEM\nRUNNING', '#5fd38d'], ['fault', 'FAULT\nMAINT', '#ff6b5e']].concat(sh.ann || []);
+    parts.ann = {};
+    ANN.forEach(function (d, k) { parts.ann[d[0]] = pkCtlAnnun(HB, -0.715 + k * 0.124, 0, 0.112, 0.1, d[1], { col: d[2], flash: d[0] === 'fault' || d[0] === 'hold' }); });
+    parts.readout = pkCtlReadout(HB, 0.5, -0.025, 0.5, 0.12);
+    parts.tele = pkCtlReadout(HB, 0.5, 0.11, 0.5, 0.06, { col: '#c8d8ff', bg: '#050505' });
+    var moon = new THREE.Mesh(new THREE.RingGeometry(0.05, 0.085, 20, 1, 0.5, 3.8), pkMats().gold); moon.position.set(0, 0.24, -0.01); HB.add(moon);
+    for (var st = 0; st < 6; st++) sphere(0.012, pkMats().gold, -0.7 + st * 0.28, 0.19 + (st % 2) * 0.03, -0.01, HB);
+    var near = false, nearT = 0, PV = new THREE.Vector3(), lastOut = null;
+    pkCtlLive({ tick: function (dt) {
+      var power = !!a.open, A = parts.ann, live = power && !C.fault && !!C.key, run = E.sys === 'running';
+      if (parts.key.on !== !!C.key) parts.key.set(!!C.key);
+      if (parts.auto.on !== C.auto) parts.auto.set(C.auto);
+      if (parts.stop.latched !== !!C.fault) parts.stop.setLatched(!!C.fault);
+      if (parts.voice.on !== pkPnVoice(a.id)) parts.voice.set(pkPnVoice(a.id));
+      A.key.on = power && !!C.key; A.auto.on = live && !!C.auto; A.gates.on = live && !!C.gates; A.hold.on = live && E.barsHold ? 'flash' : false;
+      A.run.on = live && (run ? true : E.sys === 'stopping' ? 'flash' : false); A.fault.on = power && !!C.key && ((C.fault || C.maint) ? 'flash' : false);
+      if (A.voice) A.voice.on = live && pkPnVoice(a.id); if (A.fly) A.fly.on = live && run;
+      Object.keys(A).forEach(function (k2) { if (A[k2].on === undefined) A[k2].on = live && run; });
+      parts.buttons.gates.setLit(live && C.gates); parts.buttons.bars.setLit(live && E.barsHold);
+      parts.start.setLit(live && E.sys === 'parked'); parts.halt.setLit(live && run);
+      var front = null; E.gons.forEach(function (g) { if (g.s >= D.L - 0.3 && (!front || g.s > front.s)) front = g; });
+      var spaced = !E.last || E.last.s > D.DGAP;
+      var links = [!!C.key && !C.maint, run, !E.barsHold, spaced];
+      parts.chain.forEach(function (l, k) { l.on = power ? (links[k] ? true : 'dim') : false; l.mat.emissive.setHex(links[k] ? 0x5fd38d : 0xff6b5e); });
+      var ready = live && run && !!front && links[2] && links[3];
+      parts.ready.on = ready ? (C.auto ? true : 'flash') : false;
+      parts.sig.setLit(live && pkPnVoice(a.id) && run); parts.cue.setLit(live);
+      // the music box as each gondola leaves the station
+      if (E.last !== lastOut) { if (E.last && power && pkPnVoice(a.id) && near) pkPnVoiceNow(a, sh, false); lastOut = E.last; }
+      nearT -= dt;
+      if (nearT <= 0) { nearT = 0.5; P.getWorldPosition(PV); near = typeof player !== 'undefined' && player && (PV.x - player.x) * (PV.x - player.x) + (PV.z - player.z) * (PV.z - player.z) < 40 * 40; }
+      parts.readout.setPower(power); parts.tele.setPower(power);
+      if (!power) { parts.readout.set(['NO POWER', 'BREAKER OFF']); parts.tele.set(['NO POWER', '']); return; }
+      parts.readout.set(['QUEUE ' + ('  ' + pkAttrWaiting(a)).slice(-3) + '  RIDE ' + a.riders + '/' + a.seats.length,
+        C.fault ? 'FAULT  E-STOP' : C.maint ? 'MAINT' : !C.key ? 'LOCKED' : 'SYSTEM ' + E.sys.toUpperCase()]);
+      if (near) parts.tele.set(C.fault ? ['E-STOP LATCHED', 'TURN THE STOP, THEN RESET'] : !C.key ? ['KEY OFF', 'STANDBY'] : pkConTele(a, 'droom'));
+    } });
+    a.boothPanel = parts;
+    return parts;
+  }
+  function pkRideConsole(a, con, id) {
+    var K = PK_CON[id], C = pkCtl(a), sh = PK_PANEL[id] || { sig: { label: 'VOICE', sfx: 'bell', words: 'stand clear' }, tele: function () { return ['', '']; } };
+    var body = pkConMat(K.body, 0.45, 0.15), trim = id === 'danse' ? pkMats().brass : pkMats().gold, M = pkMats();
+    // the body: a cabinet with its plinth and its cheeks, the ride's own way
+    box(2.2, 0.08, 0.9, body, 0, 0.04, -0.02, { parent: con, r: 0.02 });
+    box(2.1, 0.66, 0.78, body, 0, 0.41, -0.04, { parent: con, r: 0.03 });
+    box(2.14, 0.04, 0.82, trim, 0, 0.74, -0.04, con);
+    [-1, 1].forEach(function (s) {
+      box(0.08, 0.95, 0.86, body, s * 1.09, 0.5, -0.04, { parent: con, r: 0.02 });
+      if (id === 'danse') { pkRod(s * 1.09, 0.97, -0.4, s * 1.09, 0.97, 0.38, 0.05, body, con, 10); sphere(0.09, trim, s * 1.09, 0.97, 0.4, con); }
+      else { box(0.1, 0.04, 0.9, trim, s * 1.09, 0.98, -0.04, con); sphere(0.06, trim, s * 1.09, 1.03, 0.38, con); }
+    });
+    for (var pnl = 0; pnl < 3; pnl++) {
+      var px = -0.68 + pnl * 0.68;
+      if (id === 'danse') pkDmFrame(pkDmArch(0.42, 0.3, 0.52), pkDmArch(0.32, 0.27, 0.44), 0.02, trim, con, px, 0.14, 0.36);
+      else { box(0.5, 0.42, 0.02, trim, px, 0.4, 0.36, con); box(0.46, 0.38, 0.025, body, px, 0.4, 0.365, con); pkExtrude([[0, 0.05], [0.015, 0.015], [0.05, 0.015], [0.02, -0.006], [0.03, -0.04], [0, -0.018], [-0.03, -0.04], [-0.02, -0.006], [-0.05, 0.015], [-0.015, 0.015]], 0.01, trim, px, 0.4, 0.38, con, 0); }
+    }
+    // Danse: the two manuals in front of the face, ivory and ebony
+    if (id === 'danse') {
+      var ivory = pkConMat(0xeee6d0, 0.35, 0.05), ebony = pkConMat(0x111111, 0.35, 0.1);
+      [[0.76, 0.40], [0.80, 0.30]].forEach(function (m, mi) {
+        box(1.5, 0.03, 0.12, body, 0, m[0], m[1], con);
+        for (var k = 0; k < 36; k++) { box(0.038, 0.018, 0.1, ivory, -0.7 + k * 0.04, m[0] + 0.022, m[1] + 0.005, con); if ([1, 2, 4, 5, 6].indexOf(k % 7) >= 0) box(0.022, 0.02, 0.06, ebony, -0.68 + k * 0.04, m[0] + 0.04, m[1] - 0.015, con); }
+      });
+    }
+    // the face, tilted toward the operator
+    var PW = 1.76, PH = 0.44, TILT = 0.55, TOP = 0.82;
+    var PY = TOP + (PH / 2) * Math.cos(TILT), PZ = (PH / 2) * Math.sin(TILT) - 0.06;
+    var P = pkCtlPanel({ w: PW, h: PH, x: 0, y: PY, z: PZ, tilt: -TILT, key: 'pk-con-' + id, parent: con, paint: pkConFace(id, K, PW, PH), draw: function () {},
+      rim: trim, screw: trim, caseMat: body, glow: 0.3, rough: 0.5, metal: 0.15 });
+    pkCtlSetPower(P, function () { return !!a.open; });
+    if (id === 'droom') return pkDvControls(a, con, P, K, sh, trim, TOP + PH * Math.cos(TILT), PZ - (PH / 2) * Math.sin(TILT) - 0.05);   // a continuous system: its own controls
+    var parts = { buttons: {}, sheet: sh, panel: P };
+    var lamp = { white: 0xf0e8d0, purple: 0xc9a0ff, blue: 0x8fb8ff, sky: 0x9fd0ff, green: 0x5fd38d, amber: 0xf0c04a, red: 0xff6b5e };
+    var BX = [-0.255, -0.085, 0.085, 0.255], B = [['gates', 'GATES', id === 'danse' ? 'white' : 'green'], ['bars', 'BARS', id === 'danse' ? 'white' : 'amber'], ['station', 'STN GATES', id === 'danse' ? 'white' : 'sky'], ['test', 'TEST', id === 'danse' ? 'white' : 'purple']];
+    var ringCol = [0x5fd38d, 0xf0c04a, 0x9fd0ff, 0xc9a0ff];
+    B.forEach(function (b, i) {
+      parts.buttons[b[0]] = pkCtlBtn(P, BX[i], 0.095, { id: b[0], label: b[1], col: b[2], r: 0.028, collar: trim, lampCol: ringCol[i], prompt: 'Press ' + b[1],
+        act: function () {
+          if (C.fault && b[0] !== 'gates') { sfx('bad'); toast('Reset ' + a.name + ' first', 'bad'); return; }
+          if (b[0] === 'gates') return pkBoothGates(a);
+          if (b[0] === 'bars') { if (!C.key) { sfx('bad'); toast(a.name + ' is locked - turn the operator key on', 'bad'); return; } C.barsWant = C.barsWant > 0.5 ? 0 : 1; sfx('click'); toast(a.name + ': restraints ' + (C.barsWant > 0.5 ? 'down' : 'up'), ''); screenDirtyAll(); return true; }
+          if (b[0] === 'station') return pkStationGatesRide(a);
+          if (b[0] === 'test') return pkBoothTest(a);
+        } });
+    });
+    parts.chain = BX.map(function (x) { return pkPnLed(P, x, 0.03, { col: 0x5fd38d, r: 0.009 }); });
+    parts.auto = pkCtlToggle(P, -0.22, -0.11, { id: 'auto', on: C.auto, prompt: 'Automatic cycle', onName: 'AUTO', offName: 'MANUAL', act: function () { pkBoothAuto(a); } });
+    parts.stop = pkCtlMushroom(P, 0, -0.1, { id: 'stop', r: 0.044, prompt: 'Emergency stop', act: function () { pkBoothStop(a); } });
+    parts.reset = pkCtlBtn(P, 0.22, -0.11, { id: 'reset', label: 'RESET', col: 'white', r: 0.026, collar: trim, lampCol: 0xe8e4d8, prompt: 'Reset after a stop', act: function () { if (C.fault) pkBoothStop(a); else { sfx('click'); toast(a.name + ': nothing to reset', ''); } } });
+    parts.key = pkCtlKey(P, -0.74, -0.12, { id: 'opKey', on: !!C.key, label: a.name + ' operator key', tag: 'red', act: function (on) { return pkSetRideKey(a, on); } });
+    parts.voice = pkCtlToggle(P, -0.5, -0.12, { id: 'voice', on: pkPnVoice(id), prompt: a.name + ': the ride\'s voice on dispatch', onName: 'ON', offName: 'OFF', act: function (on) { pkPnSetVoice(id, on); sfx('click'); toast(a.name + ': voice ' + (on ? 'on' : 'off'), ''); } });
+    var gO = { dial: 'cream', bezel: trim, r: 0.058 };
+    parts.load = pkCtlGauge(P, -0.74, 0.085, Object.assign({}, gO, { id: 'load', label: '', unit: 'riders', min: 0, max: Math.max(4, a.seats.length), red: 0.92, ticks: 6, get: function () { return a.seats.length ? a.riders / a.seats.length : 0; } }));
+    parts.g2 = pkCtlGauge(P, -0.5, 0.085, Object.assign({}, gO, { id: 'g2', label: '', unit: K.g2.unit, min: K.g2.min, max: K.g2.max, red: K.g2.red, ticks: K.g2.ticks, ease: 4, get: function () { return clamp(K.g2.get(a), 0, 1); } }));
+    parts.sig = pkCtlBtn(P, 0.48, 0.09, { id: 'sig', label: sh.sig.label, col: id === 'danse' ? 'purple' : 'sky', r: 0.028, collar: trim, lampCol: 0xc9a0ff, prompt: 'Press ' + sh.sig.label, act: function () { pkPnVoiceNow(a, sh, true); } });
+    parts.cue = pkCtlBtn(P, 0.62, 0.09, { id: 'cue', label: K.cue.label, col: K.cue.col, r: 0.028, collar: trim, lampCol: 0x9fd0ff, prompt: K.cue.prompt, act: function () { if (pkCtlDead(P)) return; K.cue.act(a); } });
+    parts.ready = pkPnLed(P, 0.48, 0.0, { col: 0x5fd38d, r: 0.015 });
+    parts.lever = pkCtlLever(P, 0.74, -0.06, { id: 'dispatchLever', len: 0.13, col: id === 'danse' ? 'black' : 'purple', prompt: 'Pull the dispatch lever', act: function () { pkBoothDispatch(a); } });
+    // the bank over the face: the six windows, the ride's two, the counts; crowned the ride's way
+    var top = TOP + PH * Math.cos(TILT), hz = PZ - (PH / 2) * Math.sin(TILT) - 0.05;
+    var HB = pkCtlHood(con, 0, top + 0.15, hz, 1.56, 0.2, 0.22);
+    var ANN = [['key', 'KEY\nON', '#5fd38d'], ['auto', 'AUTO', '#8fc3ff'], ['gates', 'GATES\nOPEN', '#f0c04a'], ['bars', 'BARS\nLOCKED', '#f0c04a'], ['run', 'RIDE\nRUNNING', '#5fd38d'], ['fault', 'FAULT\nMAINT', '#ff6b5e']].concat(sh.ann || []);
+    parts.ann = {};
+    ANN.forEach(function (d, k) { parts.ann[d[0]] = pkCtlAnnun(HB, -0.715 + k * 0.124, 0, 0.112, 0.1, d[1], { col: d[2], flash: d[0] === 'fault' }); });
+    parts.readout = pkCtlReadout(HB, 0.5, -0.025, 0.5, 0.12);
+    parts.tele = pkCtlReadout(HB, 0.5, 0.11, 0.5, 0.06, { col: id === 'danse' ? '#f0c060' : '#c8d8ff', bg: '#050505' });
+    if (id === 'danse') {
+      // gilt organ pipes along the top of the bank, a candle each end
+      for (var pp = 0; pp < 15; pp++) { var ph = 0.18 + (7 - Math.abs(pp - 7)) * 0.028; cyl(0.016, ph, M.gold, -0.42 + pp * 0.06, 0.2 + ph / 2, -0.02, HB, 8); box(0.02, 0.012, 0.004, pkConMat(0x111111), -0.42 + pp * 0.06, 0.22, -0.004, HB); }
+      [-0.8, 0.8].forEach(function (x) { cyl(0.02, 0.12, pkConMat(0xeee6d0, 0.6, 0), x, 0.2, -0.02, HB, 8); sphere(0.018, pkDmM().candle, x, 0.275, -0.02, HB).scale.set(0.8, 1.6, 0.8); });
+    } else {
+      // a crescent moon over the bank and a scatter of gilt stars
+      var moon = new THREE.Mesh(new THREE.RingGeometry(0.05, 0.085, 20, 1, 0.5, 3.8), M.gold); moon.position.set(0, 0.24, -0.01); HB.add(moon);
+      for (var st = 0; st < 6; st++) sphere(0.012, M.gold, -0.7 + st * 0.28, 0.19 + (st % 2) * 0.03, -0.01, HB);
+    }
+    // ── live ──
+    var near = false, nearT = 0, wasRun = false, PV = new THREE.Vector3();
+    pkCtlLive({ tick: function (dt) {
+      var power = !!a.open, A = parts.ann, live = power && !C.fault && !!C.key;
+      if (parts.key.on !== !!C.key) parts.key.set(!!C.key);
+      if (parts.auto.on !== C.auto) parts.auto.set(C.auto);
+      if (parts.stop.latched !== !!C.fault) parts.stop.setLatched(!!C.fault);
+      if (parts.voice.on !== pkPnVoice(id)) parts.voice.set(pkPnVoice(id));
+      A.key.on = power && !!C.key; A.auto.on = live && !!C.auto; A.gates.on = live && !!C.gates; A.bars.on = live && C.barsWant > 0.5;
+      A.run.on = live && a.state === 'running'; A.fault.on = power && !!C.key && ((C.fault || C.maint) ? 'flash' : false);
+      if (A.voice) A.voice.on = live && pkPnVoice(id);
+      if (A.motion) A.motion.on = live && a.extra.tiltA > 0.01;
+      if (A.fly) A.fly.on = live && a.state === 'running';
+      Object.keys(A).forEach(function (k2) { if (['key', 'auto', 'gates', 'bars', 'run', 'fault', 'voice', 'motion'].indexOf(k2) < 0 && A[k2].on === undefined) A[k2].on = live && a.state === 'running'; });
+      parts.buttons.gates.setLit(live && (a.state === 'idle' || a.state === 'unloading' || a.state === 'boarding'));
+      parts.buttons.station.setLit(live && a.stationGates === false);
+      parts.buttons.test.setLit(live && !PK.closed && a.state === 'idle' && !a.queue.length && !a.riders);
+      parts.buttons.bars.setLit(live && C.barsWant > 0.5);
+      var walking = pkAttrWalkers(a), loading = a.state === 'boarding' || a.state === 'ready';
+      var links = [!!C.key && !C.maint, !C.gates, C.barsWant > 0.5, a.riders > 0 && !walking];
+      var ready = live && !C.maint && loading && links[0] && links[1] && links[2] && links[3];
+      parts.chain.forEach(function (l, k) { l.on = power ? (links[k] ? true : 'dim') : false; l.mat.emissive.setHex(links[k] ? 0x5fd38d : 0xff6b5e); });
+      parts.ready.on = ready ? (C.auto ? true : 'flash') : false;
+      parts.sig.setLit(live && pkPnVoice(id) && a.state === 'running'); parts.cue.setLit(live);
+      nearT -= dt;
+      if (nearT <= 0) { nearT = 0.5; P.getWorldPosition(PV); near = typeof player !== 'undefined' && player && (PV.x - player.x) * (PV.x - player.x) + (PV.z - player.z) * (PV.z - player.z) < 40 * 40; }
+      var run = a.state === 'running';
+      if (run && !wasRun && power && pkPnVoice(id) && near) pkPnVoiceNow(a, sh, false);
+      wasRun = run;
+      parts.readout.setPower(power); parts.tele.setPower(power);
+      if (!power) { parts.readout.set(['NO POWER', 'BREAKER OFF']); parts.tele.set(['NO POWER', '']); return; }
+      var left = run ? Math.max(0, Math.ceil((a.run || 0) - (a.t || 0))) + 's' : '--';
+      parts.readout.set(['QUEUE ' + ('  ' + pkAttrWaiting(a)).slice(-3) + '  RIDE ' + a.riders + '/' + a.seats.length,
+        (C.fault ? 'FAULT   ' : C.maint ? 'MAINT   ' : !C.key ? 'LOCKED  ' : (a.state.toUpperCase() + '        ').slice(0, 8)) + ' END ' + left]);
+      if (near) parts.tele.set(C.fault ? ['E-STOP LATCHED', 'TURN THE STOP, THEN RESET'] : !C.key ? ['KEY OFF', 'STANDBY'] : pkConTele(a, id));
+    } });
+    a.boothPanel = parts;
+    return parts;
+  }
+  // what the second strip on the bank reads: the show's beat and the floor for the Danse, the dream the leading gondola is in
+  // and its speed for Droomvlucht
+  function pkConTele(a, id) {
+    var E = a.extra, run = a.state === 'running';
+    if (id === 'danse') return [run ? PK_DM_BEAT_NAMES[Math.max(0, E.show.beat)] : 'STAGE AT REST', 'H ' + E.h.toFixed(1) + ' M  TILT ' + (E.tiltA * 180 / Math.PI).toFixed(0) + ' DEG'];
+    // the last gondola sent: which dream it is in; and how many are out and how many home
+    var D = PK_DV, out = 0, g0 = E.last;
+    E.gons.forEach(function (g) { if (g.s < D.sStationIn) out++; });
+    var where = 'IN THE STATION';
+    if (g0 && g0.s < D.sStationIn) {
+      var p = g0.g.position;
+      if (g0.s > D.sSpiral0 && g0.s < D.sSpiral1) where = 'ZOMPENWOUD';
+      else if (g0.s > D.sSpiral1) where = 'DROOMMOERAS';
+      else if (p.x < -95 && p.z < -14) where = 'KASTELENRIJK';
+      else if (p.x < -95 && p.z < 5) where = 'WONDERWOUD';
+      else if (p.x < -95 && p.z < 19.5) where = 'ELFENTUIN';
+      else if (p.z >= 19.5 && p.x < -91) where = 'STERRENTUNNEL';
+      else where = 'HEMELBURCHTEN';
+    }
+    return ['LAST OUT: ' + where, 'OUT ' + out + '  HOME ' + (E.gons.length - out) + '  ' + (pkCtl(a).auto ? 'AUTO' : 'MANUAL')];
+  }
+  // ── Why ──────────────────────────────────────────────────────────
+  // The surface lot holds 39 cars, a little over a hundred guests, and the park takes two hundred. The multi-storey stands on
+  // the lawn east of the lot, inside the boundary the Mountain King brought south: a ground floor and two decks, 3.2 m apart,
+  // seven bays a rank and two ranks a level either side of an aisle along x. The ramps lie side by side with the decks along
+  // the north edge, one over the other (each rises west, 22 m for its 3.2 m), so a car goes up by running east along a level,
+  // turning up the ramp at the east end and coming off it at the west end of the level above; down is the same the other way.
+  // Every car pays the parking fee (set on the PC's Finance page) as its party gets out. The free surface lot fills first,
+  // then the multi-storey: its ground floor, then the decks. A party on a deck comes down the stair tower at the south-west
+  // corner and walks out over the apron, through a gate in the lot's east fence; going home they go in at the tower's door.
+  //   The traffic keeps left as everywhere: the aisle east on z 47.1 and west on z 49.9, the ramps up on z 37.4 and down on
+  //   z 34.6, the drive in on x 45.85 and out on x 48.65.
+  var PK_MS = {
+    x0: 33, x1: 64.2, z0: 33, z1: 58, zDeck: 39, FH: 3.2, levels: 3,
+    rx0: 39, rx1: 61, up: 37.4, dn: 34.6, aE: 47.1, aW: 49.9, aC: 48.5,
+    dx: 47.25, din: 45.85, dout: 48.65, boomZ: 70.4,
+    bayX0: 40.375, bayW: 2.75, bayN: 7, door: { x: 36.9, z: 60.4 },
+    boom: null, boomT: 0, near: false
+  };
+  // the gates it needs in the fences: the drive through the boundary along z 71, and the walkers' gate in the lot's east fence
+  var PK_MS_GAPS = [{ axis: 'x', x: PK_MS.dx, z: 71, w: 7.4 }, { axis: 'z', x: 32.5, z: 60.3, w: 2.6 }];
+  var _pkMsPalisade = pkPalisade;
+  pkPalisade = function (x0, z0, x1, z1) {
+    for (var i = 0; i < PK_MS_GAPS.length; i++) {
+      var g = PK_MS_GAPS[i], h = g.w / 2;
+      if (g.axis === 'z' && Math.abs(x0 - g.x) < 0.01 && Math.abs(x1 - g.x) < 0.01 && g.z > Math.min(z0, z1) + h && g.z < Math.max(z0, z1) - h) {
+        var lo = Math.min(z0, z1), hi = Math.max(z0, z1);
+        pkPalisade(x0, lo, x0, g.z - h); pkPalisade(x0, g.z + h, x0, hi); return;
+      }
+      if (g.axis === 'x' && Math.abs(z0 - g.z) < 0.01 && Math.abs(z1 - g.z) < 0.01 && g.x > Math.min(x0, x1) + h && g.x < Math.max(x0, x1) - h) {
+        var l2 = Math.min(x0, x1), h2 = Math.max(x0, x1);
+        pkPalisade(l2, z0, g.x - h, z0); pkPalisade(g.x + h, z0, h2, z0); return;
+      }
+    }
+    return _pkMsPalisade(x0, z0, x1, z1);
+  };
+
+  // ── The bays ─────────────────────────────────────────────────────
+  // rank N noses north against the ramps' wall, rank S noses south; on the ground floor the drive takes bays 2 and 3 of rank S
+  var _pkMsLotBays = pkLotBays;
+  pkLotBays = function () {
+    if (PK_LOT.bays.length) return PK_LOT.bays;
+    var bays = _pkMsLotBays(), M = PK_MS;
+    for (var L = 0; L < M.levels; L++) for (var i = 0; i < M.bayN; i++) {
+      var x = M.bayX0 + i * M.bayW, y = L * M.FH;
+      bays.push({ x: x, z: 42, y: y, front: 39.7, mouth: 44.6, aisle: M.aC, yaw: Math.PI / 2, car: null, ms: true, L: L });
+      if (!(L === 0 && (i === 2 || i === 3))) bays.push({ x: x, z: 55, y: y, front: 57.3, mouth: 52.4, aisle: M.aC, yaw: -Math.PI / 2, car: null, ms: true, L: L });
+    }
+    return bays;
+  };
+  function pkMsFee() { return typeof S.parkFee === 'number' ? S.parkFee : 5; }
+  function pkMsSetFee(n) { S.parkFee = clamp(Math.round(pkMsFee() + n), 0, 50); hudDirty = true; screenDirtyAll(); return S.parkFee; }
+  function pkMsPay(car) {
+    var fee = pkMsFee(); if (fee <= 0 || car.paid) return;
+    car.paid = fee; pay(fee, 'Parking');
+    PK.today.parking = (PK.today.parking || 0) + fee; PK.today.earned = (PK.today.earned || 0) + fee;
+  }
+
+  // ── The ways round it ────────────────────────────────────────────
+  // a height on a level, and on a ramp: ramp k runs from level k at its east end (x 61) to level k+1 at its west end (x 39)
+  function pkMsY(L) { return L * PK_MS.FH; }
+  function pkMsRampY(k, x) { var M = PK_MS; return pkMsY(k) + M.FH * clamp((M.rx1 - x) / (M.rx1 - M.rx0), 0, 1); }
+  function pkMsAt(pts, y) { return pts.map(function (p) { return [p[0], p[1], y]; }); }
+  // up ramp k: in off level k's east lane at the east end, up the ramp westward, round onto level k+1's east lane
+  function pkMsUp(k) {
+    var M = PK_MS, pts = pkMsAt([[58.6, M.aE], [61.4, 46.3], [62.6, 43.6], [62.6, 40.2], [61.7, 38.0]], pkMsY(k));
+    for (var x = M.rx1; x >= M.rx0 - 0.01; x -= 2.75) pts.push([x, M.up, pkMsRampY(k, x)]);
+    return pts.concat(pkMsAt([[36.6, 37.8], [35.6, 40.0], [35.6, 44.4], [36.6, 46.5], [38.4, M.aE]], pkMsY(k + 1)));
+  }
+  // down ramp k: off level k+1's west lane at the west end, round onto the ramp, down it eastward, round onto level k's west lane
+  function pkMsDown(k) {
+    var M = PK_MS, pts = pkMsAt([[39.2, M.aW], [36.4, 49.6], [34.3, 47.6], [33.7, 44.0], [33.7, 38.6], [34.6, 35.6], [36.8, 34.7]], pkMsY(k + 1));
+    for (var x = M.rx0; x <= M.rx1 + 0.01; x += 2.75) pts.push([x, M.dn, pkMsRampY(k, x)]);
+    return pts.concat(pkMsAt([[62.0, 34.8], [63.4, 36.4], [63.6, 40.0], [63.6, 45.0], [62.9, 48.4], [61.2, 49.7], [58.8, M.aW]], pkMsY(k)));
+  }
+  function pkMsRoadIn(fromEast) {
+    var M = PK_MS;
+    return fromEast ? [[95, 77.5], [M.dx + 6, 77.5], [M.dx + 2.6, 77.2], [M.din + 1.2, 75.6]] : [[-95, 74.5], [M.dx - 9, 74.5], [M.dx - 3.6, 74.2]];
+  }
+  function pkMsRoadOut(toEast) {
+    var M = PK_MS;
+    return toEast ? [[M.dout + 2.2, 74.3], [M.dx + 9, 74.5], [95, 74.5]] : [[M.dout - 1, 76.6], [M.dx - 4, 77.5], [M.dx - 12, 77.5], [-95, 77.5]];
+  }
+  // the last of the way in: along the aisle and round into the bay (as the surface lot does it), at the bay's level
+  function pkMsIntoBay(bay, sx, lane, fromX) {
+    var y = bay.y, nose = bay.yaw === Math.PI / 2 ? -1 : 1;
+    return pkMsAt(pkLotAisle([fromX, lane], [bay.x - sx * 3.6, lane], sx), y)
+      .concat(pkMsAt([[bay.x - sx * 1.3, (lane + bay.mouth) / 2], [bay.x, bay.mouth + nose * 0.8], [bay.x, bay.z]], y));
+  }
+  function pkMsIn(bay, fromEast) {
+    var M = PK_MS, pts = pkMsRoadIn(fromEast).concat([[M.din, 72.4], [M.din, 53.6]]);
+    if (!bay.L) {
+      var sx = bay.x < M.din ? -1 : 1, lane = sx < 0 ? M.aW : M.aE;
+      return pts.concat(pkMsIntoBay(bay, sx, lane, M.din + sx * 2.6));
+    }
+    pts.push([M.din + 2.6, M.aE]);
+    for (var k = 0; k < bay.L; k++) pts = pts.concat(pkMsUp(k));
+    return pts.concat(pkMsIntoBay(bay, 1, M.aE, 38.4));
+  }
+  function pkMsOut(bay, toEast) {
+    var M = PK_MS, nose = bay.yaw === Math.PI / 2 ? -1 : 1, y = bay.y;
+    // on the ground floor the car heads for the drive, so its tail swings away from it; on a deck it heads west for the ramp down
+    var sx = bay.L ? 1 : (bay.x < M.dout ? -1 : 1), lane = bay.L ? M.aW : (sx < 0 ? M.aE : M.aW);
+    var back = pkMsAt([[bay.x, bay.z], [bay.x, bay.mouth - nose * 0.6], [bay.x + sx * 1.6, lane]], y);
+    var fwd = [[bay.x + sx * 1.6, lane, y]];
+    if (bay.L) {
+      fwd = fwd.concat(pkMsAt(pkLotAisle([bay.x - 2.4, lane], [40.6, lane], -1), y));
+      for (var k = bay.L - 1; k >= 0; k--) {
+        fwd = fwd.concat(pkMsDown(k));
+        if (k > 0) fwd = fwd.concat(pkMsAt([[42.0, M.aW]], pkMsY(k)));   // along the level below to its own ramp down
+      }
+      fwd = fwd.concat([[M.dout + 2.8, M.aW]]);
+    } else fwd = fwd.concat(pkLotAisle([bay.x - sx * 2.4, lane], [M.dout + sx * 2.8, lane], -sx));
+    fwd = fwd.concat([[M.dout + sx * 0.4, M.aC + 3.0], [M.dout, M.aC + 6.0], [M.dout, 72.4]], pkMsRoadOut(toEast));
+    return { back: back, fwd: fwd };
+  }
+
+  // ── The building ─────────────────────────────────────────────────
+  function pkMsMats() {
+    if (PK_MS.M) return PK_MS.M;
+    var M = PK_MS.M = {};
+    M.concrete = std({ color: 0xa3a19b, roughness: 0.92 });
+    M.deck = std({ color: 0x55585d, roughness: 0.95 });
+    M.edge = std({ color: 0xc9c5bb, roughness: 0.85 });
+    M.rail = std({ color: 0x2f6f4f, roughness: 0.5, metalness: 0.4 });
+    M.brick = std({ color: 0x8a4b38, roughness: 0.85 });
+    M.glass = std({ color: 0x9fc4d8, roughness: 0.1, metalness: 0.2, transparent: true, opacity: 0.45 });
+    M.yellow = std({ color: 0xe8c040, roughness: 0.6 });
+    return M;
+  }
+  // a slab of deck between x0..x1, z0..z1 with its top at y
+  function pkMsSlab(x0, x1, z0, z1, y) { var M = pkMsMats(); box(x1 - x0, 0.3, z1 - z0, M.deck, (x0 + x1) / 2, y - 0.15, (z0 + z1) / 2); box(x1 - x0 + 0.06, 0.12, z1 - z0 + 0.06, M.edge, (x0 + x1) / 2, y - 0.36, (z0 + z1) / 2); }
+  // a parapet along one edge: a concrete upstand with a green rail on it
+  function pkMsWall(x0, z0, x1, z1, y) {
+    var M = pkMsMats(), dx = x1 - x0, dz = z1 - z0, L = Math.hypot(dx, dz), w = box(L, 0.85, 0.2, M.concrete, (x0 + x1) / 2, y + 0.42, (z0 + z1) / 2);
+    w.rotation.y = Math.atan2(-dz, dx);
+    var r = box(L, 0.06, 0.08, M.rail, (x0 + x1) / 2, y + 1.05, (z0 + z1) / 2); r.rotation.y = w.rotation.y;
+  }
+  // a ramp from (x0, y0) to (x1, y1) along z centre zc, w wide, with a kerb wall along its outer edge
+  function pkMsRamp(x0, y0, x1, y1, zc, w) {
+    var M = pkMsMats(), L = Math.hypot(x1 - x0, y1 - y0), a = Math.atan2(y1 - y0, x1 - x0);
+    var s = box(L, 0.3, w, M.deck, (x0 + x1) / 2, (y0 + y1) / 2 - 0.15, zc); s.rotation.z = a;
+    [-1, 1].forEach(function (s) {   // a kerb wall with a rail along both edges
+      var k = box(L, 0.85, 0.2, M.concrete, (x0 + x1) / 2, (y0 + y1) / 2 + 0.42, zc + s * (w / 2 - 0.1)); k.rotation.z = a;
+      var r = box(L, 0.06, 0.08, M.rail, (x0 + x1) / 2, (y0 + y1) / 2 + 1.05, zc + s * (w / 2 - 0.1)); r.rotation.z = a;
+    });
+    // the arrows painted up it
+    for (var t = 0.2; t < 0.9; t += 0.3) {
+      var ax = x0 + (x1 - x0) * t, ay = y0 + (y1 - y0) * t + 0.02;
+      [[PK_MS.up, -1], [PK_MS.dn, 1]].forEach(function (l) { var m = box(1.2, 0.02, 0.18, MAT.whiteLine, ax, ay, l[0]); m.rotation.z = a; });
+    }
+  }
+  // the bay lines and a wheel stop at the head of each bay, on a level
+  function pkMsMarkings(L) {
+    var M = PK_MS, y = pkMsY(L) + 0.015;
+    [[42, 39.7], [55, 57.3]].forEach(function (r, ri) {
+      for (var i = 0; i <= M.bayN; i++) {
+        if (L === 0 && ri === 1 && i === 3) continue;   // the drive comes through bays 2 and 3 on the ground floor
+        box(0.12, 0.02, 5, MAT.whiteLine, M.bayX0 - M.bayW / 2 + i * M.bayW, y, r[0]);
+      }
+    });
+    PK_LOT.bays.forEach(function (b) { if (b.ms && b.L === L) box(1.7, 0.12, 0.22, MAT.steelDark, b.x, y + 0.05, b.front + (b.front < M.aC ? 0.5 : -0.5)); });
+    // the aisle's centre line and the arrows that keep the traffic left
+    box(M.rx1 - M.rx0 + 2, 0.02, 0.12, MAT.whiteLine, (M.rx0 + M.rx1) / 2, y, M.aC);
+    if (L) { box(0.6, 0.02, 0.18, MAT.whiteLine, 37.2, y, 47.2); }
+  }
+  function pkMsBuild() {
+    var M = PK_MS, C = pkMsMats(), y1 = pkMsY(1), y2 = pkMsY(2);
+    // the ground floor, the drive up from the road and the walkers' apron to the lot's gate
+    pkSlab(M.x1 - M.x0, M.z1 - M.z0, (M.x0 + M.x1) / 2, (M.z0 + M.z1) / 2, 0.012, pkAsphalt());
+    pkSlab(6.2, 14.2, M.dx, 65.2, 0.011, pkAsphalt());
+    pkSlab(13.6, 4.6, 37.3, 60.3, 0.013, pkMats().pavers);
+    // the decks: level 1 has its landing at the west end of the ramp strip and the turn onto the ramp up at its east end;
+    // level 2, the roof, has its landing only
+    pkMsSlab(M.x0, M.x1, M.zDeck, M.z1, y1); pkMsSlab(M.x0, M.rx0, M.z0, M.zDeck, y1); pkMsSlab(M.rx1, M.x1, M.z0, M.zDeck, y1);
+    pkMsSlab(M.x0, M.x1, M.zDeck, M.z1, y2); pkMsSlab(M.x0, M.rx0, M.z0, M.zDeck, y2);
+    pkMsRamp(M.rx1, 0, M.rx0, y1, (M.z0 + M.zDeck) / 2, M.zDeck - M.z0);
+    pkMsRamp(M.rx1, y1, M.rx0, y2, (M.z0 + M.zDeck) / 2, M.zDeck - M.z0);
+    // the parapets round the decks, and the wall between the ramps and rank N on every level
+    [y1, y2].forEach(function (y, i) {
+      pkMsWall(M.x0, M.z1, M.x1, M.z1, y);                          // south
+      pkMsWall(M.x0, M.z0, M.x0, M.z1, y);                          // west
+      pkMsWall(M.x0, M.z0, M.rx0, M.z0, y);                         // the landing's north edge
+      if (i === 0) { pkMsWall(M.rx1, M.z0, M.x1, M.z0, y); pkMsWall(M.x1, M.z0, M.x1, M.z1, y); }
+      else pkMsWall(M.x1, M.zDeck, M.x1, M.z1, y);
+    });
+    [y1, y2].forEach(function (y) { pkMsWall(M.rx0, M.zDeck, M.rx1, M.zDeck, y); });
+    pkMsWall(M.rx1 - 0.1, M.zDeck, M.x1 - 2.2, M.zDeck, y2);         // the roof's edge over the ramp's top end
+    // the columns: along both long edges and down the ramps' outer kerb, every two bays
+    var H = y2 + 1.1;
+    [M.x0 + 0.3, 44.5, 50, 55.5, 61, M.x1 - 0.3].forEach(function (x) {
+      [[M.z1 - 0.3, y2], [M.zDeck + 0.15, y2], [M.z0 + 0.3, x < M.rx0 ? y2 : y1]].forEach(function (c) {
+        if (c[0] === M.z0 + 0.3 && x > M.rx0 && x < M.rx1) return;   // never in the ramps' way
+        box(0.5, c[1], 0.5, C.concrete, x, c[1] / 2, c[0]); solid(x - 0.25, x + 0.25, c[0] - 0.25, c[0] + 0.25, 0, c[1]);
+      });
+    });
+    // the stair tower at the south-west corner: brick, glazed up the stair, a door onto the apron, a lit P on top
+    var tx0 = 37.4, tx1 = 41.0, tz0 = 58.5, tz1 = 62.2, tH = H + 1.6;
+    box(tx1 - tx0, tH, tz1 - tz0, C.brick, (tx0 + tx1) / 2, tH / 2, (tz0 + tz1) / 2);
+    box(0.06, tH - 2.6, 1.6, C.glass, tx0 - 0.03, (tH - 2.6) / 2 + 2.2, 60.4);
+    box(0.08, 2.1, 1.1, std({ color: 0x2f6f4f, roughness: 0.5 }), tx0 - 0.04, 1.05, 60.4);
+    box(tx1 - tx0 + 0.3, 0.25, tz1 - tz0 + 0.3, C.concrete, (tx0 + tx1) / 2, tH + 0.12, (tz0 + tz1) / 2);
+    solid(tx0, tx1, tz0, tz1, 0, tH);
+    sign(['P'], 1.4, 1.4, (tx0 + tx1) / 2, tH - 1.0, tz1 + 0.04, 0, { bg: '#2a5a9e', fg: '#ffffff' });
+    sign(['STAIRS', 'LEVELS 0 - 2'], 1.3, 0.5, tx0 - 0.05, 2.7, 60.4, -Math.PI / 2, { bg: '#1b232c', fg: '#f5b53d' });
+    // its name along the south parapet, over the drive
+    sign(['MULTI-STOREY   P   3 LEVELS'], 9, 0.8, M.dx + 3, y2 + 0.5, M.z1 + 0.12, 0, { bg: '#2a5a9e', fg: '#ffffff' });
+    // the markings, every level, and the strip lights under the decks over the aisle and the bays
+    for (var L = 0; L < M.levels; L++) pkMsMarkings(L);
+    var strip = glowMat(0xf4f1e6, 1.4);
+    [y1, y2].forEach(function (y) {
+      for (var sx = 40.5; sx < 60; sx += 4.5) [42.5, M.aC, 55].forEach(function (sz) { box(1.4, 0.06, 0.22, strip, sx, y - 0.47, sz); });
+    });
+    // the fence that keeps it out of the park: north of the ramps and west of the turn
+    pkPalisade(32.5, 32.4, M.x1 + 0.8, 32.4);
+    pkPalisade(M.x1 + 0.8, 32.4, M.x1 + 0.8, 71);
+    // lamps on the roof and at the drive
+    [[M.x0 + 0.8, M.z1 - 0.8], [M.x1 - 0.8, M.z1 - 0.8], [M.x0 + 0.8, M.zDeck + 0.8], [M.x1 - 0.8, M.zDeck + 0.8]].forEach(function (p) {
+      cyl(0.07, 4.2, MAT.steelDark, p[0], y2 + 2.1, p[1], null, 8); box(0.6, 0.14, 0.3, glowMat(0xfff1c8, 1.2), p[0], y2 + 4.2, p[1]);
+    });
+    pkLamp(M.dx - 4.2, 66, 5.2); pkLamp(M.dx + 4.2, 62, 5.2);
+    // the barrier across the drive and the pay machine beside it
+    var g = new THREE.Group(); g.position.set(M.dx - 3.1, 1.05, M.boomZ); scene.add(g); g.userData.dynamic = true;
+    box(6.2, 0.12, 0.12, MAT.whiteLine, 3.1, 0, 0, g);
+    for (var k = 0; k < 3; k++) box(0.5, 0.125, 0.125, MAT.red, 1.2 + k * 2.1, 0, 0, g);
+    M.boom = g;
+    cyl(0.14, 1.1, MAT.steelDark, M.dx - 3.1, 0.55, M.boomZ, null, 10);
+    box(0.55, 1.35, 0.45, C.yellow, M.dx - 3.9, 0.68, M.boomZ - 0.6);
+    box(0.36, 0.26, 0.02, glowMat(0x5fd38d, 1.1), M.dx - 3.9, 1.12, M.boomZ - 0.37);
+    sign(['PAY HERE', 'per car'], 0.5, 0.3, M.dx - 3.9, 1.62, M.boomZ - 0.36, 0, { bg: '#2a5a9e', fg: '#ffffff' });
+  }
+  function pkMsBoomTick(dt) {
+    var M = PK_MS;
+    M.boomT = clamp(M.boomT + (M.near ? 1.6 : -0.8) * dt, 0, 1); M.near = false;
+    if (M.boom) M.boom.rotation.z = M.boomT * 1.35;
+  }
+  // built with the midway, before the bake: the multi-storey is static concrete, only its barrier moves
+  var _pkMsMidway = pkMidway;
+  pkMidway = function () { _pkMsMidway(); pkMsBuild(); };
+
+  var _pkMsT = GAME.T;
+  GAME.T = function () { var t = _pkMsT(); t.PK_MS = PK_MS; t.pkMsFee = pkMsFee; t.pkMsSetFee = pkMsSetFee; t.pkLotArrive = pkLotArrive; t.pkLotIn = pkLotIn; t.pkLotOut = pkLotOut; return t; };
   (function () {
     var canvasId = 'co-canvas';
     var KEY = 'pk-use-button';            // 'lmb' or 'e'

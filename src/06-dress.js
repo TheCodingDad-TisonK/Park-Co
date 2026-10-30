@@ -9,7 +9,7 @@
     dodgems:   { a: 0xe0563f, b: 0xf0c04a, ground: 0x8a8f96, name: 'The Dodgem Arena' },
     droptower: { a: 0x3a3f48, b: 0xf0c04a, ground: 0x9a938a, name: 'The Drop' },
     flume:     { a: 0x3f7fa8, b: 0x8a6a4a, ground: 0x8a9a7a, name: 'The Log Flume' },
-    haunted:   { a: 0x4a4a55, b: 0xff8a3d, ground: 0x6e6a60, name: 'The Haunted Manor' }
+    danse:     { a: 0x4a4a55, b: 0xff8a3d, ground: 0x6e6a60, name: 'Danse Macabre' }
   };
   // the pavers, tinted toward the ride's own colour so each plot reads as a place of its own
   var PK_PADS = {};
@@ -187,7 +187,7 @@
   // pointed roof in the ride's colours, its name over the way in, two lanterns) and a separate exit round the ring with its
   // own sign, where the riders come off. The fence is solid; the gaps are the only ways in and out, so the guests walk in at
   // the entrance and leave by the exit. The radius keeps clear of everything the ride swings round. The flume (its own
-  // channel) and the haunted manor (its porch) have their stations already.
+  // channel) and Danse Macabre (its porch) have their stations already.
   // the fence radius, and 'arch' where something overhead (a ride's own canopy, the arena's eaves) leaves no room for a roof
   // A ride's station gate: a pair of railed steel leaves on capped posts, a gilt top rail and a hazard-striped meeting edge,
   // in the ride's colour. (x, z) is the middle of the opening, (ix, iz) the way the leaves swing (into the station for an
@@ -342,12 +342,6 @@
       box(2.6, 6.2, 0.3, glowMat(0x9fd8ff, 0.55), p.x, 4.1, p.z - 15.6, g);
       box(3.0, 2.4, 2.6, std({ color: 0x8a6a4a, roughness: 0.95 }), p.x + p.r + 2.8, 1.2, p.z + 4.0, g);
       sign(['LOGS'], 1.6, 0.5, p.x + p.r + 2.8, 2.6, p.z + 5.32, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
-    } else if (a.id === 'haunted') {
-      for (var d = 0; d < 8; d++) {
-        var dx = p.x + randf(-9, 9), dz = p.z + randf(6, 12);
-        cyl(0.12, randf(2.6, 4.4), std({ color: 0x3a332c, roughness: 1 }), dx, 2.0, dz, g, 6);
-        box(0.9, 0.09, 0.09, std({ color: 0x3a332c, roughness: 1 }), dx, 3.1, dz, g);
-      }
     }
   }
   // ── Free pieces ──────────────────────────────────────────────────
