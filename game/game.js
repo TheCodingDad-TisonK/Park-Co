@@ -465,31 +465,55 @@
     for (var p = o; p; p = p.parent) { if (p.userData && p.userData.dynamic) return false; if (!p.visible) return false; if (p === camera) return false; }
     return true;
   }
+  // The static bake used to be one mesh per material, and one mesh spans the whole site: it can never leave the frustum, so
+  // every corner of it is drawn (and shadowed) whole wherever the player stands. It now bakes per material per CHUNK, a cell of
+  // the site grid, so the cells behind the player cull away and only the scenery near the view is drawn. A material spread too
+  // thin for a cell (a lone mesh in each) still merges whole, exactly as it did before, so no mesh regresses to a separate draw.
+  var BAKE_CHUNK = 96;   // metres: the side of the grid cell the static bake splits into
+  var _bakeWp = new THREE.Vector3();
+  function bakeBatch(mat, items) {
+    var pos = [], nor = [], uv = [], hasUv = true;
+    items.forEach(function (o) {
+      var g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+      g.applyMatrix4(o.matrixWorld);
+      var pa = g.attributes.position.array, na = g.attributes.normal ? g.attributes.normal.array : null, ua = g.attributes.uv ? g.attributes.uv.array : null;
+      for (var i = 0; i < pa.length; i++) pos.push(pa[i]);
+      if (na) for (var j = 0; j < na.length; j++) nor.push(na[j]); else for (var j2 = 0; j2 < pa.length; j2++) nor.push(0);
+      if (ua) for (var u = 0; u < ua.length; u++) uv.push(ua[u]); else hasUv = false;
+      g.dispose();
+    });
+    var merged = new THREE.BufferGeometry();
+    merged.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    merged.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    if (hasUv && uv.length === pos.length / 3 * 2) merged.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    merged.computeBoundingSphere();
+    var mesh = new THREE.Mesh(merged, mat); mesh.castShadow = items[0].castShadow; mesh.receiveShadow = items[0].receiveShadow; mesh.frustumCulled = true; mesh.userData.baked = true;
+    scene.add(mesh); baked.meshes.push(mesh);
+    items.forEach(function (o) { o.visible = false; o.userData.bakedAway = true; baked.hidden++; });
+    baked.draws++;
+  }
   function bakeStatic() {
     scene.updateMatrixWorld(true);
     var byMat = {}, list = [];
     scene.traverse(function (o) { if (bakeable(o)) list.push(o); });
-    list.forEach(function (o) { var k = o.material.uuid + (o.castShadow ? 'c' : '') + (o.receiveShadow ? 'r' : ''); (byMat[k] = byMat[k] || { mat: o.material, items: [] }).items.push(o); });
+    list.forEach(function (o) {
+      var k = o.material.uuid + (o.castShadow ? 'c' : '') + (o.receiveShadow ? 'r' : '');
+      (byMat[k] = byMat[k] || { mat: o.material, items: [] }).items.push(o);
+    });
     Object.keys(byMat).forEach(function (k) {
-      var grp = byMat[k]; if (grp.items.length < 2) return;
-      var pos = [], nor = [], uv = [], hasUv = true;
+      var grp = byMat[k];
+      if (grp.items.length < 2) return;
+      var cells = {}, strays = [];
       grp.items.forEach(function (o) {
-        var g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
-        g.applyMatrix4(o.matrixWorld);
-        var pa = g.attributes.position.array, na = g.attributes.normal ? g.attributes.normal.array : null, ua = g.attributes.uv ? g.attributes.uv.array : null;
-        for (var i = 0; i < pa.length; i++) pos.push(pa[i]);
-        if (na) for (var j = 0; j < na.length; j++) nor.push(na[j]); else for (var j2 = 0; j2 < pa.length; j2++) nor.push(0);
-        if (ua) for (var u = 0; u < ua.length; u++) uv.push(ua[u]); else hasUv = false;
-        g.dispose();
+        o.getWorldPosition(_bakeWp);
+        var ck = Math.floor(_bakeWp.x / BAKE_CHUNK) + ',' + Math.floor(_bakeWp.z / BAKE_CHUNK);
+        (cells[ck] = cells[ck] || []).push(o);
       });
-      var merged = new THREE.BufferGeometry();
-      merged.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-      merged.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-      if (hasUv && uv.length === pos.length / 3 * 2) merged.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-      var mesh = new THREE.Mesh(merged, grp.mat); mesh.castShadow = grp.items[0].castShadow; mesh.receiveShadow = grp.items[0].receiveShadow; mesh.frustumCulled = false; mesh.userData.baked = true;
-      scene.add(mesh); baked.meshes.push(mesh);
-      grp.items.forEach(function (o) { o.visible = false; o.userData.bakedAway = true; baked.hidden++; });
-      baked.draws++;
+      Object.keys(cells).forEach(function (ck) {
+        var cell = cells[ck];
+        if (cell.length >= 2) bakeBatch(grp.mat, cell); else strays = strays.concat(cell);
+      });
+      if (strays.length >= 2) bakeBatch(grp.mat, strays);   // a sparse material still bakes whole, so it never loses the merge
     });
     shadowDirty = true;
   }
@@ -909,6 +933,41 @@
     for (var m in HUMAN_M) keepShared(HUMAN_M[m]);
     return G;
   }
+  // A person is built from dozens of tiny meshes so each limb can swing on its own pivot. Within one pivot group the pieces
+  // never move relative to each other, so they are merged back into one mesh per material after the build: a head's neck,
+  // skull, nose and ears become a single skin mesh, its hair one mesh, and so on. The rig keeps the pivots it animates, and
+  // the meshes it still reaches for each frame (the face for mood, the chest for breathing) are left alone via skip.
+  function mergeHumanGroup(grp, skip) {
+    var byMat = {};
+    grp.children.forEach(function (c) {
+      if (!c.isMesh || !c.material || skip.indexOf(c) >= 0) return;
+      (byMat[c.material.uuid] = byMat[c.material.uuid] || []).push(c);
+    });
+    Object.keys(byMat).forEach(function (k) {
+      var parts = byMat[k];
+      if (parts.length < 2) return;
+      var pos = [], nor = [], uv = [], hasUv = true;
+      parts.forEach(function (m) {
+        m.updateMatrix();
+        var geo = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+        geo.applyMatrix4(m.matrix);
+        var pa = geo.attributes.position.array, na = geo.attributes.normal ? geo.attributes.normal.array : null, ua = geo.attributes.uv ? geo.attributes.uv.array : null;
+        for (var i = 0; i < pa.length; i++) pos.push(pa[i]);
+        if (na) for (var j = 0; j < na.length; j++) nor.push(na[j]); else for (var j2 = 0; j2 < pa.length; j2++) nor.push(0);
+        if (ua) for (var u = 0; u < ua.length; u++) uv.push(ua[u]); else hasUv = false;
+        geo.dispose();
+      });
+      var merged = new THREE.BufferGeometry();
+      merged.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      merged.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+      if (hasUv && uv.length === pos.length / 3 * 2) merged.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      merged.computeBoundingSphere();
+      var nm = new THREE.Mesh(merged, parts[0].material);
+      nm.castShadow = parts[0].castShadow; nm.receiveShadow = parts[0].receiveShadow;
+      parts.forEach(function (m) { grp.remove(m); });
+      grp.add(nm);
+    });
+  }
   // opt: skin, hair, style ('short' | 'long' | 'bun' | 'bald' | 'cap'), shirt (a material), vest (a material), name, rolled, mood, cap, capMat, hardhat (a material), noBeard, glasses
   function makeHuman(opt) {
     opt = opt || {}; var G = humanGeo(), M = HUMAN_M;
@@ -962,6 +1021,11 @@
     // hats sit on the brows (the eye line is at 0.26 in the head's frame, the brows at 0.29), never over the eyes
     if (capOn && !opt.hardhat) { var capM = opt.capMat || MAT.blue; mesh(new THREE.SphereGeometry(0.184, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), capM, 0, 0.29, 0, head); var peak = mesh(G.peak, capM, 0, 0.3, 0.2, head); peak.rotation.x = 0.15; mesh(new THREE.SphereGeometry(0.02, 8, 6), capM, 0, 0.47, 0, head); }
     if (opt.hardhat) { mesh(new THREE.SphereGeometry(0.19, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.5), opt.hardhat, 0, 0.3, 0, head); mesh(roundCylGeo(0.212, 0.212, 0.016, 24), opt.hardhat, 0, 0.3, 0.0, head); var pk = mesh(bevelGeo(0.16, 0.012, 0.08, 0.004, 1), opt.hardhat, 0, 0.3, 0.245, head); pk.rotation.x = 0.12; }
+    // collapse each pivot group's static pieces into one mesh per material; the face and chest stay out (they still animate)
+    mergeHumanGroup(head, [face]);
+    mergeHumanGroup(torso, [u.chest]);
+    u.legs.forEach(function (hip) { mergeHumanGroup(hip, []); if (hip.userData.knee) mergeHumanGroup(hip.userData.knee, []); });
+    u.arms.forEach(function (sh) { mergeHumanGroup(sh, []); if (sh.userData.elbow) mergeHumanGroup(sh.userData.elbow, []); });
     groundBlob(0.9, 0.9, 0, 0, g, 0.002);
     runHooks('humanMade', g, opt);
     return g;
@@ -1386,13 +1450,13 @@
     MAT.lamp.color.setHex(power ? 0xfff6e4 : 0x3a3a3a); MAT.skylight.color.setHex(0xffffff); MAT.skylight.color.multiplyScalar(0.04 + day * 0.96);
     runHooks('lighting', day, dawn, overcast, power);
   }
-  // The sun's shadow map is a second full pass over every caster, so it is not redrawn every frame. It is redrawn four times a
+  // The sun's shadow map is a second full pass over every caster, so it is not redrawn every frame. It is redrawn twice a
   // second, at once when something flagged it dirty, and every frame while the game says something big is moving (CO.game.shadowLive()).
   function shadowTick(dt) {
     if (!renderer.shadowMap.enabled) return;
     shadowT += dt;
     var live = CO.game && CO.game.shadowLive ? CO.game.shadowLive() : false;
-    if (shadowDirty || live || shadowT > 0.25) { renderer.shadowMap.needsUpdate = true; shadowDirty = false; shadowT = 0; }
+    if (shadowDirty || live || shadowT > 0.5) { renderer.shadowMap.needsUpdate = true; shadowDirty = false; shadowT = 0; }
   }
   // ── World items ───────────────────────────────────────────────────
   // A key names an item by what it is and where the game built it ("lamp post@12,6", "mesh plane 34x19.2@0,13.6"), so it survives a
@@ -2140,7 +2204,7 @@
   function applySettings() {
     if (!renderer) return;
     camera.fov = SET.fov; camera.updateProjectionMatrix(); post.on = SET.film !== false;
-    var pr = SET.quality === 'high' ? Math.min(window.devicePixelRatio || 1, 2) : SET.quality === 'medium' ? 1 : 0.75;
+    var pr = SET.quality === 'high' ? Math.min(window.devicePixelRatio || 1, 1.5) : SET.quality === 'medium' ? 1 : 0.75;
     renderer.setPixelRatio(pr); renderer.shadowMap.enabled = SET.quality !== 'low'; if (sun) sun.castShadow = SET.quality !== 'low'; lightBudget.n = SET.quality === 'high' ? (CO.cfg.lightBudget || 16) : SET.quality === 'medium' ? 10 : 6;
     var big = CO.cfg && CO.cfg.sun && CO.cfg.sun.mapSize || 4096, sm = SET.quality === 'high' ? big : Math.min(big, 2048); if (sun && sun.shadow.mapSize.x !== sm) { sun.shadow.mapSize.set(sm, sm); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
     if (sky.rain) { var rn = SET.quality === 'high' ? sky.rainN : SET.quality === 'medium' ? Math.round(sky.rainN * 0.64) : Math.round(sky.rainN * 0.36), snn = SET.quality === 'high' ? sky.snowN : SET.quality === 'medium' ? Math.round(sky.snowN * 0.66) : Math.round(sky.snowN * 0.4); CO.rainN = rn; CO.snowN = snn; sky.rain.geometry.setDrawRange(0, rn); sky.snow.geometry.setDrawRange(0, snn); }
@@ -4147,7 +4211,7 @@
         "x": -9.55,
         "z": 36.8,
         "ry": 0,
-        "off": false
+        "off": true
       },
       {
         "id": "cashierEast",
@@ -4155,7 +4219,7 @@
         "x": 8.45,
         "z": 36.8,
         "ry": 0,
-        "off": false
+        "off": true
       }
     ],
     "spots": {
@@ -5957,11 +6021,15 @@
     player.yaw = photo.yaw; player.pitch = 0;
   });
   hook('lighting', function (day, dawn, overcast, power) {
-    if (scene.fog) { scene.fog.near = 210 - (overcast || 0) * 60; scene.fog.far = 540 - (overcast || 0) * 200; }
+    if (scene.fog) {
+      scene.fog.near = 210 - (overcast || 0) * 60; scene.fog.far = 540 - (overcast || 0) * 200;
+      // nothing past the fog's far edge is visible, so cull it: the camera no longer draws (or shadow-tests) fully fogged geometry
+      if (camera.far !== scene.fog.far) { camera.far = scene.fog.far; camera.updateProjectionMatrix(); }
+    }
     var night = S.time >= 18 || S.time < 7;
     pkLightsApply(!!power, !!PK.rideLights && night);
   });
-  CO.setup({ canvas: 'co-canvas', save: 'park-co', game: GAME, spawn: { x: 0, z: 42, yaw: 0 }, sun: { box: 120, far: 320, mapSize: 2048, target: [0, 0, 0] }, lightBudget: 10, far: 720, fog: { color: 0x9dbbd8, near: 300, far: 700 } });
+  CO.setup({ canvas: 'co-canvas', save: 'park-co', game: GAME, spawn: { x: 0, z: 42, yaw: 0 }, sun: { box: 120, far: 320, mapSize: 1024, target: [0, 0, 0] }, lightBudget: 10, far: 720, fog: { color: 0x9dbbd8, near: 300, far: 700 } });
   // ── The guests ────────────────────────────────────────────────────
   // A guest arrives from the car park, joins the shorter ticket line, buys a ticket, passes a turnstile, queues for the
   // coaster, boards when the gates open, rides, and goes home. The whole thing is a small state machine on a walk record.

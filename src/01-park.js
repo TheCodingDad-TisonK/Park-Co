@@ -643,8 +643,12 @@
     player.yaw = photo.yaw; player.pitch = 0;
   });
   hook('lighting', function (day, dawn, overcast, power) {
-    if (scene.fog) { scene.fog.near = 210 - (overcast || 0) * 60; scene.fog.far = 540 - (overcast || 0) * 200; }
+    if (scene.fog) {
+      scene.fog.near = 210 - (overcast || 0) * 60; scene.fog.far = 540 - (overcast || 0) * 200;
+      // nothing past the fog's far edge is visible, so cull it: the camera no longer draws (or shadow-tests) fully fogged geometry
+      if (camera.far !== scene.fog.far) { camera.far = scene.fog.far; camera.updateProjectionMatrix(); }
+    }
     var night = S.time >= 18 || S.time < 7;
     pkLightsApply(!!power, !!PK.rideLights && night);
   });
-  CO.setup({ canvas: 'co-canvas', save: 'park-co', game: GAME, spawn: { x: 0, z: 42, yaw: 0 }, sun: { box: 120, far: 320, mapSize: 2048, target: [0, 0, 0] }, lightBudget: 10, far: 720, fog: { color: 0x9dbbd8, near: 300, far: 700 } });
+  CO.setup({ canvas: 'co-canvas', save: 'park-co', game: GAME, spawn: { x: 0, z: 42, yaw: 0 }, sun: { box: 120, far: 320, mapSize: 1024, target: [0, 0, 0] }, lightBudget: 10, far: 720, fog: { color: 0x9dbbd8, near: 300, far: 700 } });

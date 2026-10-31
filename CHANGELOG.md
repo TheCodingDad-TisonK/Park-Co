@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.1 (2026-10-31): FPS patch
+
+- Maintenance release.
+
 ## 1.6.0 (2026-10-31): The Skyline Update
 
 The park grows: an elevated metro across the whole park, and the first stage of the expansion.

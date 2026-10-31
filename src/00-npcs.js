@@ -473,7 +473,7 @@
         "x": -9.55,
         "z": 36.8,
         "ry": 0,
-        "off": false
+        "off": true
       },
       {
         "id": "cashierEast",
@@ -481,7 +481,7 @@
         "x": 8.45,
         "z": 36.8,
         "ry": 0,
-        "off": false
+        "off": true
       }
     ],
     "spots": {
