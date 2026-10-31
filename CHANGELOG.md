@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.6.0 (2026-10-31): The Skyline Update
+
+The park grows: an elevated metro across the whole park, and the first stage of the expansion.
+
+## New
+- **The Skyline:** an elevated railway the length of the park, 15 m up on a viaduct with smooth curves, green railings and lamps along the deck. You can walk the deck too.
+- **Three stations:** Skyline North, Woods Halt and Skyline South, each with a brick clock tower, a lift up to the platform, a glass canopy, platform screen doors and benches.
+- **The Skyline metro:** a modern three-car train in Park Co green and cream, with 32 seats, LED headlights and sliding doors.
+- **No queue lane:** guests take the lift up at Woods Halt, wait on the platform and board at the doors. They ride to the end of the line and back, get off at Woods Halt and take the lift back down.
+- **Ride it yourself:** take the lift up, aim at an open door and press E. You step off onto the platform at the end.
+- **Drive it yourself:** climb into the cab at either end. Turn the key (K), pick a direction (R), power and brake with W and S, open and close the doors (O). L switches the headlights, H sounds the chime and Space is the emergency brake.
+  - Stop near the platform and press O: the train creeps onto the stopping mark and opens up.
+  - Take the key out and climb out (E) and the train goes back to running on its own.
+- **Expansion:** commission a stage from the Expansion page on the office PC or the tablet. The land opens three nights later at 06:00, with a countdown on the tablet while it is being built.
+- **A control cabin** for the Skyline at Skyline North.
+
+## Fixed
+- The train no longer judders through the curves.
+- The station benches are wood now, not plain white.
+- No more stone ball sticking up through the Woods Halt platform.
+- Guests no longer dip through the floor when they step into the train.
+- The train's doors no longer look open from inside.
+
+## Good to know
+Only Woods Halt is open for boarding for now. Skyline North and Skyline South are in land that later stages open, so the train calls there with its doors shut.
+
 ## 1.5.0 (2026-10-30): Big Update
 
 ## New

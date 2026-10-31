@@ -307,12 +307,12 @@
       animateHuman(g, dt, gu.pose === 'stand' ? 'idle' : 'sit', 0, null, false);
       if (gu.clap) pkGuestClap(g);
     } else if (gu.state === 'bench') {
-      g.position.set(rec.x, g.userData.baseY = pkFloor(rec.x, rec.z), rec.z);
+      g.position.set(rec.x, g.userData.baseY = pkGuestFloor(rec.x, rec.z, gu), rec.z);   // the Skyline's deck first, then the park's floor
       g.rotation.y = rec.yaw;
       animateHuman(g, dt, 'sit', 0, null, false);
     } else {
       // animateHuman puts the body at baseY, so baseY follows the floor: up a stair, onto a stand, back down again
-      g.position.set(rec.x, g.userData.baseY = pkFloor(rec.x, rec.z), rec.z);
+      g.position.set(rec.x, g.userData.baseY = pkGuestFloor(rec.x, rec.z, gu), rec.z);
       g.rotation.y = rec.yaw;
       var moving = rec.path.length > 0;
       var carry = false, look = null;

@@ -31,6 +31,7 @@
     for (var ai = 0; ai < PK.attractions.length; ai++) pkAttrTick(PK.attractions[ai], dt);
     pkGuestTick(dt);
     pkPlayerTick(dt);
+    if (typeof pkExpansionTick === 'function') pkExpansionTick();   // part 53: the expansion clock, once a frame
   }
   // nudges about the gate: shut past 8:45 gets a word of warning, shut right at 9 gets a sharper one, open past 21:45
   // gets a word to shut it, each once a day - and nothing past 22:00, because some nights run late on purpose

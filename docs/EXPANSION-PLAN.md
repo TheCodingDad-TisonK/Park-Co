@@ -1,6 +1,7 @@
 # Park Co expansion: the complete build plan
 
-**Version 1, drafted 2026-10-28. Awaiting tison's sign-off. Once signed, this plan is binding.**
+**Version 1, drafted 2026-10-28, approved by tison 2026-10-30. This plan is binding.**
+**Revision, 2026-10-30: tison changed the Skyline Shuttle from a steam tank engine to a modern metro unit (see section 3). Everything else in version 1 stands.**
 
 This is the whole plan for growing Park Co past its railway, stage by stage. Any agent building a stage builds **exactly what is written here**: the same places, the same sizes, the same names, the same rules. Where this plan does not say something, the agent does not invent it. It stops and asks tison, and his answer is written back into this file before building.
 
@@ -116,15 +117,31 @@ All of it is in `src/46-world.js`, part 46: the world past the railway.
 | Skyline South | deck from (-112, 112) to (-112, 152) | stair tower and lift at (-104, 146), in the south land |
 
 - Each platform has a canopy, two benches, a lamp every 8 m and a station name board in the Lindenburg Railway's style (part 41).
+- Nothing of a neighbouring ride may stand inside a platform's room. Woods Halt stands over a buttress of the Danse
+  Macabre chapel; that buttress's pinnacle and finial are left out once the platform is built (part 52), and the
+  buttress itself stops below the slab.
 - Each stair tower is a brick tower 5 × 5 m, with a stair round a lift shaft and a slate roof.
 
 **The train:** the "Skyline Shuttle".
-- The part 42 loco kit, as a tank engine (no tender), painted 0x2f5f9e with gold lining, plus two open-sided coaches with 16 seats each.
-- It shuttles: North to Woods Halt to South, then back.
-- It dwells 25 s at each station, runs at most 8 m/s, and always runs on AUTO.
-- No player driving in this stage.
+- Revised 2026-10-30: a modern metro unit, not the steam tank engine of the first draft. Remodelled again on
+  2026-10-31 at tison's word: three cars (a driving car, a middle car and a second driving car), built custom for
+  part 52 (not the part 42 loco kit). Park Co green (0x1d5b3b) body with a cream (0xf2e6b8) waist band, a hollow
+  nose with a raked windscreen, LED headlights and a destination display, sliding plug doors that open on the
+  platform side only, seats in 2+2 bays (12, 8 and 12, so 32 seats as in the original draft).
+- It shuttles: North to Woods Halt to South, then back. Riders stay aboard through the far stop and get off where
+  they got on.
+- It dwells at each station, runs at most 8 m/s, and runs on AUTO unless a player is driving.
+- **No queue lane** (tison, 2026-10-31): guests and the player take the tower lift up and wait on the platform
+  behind platform screen doors, which open with the train's doors. Boarding is from the platform, at the doors.
+- **Player driving** (tison, 2026-10-31): a driver's cab at each end, with a master key, a direction switch,
+  door buttons, headlights, a chime, an emergency stop and a combined power/brake controller. With the key in,
+  AUTO stands down. Stopped within 16 m of a mark, the doors button berths her onto the mark at walking pace.
+  With the key out and the driver still aboard she does not leave; once the driver has climbed out, the timetable
+  takes her again. Train protection stops her at the two end marks and holds her at 8 m/s.
 
-**Booth:** the Skyline's control cabin stands at Skyline North on the ground, beside the stair tower at (-56, -170).
+**Booth:** the Skyline's control cabin stands at Skyline North on the ground, beside the stair tower at (-55, -170)
+(moved 1 m from the first draft's -56, -170, which overlapped the tower's own footprint; the door is forced to the
+tower's clear side).
 - Panel sheet style: a new `skyline` style (Park Co green with cream lining). Mimic kind `track` on the line's own points.
 - Sound: a two-tone whistle. Hood windows: `DOORS SHUT`, `ON LINE`.
 
@@ -227,8 +244,8 @@ Each of these needs tison's word and a new version of this file:
 
 ## 10. Sign-off
 
-- [ ] tison approves this plan (date: ______). After that, any change is a new version, with the change listed here:
+- [x] tison approves this plan (date: 2026-10-30). After that, any change is a new version, with the change listed here:
 
 | Version | Date | Change | Approved by |
 |---|---|---|---|
-| 1 | 2026-10-28 | First draft | (pending) |
+| 1 | 2026-10-28 | First draft | tison, 2026-10-30 |

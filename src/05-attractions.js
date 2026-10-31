@@ -185,6 +185,7 @@
     return n;
   }
   function pkAttrTick(a, dt) {
+    if (a.skyline && typeof pkSkylineTick === 'function' && pkSkylineTick(a, dt)) return;   // the Skyline Shuttle runs a three station timetable of its own (part 52)
     if (!a.open) return;
     var C = pkCtl(a), auto = pkCtlAuto(a);   // AUTO is the desk's switch alone: on MANUAL nothing moves until someone works the desk
     // the gates and the restraints ease to where they were told to be, and the desk's lights follow

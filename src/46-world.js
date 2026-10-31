@@ -28,23 +28,66 @@
     for (var i = 0; i < PK_XP_STATIONS.length; i++) { var s = PK_XP_STATIONS[i]; if (Math.abs(x - s[0]) < 36 + m && Math.abs(z - s[1]) < 36 + m) return false; }
     if (x > 8 - m && x < 132 + m && z > -172 - m && z < -120) return false;           // the depot, its siding and TOW-1's spur and bay (part 47)
     if (Math.abs(x + 17) < 6 + m && z < -120 && z > -158) return false;              // Windmill Halt's footpath out to the viewing platform
+    if (pkXpPrecinct(x, z, m)) return false;                                          // the Skyline's two outer stations (part 52)
     return true;
   }
+  // the Skyline's station precincts at North and South: the tower, the cabin and the forecourt stand on their own paved
+  // ground, never in the site's spoil or the forest. Part 52 lays and fences them.
+  var PK_XP_PRECINCTS = [[-72, -46, -184, -158], [-118, -96, 136, 156]];
+  function pkXpPrecinct(x, z, m) {
+    m = m || 0;
+    for (var i = 0; i < PK_XP_PRECINCTS.length; i++) { var r = PK_XP_PRECINCTS[i]; if (x > r[0] - m && x < r[1] + m && z > r[2] - m && z < r[3] + m) return true; }
+    return false;
+  }
   // the expansion site: a band 10 to 50 m outside the line, wherever it is free
-  function pkXpBand(x, z) { var d = pkXpRingD(x, z); return d > 10 && d < 50 && pkXpFree(x, z, 0); }
+  function pkXpBand(x, z) {
+    if (typeof pkExpansionOpenedLandAt === 'function' && pkExpansionOpenedLandAt(x, z)) return false;   // an opened land is built, not a site (part 53)
+    var d = pkXpRingD(x, z); return d > 10 && d < 50 && pkXpFree(x, z, 0);
+  }
   // the town, the farms, the lake: their own ground, no forest on it
   function pkXpTown(x, z) { return x < -186 && x > -460 && z > 14 && z < 176; }
   function pkXpFarm(x, z) { return x > 222 && x < 500 && z > -330 && z < 330 && Math.abs(z - 76) > 6; }
   function pkXpLake(x, z) { return Math.hypot((x - 95) / 70, (z - 236) / 44) < 1.08; }
   // the viaduct's line across the park (north to south), and how near a spot is to it
   var PK_XP_VIA = [[-67, -178], [-67, 34], [-74, 52], [-90, 70], [-108, 86], [-112, 100], [-112, 152]];
+  // the line as a railway runs it: the plan's straight legs joined by circular curves (60 m radius, eased tighter only
+  // where a leg is too short to hold both of its curves), sampled every metre. A train cannot take a corner, so the
+  // piers, the deck and the Skyline's own running (part 52) all follow this, never the bare corners.
+  var PK_XP_VIA_S = null;
+  function pkXpViaPts() {
+    if (PK_XP_VIA_S) return PK_XP_VIA_S;
+    var P = PK_XP_VIA, n = P.length, out = [], T = [0], i, j;
+    for (i = 1; i < n - 1; i++) {
+      var ax = P[i][0] - P[i - 1][0], az = P[i][1] - P[i - 1][1], bx = P[i + 1][0] - P[i][0], bz = P[i + 1][1] - P[i][1];
+      var la = Math.hypot(ax, az), lb = Math.hypot(bx, bz), th = Math.acos(clamp((ax * bx + az * bz) / (la * lb), -1, 1));
+      T.push(th < 1e-4 ? 0 : Math.min(60 * Math.tan(th / 2), 0.49 * la, 0.49 * lb));
+    }
+    T.push(0);
+    var push = function (x, z) { var l = out[out.length - 1]; if (!l || Math.hypot(x - l[0], z - l[1]) > 0.05) out.push([x, z]); };
+    for (i = 0; i < n - 1; i++) {
+      var A = P[i], B = P[i + 1], L = Math.hypot(B[0] - A[0], B[1] - A[1]), ux = (B[0] - A[0]) / L, uz = (B[1] - A[1]) / L;
+      for (var s = T[i]; s < L - T[i + 1]; s += 1) push(A[0] + ux * s, A[1] + uz * s);
+      push(A[0] + ux * (L - T[i + 1]), A[1] + uz * (L - T[i + 1]));
+      if (i + 1 < n - 1 && T[i + 1] > 0) {
+        var C = P[i + 1], D = P[i + 2], L2 = Math.hypot(D[0] - C[0], D[1] - C[1]), vx = (D[0] - C[0]) / L2, vz = (D[1] - C[1]) / L2, t = T[i + 1];
+        var cr = ux * vz - uz * vx, th2 = Math.acos(clamp(ux * vx + uz * vz, -1, 1)), R = t / Math.tan(th2 / 2), sg = cr > 0 ? 1 : -1;
+        var p0x = C[0] - ux * t, p0z = C[1] - uz * t, ox = p0x + (cr > 0 ? -uz : uz) * R, oz = p0z + (cr > 0 ? ux : -ux) * R;
+        var a0 = Math.atan2(p0z - oz, p0x - ox), k = Math.max(2, Math.ceil(R * th2));
+        for (j = 1; j < k; j++) { var a = a0 + sg * th2 * j / k; push(ox + Math.cos(a) * R, oz + Math.sin(a) * R); }
+      }
+    }
+    return (PK_XP_VIA_S = out);
+  }
   function pkXpViaNear(x, z, w) {
     for (var i = 0; i < PK_XP_VIA.length - 1; i++) { var A = PK_XP_VIA[i], B = PK_XP_VIA[i + 1]; if (pkSegDist(x, z, A[0], A[1], B[0], B[1]) < w) return true; }
     return false;
   }
   // what the forest keeps clear of (part 12 asks this): the site is felled, the viaduct's line is cleared, the town, the
   // farms and the lake stand on open ground
-  function pkXpClear(x, z) { return pkXpBand(x, z) || pkXpViaNear(x, z, 6) || pkXpTown(x, z) || pkXpFarm(x, z) || pkXpLake(x, z); }
+  function pkXpClear(x, z) {
+    if (typeof pkExpansionOpenedLandAt === 'function' && pkExpansionOpenedLandAt(x, z)) return true;   // no forest inside an opened land (part 53)
+    return pkXpBand(x, z) || pkXpViaNear(x, z, 6) || pkXpPrecinct(x, z, 3) || pkXpTown(x, z) || pkXpFarm(x, z) || pkXpLake(x, z);
+  }
   // a point a given distance outside the line, by its distance round it (t, 0..1), and the way round there
   function pkXpRingPt(t, off) {
     var W = -128, E = 170, N = -134, S = 112, R = 24, r = R + off, L1 = E - W - 2 * R, L2 = S - N - 2 * R, q = Math.PI / 2 * r, P = 2 * (L1 + L2) + 4 * q;
@@ -370,7 +413,7 @@
       var off = f[0], P = pkXpPerim(off), n = Math.round(P / 3.4), run = [];
       for (var k = 0; k <= n; k++) {
         var q = pkXpRingPt(k / n, off);
-        if (pkXpFree(q[0], q[1], 0)) run.push([q[0], q[1]]);
+        if (pkXpFree(q[0], q[1], 0) && !(typeof pkExpansionOpenedLandAt === 'function' && pkExpansionOpenedLandAt(q[0], q[1]))) run.push([q[0], q[1]]);
         else { if (run.length > 1) pkXpFenceRun(run, f[2], f[1]); run = []; }
       }
       if (run.length > 1) pkXpFenceRun(run, f[2], f[1]);
@@ -427,6 +470,8 @@
     box(6, 0.06, 0.06, M.steel, 0, 3.2, -4, vg); box(0.06, 0.06, 4, M.steel, -3, 3.2, -2, vg); box(0.06, 0.06, 4, M.steel, 3, 3.2, -2, vg);
     sign(['VIEWING PLATFORM', 'THE NEW LAND AND THE NEW LINE'], 3.4, 0.7, 0, 3.6, -4.1, 0, { bg: '#1b232c', fg: '#f5b53d' }, vg);
     solid(vx - 3.2, vx + 3.2, vz - 3.2, vz - 0.6, 0, 3.4);
+    // every land already opened wears the park's own fence and its gate instead of the site fencing (part 53)
+    if (typeof pkExpansionFenceOpened === 'function') pkExpansionFenceOpened();
   }
 
   // ── The new railway: a viaduct across the park ───────────────────
@@ -439,7 +484,7 @@
     if (Math.abs(z - 76) < 7.5 && x > -150 && x < 110) return false;                    // the road
     for (var i = 0; i < PK_XP_STATIONS.length; i++) if (Math.hypot(x - PK_XP_STATIONS[i][0], z - PK_XP_STATIONS[i][1]) < (pkXpRingD(x, z) < 0 ? 34 : 14)) return false;
     for (var r = 0; r < PK_ROUTES.length; r++) { var R = PK_ROUTES[r], hw = R[4] / 2 + 2.2; if (x > Math.min(R[0], R[2]) - hw && x < Math.max(R[0], R[2]) + hw && z > Math.min(R[1], R[3]) - hw && z < Math.max(R[1], R[3]) + hw) return false; }
-    for (var k = 0; k < solids.length; k++) { var s = solids[k]; if (x > s.x0 - 2.2 && x < s.x1 + 2.2 && z > s.z0 - 2.2 && z < s.z1 + 2.2) return false; }
+    for (var k = 0; k < solids.length; k++) { var s = solids[k]; if (s.y0 > 10) continue; if (x > s.x0 - 2.2 && x < s.x1 + 2.2 && z > s.z0 - 2.2 && z < s.z1 + 2.2) return false; }   // up at deck level (the Skyline's railings) is no clash for a pier
     if (typeof PK_KEEP !== 'undefined') for (var q = 0; q < PK_KEEP.length; q++) if (PK_KEEP[q][2] < 12 && Math.hypot(x - PK_KEEP[q][0], z - PK_KEEP[q][1]) < PK_KEEP[q][2]) return false;
     // and whatever stands there that is not a solid: bunting, hedges, lamps, signs (read off the scene along the line)
     var O = PK_XP.near || [];
@@ -462,10 +507,68 @@
     });
     PK_XP.near = out;
   }
+  // every pier and span group this draws is tagged userData.pkXpVia so a later call (when stage 1 actually opens
+  // mid-session, not just at the next boot) can clear the old under-construction dressing and draw it again finished
+  // The collision boxes it registered go too: a pier or a works fence that is no longer drawn must not stay behind as an
+  // invisible wall, nor block the clearance test for the piers drawn in its place.
+  function pkXpViaductStrip() {
+    var dead = [];
+    scene.traverse(function (o) { if (o.userData && o.userData.pkXpVia) dead.push(o); });
+    dead.forEach(function (o) { if (o.parent) o.parent.remove(o); });
+    var gone = PK_XP.viaSolids || [];
+    if (gone.length) for (var i = solids.length - 1; i >= 0; i--) if (gone.indexOf(solids[i]) >= 0) solids.splice(i, 1);
+    PK_XP.viaSolids = [];
+  }
   function pkXpViaduct() {
-    pkXpNearScan();
-    var M = pkXpM(), pts = PK_XP_VIA, line = [], total = 0, i;
+    pkXpViaductStrip();
+    var sol0 = solids.length, kids0 = scene.children.length;
+    pkXpViaductBuild();
+    PK_XP.viaSolids = solids.slice(sol0);
+    for (var c = kids0; c < scene.children.length; c++) scene.children[c].userData.pkXpVia = true;   // fences, stumps and cranes the kit adds straight to the scene
+  }
+  // ── Standing on the deck ─────────────────────────────────────────
+  // Where the slab is built (PK_XP.deckRuns, its stretches along the line) the deck is a floor for the player once he is
+  // up there (landing on it out of fly mode, say), and its railings hold him on it: stepping off the slab while standing on
+  // it is refused, along the curves as on the straights. From the street underneath it is nothing at all.
+  function pkXpDeckNear(x, z) {
+    var line = PK_XP.viaLine; if (!line) return null;
+    var best = null, bd = 64;
+    for (var i = 0; i < line.length; i++) {
+      var g = line[i], ux = g.b[0] - g.a[0], uz = g.b[1] - g.a[1], ll = ux * ux + uz * uz || 1;
+      if (Math.abs(x - g.a[0]) > 9 && Math.abs(x - g.b[0]) > 9) continue;
+      var t = clamp(((x - g.a[0]) * ux + (z - g.a[1]) * uz) / ll, 0, 1), px = g.a[0] + ux * t, pz = g.a[1] + uz * t, d = (px - x) * (px - x) + (pz - z) * (pz - z);
+      if (d < bd) { bd = d; best = { s: g.s0 + t * g.L, d: Math.sqrt(d) }; }
+    }
+    return best;
+  }
+  function pkXpOnDeck(x, z) {
+    var n = pkXpDeckNear(x, z), R = PK_XP.deckRuns || [];
+    if (!n || n.d > 2.45) return false;
+    for (var i = 0; i < R.length; i++) if (n.s >= R[i][0] - 0.05 && n.s <= R[i][1] + 0.05) return true;
+    return false;
+  }
+  var _pkXpPrevFloorY = GAME.floorY;
+  GAME.floorY = function (x, z, y) {
+    var b = _pkXpPrevFloorY ? _pkXpPrevFloorY(x, z, y) : 0;
+    if (y === undefined || y < PK_XP_DECK - 1.2 || !PK_XP.deckRuns) return b;
+    return pkXpOnDeck(x, z) ? Math.max(b, PK_XP_DECK + 0.15) : b;
+  };
+  var _pkXpPrevCollides = GAME.collides;
+  GAME.collides = function (x, z, opt) {
+    if (_pkXpPrevCollides && _pkXpPrevCollides(x, z, opt)) return true;
+    // only for a player standing on the deck itself: up on a platform or a gallery beside it (a metre higher) these
+    // railings are not his, those have their own
+    if (!PK_XP.deckRuns || typeof player === 'undefined' || !player || Math.abs(player.y - (PK_XP_DECK + 0.15)) > 0.6) return false;
+    return pkXpOnDeck(player.x, player.z) && !pkXpOnDeck(x, z);
+  };
+  function pkXpViaductBuild() {
+    // the clearance scan is the expensive part (every mesh in the scene, boxed and tested): the park's static
+    // geometry never moves after boot, so a later redraw (stage 1 opening mid-session) reuses the first scan
+    // instead of paying for a second full-scene traverse at the moment a player is watching for the reveal
+    if (!PK_XP.near) pkXpNearScan();
+    var M = pkXpM(), pts = pkXpViaPts(), line = [], total = 0, i;
     for (i = 0; i < pts.length - 1; i++) { var A = pts[i], B = pts[i + 1], L = Math.hypot(B[0] - A[0], B[1] - A[1]); line.push({ a: A, b: B, s0: total, L: L }); total += L; }
+    PK_XP.viaLine = line; PK_XP.deckRuns = [];
     var at = function (s) { for (var k = 0; k < line.length; k++) { var g = line[k]; if (s <= g.s0 + g.L || k === line.length - 1) { var f = clamp((s - g.s0) / g.L, 0, 1); return { x: g.a[0] + (g.b[0] - g.a[0]) * f, z: g.a[1] + (g.b[1] - g.a[1]) * f, yaw: Math.atan2(g.b[0] - g.a[0], g.b[1] - g.a[1]) }; } } };
     // the piers: the nominal spot every 24 m, slid along the line up to 9 m either way to the nearest clear one
     var piers = [], s = 0;
@@ -475,8 +578,39 @@
       if (found && (!piers.length || found.s - piers[piers.length - 1].s > 12)) piers.push(found);
       s = (found ? found.s : s) + 24;
     }
-    var stage = function (f) { return f < 0.24 ? 'track' : f < 0.36 ? 'deck' : f < 0.5 ? 'girder' : f < 0.6 ? 'crane' : f < 0.7 ? 'girder' : f < 0.78 ? 'form' : 'deck'; };
+    // Stage 1 of the expansion, The Skyline (part 52): every span finished as track, every pier to full height, and no
+    // cranes, scaffolds or formwork left anywhere. Before stage 1 opens the viaduct stays exactly as stage 0 built it.
+    var s1 = (typeof pkExpansionOpen === 'function' && pkExpansionOpen(1) === true);
+    var stage = function (f) { return s1 ? 'track' : (f < 0.24 ? 'track' : f < 0.36 ? 'deck' : f < 0.5 ? 'girder' : f < 0.6 ? 'crane' : f < 0.7 ? 'girder' : f < 0.78 ? 'form' : 'deck'); };
     var concrete = M.concrete, D = PK_XP_DECK;
+    // Stage 1: a pier in every span longer than 30 m, at a clear spot near its middle (a ruling of section 1, rule 2). A span
+    // with no clear spot becomes a steel truss span instead of a girder span; spanTruss[i] says which. The two long spans
+    // inside the park each get one intermediate pier.
+    var spanTruss = [];
+    if (s1) {
+      PK_XP.log = [];
+      var P2 = [], k2;
+      for (i = 0; i < piers.length; i++) {
+        P2.push(piers[i]);
+        if (i >= piers.length - 1) break;
+        var gapL = piers[i + 1].s - piers[i].s;
+        if (gapL <= 30) { spanTruss[P2.length - 1] = 0; continue; }
+        var mid = (piers[i].s + piers[i + 1].s) / 2, spot = null, near = Math.max(6, gapL / 2 - 7);
+        for (var ee = 0; ee <= near && !spot; ee += 1) {
+          var cands = ee ? [mid + ee, mid - ee] : [mid];
+          for (k2 = 0; k2 < cands.length; k2++) { var q2 = at(cands[k2]); if (q2 && pkXpPierOK(q2.x, q2.z)) { spot = { s: cands[k2], p: q2, mid: true }; break; } }
+        }
+        if (spot) { P2.push(spot); spanTruss[P2.length - 1] = 0; PK_XP.log = (PK_XP.log || []); PK_XP.log.push('skyline: pier at s ' + spot.s.toFixed(1) + ' in the ' + gapL.toFixed(0) + ' m span'); }
+        else { spanTruss[P2.length - 1] = 1; PK_XP.log = (PK_XP.log || []); PK_XP.log.push('skyline: the ' + gapL.toFixed(0) + ' m span has no clear spot, so it is a truss span'); }
+      }
+      piers = P2;
+      if (window.console) { PK_XP.log.forEach(function (t) { window.console.log(t); }); }
+      PK_XP.skyline = { spans: spanTruss, piers: piers.length };
+    }
+    // the finished line's own materials (stage 1): painted steel, a stone cornice, Park Co green railings
+    var green = XM({ color: 0x1d5b3b, roughness: 0.45, metalness: 0.35 }), stoneC = XM({ map: TEX.plaster, color: 0xd9d2c2, roughness: 0.9 });
+    var ballast = XM({ color: 0x5a5750, roughness: 1 }), sleeperM = XM({ color: 0x4b3a2a, roughness: 0.95 }), trough = XM({ color: 0x6d6c68, roughness: 0.9 });
+    var lampHead = XM({ color: 0x1b1d20, roughness: 0.6 });
     piers.forEach(function (P, k) {
       var f = P.s / total, st = stage(f), q = P.p, g = pkXpGroup(q.x, q.z, q.yaw); g.userData.pkXpVia = true;
       // the pile cap, the column, the hammerhead
@@ -495,30 +629,37 @@
         if (st === 'crane') pkXpScaffold(q.x - 1.2, q.x + 1.2, q.z - 1.5, q.z + 1.5, D - 2, 0);
       }
       solid(q.x - 1.4, q.x + 1.4, q.z - 1.4, q.z + 1.4, 0, D);
-      // inside the park every pier stands in its own fenced compound, with its number on the fence
-      if (pkXpRingD(q.x, q.z) < 0) {
+      // while the line is being built every pier inside the park stands in its own fenced works compound, with its number
+      // on the fence; once stage 1 opens the works are gone and the pier stands on a dressed stone plinth
+      if (!s1 && pkXpRingD(q.x, q.z) < 0) {
         var c = 3.6, corners = [[-c, -c], [c, -c], [c, c], [-c, c], [-c, -c]].map(function (o) { var cs = Math.cos(q.yaw), sn = Math.sin(q.yaw); return [q.x + o[0] * cs + o[1] * sn, q.z - o[0] * sn + o[1] * cs]; });
         pkXpFenceRun(corners, true, 0);
         sign(['VIADUCT PIER ' + (k + 1), 'NEW LINE WORKS'], 1.6, 0.5, 0, 1.4, c + 0.06, 0, { bg: '#f0c04a', fg: '#1b1b1b' }, g);
         pkXpStump(q.x + 2.2, q.z - 2.4, 0.9);
+      }
+      if (s1) {
+        box(2.6, 0.55, 3.2, stoneC, 0, 1.07, 0, g);
+        box(2.8, 0.08, 3.4, M.concreteDark, 0, 1.38, 0, g);
+        box(2.0, 0.22, 2.6, stoneC, 0, D - 1.72, 0, g);   // a stone band where the column meets the hammerhead
       }
       P.st = st;
     });
     // the crawler crane works out on the site, never over the park: inside the ring its stretch is girders, and the gap it
     // swings a girder into is the first span of the far deck stretch that stands well outside the railway
     var craneSpan = -1;
-    for (i = 0; i < piers.length - 1 && craneSpan < 0; i++) {
+    for (i = 0; i < piers.length - 1 && !s1 && craneSpan < 0; i++) {
       var cmx = (piers[i].p.x + piers[i + 1].p.x) / 2, cmz = (piers[i].p.z + piers[i + 1].p.z) / 2;
       if ((piers[i].s + piers[i + 1].s) / 2 / total > 0.78 && pkXpRingD(cmx, cmz) > 12 && piers[i].st !== 'form' && piers[i + 1].st !== 'form') craneSpan = i;
     }
     // the spans between piers: what each stage has to show
+    var lampAt = 12;   // the next lamp along the line, every 24 m on the west railing
     for (i = 0; i < piers.length - 1; i++) {
       var A2 = piers[i], B2 = piers[i + 1], fm = (A2.s + B2.s) / 2 / total, st2 = stage(fm);
       if (st2 === 'crane') st2 = 'girder';
       if (i === craneSpan) st2 = 'crane';
       if (A2.st === 'form' || B2.st === 'form') st2 = 'none';
-      var ax = A2.p.x, az = A2.p.z, bx = B2.p.x, bz = B2.p.z, L2 = Math.hypot(bx - ax, bz - az), yaw = Math.atan2(bx - ax, bz - az), mx = (ax + bx) / 2, mz = (az + bz) / 2;
-      var sg = pkXpGroup(mx, mz, yaw); sg.userData.pkXpVia = true; sg.userData.span = [ax, az, bx, bz, st2];
+      var sm = at((A2.s + B2.s) / 2), mx = sm.x, mz = sm.z, yaw = sm.yaw;
+      var sg = pkXpGroup(mx, mz, yaw); sg.userData.pkXpVia = true; sg.userData.span = [A2.p.x, A2.p.z, B2.p.x, B2.p.z, st2];
       if (st2 === 'none') continue;
       if (st2 === 'crane') {
         // the gap: a crawler crane beside it, swinging the girder in
@@ -526,27 +667,70 @@
         if (side !== undefined) pkXpCrawler(mx + Math.cos(yaw) * side, mz - Math.sin(yaw) * side, -yaw, mx, mz, D - 2);
         continue;
       }
-      // two steel box girders from cap to cap
-      [-1.2, 1.2].forEach(function (o) { box(0.7, 1.4, L2, M.rust, o, D - 1.6 - 0.7 + 1.4, 0, sg); });
-      if (st2 === 'girder') { for (var cb = -L2 / 2 + 3; cb < L2 / 2; cb += 4) box(2.4, 0.3, 0.2, M.rust, 0, D - 0.9, cb, sg); continue; }
-      // the deck slab and its parapets
-      box(5.4, 0.45, L2, M.concrete, 0, D - 0.25, 0, sg);
-      [-2.55, 2.55].forEach(function (o) { box(0.3, 1.0, L2, M.concrete, o, D + 0.45, 0, sg); });
-      if (st2 === 'deck') { // the rails and sleepers stacked on the deck, waiting to be laid
-        box(1.2, 0.5, 3.0, M.wood, -0.9, D + 0.2, -L2 / 4, sg); for (var rl = 0; rl < 4; rl++) box(0.1, 0.12, Math.min(18, L2 - 4), MAT.chrome, 0.6 + rl * 0.15, D + 0.05 + (rl > 1 ? 0.12 : 0), 0, sg);
-        continue;
+      // the span in short pieces that follow the line's curves, so a bend reads as a bend and not as straight chords
+      var nP = Math.max(1, Math.ceil((B2.s - A2.s) / 4)), dS = (B2.s - A2.s) / nP;
+      for (var pc = 0; pc < nP; pc++) {
+        var s0 = A2.s + pc * dS, s1e = s0 + dS, pa = at(s0), pb = at(s1e);
+        var L2 = Math.hypot(pb.x - pa.x, pb.z - pa.z) + 0.04, py = Math.atan2(pb.x - pa.x, pb.z - pa.z);
+        var g = pkXpGroup((pa.x + pb.x) / 2, (pa.z + pb.z) / 2, py); g.userData.pkXpVia = true;
+        // the span's steel: two box girders (rusted while it is being built, painted once the line opens), or the green
+        // lattice of a truss span where no pier could stand
+        if (spanTruss[i]) {
+          var dl = Math.hypot(L2, 2.8), da = Math.atan2(L2, 2.8) * (pc % 2 ? 1 : -1);
+          [-1.35, 1.35].forEach(function (o) {
+            box(0.4, 0.36, L2, green, o, D - 0.2, 0, g);
+            box(0.4, 0.36, L2, green, o, D - 3.0, 0, g);
+            box(0.22, 2.8, 0.22, green, o, D - 1.6, -L2 / 2 + 0.11, g);
+            var dg = box(0.16, dl, 0.16, green, o, D - 1.6, 0, g); dg.rotation.x = da;
+          });
+          box(2.9, 0.2, 0.2, green, 0, D - 3.0, 0, g);
+        } else [-1.2, 1.2].forEach(function (o) { box(0.7, 1.4, L2, s1 ? green : M.rust, o, D - 0.9, 0, g); });
+        if (st2 === 'girder') { box(2.4, 0.3, 0.2, M.rust, 0, D - 0.9, 0, g); continue; }
+        // the deck slab, its top exactly at D
+        box(5.4, 0.45, L2, M.concrete, 0, D - 0.225, 0, g);
+        var dr = PK_XP.deckRuns, lr = dr[dr.length - 1];
+        if (lr && Math.abs(lr[1] - s0) < 0.01) lr[1] = s1e; else dr.push([s0, s1e]);
+        if (!s1) { box(0.3, 1.0, L2, M.concrete, -2.55, D + 0.45, 0, g); box(0.3, 1.0, L2, M.concrete, 2.55, D + 0.45, 0, g); }
+        if (st2 === 'deck') { // the rails and sleepers stacked on the deck, waiting to be laid
+          if (pc === Math.floor(nP / 2)) { box(1.2, 0.5, 3.0, M.wood, -0.9, D + 0.2, 0, g); for (var rl = 0; rl < 4; rl++) box(0.1, 0.12, Math.min(3.6, L2 - 0.4), MAT.chrome, 0.6 + rl * 0.15, D + 0.05 + (rl > 1 ? 0.12 : 0), 0, g); }
+          continue;
+        }
+        // the track itself: ballast, sleepers every 0.65 m, and the two rails, their tops at D + 0.4 (15.4 m)
+        box(3.2, 0.15, L2, ballast, 0, D + 0.075, 0, g);
+        for (var sl = -L2 / 2 + 0.3; sl < L2 / 2; sl += 0.65) box(2.2, 0.12, 0.22, sleeperM, 0, D + 0.21, sl, g);
+        [-0.5, 0.5].forEach(function (o) { box(0.08, 0.13, L2, MAT.chrome, o, D + 0.335, 0, g); });
+        if (!s1) continue;
+        // the finished line: a stone cornice either side with a drip that throws a shadow line, the cable trough along the
+        // west walkway, Park Co green railings (the east one gives way where a platform stands) and a lamp every 24 m
+        [-1, 1].forEach(function (sd) { box(0.22, 0.75, L2, stoneC, sd * 2.81, D - 0.3, 0, g); box(0.42, 0.12, L2, stoneC, sd * 2.86, D + 0.06, 0, g); });
+        box(0.5, 0.18, L2, trough, -2.05, D + 0.09, 0, g);
+        var plat = typeof pkSkyPlatformRun === 'function' && pkSkyPlatformRun(pa.x, pa.z, pb.x, pb.z);
+        [-1, 1].forEach(function (sd) {
+          if (sd > 0 && plat) return;
+          var x = sd * 2.62;
+          box(0.07, 0.07, L2, green, x, D + 1.1, 0, g); box(0.05, 0.05, L2, green, x, D + 0.62, 0, g);
+          for (var pp = -L2 / 2 + 0.2; pp < L2 / 2; pp += 1.6) box(0.07, 1.1, 0.07, green, x, D + 0.55, pp, g);
+        });
+        while (lampAt < s1e) {
+          if (lampAt >= s0) {
+            var lz = (lampAt - s0) - (s1e - s0) / 2;
+            box(0.12, 4.0, 0.12, green, -2.62, D + 2.1, lz, g);
+            box(0.95, 0.08, 0.08, green, -2.18, D + 4.06, lz, g);
+            box(0.38, 0.16, 0.26, lampHead, -1.76, D + 3.98, lz, g);
+            box(0.3, 0.04, 0.2, M.lamp, -1.76, D + 3.89, lz, g);
+          }
+          lampAt += 24;
+        }
       }
-      // the track itself: ballast, sleepers, the two rails
-      box(3.2, 0.25, L2, XM({ color: 0x5a5750, roughness: 1 }), 0, D + 0.1, 0, sg);
-      for (var sl = -L2 / 2 + 0.3; sl < L2 / 2; sl += 0.65) box(2.2, 0.12, 0.22, XM({ color: 0x4b3a2a, roughness: 0.95 }), 0, D + 0.28, sl, sg);
-      [-0.5, 0.5].forEach(function (o) { box(0.08, 0.12, L2, MAT.chrome, o, D + 0.4, 0, sg); });
     }
-    // the ends: a buffer stop on the deck at each, so the new line ends where it ends, and the site's spoil ramp under it
+    // the ends: a buffer stop on the deck at each, so the new line ends where it ends. Before stage 1 is finished it
+    // carries a works warning; once the line is open that is a lie, so it reads as an ordinary terminus board instead
     [piers[0], piers[piers.length - 1]].forEach(function (P, e) {
       if (!P) return;
       var g = pkXpGroup(P.p.x, P.p.z, P.p.yaw + (e ? 0 : Math.PI)); g.userData.pkXpVia = true;
       box(3.4, 1.2, 0.6, M.red, 0, D + 1.0, 2.2, g); box(3.4, 0.2, 0.62, M.white, 0, D + 1.3, 2.2, g);
-      sign(['END OF THE NEW LINE', 'WORKS CONTINUE'], 2.6, 0.6, 0, D + 2.2, 2.6, 0, { bg: '#b8362b', fg: '#ffffff' }, g);
+      if (s1) sign(['SKYLINE LINE', 'END OF LINE'], 2.6, 0.6, 0, D + 2.2, 2.6, 0, { bg: '#1d5b3b', fg: '#f2e6b8' }, g);
+      else sign(['END OF THE NEW LINE', 'WORKS CONTINUE'], 2.6, 0.6, 0, D + 2.2, 2.6, 0, { bg: '#b8362b', fg: '#ffffff' }, g);
     });
     PK_XP.viaduct = { piers: piers, total: total };
   }
@@ -760,4 +944,4 @@
   var _pkXpPrevBuildWorld = GAME.buildWorld;
   GAME.buildWorld = function (loaded) { var r = _pkXpPrevBuildWorld ? _pkXpPrevBuildWorld(loaded) : undefined; pkXpBuild(); return r; };
   var _pkXpPrevT = GAME.T;
-  GAME.T = function () { var o = _pkXpPrevT(); o.pkXpKit = { stump: pkXpStump, logs: pkXpLogs, brush: pkXpBrush, spoil: pkXpSpoil, cabin: pkXpCabin, container: pkXpContainer, skip: pkXpSkip, toilet: pkXpToilet, pipes: pkXpPipes, beams: pkXpBeams, pallets: pkXpPallets, flood: pkXpFlood, worker: pkXpWorker, excavator: pkXpExcavator, truck: pkXpTruck, dozer: pkXpDozer, roller: pkXpRoller, mixer: pkXpMixer, harvester: pkXpHarvester, crane: pkXpCrane, crawler: pkXpCrawler, shell: pkXpShell, ride: pkXpRideSteel, fence: pkXpFenceRun, house: pkXpHouse }; o.PK_XP = PK_XP; o.pkXpRingD = pkXpRingD; o.pkXpFree = pkXpFree; o.pkXpBand = pkXpBand; return o; };
+  GAME.T = function () { var o = _pkXpPrevT(); o.pkXpKit = { stump: pkXpStump, logs: pkXpLogs, brush: pkXpBrush, spoil: pkXpSpoil, cabin: pkXpCabin, container: pkXpContainer, skip: pkXpSkip, toilet: pkXpToilet, pipes: pkXpPipes, beams: pkXpBeams, pallets: pkXpPallets, flood: pkXpFlood, worker: pkXpWorker, excavator: pkXpExcavator, truck: pkXpTruck, dozer: pkXpDozer, roller: pkXpRoller, mixer: pkXpMixer, harvester: pkXpHarvester, crane: pkXpCrane, crawler: pkXpCrawler, shell: pkXpShell, ride: pkXpRideSteel, fence: pkXpFenceRun, house: pkXpHouse }; o.PK_XP = PK_XP; o.pkXpRingD = pkXpRingD; o.pkXpFree = pkXpFree; o.pkXpBand = pkXpBand; o.pkXpPierOK = pkXpPierOK; o.pkXpNearScan = pkXpNearScan; o.pkXpViaNear = pkXpViaNear; return o; };

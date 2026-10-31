@@ -38,7 +38,7 @@ module.exports = `
   ok(!!T.pkScreen() && !!T.pkSnack() && !!T.pkConsole() && !!T.pkConsole().parts.buttons.gates && !!T.pkConsole().parts.gauges.speed && !!T.pkConsole().parts.lever, 'the operator room has its screen and a real desk: buttons, a throttle and gauges');
   ok(T.pkScreen().zones.length === 0, 'the room screen reports the ride; it does not take taps');
   { const attractions = T.PK.attractions;
-    ok(attractions.length === 20 && attractions.every((a) => !!a.booth && !!a.boothScreen), 'every attraction has an operator booth and screen');
+    ok(attractions.length === 21 && attractions.every((a) => !!a.booth && !!a.boothScreen), 'every attraction has an operator booth and screen');
     ok(attractions.every((a) => {
       const sc = a.boothScreen, m = sc.mesh, g = a.booth, wp = m.getWorldPosition(new T.THREE.Vector3());
       const dx = wp.x - g.position.x, dz = wp.z - g.position.z;
@@ -311,7 +311,7 @@ module.exports = `
     for (let k = 0; k < 1200 && R.riders < 2; k++) { T.pkRideTick(0.05); T.pkGuestTick(0.05); }
     ok(R.riders === 2 && next.every((g) => g.state === 'seated'), 'the second line walks in from the lane'); }
   // the rides
-  ok(T.PK.attractions.length === 20, 'twenty rides besides the main coaster: ' + T.PK.attractions.length);
+  ok(T.PK.attractions.length === 21, 'twenty-one rides besides the main coaster: ' + T.PK.attractions.length);
   ok(T.PK.attrById.carousel && T.PK.attrById.carousel.seats.length === 8, 'the carousel has eight horses');
   ok(T.PK.attrById.ferris && T.PK.attrById.ferris.seats.length === 16, 'the ferris wheel has eight cabins of two');
   { const d = T.CO.npcs(), ids = d.workers.map((w) => w.id);
@@ -335,7 +335,8 @@ module.exports = `
      ok(T.pkBoothDispatch(a) === true && a.state === 'running', 'manual dispatch waits until queue and boarding paths clear');
     T.pkCtl(a).fault = ''; a.state = 'unloading'; a.t = a.unload; a.queue.length = 0; a.riders = 0; T.pkAttrTick(a, 0.05); T.pkAttrUnseatAll(a); guest.state = 'gone'; T.pkGuestTick(0.01); T.PK.guests.push(...keep); }
   // the real queue lanes and the player's own turn on the rides
-  ok(T.pkLanes().length === 20 && T.pkLanes().every((L) => L.a && !!L.leafL && !!L.leafR), 'every ride has a fenced queue lane and a boarding gate');
+  // every ride but the Skyline, whose line waits up on her platform (it is reached by the tower's lift, not a street lane)
+  ok(T.pkLanes().length === 20 && T.pkLanes().every((L) => L.a && L.a.id !== 'skyline' && !!L.leafL && !!L.leafR), 'every ride has a fenced queue lane and a boarding gate, the Skyline its platform');
   // the arena's lane holds a sixty-seat show's line and Danse Macabre's and Droomvlucht's theirs (36 and 24 riders), so they run deeper than a ride's three rows; they still fold and still keep to 8.5 m
   ok(T.pkLanes().every((L) => L.x1 > L.x0 && L.zB > L.zA && L.x1 - L.x0 < 8.5 && (L.zB - L.zA < 3.6 || L.a.id === 'theater' || L.a.id === 'danse' || L.a.id === 'droom') && L.rows % 2 === 1),
     'the lanes fold into switchbacks, none longer than 8.5 m: ' + T.pkLanes().map((L) => L.a.id + ' ' + (L.x1 - L.x0).toFixed(1) + 'x' + (L.zB - L.zA).toFixed(1)).join(', '));
@@ -472,9 +473,9 @@ module.exports = `
         if (Math.abs(t.y) < 0.85) worst = Math.max(worst, Math.acos(Math.min(1, F.up[i].y / Math.sqrt(1 - t.y * t.y))) * 57.3); } });
     ok(worst < 30, 'every lift is ridden upright (worst roll on a lift ' + worst.toFixed(0) + ' deg)'); }
   // the level ladder and the prices
-  ok(T.PK_LEVELS.length === 7 && T.PK_LEVELS[0].name === 'The gate' && T.PK_LEVELS[6].unlock === 'lights', 'the level ladder runs from the gate to the park lights');
+  ok(T.PK_LEVELS.length === 34 && T.PK_LEVELS[0].name === 'The gate' && T.PK_LEVELS[6].unlock === 'lights' && T.PK_LEVELS[25].name === 'The Skyline' && T.PK_LEVELS[33].name === 'The East Fair', 'the level ladder runs from the gate to the park lights and on to the five expansion stages');
   ok(T.pkPrice(5) === 30 && T.pkPrice(-100) === 5 && T.pkPrice(1000) === 200, 'the ticket price clamps 5 to 200');
-  ok(T.pkOpenCount() === 21, 'every ride is open from the first day (' + T.pkOpenCount() + ')');
+  ok(T.pkOpenCount() === 22, 'every ride is open from the first day (' + T.pkOpenCount() + ')');
   { const x0 = T.PK.xp; T.pkXp(60); ok(T.PK.xp === x0 + 60 && T.PK.level >= 2 && T.PK.snackOpen === true && S.snackOpen === true, 'xp opens the snack stand at level 2'); }
   ok(T.pkSnackPrice(1) === 7 && T.pkSnackPrice(-100) === 1, 'the snack price clamps 1 to 40');
   // the snack stand
@@ -600,6 +601,63 @@ module.exports = `
     S.time = t0; S.gateOpen = g0; T.PK.gateWarn = w0;
     ok(warned845 && noRepeat845 && warned900 && opened && warnedClose && noLateNag,
       'the gate nags at 8:45 and 9 while shut, and at 21:45 if left open, never past 22:00'); }
+  // The Skyline, stage 1 of the expansion plan (part 52): the ride, its three stations, its cabin and its gate
+  { const a = T.PK.attrById.skyline;
+    ok(!!a && a.name === 'The Skyline' && a.level === 26 && a.seats.length === 32, 'the Skyline stands: 32 seats, unlock level 26');
+    ok(T.PK_SKY_ST.length === 3 && T.PK_SKY.veh.length === 3, 'three stations on the deck and a locomotive with two coaches');
+    ok(!!a.booth && Math.abs(a.booth.position.x + 55) < 1.2 && Math.abs(a.booth.position.z + 170) < 1.2, 'its control cabin stands beside Skyline North at -55, -170'); }
+  // the shuttle must not run before stage 1 is finished, whatever the desk says: the key can be on and the breaker
+  // closed, but the line itself is still the bare pre-construction deck until the third night
+  { const a = T.PK.attrById.skyline, C = T.pkCtl(a), K = T.PK_SKY;
+    C.key = true; C.auto = true; C.fault = ''; C.maint = false; T.PK.closed = false;
+    const g = T.pkSpawnGuest(), s0 = T.pkAttrSlot(a, 0);
+    g.rec.x = s0.x; g.rec.z = s0.z; g.state = 'qwait'; g.slot = 0; g.attr = a.id; a.queue.push(g);
+    for (let k = 0; k < 400; k++) { T.pkAttrTick(a, 0.05); T.pkGuestTick(0.05); }
+    ok(T.pkExpansionOpen(1) === false && K.v === 0 && a.riders === 0, 'the shuttle stands fast on the unfinished line before stage 1 opens, key or no key');
+    g.state = 'gone'; T.pkGuestTick(0.01); a.queue.length = 0; C.key = false; C.auto = false; }
+  // the expansion gate: a stage is bought, pays its cost, and opens on the third night at 06:00
+  { S.bank = 400000; T.pkXp(20000);
+    ok(T.pkExpansionOpen(1) === false, 'stage 1 starts shut');
+    const bought = T.pkExpansionCommission();
+    ok(bought === 'Commissioned' && S.expansion.stage === 1 && S.expansion.opened.length === 0 && S.bank === 150000, 'commissioning stage 1 pays 250,000 and starts the works: bank ' + S.bank);
+    S.day = S.expansion.commissioned + 3; S.time = 5.5; T.pkExpansionTick();
+    const early = T.pkExpansionOpen(1);
+    S.time = 6.01; T.pkExpansionTick();
+    ok(early === false && T.pkExpansionOpen(1) === true && S.expansion.opened.length === 1, 'the land opens at 06:00 on the third night, not before');
+    T.pkExpansionTick(); ok(S.expansion.opened.length === 1, 'and it opens once'); }
+  // the shuttle itself: it opens, boards a guest, runs the line and lets them off at Woods Halt
+  { const a = T.PK.attrById.skyline, C = T.pkCtl(a), K = T.PK_SKY;
+    T.pkOpenRide('skyline'); C.key = true; C.auto = true; C.fault = ''; C.maint = false; T.PK.closed = false;
+    a.state = 'idle'; a.t = 0; a.riders = 0; a.queue.length = 0; T.pkAttrUnseatAll(a);
+    K.s = T.PK_SKY_ST[K.home].stop; K.at = K.home; K.mode = 'dwell'; K.v = 0; K.dwell = 25; K.dir = 1;
+    const g = T.pkSpawnGuest(), s0 = T.pkAttrSlot(a, 0);
+    g.rec.x = s0.x; g.rec.z = s0.z; g.state = 'qwait'; g.slot = 0; g.attr = a.id; a.queue.push(g);
+    let boarded = 0, ran = false, unloaded = false;
+    for (let k = 0; k < 12000 && !unloaded; k++) {
+      T.pkAttrTick(a, 0.05); T.pkGuestTick(0.05);
+      if (a.riders > boarded) boarded = a.riders;
+      if (a.state === 'running') ran = true;
+      if (boarded > 0 && a.riders === 0 && a.cycles > 0) unloaded = true;
+    }
+    ok(boarded > 0 && ran && unloaded, 'the Skyline opens, boards ' + boarded + ', runs the line and unloads');
+    g.state = 'gone'; T.pkGuestTick(0.01); }
+  // the driver's cab: short of the mark she berths herself, doors open on it; with the key out and the driver still in
+  // she never leaves; once they climb out onto the platform the timetable takes her again
+  { const a = T.PK.attrById.skyline, K = T.PK_SKY, st = T.PK_SKY_ST[K.home], p = T.player;
+    a.state = 'idle'; a.riders = 0; a.queue.length = 0; K.s = st.stop; K.at = K.home; K.mode = 'dwell'; K.v = 0; K.dwell = 25;
+    p.x = st.px0 + 1; p.z = (st.z0 + st.z1) / 2; p.y = T.PK_SKY_TOP;
+    const inCab = T.pkSkyDrvEnter(K.cabs[0]), D = T.pkSkyDrv();
+    T.pkSkyDrvKey(true); if (D && D.doors) T.pkSkyDrvDoors(false);
+    K.s = st.stop + 6; K.v = 0; T.pkSkyPlace(K.s); T.pkSkyDrvDoors(true);
+    const asked = D && D.berth === K.home;
+    for (let k = 0; k < 600 && D && !D.doors; k++) T.pkAttrTick(a, 0.05);
+    ok(inCab && asked && D.doors && Math.abs(K.s - st.stop) < 0.07, 'the cab: 6 m short of the mark she creeps in and opens on it (' + (K.s - st.stop).toFixed(3) + ' m)');
+    T.pkSkyDrvDoors(false); T.pkSkyDrvKey(false);
+    for (let k = 0; k < 600; k++) T.pkAttrTick(a, 0.05);
+    const held = K.mode === 'dwell' && K.v === 0 && Math.abs(K.s - st.stop) < 0.07;
+    const out = T.pkSkyDrvLeave(); let left = false;
+    for (let k = 0; k < 600 && !left; k++) { T.pkAttrTick(a, 0.05); if (K.mode === 'run') left = true; }
+    ok(held && out && !T.pkSkyDrv() && Math.abs(p.y - T.PK_SKY_TOP) < 0.01 && left, 'key out, driver aboard: she holds; climbed out onto the platform: she runs again'); }
   // the save round trip
   T.save(); { const raw = JSON.parse(localStorage.getItem('park-co-slot1')); ok(!!raw && raw.bank === S.bank && raw.ticketPrice === S.ticketPrice && raw.auto === S.auto && raw.xp === T.PK.xp, 'save wrote the slot: ' + JSON.stringify({ bank: raw && raw.bank, s: S.bank, failed: !!T.save.failed })); }
   // the pure layer

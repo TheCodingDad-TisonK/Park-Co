@@ -15,7 +15,7 @@
   // Every button is a tap zone on the screen (E or a click while aiming at it); the full management panel is a tap away.
   var PK_PC = { app: 'home', awake: false, idle: 0, page: 0, hist: [], lastSample: -1, sc: null, side: null, x: 0, z: 0, hue: 0, rgb: [] };
   var PK_PC_APPS = [['home', 'Dashboard', '#f5b53d'], ['money', 'Finance', '#5fd38d'], ['rides', 'Rides', '#ff8a5c'], ['guests', 'Guests', '#8fc3ff'],
-    ['staff', 'Staff', '#c79bff'], ['cctv', 'Security', '#ff6b5e'], ['mail', 'Inbox', '#f0d58a']];
+    ['staff', 'Staff', '#c79bff'], ['cctv', 'Security', '#ff6b5e'], ['mail', 'Inbox', '#f0d58a'], ['exp', 'Expansion', '#9fd0ff']];
   var PK_PC_W = 960, PK_PC_H = 420, PK_PC_SIDE = 150, PK_PC_TOP = 30;
 
   // ── The hardware ──────────────────────────────────────────────────
@@ -137,23 +137,28 @@
     pkPCText(c, 'PARK OS', 12, 20, 13, '#f5b53d', true);
     var app = PK_PC_APPS.filter(function (a) { return a[0] === PK_PC.app; })[0];
     pkPCText(c, app ? app[1] : '', 92, 20, 13, '#d7dee4');
+    // the held tablet carries the expansion countdown in its top bar (part 29, part 53)
+    var xpLine = tabletOpen && typeof pkExpansionTabletLine === 'function' ? pkExpansionTabletLine() : '';
+    if (xpLine) pkPCText(c, xpLine, W / 2, 20, 12, '#9fd0ff', true, 'center');
     pkPCText(c, 'Day ' + S.day + '   ' + fmtTime(S.time) + '   ' + money(S.bank), tabletOpen ? W - 54 : W - 14, 20, 13, '#d7dee4', false, 'right');
     c.fillStyle = PK.closed ? '#ff6b5e' : '#5fd38d'; c.beginPath(); c.arc(W - 250, 15, 4, 0, 6.283); c.fill();
     pkPCText(c, PK.closed ? 'CLOSED' : 'OPEN', W - 240, 20, 11, PK.closed ? '#ff6b5e' : '#5fd38d', true);
     // the dock
     c.fillStyle = 'rgba(0,0,0,0.28)'; c.fillRect(0, PK_PC_TOP, PK_PC_SIDE, H - PK_PC_TOP);
+    // eight apps fit the dock by narrowing the row a little; seven keep the height they had
+    var dockH = Math.min(36, (H - 90 - (PK_PC_TOP + 8) - 4 * (PK_PC_APPS.length - 1)) / PK_PC_APPS.length), dockStep = dockH + 4;
     PK_PC_APPS.forEach(function (a, i) {
-      var y = PK_PC_TOP + 8 + i * 40, on = a[0] === PK_PC.app;
-      if (on) { pkPCRound(c, 6, y, PK_PC_SIDE - 12, 36, 8); c.fillStyle = 'rgba(255,255,255,0.09)'; c.fill(); }
-      pkPCRound(c, 14, y + 5, 26, 26, 7); c.fillStyle = a[2]; c.fill();
-      pkPCText(c, a[1].charAt(0), 27, y + 24, 15, '#14181c', true, 'center');
-      pkPCText(c, a[1], 50, y + 23, 14, on ? '#ffffff' : '#c3ccd4', on);
-      pkPCZone(sc, 6, y, PK_PC_SIDE - 12, 36, a[1], function () { PK_PC.app = a[0]; PK_PC.page = 0; });
+      var y = PK_PC_TOP + 8 + i * dockStep, on = a[0] === PK_PC.app, iy = y + (dockH - 26) / 2;
+      if (on) { pkPCRound(c, 6, y, PK_PC_SIDE - 12, dockH, 8); c.fillStyle = 'rgba(255,255,255,0.09)'; c.fill(); }
+      pkPCRound(c, 14, iy, 26, 26, 7); c.fillStyle = a[2]; c.fill();
+      pkPCText(c, a[1].charAt(0), 27, iy + 19, 15, '#14181c', true, 'center');
+      pkPCText(c, a[1], 50, iy + 18, 14, on ? '#ffffff' : '#c3ccd4', on);
+      pkPCZone(sc, 6, y, PK_PC_SIDE - 12, dockH, a[1], function () { PK_PC.app = a[0]; PK_PC.page = 0; });
     });
     pkPCBtn(sc, 10, H - 82, PK_PC_SIDE - 20, 30, 'Full panel', function () { if (tabletOpen) pkTabletToggle(false); openPanel('admin'); });
     pkPCBtn(sc, 10, H - 44, PK_PC_SIDE - 20, 30, 'Lock', function () { PK_PC.awake = false; }, false);
     var X = PK_PC_SIDE + 12, Y = PK_PC_TOP + 12, CW = W - X - 12, CH = H - Y - 12;
-    ({ home: pkPCHome, money: pkPCMoney, rides: pkPCRides, guests: pkPCGuests, staff: pkPCStaff, cctv: pkPCCctv, mail: pkPCMail }[PK_PC.app] || pkPCHome)(c, sc, X, Y, CW, CH);
+    ({ home: pkPCHome, money: pkPCMoney, rides: pkPCRides, guests: pkPCGuests, staff: pkPCStaff, cctv: pkPCCctv, mail: pkPCMail, exp: pkPCExpansion }[PK_PC.app] || pkPCHome)(c, sc, X, Y, CW, CH);
   }
   // the lock screen: the time, big, over the wallpaper; a tap anywhere signs in
   function pkPCLock(c, sc) {
@@ -258,6 +263,69 @@
       pkPCText(c, why, gx + 100, y, 13, '#d7dee4');
       pkPCText(c, (e.n >= 0 ? '+' : '-') + money(Math.abs(e.n)), gx + gw - 14, y, 13, e.n >= 0 ? '#5fd38d' : '#ff8a5c', true, 'right');
     });
+  }
+  // the Expansion page: the next stage of the plan, its land on a small map, its cost, and the Commission button.
+  // The state, the clock and the land table live in part 53; this page only draws them and asks for a commission.
+  function pkExpansionPageMap(c, x, y, w, h, lands) {
+    var pad = 16, x0 = lands[0].x0, x1 = lands[0].x1, z0 = lands[0].z0, z1 = lands[0].z1, i;
+    for (i = 0; i < lands.length; i++) { x0 = Math.min(x0, lands[i].x0); x1 = Math.max(x1, lands[i].x1); z0 = Math.min(z0, lands[i].z0); z1 = Math.max(z1, lands[i].z1); }
+    var cam = [lands[0].name, x0 - pad, x1 + pad, z0 - pad, z1 + pad];
+    pkPCCam(c, x, y, w, h, cam, 0);
+    var k = Math.min(w / (cam[2] - cam[1]), h / (cam[4] - cam[3]));
+    var ox = x + w / 2 - (cam[1] + cam[2]) / 2 * k, oz = y + h / 2 - (cam[3] + cam[4]) / 2 * k;
+    var X = function (v) { return ox + v * k; }, Z = function (v) { return oz + v * k; };
+    c.save();
+    for (i = 0; i < lands.length; i++) {
+      var land = lands[i];
+      c.strokeStyle = '#9fd0ff'; c.lineWidth = 2; c.setLineDash([7, 5]);
+      c.strokeRect(X(land.x0), Z(land.z0), (land.x1 - land.x0) * k, (land.z1 - land.z0) * k);
+      c.setLineDash([]);
+      c.fillStyle = '#f5b53d'; c.beginPath(); c.arc(X(land.gate.x), Z(land.gate.z), 4.5, 0, 6.283); c.fill();
+    }
+    c.restore();
+  }
+  function pkPCExpansion(c, sc, X, Y, W, H) {
+    var E = pkExpState(), st = pkExpansionNext();
+    if (!st) {
+      pkPCPanel(c, X, Y, W, H, 'Expansion');
+      pkPCText(c, 'Every stage is open', X + 22, Y + 90, 30, '#5fd38d', true);
+      pkPCText(c, 'All five stages of the plan are built.', X + 22, Y + 122, 14, '#8b98a4');
+      return;
+    }
+    var lw = Math.round(W * 0.46), rx = X + lw + 12, rw = W - lw - 12;
+    pkPCPanel(c, X, Y, lw, H, st.lands.length ? 'The land' : 'The line');
+    if (st.lands.length) {
+      var lands = st.lands.map(function (id) { return PK_XP_LANDS[id]; });
+      pkExpansionPageMap(c, X + 10, Y + 30, lw - 20, H - 76, lands);
+      pkPCText(c, st.lands.length > 1 ? 'Two parts of the east band, north and south of the square' : lands[0].name, X + 10, Y + H - 14, 11, '#8b98a4');
+    } else {
+      pkPCCam(c, X + 10, Y + 30, lw - 20, H - 76, ['THE VIADUCT', -132, -40, -190, 165], 0);
+      pkPCText(c, 'The viaduct across the park: no land of its own', X + 10, Y + H - 14, 11, '#8b98a4');
+    }
+    pkPCPanel(c, rx, Y, rw, H, 'Expansion');
+    pkPCText(c, 'STAGE ' + st.id + ' OF ' + PK_XP_STAGES.length, rx + 18, Y + 48, 11, '#9fd0ff', true);
+    pkPCText(c, st.name, rx + 18, Y + 82, 26, '#eef1f5', true);
+    pkPCText(c, st.where, rx + 18, Y + 106, 13, '#8b98a4');
+    var tw = (rw - 54) / 2, ty = Y + 120;
+    pkPCTile(c, rx + 18, ty, tw, 74, 'Level', String(st.level), pkLevel() >= st.level ? '#5fd38d' : '#ff8a5c', pkLevel() >= st.level ? 'reached' : 'the park is level ' + pkLevel());
+    pkPCTile(c, rx + 30 + tw, ty, tw, 74, 'Cost', money(st.cost), S.bank >= st.cost && S.bank >= 0 ? '#f5b53d' : '#ff8a5c', 'the bank holds ' + money(S.bank));
+    var sy = ty + 92, live = E.stage === st.id && !pkExpansionOpen(st.id);
+    if (live) {
+      var d = pkExpansionDaysLeft(), f = (PK_XP_BUILD_DAYS - d) / PK_XP_BUILD_DAYS;
+      pkPCText(c, d > 0 ? 'OPENING IN ' + d + (d === 1 ? ' DAY' : ' DAYS') : 'OPENS AT 06:00', rx + 18, sy + 6, 20, '#ffd166', true);
+      pkPCRound(c, rx + 18, sy + 22, rw - 36, 10, 5); c.fillStyle = 'rgba(255,255,255,0.1)'; c.fill();
+      pkPCRound(c, rx + 18, sy + 22, Math.max(10, (rw - 36) * f), 10, 5); c.fillStyle = '#f5b53d'; c.fill();
+      pkPCText(c, 'Commissioned on day ' + E.commissioned + '. The works run for three days.', rx + 18, sy + 54, 13, '#8b98a4');
+      pkPCText(c, 'The tablet shows the days left.', rx + 18, sy + 74, 13, '#8b98a4');
+    } else {
+      var can = pkLevel() >= st.level && S.bank >= st.cost && S.bank >= 0;
+      var why = pkLevel() < st.level ? ('Park level ' + st.level + ' is needed first.') : (S.bank < st.cost ? ('The bank is short by ' + money(st.cost - S.bank) + '.') : 'Ready when you are.');
+      pkPCText(c, why, rx + 18, sy + 6, 14, can ? '#5fd38d' : '#ff8a5c');
+      pkPCBtn(sc, rx + 18, sy + 24, rw - 36, 42, 'Commission (' + money(st.cost) + ')', pkExpansionCommission, can, '#9fd0ff');
+    }
+    var done = null;
+    for (var i = 0; i < PK_XP_STAGES.length; i++) if (pkExpansionOpen(PK_XP_STAGES[i].id)) done = PK_XP_STAGES[i];
+    if (done) pkPCText(c, 'Stage ' + done.id + ' OPEN: ' + done.name, rx + 18, Y + H - 14, 12, '#5fd38d', true);
   }
   function pkPCRideRows() {
     var rows = [{ coaster: true, name: 'The coaster', state: pkRideWord(), queue: pkQueueWaiting(), riders: PK.ride.riders, seats: PK.seats.length, cycles: S.cycles || 0, open: true, bad: !!PK.ride.fault }];

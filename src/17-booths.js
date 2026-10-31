@@ -656,6 +656,7 @@
     var ry = Math.atan2(plot.x - bx, plot.z - bz);
     var toQ = Math.atan2(q[0] - bx, q[1] - bz);
     var ds = Math.cos(toQ - (ry + Math.PI / 2)) >= 0 ? 1 : -1;          // the door side, in local x
+    if (plot.boothDs === 1 || plot.boothDs === -1) ds = plot.boothDs;   // the queue point can stand nowhere near a remote booth (boothAt); say the door side outright
     var K = PK_BK, W = K.W, D = K.D, HW = W / 2, HD = D / 2, F = K.FLOOR, T = K.T, WH = K.WALL;
     var host = null, out = null;
     worldItem('booth', function () {

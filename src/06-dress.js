@@ -39,7 +39,7 @@
       // the gateway over the queue, facing the midway
       pkDressItem('ride gateway', function (g) { if (th.portal) th.portal(p, side, g); else pkGatewayBetter(p.q[0], p.q[1], th.name, th, side, g); });   // centred on the switchbacks, its posts just outside them (a theme may bring its own portal)
       // the line itself: a fenced lane behind the arch with a boarding gate. It stays with the ride (the guests walk its slots)
-      pkQueueLaneBetter(a, th, dg);
+      if (!th.noLane) pkQueueLaneBetter(a, th, dg);   // the Skyline has none: her line waits on her platform (part 52)
       // the ride's own station round it: the fence, the entrance porch and the exit
       pkFlatStation(a, th);
       // planters by the gateway and two lamps, where the plot has the room for them

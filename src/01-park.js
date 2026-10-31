@@ -31,7 +31,34 @@
     { xp: 120, name: 'Ticket clerk',  note: 'Hire a clerk and the window serves itself.', unlock: 'clerk' },
     { xp: 160, name: 'Toys stand',    note: 'A toys stand opens on the midway.', unlock: 'toy' },
     { xp: 280, name: 'Ride operator', note: 'Hire an operator and the coaster runs itself.', unlock: 'operator' },
-    { xp: 520, name: 'Park lights',   note: 'The park stays open into the evening.', unlock: 'lights' }
+    { xp: 520, name: 'Park lights',   note: 'The park stays open into the evening.', unlock: 'lights' },
+    { xp: 700,    name: "Full house",  note: "The park is busy from opening to close." },
+    { xp: 900,    name: "Coach parties",  note: "Buses fill the car park by ten." },
+    { xp: 1150,   name: "The long summer",  note: "The season stretches into the evenings." },
+    { xp: 1450,   name: "Regulars",  note: "Faces the gate staff know by name." },
+    { xp: 1800,   name: "The waiting list",  note: "Lines run back to the gate at weekends." },
+    { xp: 2200,   name: "A name for itself",  note: "People come from the next town over." },
+    { xp: 2650,   name: "The excursion",  note: "A railway party books the park for the day." },
+    { xp: 3150,   name: "Harvest fair",  note: "The autumn crowds arrive." },
+    { xp: 3700,   name: "Winter lights",  note: "The park glows after dark all season." },
+    { xp: 4300,   name: "The town comes out",  note: "Lindenburg walks over for the evening." },
+    { xp: 5000,   name: "Second platform",  note: "The halt is busier than the road." },
+    { xp: 5750,   name: "The waiting crowd",  note: "Rides run at capacity all afternoon." },
+    { xp: 6600,   name: "Three deep at the gate",  note: "The turnstiles never stop clicking." },
+    { xp: 7500,   name: "The season ticket",  note: "Half the park comes every week." },
+    { xp: 8500,   name: "A park of note",  note: "The papers send someone along." },
+    { xp: 9600,   name: "The long queues",  note: "Guests plan their day around the lines." },
+    { xp: 10800,  name: "The overflow car park",  note: "The meadow is mown for parking." },
+    { xp: 12100,  name: "All day, every day",  note: "The park fills before the gates open." },
+    { xp: 13500,  name: "The Skyline",  note: "The new railway may be commissioned." },
+    { xp: 15000,  name: "The viaduct at night",  note: "The line runs lit, north to south." },
+    { xp: 16600,  name: "Northern Heights",  note: "The north land may be commissioned." },
+    { xp: 18300,  name: "The mountain road",  note: "Machines work the north all season." },
+    { xp: 20000,  name: "The Hunter's Woods",  note: "The west land may be commissioned." },
+    { xp: 22000,  name: "The old town",  note: "Lindenburg looks over the fence." },
+    { xp: 24500,  name: "Lindenburg Harbour",  note: "The south land may be commissioned." },
+    { xp: 27000,  name: "The lake boats",  note: "The quay is busy from spring on." },
+    { xp: 30000,  name: "The East Fair",  note: "The east land may be commissioned." }
   ];
   // the live park: everything that is not worth saving. The saved bits live in S (ticketPrice, auto, xp, the hires)
   var PK = {
@@ -494,11 +521,14 @@
     freshState: function () {
       return { day: 1, time: 9, bank: 500, level: 1, log: [], ledger: [], stats: { earned: 0, spent: 0 }, layout: {}, custom: [], hdoors: {},
         ticketPrice: 25, snackPrice: 6, icePrice: 4, toyPrice: 5, auto: false, ctlAuto: {}, ctlKey: {}, coasterKey: false, cycles: 0, xp: 0, clerk: true, operator: false, snackOpen: false, iceOpen: false, toyOpen: false, train2: false, lights: false, rideLights: false,   // the starter clerk works day one for free
-        wear: 0, rides: {}, today: { tickets: 0, snacks: 0, rides: 0, earned: 0, ice: 0, toys: 0 }, gateOpen: true };
+        wear: 0, rides: {}, today: { tickets: 0, snacks: 0, rides: 0, earned: 0, ice: 0, toys: 0 }, gateOpen: true,
+        expansion: { stage: 0, commissioned: 0, opened: [] } };   // part 53: the expansion gate (none commissioned yet)
     },
     // a day one save from before the starter clerk gets one too; later days keep the park they earned
     // a save from before the gate was a switch of its own: open if the old automatic hours say it would have been
-    migrate: function (s) { if (s.day === 1 && !s.clerk) s.clerk = true; if (s.gateOpen === undefined) s.gateOpen = s.time >= 9 && s.time < 22; if (s.rideLights === undefined) s.rideLights = !!s.lights; return s; },
+    migrate: function (s) { if (s.day === 1 && !s.clerk) s.clerk = true; if (s.gateOpen === undefined) s.gateOpen = s.time >= 9 && s.time < 22; if (s.rideLights === undefined) s.rideLights = !!s.lights;
+      if (!s.expansion) s.expansion = { stage: 0, commissioned: 0, opened: [] }; if (!s.expansion.opened) s.expansion.opened = [];   // part 53: an old save gets the expansion state
+      return s; },
     buildWorld: function (loaded) {
       pkGround(); pkGate(); pkBooths(); pkOffice(); pkMidway(); pkBuildCoaster(); pkBuildOperatorRoom(); pkBuildSnack(); pkBuildIceCream(); pkBuildToys();
       pkBuildAttractions();
