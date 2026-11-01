@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.2 (2026-11-01): World Update
+
+- Maintenance release.
+
 ## 1.6.1 (2026-10-31): FPS patch
 
 - Maintenance release.

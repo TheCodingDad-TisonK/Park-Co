@@ -7,9 +7,9 @@
   }
   var TR_STATIONS = [
     { id: 'central', name: 'CENTRAL STATION', x: -128, z: 34, walk: [[-117.4, 34], [-117.4, 62], [-30, 62]], roof: 'slateRed' },
-    { id: 'windmill', name: 'WINDMILL HALT', x: -62, z: -134, walk: [[-62, -123.4], [-17, -123.4], [-17, -160]], roof: 'slateRed' },
-    { id: 'dragon', name: 'DRAGON GATE', x: 170, z: -2, walk: [[159.4, -2], [121, -2]], roof: 'slateGreen' },
-    { id: 'lake', name: 'LAKESIDE HALT', x: 95, z: 112, walk: [[95, 101.4], [95, 66]], roof: 'slateRed' }
+    { id: 'windmill', name: 'WINDMILL HALT', x: -62, z: -134, walk: [[-62, -123.4], [-17, -123.4], [-17, -160]], guest: false, roof: 'slateRed' },
+    { id: 'dragon', name: 'DRAGON GATE', x: 170, z: -2, walk: [[159.4, -2], [121, -2]], guest: false, roof: 'slateGreen' },
+    { id: 'lake', name: 'LAKESIDE HALT', x: 95, z: 112, walk: [[95, 102.2], [72.5, 102.2], [72.5, 64.6]], roof: 'slateRed' }
   ];
   // wagon centres along a stopped train, in a station's local x (the front buffer stops 28 m ahead of the middle of the platform)
   function trWagonX(k) { return 12.3 - 5.1 * k; }
@@ -191,10 +191,27 @@
     trBuildCabinet(st);
     
     var p0 = trLocalToWorld(st, 0, 9.8), pts = def.walk.slice(); pts[0] = [p0.x, p0.z]; trPath(3.4, pts);
+    trRegisterWalk(st, def);
     trDrawBoard(st, true);
     return st;
   }
   function trLocalToWorld(st, lx, lz) { return { x: st.x + st.dx * lx - st.dz * lz, z: st.z + st.dz * lx + st.dx * lz }; }
+  // the ground a guest may walk on at a station: its platform and ramp (in the station's local frame), plus every footpath
+  // segment (def.walk). These are the slabs trPath draws, but they lie outside the park's palisade, so the route finder is
+  // told to open them here.
+  function trWalkRect(st, lx0, lx1, lz0, lz1) {
+    var a = trLocalToWorld(st, lx0, lz0), b = trLocalToWorld(st, lx1, lz0), c = trLocalToWorld(st, lx0, lz1), d = trLocalToWorld(st, lx1, lz1);
+    PK_WALK_EXTRA.push({ x0: Math.min(a.x, b.x, c.x, d.x), x1: Math.max(a.x, b.x, c.x, d.x), z0: Math.min(a.z, b.z, c.z, d.z), z1: Math.max(a.z, b.z, c.z, d.z) });
+  }
+  function trRegisterWalk(st, def) {
+    trWalkRect(st, -32.4, 32.4, 1.3, 12.9);                       // the platform and its ramp
+    var p0 = trLocalToWorld(st, 0, 9.8), hw = 2.2, pts = def.walk.slice();
+    pts[0] = [p0.x, p0.z];
+    for (var i = 0; i < pts.length - 1; i++) {
+      var a = pts[i], b = pts[i + 1];
+      PK_WALK_EXTRA.push({ x0: Math.min(a[0], b[0]) - hw, x1: Math.max(a[0], b[0]) + hw, z0: Math.min(a[1], b[1]) - hw, z1: Math.max(a[1], b[1]) + hw });
+    }
+  }
 
   // ── The control cabinet ──────────────────────────────────────────
   function trBuildCabinet(st) {

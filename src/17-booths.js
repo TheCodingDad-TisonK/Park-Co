@@ -603,7 +603,7 @@
     chair.updateWorldMatrix(true, false);
     PK_SIT_V.setFromMatrixPosition(chair.matrixWorld);
     PK_SIT_F.set(0, 0, 1).transformDirection(chair.matrixWorld);
-    PK_SIT = { chair: chair, x: PK_SIT_V.x, y: PK_SIT_V.y, z: PK_SIT_V.z, sx: player.x, sz: player.z };
+    PK_SIT = { chair: chair, x: PK_SIT_V.x, y: PK_SIT_V.y, z: PK_SIT_V.z, eyeY: (chair.userData && chair.userData.eyeY) || 1.42, sx: player.x, sz: player.z };
     player.yaw = Math.atan2(-PK_SIT_F.x, -PK_SIT_F.z); player.pitch = -0.18;
     sfx('click'); toast('Seated - E or a step to stand up', '');
   }
@@ -620,7 +620,7 @@
       var k = player.keys;
       if (k.KeyW || k.KeyS || k.KeyA || k.KeyD) { pkBkStand(); return false; }
       player.x = PK_SIT.x; player.z = PK_SIT.z; player.y = PK_SIT.y; player.vy = 0;
-      camera.position.set(PK_SIT.x, PK_SIT.y + 1.42, PK_SIT.z);   // a seated eye on the bigger chair, over the desk
+      camera.position.set(PK_SIT.x, PK_SIT.y + PK_SIT.eyeY, PK_SIT.z);   // a seated eye on the bigger chair, over the desk
       camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
       return true;
     }

@@ -897,7 +897,8 @@
   // the key box, the chair, the lights and their switch, the status board, the stack lamp) without the glazed cabin round
   // it, for a ride whose room is built into its own building in its own style (Danse Macabre's sacristy, Droomvlucht's
   // booth in the U). o: { x, z, y, ry, W, D, H, cab (-1 or 1: the side wall the cabinet stands on) or cabBack (on the back wall), sw: [x, z, ry] the light
-  // switch by the door, mon: [x, y, z, ry] the monitors, stack: false to leave the lamp off }. In the room's own frame local
+  // switch by the door, mon: [x, y, z, ry] the monitors, stack: false to leave the lamp off, chair: the desk's gap from the
+  // window (1.2 default) }. In the room's own frame local
   // -z is the window the operator looks out of over the desk, +z the back wall.
   function pkRoomKit(g, a, o) {
     var R = new THREE.Group(); R.position.set(o.x, o.y || 0, o.z); R.rotation.y = o.ry || 0; g.add(R);
@@ -914,7 +915,7 @@
     pkBkClock(k, cl[0], cl[1], D / 2 - 0.09, Math.PI, 0.14);
     a.boothClock = pkBkTimeClock(k, tc[0], tc[1], D / 2 - 0.08, Math.PI, a.id, a.name);
     pkBkKeyBox(k, kb[0], kb[1], D / 2 - 0.08, Math.PI);
-    pkBkChair(k, 0.1, -D / 2 + 1.2, Math.PI, 0);
+    pkBkChair(k, 0.1, -D / 2 + (o.chair || 1.2), Math.PI, 0);
     var bat = pkBkBatten(k, 0, H - 0.17, 0.2, 0, 1.4);
     a.boothLights = pkBkLights(a.id, k, [bat], 0, H - 0.5, 0.2);
     a.boothLights.setPower(!!a.open);

@@ -6,6 +6,11 @@
   var PK_GATE_Z = 30, PK_PLATFORM_Y = 0.6, PK_STATION_Z = -4.6, PK_KIDS_Z = 56;   // PK_KIDS_Z: the south fence of the kids' garden
   // the park is a long rectangle: the gate at the south, the coaster across the north, and rides either side of the midway
   var PK_PARK = { x0: -72, x1: 123, z0: -118, z1: 70 };   // z0 was -95: the north fence moved back for the bigger indoor halls; x1 was 72, out east for The Dragon and The Firebird
+  // walkable rectangles laid by other parts outside the palisade: the railway stations' platforms, ramps and footpaths (part 41)
+  var PK_WALK_EXTRA = [];
+  // the draw distance: how far the eye (and the renderer) sees. The fog's far edge also cuts the camera's far plane, so
+  // geometry beyond it is culled and not drawn. Small values keep the frame cheaper; `fog 540` restores the wide view.
+  var PK_FOG = { near: 40, far: 110 };
   var PK_BOOTHS = [{ x: -9, z: 36, turnstile: -6, turnstiles: [-6, -2] }, { x: 9, z: 36, turnstile: 6, turnstiles: [2, 6] }];
   var PK_TURNSTILES = [-6, -2, 2, 6];
   // the coaster queue: a single lane beside the platform, fenced on both sides. Guests join at the back (PK_QUEUE_ENTRY,
@@ -175,7 +180,11 @@
     return pkBkFloorAt(x, z);            // up the steps into a ride's booth (part 17)
   }
   function pkOnPlatform(x, z) { return x > -10 && x < 10 && z > -3.6 && z < -0.6; }
-  function pkInsidePark(x, z) { return x > PK_PARK.x0 && x < PK_PARK.x1 && z > PK_PARK.z0 && z < PK_PARK.z1; }
+  function pkInsidePark(x, z) {
+    if (x > PK_PARK.x0 && x < PK_PARK.x1 && z > PK_PARK.z0 && z < PK_PARK.z1) return true;
+    for (var i = 0; i < PK_WALK_EXTRA.length; i++) { var r = PK_WALK_EXTRA[i]; if (x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1) return true; }
+    return false;
+  }
   function pkBoothSlot(bi, i) { var b = PK_BOOTHS[bi]; return { x: b.x, z: b.z + 2.7 + i * 1.1 }; }   // in front of the ticket office's counter
   function pkCoasterAuto() { return !!S.auto; }   // the switch alone: a hired operator puts it on AUTO (pkHire), it does not lock it there
   function pkRideWord() {
@@ -574,7 +583,30 @@
       auto: function () { var on = pkSetAuto(!pkCoasterAuto()); return 'coaster auto ' + (on ? 'on' : 'off'); },
       dispatch: function () { return pkDispatch() ? 'dispatched' : 'the ride will not go: ' + PK.ride.fault; },
       rides: function () { return pkOpenCount() + ' of ' + (PK.attractions.length + 1) + ' open: ' + pkRideList(); },
-      open: function (id) { return pkOpenRide(String(id || '')) ? 'opened ' + id : 'no ride called ' + id; }
+      open: function (id) { return pkOpenRide(String(id || '')) ? 'opened ' + id : 'no ride called ' + id; },
+      // ── a fuller dev console: money, the clock, the park, the rides, the guests and the weather ──
+      bank: function () { return 'bank ' + money(S.bank); },
+      time: function (h) { if (typeof h !== 'number' || !isFinite(h)) return 'time needs an hour, e.g. time 21'; S.time = ((+h % 24) + 24) % 24; hudDirty = true; return 'time ' + fmtTime(S.time); },
+      day: function (d) { if (typeof d === 'number') { S.day = Math.max(1, Math.round(d)); hudDirty = true; screenDirtyAll(); } return 'day ' + S.day; },
+      night: function () { S.time = 21; hudDirty = true; return 'night: ' + fmtTime(S.time); },
+      dawn: function () { S.time = 7; hudDirty = true; return 'dawn: ' + fmtTime(S.time); },
+      status: function () { return 'day ' + S.day + ' · ' + fmtTime(S.time) + ' · bank ' + money(S.bank) + ' · ' + PK.guests.length + ' guests · ' + pkOpenCount() + '/' + (PK.attractions.length + 1) + ' rides open · weather ' + (S.weather && S.weather.kind || 'clear'); },
+      where: function () { return player ? ('player at ' + Math.round(player.x * 10) / 10 + ', ' + Math.round(player.z * 10) / 10 + (player.y ? ', y ' + Math.round(player.y * 10) / 10 : '')) : 'no player'; },
+      spawnhere: function (n) { var k = clamp(+n || 1, 1, 30); for (var i = 0; i < k; i++) { var g = pkSpawnGuest(); if (player && g && g.rec) { g.rec.x = player.x + randf(-2, 2); g.rec.z = player.z + randf(-2, 2); g.rec.path = []; } } return k + ' guests appear by the player'; },
+      kick: function () { var n = 0; PK.guests.forEach(function (g) { if (g && g.state !== 'gone' && g.state !== 'leave' && g.state !== 'trainRide' && g.state !== 'trainAlight') { n++; } }); if (typeof pkCloseGuests === 'function') pkCloseGuests(); if (typeof TR !== 'undefined' && TR.guestQueue) TR.guestQueue.length = 0; return n + ' guests sent home'; },
+      close: function () { pkCloseGuests(); return 'park closed for the night'; },
+      lights: function (on) { S.lights = on === undefined ? !S.lights : !!on; pkLightsApply(S.lights, S.rideLights); return 'park lights ' + (S.lights ? 'on' : 'off'); },
+      ridelights: function (on) { S.rideLights = on === undefined ? !S.rideLights : !!on; pkLightsApply(S.lights, S.rideLights); return 'ride lights ' + (S.rideLights ? 'on' : 'off'); },
+      repair: function () { PK.ride.fault = ''; return 'coaster fault cleared'; },
+      clear: function () { PK.ride.fault = ''; pkReset(); return 'coaster cleared and reset'; },
+      gates: function () { return pkGatesToggle() ? 'coaster gates toggled' : 'coaster gates refused'; },
+      bars: function () { var ok = PK.ride.bars > 0.05 ? pkBarsUp() : pkBarsDown(); return ok ? 'restraints toggled' : 'restraints refused'; },
+      stopride: function () { return pkStop() ? 'coaster stopped' : 'coaster not stopped'; },
+      resetride: function () { return pkReset() ? 'coaster reset' : 'coaster not reset'; },
+      openall: function () { var n = 0; (PK.attractions || []).forEach(function (a) { if (pkOpenRide(a.id)) n++; }); pkOpenRide('coaster'); return n + ' rides open; coaster ' + (pkCoasterOpen() ? 'open' : 'closed'); },
+      closeall: function () { var n = 0; (PK.attractions || []).forEach(function (a) { if (pkSetRideOpen(a.id, false)) n++; }); return n + ' rides closed'; },
+      fog: function (m) { if (typeof m === 'number' && isFinite(m)) { PK_FOG.far = clamp(m, 40, 720); PK_FOG.near = Math.max(10, Math.round(PK_FOG.far * 0.38)); } pkFogApply(); return 'draw distance ' + PK_FOG.far + ' m (fog far ' + Math.round(scene.fog ? scene.fog.far : PK_FOG.far) + ' m)'; },
+      far: function (m) { if (typeof m === 'number' && isFinite(m)) { PK_FOG.far = clamp(m, 40, 720); pkFogApply(); } return 'draw distance ' + PK_FOG.far + ' m'; }
     },
     devState: function () { return { guests: PK.guests.length, queue: PK.queue.length, ride: PK.ride.state, auto: !!S.auto, cycles: S.cycles || 0, level: PK.level, xp: PK.xp, tickets: PK.today.tickets }; },
     T: function () {
@@ -613,7 +645,7 @@
         pkNearestHuman: pkNearestHuman, pkLog: pkLog, pkNewDay: pkNewDay,
         pkHire: pkHire, pkSnackBuy: pkSnackBuy, pkSnackPrice: pkSnackPrice, pkRideLoad: pkRideLoad, pkPlaceTrain: pkPlaceTrain, pkSeatGuest: pkSeatGuest, pkUnseatGuest: pkUnseatGuest,
         spanCut: spanCut, lineWall: lineWall, roomFloor: roomFloor, troffer: troffer, highBay: highBay, fenceRun: fenceRun, tree: tree, lampPost: lampPost,
-        insideWalk: insideWalk, inRect: inRect, navSetup: navSetup, yawWrap: yawWrap, sfxCount: function () { return sfxCount; }, SFX: SFX,
+        insideWalk: insideWalk, inRect: inRect, navSetup: navSetup, navOpen: navOpen, navCell: navCell, navInfo: function () { return { x0: NAV.x0, z0: NAV.z0, w: NAV.w, h: NAV.h, cell: NAV.cell, dirty: NAV.dirty, steps: NAV.steps }; }, yawWrap: yawWrap, sfxCount: function () { return sfxCount; }, SFX: SFX,
         geoCache: geoCache, BEVEL: BEVEL, bevelGeo: bevelGeo, roundCylGeo: roundCylGeo, boxGeo: boxGeo, taperGeo: taperGeo, textTex: textTex,
         box: box, cyl: cyl, sign: sign, groundBlob: groundBlob, disposeTree: disposeTree, burst: burst, tickBursts: tickBursts, bursts: bursts,
         lightBudget: lightBudget, seededStream: seededStream, hexCss: hexCss, mergeById: mergeById, scFit: scFit, catalogueHtml: catalogueHtml,
@@ -642,13 +674,19 @@
     player.x = best[0]; player.z = best[1]; player.y = floorY(best[0], best[1], photo.y);
     player.yaw = photo.yaw; player.pitch = 0;
   });
+  function pkFogApply(overcast) {
+    if (!scene.fog) return;
+    var ov = overcast || 0;
+    scene.fog.near = Math.max(10, PK_FOG.near - ov * PK_FOG.near * 0.29);
+    scene.fog.far = Math.max(24, PK_FOG.far - ov * PK_FOG.far * 0.37);
+    // nothing past the fog's far edge is visible, so cull it: the camera no longer draws (or shadow-tests) fully fogged geometry.
+    // Keep 210 m as the floor so the sun and moon (held 200 m out) are never frustum-culled.
+    var far = Math.max(scene.fog.far, 210);
+    if (camera.far !== far) { camera.far = far; camera.updateProjectionMatrix(); }
+  }
   hook('lighting', function (day, dawn, overcast, power) {
-    if (scene.fog) {
-      scene.fog.near = 210 - (overcast || 0) * 60; scene.fog.far = 540 - (overcast || 0) * 200;
-      // nothing past the fog's far edge is visible, so cull it: the camera no longer draws (or shadow-tests) fully fogged geometry
-      if (camera.far !== scene.fog.far) { camera.far = scene.fog.far; camera.updateProjectionMatrix(); }
-    }
+    pkFogApply(overcast);
     var night = S.time >= 18 || S.time < 7;
     pkLightsApply(!!power, !!PK.rideLights && night);
   });
-  CO.setup({ canvas: 'co-canvas', save: 'park-co', game: GAME, spawn: { x: 0, z: 42, yaw: 0 }, sun: { box: 120, far: 320, mapSize: 1024, target: [0, 0, 0] }, lightBudget: 10, far: 720, fog: { color: 0x9dbbd8, near: 300, far: 700 } });
+  CO.setup({ canvas: 'co-canvas', save: 'park-co', game: GAME, spawn: { x: 0, z: 42, yaw: 0 }, sun: { box: 120, far: 150, mapSize: 1024, target: [0, 0, 0] }, lightBudget: 10, far: 160, fog: { color: 0x9dbbd8, near: 40, far: 110 } });

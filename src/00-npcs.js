@@ -280,22 +280,6 @@
           },
           {
             "do": "walk",
-            "to": "firebird"
-          },
-          {
-            "do": "wait",
-            "seconds": 6
-          },
-          {
-            "do": "walk",
-            "to": "dragon"
-          },
-          {
-            "do": "wait",
-            "seconds": 8
-          },
-          {
-            "do": "walk",
             "to": "promEast"
           },
           {
@@ -473,7 +457,7 @@
         "x": -9.55,
         "z": 36.8,
         "ry": 0,
-        "off": true
+        "off": false
       },
       {
         "id": "cashierEast",
@@ -481,7 +465,7 @@
         "x": 8.45,
         "z": 36.8,
         "ry": 0,
-        "off": true
+        "off": false
       }
     ],
     "spots": {
@@ -588,14 +572,6 @@
       "eastWalk": {
         "x": 76,
         "z": -20
-      },
-      "firebird": {
-        "x": 77,
-        "z": -36
-      },
-      "dragon": {
-        "x": 77,
-        "z": -92
       },
       "lotDrive": {
         "x": 0,

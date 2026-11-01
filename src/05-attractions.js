@@ -109,11 +109,12 @@
   }
   function pkAttrFill(a) {
     var n = 0;
+    if (a.stationGates === false) return 0;   // the station gate is shut: nobody walks through it
     while (a.queue.length && n < a.cap) {
       var gu = a.queue[0];
       if (gu.state !== 'qwait' && gu.state !== 'qmove') break;
-      var si = -1;
-      for (var i = 0; i < a.seats.length; i++) if (!a.seats[i].guest && !a.seats[i].player) { si = i; break; }
+      var si = a.pickSeat ? a.pickSeat(gu) : -1;   // a ride with a choice (Water or Vuur) picks the seat itself
+      if (si < 0) for (var i = 0; i < a.seats.length; i++) if (!a.seats[i].guest && !a.seats[i].player) { si = i; break; }
       if (si < 0) break;
       var seat = a.seats[si];
       a.queue.shift();
@@ -150,6 +151,7 @@
     if (a.state !== 'idle' && a.state !== 'unloading') return;
     var C = pkCtl(a);
     if (C.maint || !C.key) return;       // locked out at the cabinet, or the operator key off: nobody boards
+    if (a.stationGates === false) return;   // the station gate is shut: nobody walks through it
     a.state = 'boarding'; a.t = 0; C.gates = true; pkAttrBarsUp(a, C);
     pkAttrReslot(a);
     a.boarding = 0;

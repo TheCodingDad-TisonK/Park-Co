@@ -443,7 +443,7 @@
     box(0.06, 2.05, 0.93, navy, 0, 1.03, 0.47, hinge); var dg = box(0.07, 0.7, 0.6, glass, 0, 1.5, 0.47, hinge); dg.userData.noBake = true;
     sphere(0.035, X.gold, 0.06, 1.0, 0.82, hinge);
     pkRoomDoor(hinge, 0.95, 2.05, -Math.PI / 2 * 0.95, 'the booth door', a);
-    pkRoomKit(g, a, { x: (x0 + x1) / 2, z: (z0 + z1) / 2, y: 0, ry: Math.PI, W: x1 - x0, D: z1 - z0, H: Hb, cabBack: true, cabAt: [-1.5, 1.15], key: [-0.78, 1.9], clock: [0, 2.42], tc: [0.95, 1.3], sw: [(x1 - x0) / 2 - 0.35, (z1 - z0) / 2 - 0.06, Math.PI, 1.25], mon: [0, 2.15, -(z1 - z0) / 2 + 0.6, 0], console: 'droom' });
+    pkRoomKit(g, a, { x: (x0 + x1) / 2, z: (z0 + z1) / 2, y: 0, ry: Math.PI, W: x1 - x0, D: z1 - z0, H: Hb, cabBack: true, cabAt: [-1.5, 1.15], key: [-0.78, 1.9], clock: [0, 2.42], tc: [0.95, 1.3], sw: [(x1 - x0) / 2 - 0.35, (z1 - z0) / 2 - 0.06, Math.PI, 1.25], mon: [0, 2.15, -(z1 - z0) / 2 + 0.6, 0], chair: 1.5, console: 'droom' });
   }
   // the rail: an I-beam along the whole course, hung from the roof on rods (or from the swamp tree on arms in the spiral)
   function pkDvRail(g) {

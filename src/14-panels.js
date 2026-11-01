@@ -271,17 +271,6 @@
       [[0, -0.35, 0.42], [-0.32, -0.12, 0.3], [0.3, -0.1, 0.3], [0, -0.62, 0.25]].forEach(function (b) { c.beginPath(); c.arc(x + b[0] * r, y + b[1] * r, b[2] * r, 0, 6.28); c.fill(); });
       c.strokeStyle = S.acc; c.lineWidth = r * 0.06; c.beginPath(); c.moveTo(x, y + r * 0.75); c.lineTo(x - r * 0.35, y + r * 0.82); c.moveTo(x, y + r * 0.75); c.lineTo(x + r * 0.35, y + r * 0.82); c.stroke();
     },
-    dragon: function (c, x, y, r, S) {
-      c.fillStyle = S.acc; c.beginPath(); c.moveTo(x - r * 0.75, y); c.quadraticCurveTo(x, y - r * 0.75, x + r * 0.75, y); c.quadraticCurveTo(x, y + r * 0.75, x - r * 0.75, y); c.fill();
-      var g = c.createRadialGradient(x, y, 1, x, y, r * 0.42); g.addColorStop(0, '#fff2a8'); g.addColorStop(1, '#d88a1a'); c.fillStyle = g; c.beginPath(); c.arc(x, y, r * 0.4, 0, 6.28); c.fill();
-      c.fillStyle = '#111'; c.beginPath(); c.ellipse(x, y, r * 0.07, r * 0.36, 0, 0, 6.28); c.fill();
-      c.fillStyle = 'rgba(255,255,255,0.7)'; c.beginPath(); c.arc(x - r * 0.14, y - r * 0.14, r * 0.06, 0, 6.28); c.fill();
-    },
-    firebird: function (c, x, y, r, S) {
-      var g = c.createLinearGradient(x, y + r * 0.8, x, y - r * 0.8); g.addColorStop(0, '#ffe08a'); g.addColorStop(0.5, '#ff8a30'); g.addColorStop(1, '#c8452a'); c.fillStyle = g;
-      c.beginPath(); c.moveTo(x, y + r * 0.8); c.bezierCurveTo(x - r * 0.75, y + r * 0.2, x - r * 0.1, y - r * 0.2, x - r * 0.3, y - r * 0.85); c.bezierCurveTo(x + r * 0.15, y - r * 0.4, x + r * 0.2, y - r * 0.6, x + r * 0.15, y - r * 0.9); c.bezierCurveTo(x + r * 0.7, y - r * 0.3, x + r * 0.6, y + r * 0.4, x, y + r * 0.8); c.fill();
-      c.fillStyle = '#fff6d0'; c.beginPath(); c.ellipse(x + r * 0.05, y + r * 0.35, r * 0.14, r * 0.28, 0, 0, 6.28); c.fill();
-    },
     coaster: function (c, x, y, r, S) {
       c.strokeStyle = S.ink; c.lineWidth = r * 0.12; c.lineCap = 'round'; c.lineJoin = 'round';
       c.beginPath(); c.moveTo(x - r * 0.85, y + r * 0.55); c.lineTo(x - r * 0.45, y - r * 0.65); c.quadraticCurveTo(x - r * 0.3, y - r * 0.8, x - r * 0.15, y - r * 0.55); c.lineTo(x + r * 0.05, y + r * 0.2);
@@ -350,10 +339,6 @@
         base: function (c, W, H) { pkPnPlanks(c, W, H, 6, '#6a4528', '#5d3c22'); pkPnVignette(c, W, H, 0.3); pkPnRope(c, 12, 12, W - 24, H - 24, '#cfae78'); } },
       forest: { font: sans, head: ser, ink: '#dcfff5', dim: '#9fd6c6', acc: '#9fe0d4', zone: 'rgba(4,22,20,0.5)', zone2: '#123a34', edge: 'rgba(159,224,212,0.55)', win: '#021210', grid: 'rgba(159,224,212,0.07)', rim: bronze, collar: bronze, dial: 'black', lever: 'teal', tele: '#9fe0d4', glow: 0.32,
         base: function (c, W, H) { pkPnFill(c, W, H, '#1e5a52', '#0c2a26'); for (var i = 0; i < 26; i++) { c.fillStyle = 'rgba(159,224,212,' + randf(0.04, 0.1) + ')'; var x = Math.random() * W, y = Math.random() * H, s = randf(20, 70); c.beginPath(); c.moveTo(x, y - s); c.lineTo(x + s * 0.35, y + s * 0.4); c.lineTo(x - s * 0.35, y + s * 0.4); c.fill(); } pkPnVines(c, W, H, 'rgba(159,224,212,0.45)'); pkPnVignette(c, W, H, 0.4); } },
-      dragon: { font: sans, head: ser, ink: '#fbe6a8', dim: '#c8c08a', acc: '#e0b04a', zone: 'rgba(6,26,14,0.55)', zone2: '#103a22', edge: 'rgba(224,176,74,0.65)', win: '#03100a', grid: 'rgba(224,176,74,0.07)', rim: gold, collar: brass, screw: brass, dial: 'brass', lever: 'jade', tele: '#f6e2a6', glow: 0.3,
-        base: function (c, W, H) { pkPnFill(c, W, H, '#2f7a4a', '#14361f'); pkPnScales(c, W, H, 64, 'rgba(240,210,110,0.22)', 'rgba(10,40,20,0.05)'); pkPnVignette(c, W, H, 0.45); pkPnPinstripe(c, W, H, 10, '#e0b04a', 4, 30); } },
-      flame: { font: sans, head: ser, ink: '#fff0d0', dim: '#ffc48a', acc: '#ffd08a', zone: 'rgba(40,6,2,0.5)', zone2: '#5a1408', edge: 'rgba(255,208,138,0.6)', win: '#120302', grid: 'rgba(255,208,138,0.07)', rim: gold, collar: brass, dial: 'black', lever: 'orange', tele: '#ffb03a', glow: 0.32,
-        base: function (c, W, H) { pkPnFill(c, W, H, '#c8452a', '#5a1408'); pkPnFlames(c, W, H); pkPnVignette(c, W, H, 0.4); pkPnPinstripe(c, W, H, 10, '#ffd08a', 2.5, 30); } },
       mountain: { font: sans, head: ser, ink: '#f2e2b0', dim: '#b8b4c8', acc: '#d8b04a', zone: 'rgba(8,10,22,0.5)', zone2: '#1e2540', edge: 'rgba(216,176,74,0.6)', win: '#060814', grid: 'rgba(216,176,74,0.07)', rim: gold, collar: brass, screw: brass, dial: 'bone', lever: 'navy', tele: '#f2d27a', glow: 0.3,
         base: function (c, W, H) { pkPnStone(c, W, H, '#4f5f8c', '#262e4a'); pkPnMountains(c, 0, H * 0.62, W, H * 0.38, 'rgba(10,14,30,0.4)', 'rgba(255,255,255,0.12)'); pkPnRunes(c, 40, 28, W - 80, 64, 'rgba(216,176,74,0.35)', 16); pkPnRunes(c, 40, H - 28, W - 80, 64, 'rgba(216,176,74,0.35)', 16); pkPnVignette(c, W, H, 0.4); } },
       droom: { font: sans, head: ser, ink: '#f0e8ff', dim: '#b0a0d0', acc: '#e0c0ff', zone: 'rgba(30,16,60,0.55)', zone2: '#2a1f4a', edge: 'rgba(224,192,255,0.6)', win: '#0a0618', grid: 'rgba(224,192,255,0.08)', rim: chrome, collar: chrome, dial: 'night', lever: 'purple', tele: '#e0c0ff', glow: 0.3,
@@ -465,12 +450,10 @@
       sig: { label: 'FOGHORN', sfx: 'pkFoghorn', words: 'the foghorn sounds', col: 'brass' } },
     moonwood: { style: 'forest', title: 'Moonwood', model: 'CAMELBACK MW-3 · ROUND THE OLD TREE', kind: 'track', coaster: true,
       sig: { label: 'THE OWL', sfx: 'pkOwl', words: 'an owl calls from the crown', col: 'teal' } },
-    dragon: { style: 'dragon', title: 'The Dragon', model: 'FAMILY DRAGON DR-21 · OVER THE HILL', kind: 'track', coaster: true,
-      sig: { label: 'THE ROAR', sfx: 'pkRoar', words: 'the Dragon roars', col: 'red' } },
-    firebird: { style: 'flame', title: 'The Firebird', model: 'LOOP COASTER FB-1 · THROUGH THE ROLL', kind: 'track', coaster: true,
-      sig: { label: 'THE CALL', sfx: 'pkFirebirdCall', words: 'the Firebird calls', col: 'orange' } },
     mountain: { style: 'mountain', title: 'The Mountain King', model: 'MINE TRAIN MK-1 · INTO THE HALL', kind: 'track', coaster: true,
-      sig: { label: 'THE HALL', sfx: 'pkMountainKing', words: 'in the hall of the Mountain King', col: 'navy' } }
+      sig: { label: 'THE HALL', sfx: 'pkMountainKing', words: 'in the hall of the Mountain King', col: 'navy' } },
+    joris: { style: 'forest', title: 'Joris en de Draak', model: 'TWIN WOOD RACER JR-2 · WATER AND VUUR', kind: 'track', coaster: true,
+      sig: { label: 'THE ROAR', sfx: 'pkOwl', words: 'the dragon stirs', col: 'green' } }
   };
   // every coaster on the kit gets the same instruments and windows, sized to its own top speed
   function pkPnCoasterSheet(sh, a) {
@@ -878,8 +861,6 @@
   SFX.pkNightChime = function (t) { [1760, 1568, 1319, 1175, 1047, 880].forEach(function (f, i) { sTone('sine', f, t + i * 0.26, 1.8, 0.035); sTone('sine', f * 3, t + i * 0.26, 0.3, 0.006); }); };
   SFX.pkFoghorn = function (t) { sTone('sawtooth', 87, t, 2.2, 0.08, { lp: 420, attack: 0.15 }); sTone('sawtooth', 174, t, 2.2, 0.03, { lp: 520, attack: 0.15 }); [2.4, 2.75].forEach(function (d) { SFX.bell(t + d); }); };
   SFX.pkOwl = function (t) { [[0, 0.42], [0.62, 0.16], [0.82, 0.38]].forEach(function (p) { sTone('sine', 410, t + p[0], p[1], 0.06, { f1: 360, attack: 0.04 }); }); };
-  SFX.pkRoar = function (t) { sNoise(t, 1.8, 0.22, { type: 'lowpass', freq: 650, shape: 'swell', fade: true }); sTone('sawtooth', 140, t, 1.6, 0.06, { f1: 55, lp: 600 }); sTone('sawtooth', 93, t + 0.1, 1.5, 0.04, { f1: 40, lp: 400 }); };
-  SFX.pkFirebirdCall = function (t) { sNoise(t, 1.0, 0.1, { type: 'bandpass', freq: 1800, q: 1.2, shape: 'swell' }); for (var i = 0; i < 8; i++) sTone('sine', i % 2 ? 1760 : 1397, t + 0.5 + i * 0.07, 0.09, 0.04); sTone('sine', 1319, t + 1.1, 0.7, 0.04, { f1: 2093 }); };
   // the opening of In the Hall of the Mountain King, plucked, the way it creeps in
   SFX.pkMountainKing = function (t) {
     var B = 246.94, Cs = 277.18, D = 293.66, E = 329.63, Fs = 369.99, F = 349.23, Cn = 261.63;

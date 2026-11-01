@@ -516,20 +516,20 @@ function pkBuildCoasterConsole(at) {
   C.built = true;
   var M = pkCtlM();
   at = at || { x: 14.30, z: -3.50, ry: 0 };
-  var G = new THREE.Group(); G.position.set(at.x, 0, at.z); G.rotation.y = at.ry || 0; scene.add(G);
-  var CX = 0, CZ = 0, TOP = 0.91, PW = 2.60, PH = 0.72, TILT = 0.52;
+  var G = new THREE.Group(); G.position.set(at.x, at.y || 0, at.z); G.rotation.y = at.ry || 0; scene.add(G);
+  var CX = 0, CZ = 0, TOP = 0.50, PW = 2.60, PH = 0.72, TILT = 0.52;
 
   // ── the cabinet: a steel pedestal with two doors, a kick plate and a vent ──
-  pkBevelBox(2.72, 0.84, 0.68, M.case, CX, 0.43, CZ, G, 0.025);
+  pkBevelBox(2.72, 0.44, 0.68, M.case, CX, 0.22, CZ, G, 0.025);
   pkBevelBox(2.78, 0.05, 0.72, M.face, CX, TOP - 0.025, CZ, G, 0.012);
   pkBevelBox(2.72, 0.14, 0.03, M.well, CX, 0.08, CZ + 0.345, G, 0.008);
   [-0.69, 0.69].forEach(function (dx) {
-    pkBevelBox(1.22, 0.52, 0.022, M.face, CX + dx, 0.46, CZ + 0.344, G, 0.008);
-    pkBevelBox(0.28, 0.045, 0.035, MAT.chrome, CX + dx, 0.62, CZ + 0.365, G, 0.008);
+    pkBevelBox(1.22, 0.28, 0.022, M.face, CX + dx, 0.20, CZ + 0.344, G, 0.008);
+    pkBevelBox(0.28, 0.045, 0.035, MAT.chrome, CX + dx, 0.29, CZ + 0.365, G, 0.008);
   });
   // a vent grille low on the right, and the maker's plate on the cabinet
-  for (var v = 0; v < 5; v++) pkBevelBox(0.34, 0.016, 0.014, M.well, CX + 0.96, 0.20 + v * 0.045, CZ + 0.352, G, 0.004);
-  pkSign3D(['PARK CO', 'COASTER CONTROL'], 0.62, 0.20, CX - 0.72, 0.40, CZ + 0.365, 0, { bg: '#1b232c', fg: '#e8e4d8' }, G);
+  for (var v = 0; v < 5; v++) pkBevelBox(0.34, 0.016, 0.014, M.well, CX + 0.96, 0.10 + v * 0.03, CZ + 0.352, G, 0.004);
+  pkSign3D(['PARK CO', 'COASTER CONTROL'], 0.62, 0.20, CX - 0.72, 0.18, CZ + 0.365, 0, { bg: '#1b232c', fg: '#e8e4d8' }, G);
 
   // ── the fascia ──
   // The flagship's own plate (part 14, the booth panels, has the styles): three fields. DRIVE: the crest and the maker's
@@ -810,7 +810,7 @@ function pkBuildCoasterConsole(at) {
   });
   // the console is a fixture of the room: it is solid so nobody walks through the doors
   var rc = Math.abs(Math.cos(at.ry || 0)), rs = Math.abs(Math.sin(at.ry || 0)), hx = 1.36 * rc + 0.34 * rs, hz = 1.36 * rs + 0.34 * rc;
-  solid(at.x - hx, at.x + hx, at.z - hz, at.z + hz, 0, 0.95);
+  solid(at.x - hx, at.x + hx, at.z - hz, at.z + hz, at.y || 0, (at.y || 0) + 0.95);
   return C;
 }
 
@@ -905,8 +905,8 @@ var PK_CAB_RIDES = [
   ['dodgems', 'DODGEMS'], ['droptower', 'DROP TOWER'], ['flume', 'LOG FLUME'], ['danse', 'DANSE MACABRE'],
   ['kround', 'LITTLE ROUNDABOUT'], ['kpots', 'WOBBLY POTS'], ['kpuffin', 'PUFFIN LINE'],
   ['serpent', 'THE SERPENT'], ['baron', "BARON'S DROP"], ['nocturne', 'NOCTURNE'], ['wreck', 'THE WRECK'],
-  ['moonwood', 'MOONWOOD'], ['dragon', 'THE DRAGON'], ['firebird', 'THE FIREBIRD'], ['mountain', 'THE MOUNTAIN KING'],
-  ['droom', 'DROOMVLUCHT']
+  ['moonwood', 'MOONWOOD'], ['mountain', 'THE MOUNTAIN KING'],
+  ['droom', 'DROOMVLUCHT'], ['joris', 'JORIS EN DE DRAAK']
 ];
 var PK_CAB_PER_COL = 10;
 function pkCabRideSlot(i) {

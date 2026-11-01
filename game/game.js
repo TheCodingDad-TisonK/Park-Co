@@ -4018,22 +4018,6 @@
           },
           {
             "do": "walk",
-            "to": "firebird"
-          },
-          {
-            "do": "wait",
-            "seconds": 6
-          },
-          {
-            "do": "walk",
-            "to": "dragon"
-          },
-          {
-            "do": "wait",
-            "seconds": 8
-          },
-          {
-            "do": "walk",
             "to": "promEast"
           },
           {
@@ -4211,7 +4195,7 @@
         "x": -9.55,
         "z": 36.8,
         "ry": 0,
-        "off": true
+        "off": false
       },
       {
         "id": "cashierEast",
@@ -4219,7 +4203,7 @@
         "x": 8.45,
         "z": 36.8,
         "ry": 0,
-        "off": true
+        "off": false
       }
     ],
     "spots": {
@@ -4326,14 +4310,6 @@
       "eastWalk": {
         "x": 76,
         "z": -20
-      },
-      "firebird": {
-        "x": 77,
-        "z": -36
-      },
-      "dragon": {
-        "x": 77,
-        "z": -92
       },
       "lotDrive": {
         "x": 0,
@@ -5384,6 +5360,11 @@
   var PK_GATE_Z = 30, PK_PLATFORM_Y = 0.6, PK_STATION_Z = -4.6, PK_KIDS_Z = 56;   // PK_KIDS_Z: the south fence of the kids' garden
   // the park is a long rectangle: the gate at the south, the coaster across the north, and rides either side of the midway
   var PK_PARK = { x0: -72, x1: 123, z0: -118, z1: 70 };   // z0 was -95: the north fence moved back for the bigger indoor halls; x1 was 72, out east for The Dragon and The Firebird
+  // walkable rectangles laid by other parts outside the palisade: the railway stations' platforms, ramps and footpaths (part 41)
+  var PK_WALK_EXTRA = [];
+  // the draw distance: how far the eye (and the renderer) sees. The fog's far edge also cuts the camera's far plane, so
+  // geometry beyond it is culled and not drawn. Small values keep the frame cheaper; `fog 540` restores the wide view.
+  var PK_FOG = { near: 40, far: 110 };
   var PK_BOOTHS = [{ x: -9, z: 36, turnstile: -6, turnstiles: [-6, -2] }, { x: 9, z: 36, turnstile: 6, turnstiles: [2, 6] }];
   var PK_TURNSTILES = [-6, -2, 2, 6];
   // the coaster queue: a single lane beside the platform, fenced on both sides. Guests join at the back (PK_QUEUE_ENTRY,
@@ -5553,7 +5534,11 @@
     return pkBkFloorAt(x, z);            // up the steps into a ride's booth (part 17)
   }
   function pkOnPlatform(x, z) { return x > -10 && x < 10 && z > -3.6 && z < -0.6; }
-  function pkInsidePark(x, z) { return x > PK_PARK.x0 && x < PK_PARK.x1 && z > PK_PARK.z0 && z < PK_PARK.z1; }
+  function pkInsidePark(x, z) {
+    if (x > PK_PARK.x0 && x < PK_PARK.x1 && z > PK_PARK.z0 && z < PK_PARK.z1) return true;
+    for (var i = 0; i < PK_WALK_EXTRA.length; i++) { var r = PK_WALK_EXTRA[i]; if (x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1) return true; }
+    return false;
+  }
   function pkBoothSlot(bi, i) { var b = PK_BOOTHS[bi]; return { x: b.x, z: b.z + 2.7 + i * 1.1 }; }   // in front of the ticket office's counter
   function pkCoasterAuto() { return !!S.auto; }   // the switch alone: a hired operator puts it on AUTO (pkHire), it does not lock it there
   function pkRideWord() {
@@ -5952,7 +5937,30 @@
       auto: function () { var on = pkSetAuto(!pkCoasterAuto()); return 'coaster auto ' + (on ? 'on' : 'off'); },
       dispatch: function () { return pkDispatch() ? 'dispatched' : 'the ride will not go: ' + PK.ride.fault; },
       rides: function () { return pkOpenCount() + ' of ' + (PK.attractions.length + 1) + ' open: ' + pkRideList(); },
-      open: function (id) { return pkOpenRide(String(id || '')) ? 'opened ' + id : 'no ride called ' + id; }
+      open: function (id) { return pkOpenRide(String(id || '')) ? 'opened ' + id : 'no ride called ' + id; },
+      // ── a fuller dev console: money, the clock, the park, the rides, the guests and the weather ──
+      bank: function () { return 'bank ' + money(S.bank); },
+      time: function (h) { if (typeof h !== 'number' || !isFinite(h)) return 'time needs an hour, e.g. time 21'; S.time = ((+h % 24) + 24) % 24; hudDirty = true; return 'time ' + fmtTime(S.time); },
+      day: function (d) { if (typeof d === 'number') { S.day = Math.max(1, Math.round(d)); hudDirty = true; screenDirtyAll(); } return 'day ' + S.day; },
+      night: function () { S.time = 21; hudDirty = true; return 'night: ' + fmtTime(S.time); },
+      dawn: function () { S.time = 7; hudDirty = true; return 'dawn: ' + fmtTime(S.time); },
+      status: function () { return 'day ' + S.day + ' · ' + fmtTime(S.time) + ' · bank ' + money(S.bank) + ' · ' + PK.guests.length + ' guests · ' + pkOpenCount() + '/' + (PK.attractions.length + 1) + ' rides open · weather ' + (S.weather && S.weather.kind || 'clear'); },
+      where: function () { return player ? ('player at ' + Math.round(player.x * 10) / 10 + ', ' + Math.round(player.z * 10) / 10 + (player.y ? ', y ' + Math.round(player.y * 10) / 10 : '')) : 'no player'; },
+      spawnhere: function (n) { var k = clamp(+n || 1, 1, 30); for (var i = 0; i < k; i++) { var g = pkSpawnGuest(); if (player && g && g.rec) { g.rec.x = player.x + randf(-2, 2); g.rec.z = player.z + randf(-2, 2); g.rec.path = []; } } return k + ' guests appear by the player'; },
+      kick: function () { var n = 0; PK.guests.forEach(function (g) { if (g && g.state !== 'gone' && g.state !== 'leave' && g.state !== 'trainRide' && g.state !== 'trainAlight') { n++; } }); if (typeof pkCloseGuests === 'function') pkCloseGuests(); if (typeof TR !== 'undefined' && TR.guestQueue) TR.guestQueue.length = 0; return n + ' guests sent home'; },
+      close: function () { pkCloseGuests(); return 'park closed for the night'; },
+      lights: function (on) { S.lights = on === undefined ? !S.lights : !!on; pkLightsApply(S.lights, S.rideLights); return 'park lights ' + (S.lights ? 'on' : 'off'); },
+      ridelights: function (on) { S.rideLights = on === undefined ? !S.rideLights : !!on; pkLightsApply(S.lights, S.rideLights); return 'ride lights ' + (S.rideLights ? 'on' : 'off'); },
+      repair: function () { PK.ride.fault = ''; return 'coaster fault cleared'; },
+      clear: function () { PK.ride.fault = ''; pkReset(); return 'coaster cleared and reset'; },
+      gates: function () { return pkGatesToggle() ? 'coaster gates toggled' : 'coaster gates refused'; },
+      bars: function () { var ok = PK.ride.bars > 0.05 ? pkBarsUp() : pkBarsDown(); return ok ? 'restraints toggled' : 'restraints refused'; },
+      stopride: function () { return pkStop() ? 'coaster stopped' : 'coaster not stopped'; },
+      resetride: function () { return pkReset() ? 'coaster reset' : 'coaster not reset'; },
+      openall: function () { var n = 0; (PK.attractions || []).forEach(function (a) { if (pkOpenRide(a.id)) n++; }); pkOpenRide('coaster'); return n + ' rides open; coaster ' + (pkCoasterOpen() ? 'open' : 'closed'); },
+      closeall: function () { var n = 0; (PK.attractions || []).forEach(function (a) { if (pkSetRideOpen(a.id, false)) n++; }); return n + ' rides closed'; },
+      fog: function (m) { if (typeof m === 'number' && isFinite(m)) { PK_FOG.far = clamp(m, 40, 720); PK_FOG.near = Math.max(10, Math.round(PK_FOG.far * 0.38)); } pkFogApply(); return 'draw distance ' + PK_FOG.far + ' m (fog far ' + Math.round(scene.fog ? scene.fog.far : PK_FOG.far) + ' m)'; },
+      far: function (m) { if (typeof m === 'number' && isFinite(m)) { PK_FOG.far = clamp(m, 40, 720); pkFogApply(); } return 'draw distance ' + PK_FOG.far + ' m'; }
     },
     devState: function () { return { guests: PK.guests.length, queue: PK.queue.length, ride: PK.ride.state, auto: !!S.auto, cycles: S.cycles || 0, level: PK.level, xp: PK.xp, tickets: PK.today.tickets }; },
     T: function () {
@@ -5991,7 +5999,7 @@
         pkNearestHuman: pkNearestHuman, pkLog: pkLog, pkNewDay: pkNewDay,
         pkHire: pkHire, pkSnackBuy: pkSnackBuy, pkSnackPrice: pkSnackPrice, pkRideLoad: pkRideLoad, pkPlaceTrain: pkPlaceTrain, pkSeatGuest: pkSeatGuest, pkUnseatGuest: pkUnseatGuest,
         spanCut: spanCut, lineWall: lineWall, roomFloor: roomFloor, troffer: troffer, highBay: highBay, fenceRun: fenceRun, tree: tree, lampPost: lampPost,
-        insideWalk: insideWalk, inRect: inRect, navSetup: navSetup, yawWrap: yawWrap, sfxCount: function () { return sfxCount; }, SFX: SFX,
+        insideWalk: insideWalk, inRect: inRect, navSetup: navSetup, navOpen: navOpen, navCell: navCell, navInfo: function () { return { x0: NAV.x0, z0: NAV.z0, w: NAV.w, h: NAV.h, cell: NAV.cell, dirty: NAV.dirty, steps: NAV.steps }; }, yawWrap: yawWrap, sfxCount: function () { return sfxCount; }, SFX: SFX,
         geoCache: geoCache, BEVEL: BEVEL, bevelGeo: bevelGeo, roundCylGeo: roundCylGeo, boxGeo: boxGeo, taperGeo: taperGeo, textTex: textTex,
         box: box, cyl: cyl, sign: sign, groundBlob: groundBlob, disposeTree: disposeTree, burst: burst, tickBursts: tickBursts, bursts: bursts,
         lightBudget: lightBudget, seededStream: seededStream, hexCss: hexCss, mergeById: mergeById, scFit: scFit, catalogueHtml: catalogueHtml,
@@ -6020,16 +6028,22 @@
     player.x = best[0]; player.z = best[1]; player.y = floorY(best[0], best[1], photo.y);
     player.yaw = photo.yaw; player.pitch = 0;
   });
+  function pkFogApply(overcast) {
+    if (!scene.fog) return;
+    var ov = overcast || 0;
+    scene.fog.near = Math.max(10, PK_FOG.near - ov * PK_FOG.near * 0.29);
+    scene.fog.far = Math.max(24, PK_FOG.far - ov * PK_FOG.far * 0.37);
+    // nothing past the fog's far edge is visible, so cull it: the camera no longer draws (or shadow-tests) fully fogged geometry.
+    // Keep 210 m as the floor so the sun and moon (held 200 m out) are never frustum-culled.
+    var far = Math.max(scene.fog.far, 210);
+    if (camera.far !== far) { camera.far = far; camera.updateProjectionMatrix(); }
+  }
   hook('lighting', function (day, dawn, overcast, power) {
-    if (scene.fog) {
-      scene.fog.near = 210 - (overcast || 0) * 60; scene.fog.far = 540 - (overcast || 0) * 200;
-      // nothing past the fog's far edge is visible, so cull it: the camera no longer draws (or shadow-tests) fully fogged geometry
-      if (camera.far !== scene.fog.far) { camera.far = scene.fog.far; camera.updateProjectionMatrix(); }
-    }
+    pkFogApply(overcast);
     var night = S.time >= 18 || S.time < 7;
     pkLightsApply(!!power, !!PK.rideLights && night);
   });
-  CO.setup({ canvas: 'co-canvas', save: 'park-co', game: GAME, spawn: { x: 0, z: 42, yaw: 0 }, sun: { box: 120, far: 320, mapSize: 1024, target: [0, 0, 0] }, lightBudget: 10, far: 720, fog: { color: 0x9dbbd8, near: 300, far: 700 } });
+  CO.setup({ canvas: 'co-canvas', save: 'park-co', game: GAME, spawn: { x: 0, z: 42, yaw: 0 }, sun: { box: 120, far: 150, mapSize: 1024, target: [0, 0, 0] }, lightBudget: 10, far: 160, fog: { color: 0x9dbbd8, near: 40, far: 110 } });
   // ── The guests ────────────────────────────────────────────────────
   // A guest arrives from the car park, joins the shorter ticket line, buys a ticket, passes a turnstile, queues for the
   // coaster, boards when the gates open, rides, and goes home. The whole thing is a small state machine on a walk record.
@@ -6316,6 +6330,7 @@
         else if (PK.iceOpen && !gu.ate && gu.hunger > 50 && S.bank >= S.icePrice) pkGo(gu, -8, 10.4, 'toIce');
         else if (PK.toyOpen && Math.random() < 0.15) pkGo(gu, -18, 10.4, 'toToy');
         else if (!gu.trash && randf(0, 1) < 0.22 && pkGuestLifeStart(gu)) { /* a bench, a phone call, a smoke, a chat */ }
+        else if ((gu.rides || 0) < 5 && randf(0, 1) < 0.10 && typeof trGuestQueueJoin === 'function' && TR.st && TR.st.length && trGuestQueueJoin(gu)) { gu.trainAt = undefined; /* off to the Lindenburg Railway */ }
         else if ((gu.rides || 0) < 4 && randf(0, 1) < 0.8 && (pkQueueJoin(gu) || pkAttrPick(gu))) { /* off to another ride */ }
         else pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
       }
@@ -6323,6 +6338,39 @@
       if (arrived) pkGuestBinArrive(gu);
     } else if (gu.state === 'toBench') {
       if (arrived) { gu.state = 'bench'; rec.path = []; rec.yaw = gu.benchYaw; }
+    } else if (gu.state === 'trainQueue') {
+      if (!rec.path.length) {
+        if (gu.trainAt === undefined) {
+          if (typeof trNearestStation === 'function' && typeof trStationPlatform === 'function') {
+            gu.trainAt = trNearestStation(rec.x, rec.z);
+            if (gu.trainAt >= 0) { var tp = trStationPlatform(gu.trainAt); pkGo(gu, tp.x, tp.z, 'trainQueue'); }
+            else { if (typeof trGuestQueueLeave === 'function') trGuestQueueLeave(gu); gu.state = 'off'; }
+          } else gu.state = 'off';
+        } else {
+          // reached the platform: stand and wait for the train, the doors and the gates
+          gu.state = 'trainWait'; gu.trainWait = 0;
+        }
+      }
+    } else if (gu.state === 'trainWait') {
+      gu.trainWait = (gu.trainWait || 0) + dt;
+      if (PK.closed || gu.trainWait > 150) { if (typeof trGuestQueueLeave === 'function') trGuestQueueLeave(gu); gu.trainAt = undefined; gu.state = 'off'; }
+    } else if (gu.state === 'trainRide') {
+      // follow the seat on the moving train
+      if (gu.trainSeat && gu.trainUnit && gu.trainUnit.g) {
+        var u = gu.trainUnit, s = gu.trainSeat;
+        var c = Math.cos(u.g.rotation.y), sn = Math.sin(u.g.rotation.y);
+        rec.x = u.g.position.x + (s.x * c - s.z * sn);
+        rec.z = u.g.position.z + (s.x * sn + s.z * c);
+        rec.yaw = u.g.rotation.y + (s.face || 0);
+        rec.path = [];
+      }
+    } else if (gu.state === 'trainAlight') {
+      if (!rec.path.length) {
+        var sti = (gu.trainStation >= 0 ? gu.trainStation : 0);
+        var dest = (typeof trStationWalkIn === 'function') ? trStationWalkIn(sti) : null;
+        pkGo(gu, dest ? dest.x : rec.x, dest ? dest.z : rec.z, 'trainAlight');
+      }
+      if (arrived) { gu.state = 'off'; gu.trainSeat = null; gu.trainUnit = null; gu.trainStation = -1; }
     } else if (gu.state === 'bench') {
       gu.lifeT -= dt;
       if (gu.lifeT <= 0 || PK.closed) { pkLifeEnd(gu); gu.state = 'off'; }
@@ -6382,7 +6430,7 @@
     if (!PK.guests) return;
     PK.guests.forEach(function (gu) {
       if (!gu) return;
-      if (gu.state === 'seated' || gu.state === 'board') return;
+      if (gu.state === 'seated' || gu.state === 'board' || gu.state === 'trainRide') return;
       if (gu.booth >= 0 && PK.booths[gu.booth]) {
         var b = PK.booths[gu.booth], bi = b.queue.indexOf(gu);
         if (bi >= 0) { b.queue.splice(bi, 1); screenDirtyAll(); }
@@ -6399,6 +6447,7 @@
     });
     if (PK.attractions) PK.attractions.forEach(function (a) { pkAttrQueueReslot(a); });
     pkQueueReslot(); screenDirtyAll();
+    if (typeof TR !== 'undefined' && TR.guestQueue) TR.guestQueue.length = 0;   // guests waiting for the train go home too
   }
   // ── The ticket window ─────────────────────────────────────────────
   function pkServe(bi, machine) {
@@ -6731,9 +6780,8 @@
     PK.opLights.setPower(pkCoasterOpen());
     pkBkSwitch(scene, DX0 - 0.35, 1.2, Z1 - 0.11, Math.PI, PK.opLights, 'the control room');
     // the coaster desk under the long window, facing it: the operator works the ride with the platform and the train in
-    // front of them; the status board hangs on the north wall at their right hand
+    // front of them; the status board hangs on the north wall at their right hand.
     pkBuildCoasterConsole({ x: X0 + 0.6, z: -0.85, ry: Math.PI / 2 });
-    pkBkChair(scene, X0 + 1.55, -0.85, -Math.PI / 2, 0);
     box(1.08, 0.96, 0.06, MAT.steelDark, 14.8, 2.02, Z0 + 0.07);
     // the station desk on the north wall: oak on a steel frame, the CCTV monitors on their stands, the radio and the log
     var sdz = Z0 + 0.5;
@@ -7856,11 +7904,12 @@
   }
   function pkAttrFill(a) {
     var n = 0;
+    if (a.stationGates === false) return 0;   // the station gate is shut: nobody walks through it
     while (a.queue.length && n < a.cap) {
       var gu = a.queue[0];
       if (gu.state !== 'qwait' && gu.state !== 'qmove') break;
-      var si = -1;
-      for (var i = 0; i < a.seats.length; i++) if (!a.seats[i].guest && !a.seats[i].player) { si = i; break; }
+      var si = a.pickSeat ? a.pickSeat(gu) : -1;   // a ride with a choice (Water or Vuur) picks the seat itself
+      if (si < 0) for (var i = 0; i < a.seats.length; i++) if (!a.seats[i].guest && !a.seats[i].player) { si = i; break; }
       if (si < 0) break;
       var seat = a.seats[si];
       a.queue.shift();
@@ -7897,6 +7946,7 @@
     if (a.state !== 'idle' && a.state !== 'unloading') return;
     var C = pkCtl(a);
     if (C.maint || !C.key) return;       // locked out at the cabinet, or the operator key off: nobody boards
+    if (a.stationGates === false) return;   // the station gate is shut: nobody walks through it
     a.state = 'boarding'; a.t = 0; C.gates = true; pkAttrBarsUp(a, C);
     pkAttrReslot(a);
     a.boarding = 0;
@@ -8674,8 +8724,8 @@
       pkRoundCyl(0.075, 1.30, MAT.steelDark, xN, 0.65, z, parent, 8);
       sphere(0.075, pkMats().gold, xN, 1.33, z, parent);
     });
-    var leafL = new THREE.Group(); leafL.position.set(xN, 0, zA); parent.add(leafL);
-    var leafR = new THREE.Group(); leafR.position.set(xN, 0, zB); parent.add(leafR);
+    var leafL = new THREE.Group(); leafL.position.set(xN, 0, zA); leafL.userData.dynamic = true; parent.add(leafL);
+    var leafR = new THREE.Group(); leafR.position.set(xN, 0, zB); leafR.userData.dynamic = true; parent.add(leafR);
     var gateMat = std({ color: 0x2f3a42, roughness: 0.5, metalness: 0.35 }), lw = P / 2 - 0.03;
     pkBevelBox(0.055, 0.92, lw, gateMat, 0, 0.55, lw / 2, leafL, 0.015);
     pkBevelBox(0.055, 0.92, lw, gateMat, 0, 0.55, -lw / 2, leafR, 0.015);
@@ -8741,7 +8791,7 @@
     [-1, 1].forEach(function (s) {
       pkRoundCyl(0.06, H + 0.15, steel, s * (w / 2 + 0.04), (H + 0.15) / 2, 0, g, 8); sphere(0.075, gold, s * (w / 2 + 0.04), H + 0.2, 0, g);
       pkRoundCyl(0.12, 0.06, steel, s * (w / 2 + 0.04), 0.03, 0, g, 10);
-      var piv = new THREE.Group(); piv.position.set(s * w / 2, 0, 0); g.add(piv);
+      var piv = new THREE.Group(); piv.position.set(s * w / 2, 0, 0); piv.userData.dynamic = true; g.add(piv);
       var lw = w / 2 - 0.04, dx = -s;                      // each leaf runs from its hinge toward the middle
       box(lw, 0.06, 0.05, gold, dx * lw / 2, H, 0, piv, { r: 0.015 });
       box(lw, 0.05, 0.04, steel, dx * lw / 2, 0.2, 0, piv);
@@ -9020,7 +9070,7 @@
         guardNorth: {
           names: ['Ingrid'], look: guard, speed: 1.15,
           steps: beat([go('gardenWalk', 8), go('darkWoods', 6), go('dropTower', 6), go('promWest'), go('halls', 8), go('promWest'), go('bandstand', 6),
-            go('promEast'), go('coasterCountry', 6), go('eastWalk'), go('firebird', 6), go('dragon', 8), go('promEast'), go('gardenWalk')])
+            go('promEast'), go('coasterCountry', 6), go('eastWalk'), go('promEast'), go('gardenWalk')])
         },
         // the car park: beside the barrier, watching the cars come in off the road
         guardGate: {
@@ -9052,7 +9102,6 @@
         darkWoods: { x: -36, z: -24 }, dropTower: { x: -36, z: -52 }, promWest: { x: -20, z: -60 }, halls: { x: -46.5, z: -70 },
         gardenWest: { x: -28, z: -44 }, gardenWalk: { x: 2, z: -44 }, clock: { x: 6, z: -58 }, bandstand: { x: 2, z: -66 }, maze: { x: 9.5, z: -72 },
         coasterCountry: { x: 40, z: -24 }, promEast: { x: 50, z: -60 }, eastWalk: { x: 76, z: -20 },
-        firebird: { x: 77, z: -36 }, dragon: { x: 77, z: -92 },
         lotDrive: { x: 0, z: 74 }
       }
     });
@@ -11587,20 +11636,20 @@ function pkBuildCoasterConsole(at) {
   C.built = true;
   var M = pkCtlM();
   at = at || { x: 14.30, z: -3.50, ry: 0 };
-  var G = new THREE.Group(); G.position.set(at.x, 0, at.z); G.rotation.y = at.ry || 0; scene.add(G);
-  var CX = 0, CZ = 0, TOP = 0.91, PW = 2.60, PH = 0.72, TILT = 0.52;
+  var G = new THREE.Group(); G.position.set(at.x, at.y || 0, at.z); G.rotation.y = at.ry || 0; scene.add(G);
+  var CX = 0, CZ = 0, TOP = 0.50, PW = 2.60, PH = 0.72, TILT = 0.52;
 
   // ── the cabinet: a steel pedestal with two doors, a kick plate and a vent ──
-  pkBevelBox(2.72, 0.84, 0.68, M.case, CX, 0.43, CZ, G, 0.025);
+  pkBevelBox(2.72, 0.44, 0.68, M.case, CX, 0.22, CZ, G, 0.025);
   pkBevelBox(2.78, 0.05, 0.72, M.face, CX, TOP - 0.025, CZ, G, 0.012);
   pkBevelBox(2.72, 0.14, 0.03, M.well, CX, 0.08, CZ + 0.345, G, 0.008);
   [-0.69, 0.69].forEach(function (dx) {
-    pkBevelBox(1.22, 0.52, 0.022, M.face, CX + dx, 0.46, CZ + 0.344, G, 0.008);
-    pkBevelBox(0.28, 0.045, 0.035, MAT.chrome, CX + dx, 0.62, CZ + 0.365, G, 0.008);
+    pkBevelBox(1.22, 0.28, 0.022, M.face, CX + dx, 0.20, CZ + 0.344, G, 0.008);
+    pkBevelBox(0.28, 0.045, 0.035, MAT.chrome, CX + dx, 0.29, CZ + 0.365, G, 0.008);
   });
   // a vent grille low on the right, and the maker's plate on the cabinet
-  for (var v = 0; v < 5; v++) pkBevelBox(0.34, 0.016, 0.014, M.well, CX + 0.96, 0.20 + v * 0.045, CZ + 0.352, G, 0.004);
-  pkSign3D(['PARK CO', 'COASTER CONTROL'], 0.62, 0.20, CX - 0.72, 0.40, CZ + 0.365, 0, { bg: '#1b232c', fg: '#e8e4d8' }, G);
+  for (var v = 0; v < 5; v++) pkBevelBox(0.34, 0.016, 0.014, M.well, CX + 0.96, 0.10 + v * 0.03, CZ + 0.352, G, 0.004);
+  pkSign3D(['PARK CO', 'COASTER CONTROL'], 0.62, 0.20, CX - 0.72, 0.18, CZ + 0.365, 0, { bg: '#1b232c', fg: '#e8e4d8' }, G);
 
   // ── the fascia ──
   // The flagship's own plate (part 14, the booth panels, has the styles): three fields. DRIVE: the crest and the maker's
@@ -11881,7 +11930,7 @@ function pkBuildCoasterConsole(at) {
   });
   // the console is a fixture of the room: it is solid so nobody walks through the doors
   var rc = Math.abs(Math.cos(at.ry || 0)), rs = Math.abs(Math.sin(at.ry || 0)), hx = 1.36 * rc + 0.34 * rs, hz = 1.36 * rs + 0.34 * rc;
-  solid(at.x - hx, at.x + hx, at.z - hz, at.z + hz, 0, 0.95);
+  solid(at.x - hx, at.x + hx, at.z - hz, at.z + hz, at.y || 0, (at.y || 0) + 0.95);
   return C;
 }
 
@@ -11976,8 +12025,8 @@ var PK_CAB_RIDES = [
   ['dodgems', 'DODGEMS'], ['droptower', 'DROP TOWER'], ['flume', 'LOG FLUME'], ['danse', 'DANSE MACABRE'],
   ['kround', 'LITTLE ROUNDABOUT'], ['kpots', 'WOBBLY POTS'], ['kpuffin', 'PUFFIN LINE'],
   ['serpent', 'THE SERPENT'], ['baron', "BARON'S DROP"], ['nocturne', 'NOCTURNE'], ['wreck', 'THE WRECK'],
-  ['moonwood', 'MOONWOOD'], ['dragon', 'THE DRAGON'], ['firebird', 'THE FIREBIRD'], ['mountain', 'THE MOUNTAIN KING'],
-  ['droom', 'DROOMVLUCHT']
+  ['moonwood', 'MOONWOOD'], ['mountain', 'THE MOUNTAIN KING'],
+  ['droom', 'DROOMVLUCHT'], ['joris', 'JORIS EN DE DRAAK']
 ];
 var PK_CAB_PER_COL = 10;
 function pkCabRideSlot(i) {
@@ -12403,17 +12452,6 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       [[0, -0.35, 0.42], [-0.32, -0.12, 0.3], [0.3, -0.1, 0.3], [0, -0.62, 0.25]].forEach(function (b) { c.beginPath(); c.arc(x + b[0] * r, y + b[1] * r, b[2] * r, 0, 6.28); c.fill(); });
       c.strokeStyle = S.acc; c.lineWidth = r * 0.06; c.beginPath(); c.moveTo(x, y + r * 0.75); c.lineTo(x - r * 0.35, y + r * 0.82); c.moveTo(x, y + r * 0.75); c.lineTo(x + r * 0.35, y + r * 0.82); c.stroke();
     },
-    dragon: function (c, x, y, r, S) {
-      c.fillStyle = S.acc; c.beginPath(); c.moveTo(x - r * 0.75, y); c.quadraticCurveTo(x, y - r * 0.75, x + r * 0.75, y); c.quadraticCurveTo(x, y + r * 0.75, x - r * 0.75, y); c.fill();
-      var g = c.createRadialGradient(x, y, 1, x, y, r * 0.42); g.addColorStop(0, '#fff2a8'); g.addColorStop(1, '#d88a1a'); c.fillStyle = g; c.beginPath(); c.arc(x, y, r * 0.4, 0, 6.28); c.fill();
-      c.fillStyle = '#111'; c.beginPath(); c.ellipse(x, y, r * 0.07, r * 0.36, 0, 0, 6.28); c.fill();
-      c.fillStyle = 'rgba(255,255,255,0.7)'; c.beginPath(); c.arc(x - r * 0.14, y - r * 0.14, r * 0.06, 0, 6.28); c.fill();
-    },
-    firebird: function (c, x, y, r, S) {
-      var g = c.createLinearGradient(x, y + r * 0.8, x, y - r * 0.8); g.addColorStop(0, '#ffe08a'); g.addColorStop(0.5, '#ff8a30'); g.addColorStop(1, '#c8452a'); c.fillStyle = g;
-      c.beginPath(); c.moveTo(x, y + r * 0.8); c.bezierCurveTo(x - r * 0.75, y + r * 0.2, x - r * 0.1, y - r * 0.2, x - r * 0.3, y - r * 0.85); c.bezierCurveTo(x + r * 0.15, y - r * 0.4, x + r * 0.2, y - r * 0.6, x + r * 0.15, y - r * 0.9); c.bezierCurveTo(x + r * 0.7, y - r * 0.3, x + r * 0.6, y + r * 0.4, x, y + r * 0.8); c.fill();
-      c.fillStyle = '#fff6d0'; c.beginPath(); c.ellipse(x + r * 0.05, y + r * 0.35, r * 0.14, r * 0.28, 0, 0, 6.28); c.fill();
-    },
     coaster: function (c, x, y, r, S) {
       c.strokeStyle = S.ink; c.lineWidth = r * 0.12; c.lineCap = 'round'; c.lineJoin = 'round';
       c.beginPath(); c.moveTo(x - r * 0.85, y + r * 0.55); c.lineTo(x - r * 0.45, y - r * 0.65); c.quadraticCurveTo(x - r * 0.3, y - r * 0.8, x - r * 0.15, y - r * 0.55); c.lineTo(x + r * 0.05, y + r * 0.2);
@@ -12482,10 +12520,6 @@ function pkBuildParkCabinet(px, py, pz, ry) {
         base: function (c, W, H) { pkPnPlanks(c, W, H, 6, '#6a4528', '#5d3c22'); pkPnVignette(c, W, H, 0.3); pkPnRope(c, 12, 12, W - 24, H - 24, '#cfae78'); } },
       forest: { font: sans, head: ser, ink: '#dcfff5', dim: '#9fd6c6', acc: '#9fe0d4', zone: 'rgba(4,22,20,0.5)', zone2: '#123a34', edge: 'rgba(159,224,212,0.55)', win: '#021210', grid: 'rgba(159,224,212,0.07)', rim: bronze, collar: bronze, dial: 'black', lever: 'teal', tele: '#9fe0d4', glow: 0.32,
         base: function (c, W, H) { pkPnFill(c, W, H, '#1e5a52', '#0c2a26'); for (var i = 0; i < 26; i++) { c.fillStyle = 'rgba(159,224,212,' + randf(0.04, 0.1) + ')'; var x = Math.random() * W, y = Math.random() * H, s = randf(20, 70); c.beginPath(); c.moveTo(x, y - s); c.lineTo(x + s * 0.35, y + s * 0.4); c.lineTo(x - s * 0.35, y + s * 0.4); c.fill(); } pkPnVines(c, W, H, 'rgba(159,224,212,0.45)'); pkPnVignette(c, W, H, 0.4); } },
-      dragon: { font: sans, head: ser, ink: '#fbe6a8', dim: '#c8c08a', acc: '#e0b04a', zone: 'rgba(6,26,14,0.55)', zone2: '#103a22', edge: 'rgba(224,176,74,0.65)', win: '#03100a', grid: 'rgba(224,176,74,0.07)', rim: gold, collar: brass, screw: brass, dial: 'brass', lever: 'jade', tele: '#f6e2a6', glow: 0.3,
-        base: function (c, W, H) { pkPnFill(c, W, H, '#2f7a4a', '#14361f'); pkPnScales(c, W, H, 64, 'rgba(240,210,110,0.22)', 'rgba(10,40,20,0.05)'); pkPnVignette(c, W, H, 0.45); pkPnPinstripe(c, W, H, 10, '#e0b04a', 4, 30); } },
-      flame: { font: sans, head: ser, ink: '#fff0d0', dim: '#ffc48a', acc: '#ffd08a', zone: 'rgba(40,6,2,0.5)', zone2: '#5a1408', edge: 'rgba(255,208,138,0.6)', win: '#120302', grid: 'rgba(255,208,138,0.07)', rim: gold, collar: brass, dial: 'black', lever: 'orange', tele: '#ffb03a', glow: 0.32,
-        base: function (c, W, H) { pkPnFill(c, W, H, '#c8452a', '#5a1408'); pkPnFlames(c, W, H); pkPnVignette(c, W, H, 0.4); pkPnPinstripe(c, W, H, 10, '#ffd08a', 2.5, 30); } },
       mountain: { font: sans, head: ser, ink: '#f2e2b0', dim: '#b8b4c8', acc: '#d8b04a', zone: 'rgba(8,10,22,0.5)', zone2: '#1e2540', edge: 'rgba(216,176,74,0.6)', win: '#060814', grid: 'rgba(216,176,74,0.07)', rim: gold, collar: brass, screw: brass, dial: 'bone', lever: 'navy', tele: '#f2d27a', glow: 0.3,
         base: function (c, W, H) { pkPnStone(c, W, H, '#4f5f8c', '#262e4a'); pkPnMountains(c, 0, H * 0.62, W, H * 0.38, 'rgba(10,14,30,0.4)', 'rgba(255,255,255,0.12)'); pkPnRunes(c, 40, 28, W - 80, 64, 'rgba(216,176,74,0.35)', 16); pkPnRunes(c, 40, H - 28, W - 80, 64, 'rgba(216,176,74,0.35)', 16); pkPnVignette(c, W, H, 0.4); } },
       droom: { font: sans, head: ser, ink: '#f0e8ff', dim: '#b0a0d0', acc: '#e0c0ff', zone: 'rgba(30,16,60,0.55)', zone2: '#2a1f4a', edge: 'rgba(224,192,255,0.6)', win: '#0a0618', grid: 'rgba(224,192,255,0.08)', rim: chrome, collar: chrome, dial: 'night', lever: 'purple', tele: '#e0c0ff', glow: 0.3,
@@ -12597,12 +12631,10 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       sig: { label: 'FOGHORN', sfx: 'pkFoghorn', words: 'the foghorn sounds', col: 'brass' } },
     moonwood: { style: 'forest', title: 'Moonwood', model: 'CAMELBACK MW-3 · ROUND THE OLD TREE', kind: 'track', coaster: true,
       sig: { label: 'THE OWL', sfx: 'pkOwl', words: 'an owl calls from the crown', col: 'teal' } },
-    dragon: { style: 'dragon', title: 'The Dragon', model: 'FAMILY DRAGON DR-21 · OVER THE HILL', kind: 'track', coaster: true,
-      sig: { label: 'THE ROAR', sfx: 'pkRoar', words: 'the Dragon roars', col: 'red' } },
-    firebird: { style: 'flame', title: 'The Firebird', model: 'LOOP COASTER FB-1 · THROUGH THE ROLL', kind: 'track', coaster: true,
-      sig: { label: 'THE CALL', sfx: 'pkFirebirdCall', words: 'the Firebird calls', col: 'orange' } },
     mountain: { style: 'mountain', title: 'The Mountain King', model: 'MINE TRAIN MK-1 · INTO THE HALL', kind: 'track', coaster: true,
-      sig: { label: 'THE HALL', sfx: 'pkMountainKing', words: 'in the hall of the Mountain King', col: 'navy' } }
+      sig: { label: 'THE HALL', sfx: 'pkMountainKing', words: 'in the hall of the Mountain King', col: 'navy' } },
+    joris: { style: 'forest', title: 'Joris en de Draak', model: 'TWIN WOOD RACER JR-2 · WATER AND VUUR', kind: 'track', coaster: true,
+      sig: { label: 'THE ROAR', sfx: 'pkOwl', words: 'the dragon stirs', col: 'green' } }
   };
   // every coaster on the kit gets the same instruments and windows, sized to its own top speed
   function pkPnCoasterSheet(sh, a) {
@@ -13010,8 +13042,6 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   SFX.pkNightChime = function (t) { [1760, 1568, 1319, 1175, 1047, 880].forEach(function (f, i) { sTone('sine', f, t + i * 0.26, 1.8, 0.035); sTone('sine', f * 3, t + i * 0.26, 0.3, 0.006); }); };
   SFX.pkFoghorn = function (t) { sTone('sawtooth', 87, t, 2.2, 0.08, { lp: 420, attack: 0.15 }); sTone('sawtooth', 174, t, 2.2, 0.03, { lp: 520, attack: 0.15 }); [2.4, 2.75].forEach(function (d) { SFX.bell(t + d); }); };
   SFX.pkOwl = function (t) { [[0, 0.42], [0.62, 0.16], [0.82, 0.38]].forEach(function (p) { sTone('sine', 410, t + p[0], p[1], 0.06, { f1: 360, attack: 0.04 }); }); };
-  SFX.pkRoar = function (t) { sNoise(t, 1.8, 0.22, { type: 'lowpass', freq: 650, shape: 'swell', fade: true }); sTone('sawtooth', 140, t, 1.6, 0.06, { f1: 55, lp: 600 }); sTone('sawtooth', 93, t + 0.1, 1.5, 0.04, { f1: 40, lp: 400 }); };
-  SFX.pkFirebirdCall = function (t) { sNoise(t, 1.0, 0.1, { type: 'bandpass', freq: 1800, q: 1.2, shape: 'swell' }); for (var i = 0; i < 8; i++) sTone('sine', i % 2 ? 1760 : 1397, t + 0.5 + i * 0.07, 0.09, 0.04); sTone('sine', 1319, t + 1.1, 0.7, 0.04, { f1: 2093 }); };
   // the opening of In the Hall of the Mountain King, plucked, the way it creeps in
   SFX.pkMountainKing = function (t) {
     var B = 246.94, Cs = 277.18, D = 293.66, E = 329.63, Fs = 369.99, F = 349.23, Cn = 261.63;
@@ -14393,6 +14423,12 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     pkBkSwitch(k, (xn - cx) + s * 0.1, 1.2, (d1 - cz) + 0.25, s * Math.PI / 2, a.boothLights, a.name);
     pkBkStack(a, k, s * 1.3, H + 0.02, 0.9);
     pkBkCamera(k, -s * (W / 2 + 0.02), H - 0.3, K.z0 - cz + 0.3, s * Math.PI / 2 + Math.PI, 0.5);
+    // a small filing cabinet and a potted plant in the back corner, so the room reads as lived-in
+    box(0.5, 0.9, 0.45, std({ color: 0x3a3a42, roughness: 0.7 }), xf - s * 0.4, 0.45, K.z1 - 0.5, g);
+    box(0.5, 0.08, 0.45, std({ color: 0x2a2a30, roughness: 0.8 }), xf - s * 0.4, 0.92, K.z1 - 0.5, g);
+    var plantPot = new THREE.Group(); plantPot.position.set(xf - s * 1.0, 0.12, K.z1 - 0.5); g.add(plantPot);
+    cyl(0.18, 0.28, std({ color: 0x6b4a2a, roughness: 0.8 }), 0, 0.14, 0, plantPot, 10);
+    sphere(0.32, std({ color: 0x2f6b3a, roughness: 0.85 }), 0, 0.42, 0, plantPot);
     // the status board on the back wall, facing the operator
     var screen = touchScreen({
       w: 380, h: 320, pw: 0.94, ph: 0.80, x: cx, y: 1.62, z: K.z1 - 0.1, ry: Math.PI, parent: g, title: a.name,
@@ -15212,7 +15248,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     chair.updateWorldMatrix(true, false);
     PK_SIT_V.setFromMatrixPosition(chair.matrixWorld);
     PK_SIT_F.set(0, 0, 1).transformDirection(chair.matrixWorld);
-    PK_SIT = { chair: chair, x: PK_SIT_V.x, y: PK_SIT_V.y, z: PK_SIT_V.z, sx: player.x, sz: player.z };
+    PK_SIT = { chair: chair, x: PK_SIT_V.x, y: PK_SIT_V.y, z: PK_SIT_V.z, eyeY: (chair.userData && chair.userData.eyeY) || 1.42, sx: player.x, sz: player.z };
     player.yaw = Math.atan2(-PK_SIT_F.x, -PK_SIT_F.z); player.pitch = -0.18;
     sfx('click'); toast('Seated - E or a step to stand up', '');
   }
@@ -15229,7 +15265,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       var k = player.keys;
       if (k.KeyW || k.KeyS || k.KeyA || k.KeyD) { pkBkStand(); return false; }
       player.x = PK_SIT.x; player.z = PK_SIT.z; player.y = PK_SIT.y; player.vy = 0;
-      camera.position.set(PK_SIT.x, PK_SIT.y + 1.42, PK_SIT.z);   // a seated eye on the bigger chair, over the desk
+      camera.position.set(PK_SIT.x, PK_SIT.y + PK_SIT.eyeY, PK_SIT.z);   // a seated eye on the bigger chair, over the desk
       camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
       return true;
     }
@@ -16289,242 +16325,13 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     return r;
   };
   // ── Why ──────────────────────────────────────────────────────────
-  // Two more full coasters like the main one: lift, drops, inversions, a trim brake, a level station, the train on its own
-  // frames; and each worked from a proper control house beside its platform rather than a booth. The park was full, so the
-  // east fence moves out (x 72 to 123) and a new street, the East Walk, runs down the strip from the North Promenade.
-  // Both circuits were laid in the main coaster's own frame with the same kit and checks (clear of themselves, at most 4.8 g,
-  // the station dead level) and are turned into the strip here: the layout's +x (the way the train leaves the platform) is
-  // the world's +z, the layout's yard side (-z) the world's east. (ax, az) is where the layout's station start lands.
-  //   The Dragon: a double looper. 21 m lift, the big drop into a 14 m loop, a high turnaround, camelbacks, the turn at the
-  //     far end and back through a second, tighter loop; 326 m, 69 km/h, 52 s.
-  //   The Firebird: a 20 m lift, a straight dive along the far fence into a falling helix (a turn and a half round, over its
-  //     own track), camelbacks, the turn, and back through a corkscrew; 299 m, 58 km/h, 47 s.
-  var PK_EAST = {
-    dragon: { name: 'The Dragon', ax: 88, az: -102, a: 0x2f7a4a, b: 0xe0b04a, spine: 0x2a6a40, legs: 0x1e3a2a, ground: 0x8fa080, sign: '#f6e2a6',
-      trim: [[-9, -28.3], [-14.5, -28.3], 6], roll: null, cars: [0x2f7a4a, 0xe0b04a, 0x2f7a4a, 0xe0b04a, 0x2f7a4a] },
-    firebird: { name: 'The Firebird', ax: 88, az: -47, a: 0xc8452a, b: 0xf0a030, spine: 0xc8452a, legs: 0x3a2a24, ground: 0xa89080, sign: '#ffd08a',
-      trim: [[-7, -30.9], [-13, -30.9], 6], roll: [[13.5, -30.9], [-6.5, -30.9]], cars: [0xc8452a, 0xf0a030, 0xc8452a, 0xf0a030, 0xc8452a] }
-  };
-  // the layout frame into the world
-  function pkEastW(cfg, xl, zl) { return [cfg.ax - (zl + 4.6), cfg.az + (xl + 11)]; }
-  var PK_DRAGON_LOCAL = [
-    [-11, 0.6, -4.6], [-9.8, 0.6, -4.6], [-8.6, 0.6, -4.6], [-7.41, 0.6, -4.6], [-6.21, 0.6, -4.6], [-5.01, 0.6, -4.6],
-    [-3.81, 0.6, -4.6], [-2.61, 0.6, -4.6], [-1.41, 0.6, -4.6], [-0.22, 0.6, -4.6], [0.98, 0.6, -4.6], [2.18, 0.6, -4.6],
-    [3.38, 0.6, -4.6], [4.58, 0.6, -4.6], [5.78, 0.6, -4.6], [6.97, 0.6, -4.6], [8.17, 0.6, -4.6], [9.37, 0.6, -4.6],
-    [10.56, 0.6, -4.68], [11.73, 0.6, -4.97], [12.82, 0.6, -5.44], [13.82, 0.67, -6.1], [14.68, 0.88, -6.9], [15.38, 1.23, -7.81],
-    [15.9, 1.71, -8.77], [16.24, 2.33, -9.74], [16.44, 3.06, -10.67], [16.5, 3.89, -11.52], [16.5, 4.75, -12.35], [16.5, 5.62, -13.18],
-    [16.5, 6.49, -14.01], [16.5, 7.35, -14.84], [16.5, 8.22, -15.66], [16.5, 9.08, -16.49], [16.5, 9.95, -17.32], [16.5, 10.81, -18.15],
-    [16.5, 11.68, -18.98], [16.5, 12.55, -19.81], [16.5, 13.41, -20.64], [16.5, 14.28, -21.46], [16.5, 15.14, -22.29], [16.5, 16.01, -23.12],
-    [16.5, 16.88, -23.95], [16.5, 17.74, -24.78], [16.5, 18.61, -25.61], [16.5, 19.47, -26.43], [16.5, 20.27, -27.32], [16.5, 20.8, -28.39],
-    [16.5, 21, -29.57], [16.5, 20.82, -30.75], [16.43, 20.32, -31.82], [16.21, 19.5, -32.66], [15.98, 18.47, -33.2], [15.8, 17.34, -33.55],
-    [15.62, 16.19, -33.83], [15.41, 15.04, -34.1], [15.19, 13.89, -34.36], [14.96, 12.74, -34.61], [14.71, 11.59, -34.83], [14.44, 10.44, -35.04],
-    [14.15, 9.3, -35.23], [13.86, 8.15, -35.41], [13.44, 7.04, -35.61], [12.89, 6, -35.8], [12.2, 5.03, -35.95], [11.39, 4.16, -36],
-    [10.47, 3.38, -36], [9.47, 2.73, -36], [8.4, 2.19, -36], [7.27, 1.79, -36], [6.1, 1.53, -36], [4.91, 1.41, -36],
-    [3.71, 1.43, -36], [2.53, 1.6, -35.99], [1.37, 1.91, -35.98], [0.26, 2.35, -35.97], [-0.79, 2.93, -35.95], [-1.75, 3.64, -35.92],
-    [-2.62, 4.46, -35.89], [-3.37, 5.4, -35.85], [-3.98, 6.42, -35.81], [-4.44, 7.53, -35.75], [-4.72, 8.69, -35.69], [-4.8, 9.88, -35.61],
-    [-4.67, 11.07, -35.52], [-4.32, 12.21, -35.41], [-3.72, 13.23, -35.28], [-2.9, 14.08, -35.12], [-1.87, 14.67, -34.94], [-0.72, 14.9, -34.72],
-    [0.44, 14.74, -34.51], [1.5, 14.22, -34.31], [2.37, 13.42, -34.15], [3.01, 12.42, -34.01], [3.41, 11.3, -33.9], [3.58, 10.12, -33.8],
-    [3.54, 8.93, -33.73], [3.3, 7.76, -33.66], [2.88, 6.64, -33.6], [2.29, 5.59, -33.56], [1.57, 4.64, -33.52], [0.72, 3.79, -33.48],
-    [-0.22, 3.06, -33.46], [-1.26, 2.46, -33.44], [-2.36, 1.98, -33.42], [-3.51, 1.65, -33.41], [-4.69, 1.45, -33.4], [-5.88, 1.4, -33.4],
-    [-7.08, 1.5, -33.4], [-8.25, 1.73, -33.4], [-9.39, 2.1, -33.4], [-10.47, 2.61, -33.4], [-11.49, 3.24, -33.4], [-12.44, 3.98, -33.4],
-    [-13.37, 4.74, -33.4], [-14.29, 5.49, -33.4], [-15.22, 6.25, -33.4], [-16.15, 7, -33.4], [-17.08, 7.76, -33.37], [-18, 8.52, -33.21],
-    [-18.88, 9.27, -32.91], [-19.7, 10.03, -32.48], [-20.46, 10.76, -31.91], [-21.17, 11.37, -31.17], [-21.78, 11.86, -30.27], [-22.23, 12.21, -29.21],
-    [-22.47, 12.43, -28.07], [-22.51, 12.5, -26.87], [-22.51, 12.43, -25.68], [-22.51, 12.21, -24.5], [-22.43, 11.86, -23.36], [-22.16, 11.37, -22.3],
-    [-21.74, 10.75, -21.37], [-21.22, 10.02, -20.58], [-20.63, 9.2, -19.94], [-19.95, 8.37, -19.39], [-19.21, 7.54, -18.95], [-18.42, 6.71, -18.61],
-    [-17.58, 5.88, -18.4], [-16.72, 5.05, -18.31], [-15.81, 4.28, -18.3], [-14.82, 3.6, -18.3], [-13.78, 3.02, -18.3], [-12.67, 2.55, -18.3],
-    [-11.53, 2.19, -18.3], [-10.36, 1.95, -18.3], [-9.17, 1.82, -18.3], [-7.97, 1.82, -18.3], [-6.78, 1.97, -18.3], [-5.63, 2.27, -18.3],
-    [-4.51, 2.72, -18.3], [-3.47, 3.31, -18.3], [-2.52, 4.03, -18.3], [-1.64, 4.84, -18.3], [-0.7, 5.58, -18.3], [0.33, 6.2, -18.3],
-    [1.43, 6.67, -18.3], [2.58, 7, -18.3], [3.77, 7.17, -18.3], [4.96, 7.19, -18.3], [6.16, 7.08, -18.3], [7.33, 6.86, -18.3],
-    [8.48, 6.52, -18.3], [9.59, 6.07, -18.3], [10.69, 5.6, -18.3], [11.8, 5.13, -18.3], [12.9, 4.67, -18.3], [14.04, 4.31, -18.3],
-    [15.22, 4.08, -18.3], [16.41, 4, -18.3], [17.61, 4.07, -18.3], [18.79, 4.27, -18.3], [19.94, 4.61, -18.3], [21.03, 5.09, -18.3],
-    [22.07, 5.7, -18.3], [23.06, 6.36, -18.3], [24.06, 7.03, -18.34], [25.03, 7.69, -18.55], [25.94, 8.36, -18.95], [26.75, 9.02, -19.52],
-    [27.44, 9.69, -20.24], [27.97, 10.35, -21.09], [28.32, 11.02, -22.02], [28.48, 11.68, -23], [28.43, 12.32, -24.01], [28.17, 12.85, -25.05],
-    [27.66, 13.22, -26.06], [26.89, 13.44, -26.95], [25.93, 13.5, -27.66], [24.83, 13.4, -28.11], [23.68, 13.14, -28.29], [22.56, 12.73, -28.3],
-    [21.5, 12.17, -28.3], [20.52, 11.48, -28.3], [19.64, 10.66, -28.3], [18.83, 9.78, -28.3], [18.03, 8.89, -28.3], [17.22, 8.01, -28.3],
-    [16.41, 7.12, -28.3], [15.61, 6.24, -28.3], [14.79, 5.36, -28.3], [13.9, 4.56, -28.3], [12.92, 3.88, -28.3], [11.86, 3.31, -28.3],
-    [10.75, 2.88, -28.3], [9.59, 2.58, -28.3], [8.4, 2.43, -28.3], [7.2, 2.39, -28.3], [6.01, 2.48, -28.3], [4.85, 2.78, -28.32],
-    [3.76, 3.28, -28.35], [2.78, 3.96, -28.39], [1.95, 4.82, -28.44], [1.29, 5.82, -28.51], [0.87, 6.93, -28.6], [0.73, 8.11, -28.71],
-    [0.9, 9.28, -28.87], [1.44, 10.32, -29.09], [2.34, 11.03, -29.42], [3.44, 11.15, -29.84], [4.44, 10.63, -30.2], [5.11, 9.69, -30.46],
-    [5.42, 8.55, -30.64], [5.38, 7.36, -30.77], [5.06, 6.21, -30.86], [4.48, 5.17, -30.94], [3.71, 4.26, -31], [2.78, 3.51, -31.04],
-    [1.72, 2.94, -31.07], [0.59, 2.57, -31.09], [-0.6, 2.4, -31.1], [-1.79, 2.32, -31.1], [-2.98, 2.19, -31.1], [-4.17, 2.06, -31.1],
-    [-5.37, 1.93, -31.1], [-6.56, 1.81, -31.1], [-7.75, 1.68, -31.1], [-8.94, 1.55, -31.1], [-10.13, 1.42, -31.1], [-11.32, 1.3, -31.1],
-    [-12.52, 1.17, -31.1], [-13.71, 1.04, -31.1], [-14.9, 0.91, -31.1], [-16.07, 0.79, -30.95], [-17.16, 0.66, -30.46], [-18.05, 0.6, -29.68],
-    [-18.68, 0.6, -28.66], [-18.98, 0.6, -27.5], [-19, 0.6, -26.31], [-19, 0.6, -25.11], [-19, 0.6, -23.91], [-19, 0.6, -22.71],
-    [-19, 0.6, -21.52], [-19, 0.6, -20.32], [-19, 0.6, -19.12], [-19, 0.6, -17.92], [-19, 0.6, -16.72], [-19, 0.6, -15.52],
-    [-19, 0.6, -14.33], [-19, 0.6, -13.13], [-19, 0.6, -11.93], [-19, 0.6, -10.73], [-19, 0.6, -9.53], [-18.84, 0.6, -8.35],
-    [-18.4, 0.6, -7.23], [-17.71, 0.6, -6.26], [-16.82, 0.6, -5.47], [-15.75, 0.6, -4.92], [-14.59, 0.6, -4.64], [-13.4, 0.6, -4.6],
-    [-12.2, 0.6, -4.6]
-  ];
-  var PK_FIREBIRD_LOCAL = [
-    [-11, 0.6, -4.6], [-9.8, 0.6, -4.6], [-8.6, 0.6, -4.6], [-7.4, 0.6, -4.6], [-6.21, 0.6, -4.6], [-5.01, 0.6, -4.6],
-    [-3.81, 0.6, -4.6], [-2.61, 0.6, -4.6], [-1.41, 0.6, -4.6], [-0.21, 0.6, -4.6], [0.99, 0.6, -4.6], [2.19, 0.6, -4.6],
-    [3.39, 0.6, -4.6], [4.58, 0.6, -4.6], [5.78, 0.6, -4.6], [6.98, 0.6, -4.6], [8.18, 0.6, -4.6], [9.38, 0.6, -4.6],
-    [10.57, 0.6, -4.68], [11.74, 0.6, -4.97], [12.84, 0.6, -5.45], [13.83, 0.67, -6.11], [14.69, 0.88, -6.91], [15.39, 1.23, -7.82],
-    [15.9, 1.72, -8.78], [16.25, 2.33, -9.75], [16.44, 3.07, -10.68], [16.5, 3.89, -11.54], [16.5, 4.73, -12.4], [16.5, 5.57, -13.26],
-    [16.5, 6.41, -14.11], [16.5, 7.25, -14.97], [16.5, 8.09, -15.82], [16.5, 8.93, -16.68], [16.5, 9.77, -17.54], [16.5, 10.61, -18.39],
-    [16.5, 11.45, -19.25], [16.5, 12.29, -20.1], [16.5, 13.12, -20.96], [16.5, 13.96, -21.82], [16.5, 14.8, -22.67], [16.5, 15.64, -23.53],
-    [16.5, 16.48, -24.38], [16.5, 17.32, -25.24], [16.5, 18.16, -26.09], [16.5, 18.99, -26.96], [16.5, 19.64, -27.96], [16.5, 19.96, -29.11],
-    [16.5, 19.93, -30.3], [16.48, 19.55, -31.43], [16.3, 18.85, -32.38], [16.06, 17.89, -33.03], [15.86, 16.78, -33.44], [15.68, 15.63, -33.74],
-    [15.47, 14.49, -34.03], [15.23, 13.35, -34.32], [14.93, 12.23, -34.63], [14.49, 11.18, -35], [13.91, 10.21, -35.38], [13.17, 9.32, -35.71],
-    [12.29, 8.54, -35.93], [11.3, 7.88, -36], [10.23, 7.33, -36], [9.11, 6.92, -36], [7.94, 6.65, -36], [6.75, 6.52, -36],
-    [5.55, 6.53, -36], [4.37, 6.68, -36], [3.21, 6.98, -36], [2.08, 7.38, -36], [0.96, 7.81, -36], [-0.16, 8.23, -36],
-    [-1.29, 8.65, -36], [-2.41, 9.08, -36], [-3.53, 9.5, -36], [-4.65, 9.92, -36], [-5.77, 10.34, -36], [-6.89, 10.77, -36],
-    [-8.02, 11.19, -36], [-9.14, 11.61, -36], [-10.26, 12.03, -36], [-11.39, 12.44, -36], [-12.55, 12.71, -36], [-13.75, 12.8, -36],
-    [-14.95, 12.72, -36], [-16.14, 12.59, -36], [-17.32, 12.45, -35.94], [-18.48, 12.32, -35.66], [-19.56, 12.19, -35.16], [-20.52, 12.06, -34.45],
-    [-21.32, 11.93, -33.57], [-21.93, 11.8, -32.55], [-22.32, 11.66, -31.43], [-22.49, 11.53, -30.25], [-22.43, 11.4, -29.07], [-22.12, 11.27, -27.91],
-    [-21.6, 11.14, -26.85], [-20.88, 11.01, -25.9], [-19.98, 10.88, -25.12], [-18.95, 10.74, -24.53], [-17.82, 10.61, -24.15], [-16.64, 10.48, -24.01],
-    [-15.46, 10.35, -24.09], [-14.31, 10.22, -24.42], [-13.25, 10.09, -24.96], [-12.32, 9.95, -25.7], [-11.56, 9.82, -26.61], [-10.98, 9.69, -27.65],
-    [-10.63, 9.56, -28.79], [-10.5, 9.43, -29.97], [-10.62, 9.3, -31.15], [-10.96, 9.16, -32.29], [-11.52, 9.03, -33.34], [-12.28, 8.9, -34.26],
-    [-13.2, 8.77, -35.01], [-14.25, 8.64, -35.56], [-15.39, 8.51, -35.89], [-16.58, 8.38, -36], [-17.76, 8.24, -35.86], [-18.89, 8.11, -35.5],
-    [-19.93, 7.98, -34.92], [-20.83, 7.85, -34.15], [-21.57, 7.72, -33.21], [-22.1, 7.58, -32.15], [-22.42, 7.5, -31], [-22.5, 7.56, -29.8],
-    [-22.5, 7.68, -28.61], [-22.5, 7.8, -27.42], [-22.46, 7.92, -26.23], [-22.21, 8.04, -25.06], [-21.73, 8.16, -23.97], [-21.05, 8.28, -23],
-    [-20.19, 8.4, -22.17], [-19.18, 8.52, -21.54], [-18.07, 8.64, -21.11], [-16.9, 8.76, -20.92], [-15.7, 8.88, -20.9], [-14.51, 9, -20.9],
-    [-13.32, 9.12, -20.9], [-12.13, 9.24, -20.9], [-10.93, 9.36, -20.9], [-9.74, 9.47, -20.9], [-8.54, 9.49, -20.9], [-7.35, 9.38, -20.9],
-    [-6.17, 9.14, -20.9], [-5.04, 8.77, -20.9], [-3.95, 8.27, -20.9], [-2.92, 7.64, -20.9], [-1.98, 6.91, -20.9], [-1.11, 6.08, -20.9],
-    [-0.21, 5.29, -20.9], [0.79, 4.63, -20.9], [1.87, 4.12, -20.9], [3.01, 3.75, -20.9], [4.19, 3.55, -20.9], [5.39, 3.51, -20.9],
-    [6.58, 3.61, -20.9], [7.75, 3.86, -20.9], [8.9, 4.22, -20.9], [10.04, 4.59, -20.9], [11.18, 4.96, -20.9], [12.32, 5.34, -20.9],
-    [13.46, 5.71, -20.9], [14.6, 6.08, -20.9], [15.74, 6.45, -20.9], [16.88, 6.82, -20.9], [18.02, 7.2, -20.9], [19.16, 7.57, -20.9],
-    [20.29, 7.94, -20.9], [21.43, 8.31, -20.9], [22.57, 8.68, -20.9], [23.71, 9.06, -20.91], [24.84, 9.43, -21.09], [25.89, 9.8, -21.51],
-    [26.82, 10.17, -22.17], [27.58, 10.54, -23.01], [28.13, 10.84, -24.03], [28.44, 10.98, -25.17], [28.48, 10.97, -26.37], [28.22, 10.79, -27.52],
-    [27.73, 10.46, -28.56], [27.05, 9.98, -29.42], [26.23, 9.43, -30.09], [25.29, 8.87, -30.57], [24.26, 8.31, -30.84], [23.21, 7.75, -30.9],
-    [22.14, 7.19, -30.9], [21.08, 6.63, -30.9], [20.02, 6.08, -30.9], [18.96, 5.52, -30.9], [17.9, 4.97, -30.9], [16.79, 4.52, -30.9],
-    [15.63, 4.21, -30.9], [14.44, 4.04, -30.9], [13.24, 4, -30.91], [12.07, 4.05, -31.12], [10.97, 4.27, -31.54], [9.95, 4.68, -32],
-    [8.98, 5.28, -32.38], [8.04, 5.99, -32.62], [7.12, 6.75, -32.66], [6.2, 7.48, -32.47], [5.26, 8.1, -32.06], [4.3, 8.49, -31.46],
-    [3.33, 8.59, -30.77], [2.36, 8.38, -30.11], [1.41, 7.9, -29.57], [0.47, 7.23, -29.23], [-0.45, 6.47, -29.13], [-1.38, 5.72, -29.24],
-    [-2.32, 5.05, -29.54], [-3.3, 4.51, -29.97], [-4.35, 4.17, -30.43], [-5.48, 4.02, -30.79], [-6.67, 3.99, -30.9], [-7.87, 3.89, -30.9],
-    [-9.04, 3.65, -30.9], [-10.2, 3.35, -30.9], [-11.36, 3.05, -30.9], [-12.52, 2.75, -30.9], [-13.68, 2.45, -30.9], [-14.85, 2.15, -30.9],
-    [-15.99, 1.85, -30.77], [-17.06, 1.55, -30.32], [-17.96, 1.25, -29.59], [-18.6, 0.96, -28.63], [-18.95, 0.73, -27.51], [-19, 0.61, -26.32],
-    [-19, 0.6, -25.12], [-19, 0.6, -23.92], [-19, 0.6, -22.73], [-19, 0.6, -21.53], [-19, 0.6, -20.33], [-19, 0.6, -19.13],
-    [-19, 0.6, -17.93], [-19, 0.6, -16.73], [-19, 0.6, -15.53], [-19, 0.6, -14.33], [-19, 0.6, -13.13], [-19, 0.6, -11.94],
-    [-19, 0.6, -10.74], [-19, 0.6, -9.54], [-18.84, 0.6, -8.35], [-18.41, 0.6, -7.24], [-17.71, 0.6, -6.26], [-16.82, 0.6, -5.47],
-    [-15.76, 0.6, -4.92], [-14.6, 0.6, -4.64], [-13.4, 0.6, -4.6], [-12.2, 0.6, -4.6]
-  ];
-  // ── Registering the plots and the streets ────────────────────────
-  // pushed at load time like the other coasters, so the planting keeps clear and the dressing gives them their gateway and line
+  // The Dragon and The Firebird (two full coasters on the east strip) were removed to free the whole strip for a faithful
+  // Joris en de Draak: a twin-track wooden racing coaster. Their plots, track points and control houses lived here. The new
+  // ride (part 55) registers its own plot, yard and station; the strip's two streets below stay, because the new ride's
+  // queue and the walks to the east reach the strip down them.
   (function () {
-    for (var id in PK_EAST) {
-      var c = PK_EAST[id], q = [c.ax - 5.2, c.az + 8];
-      PK_PLOTS.push({ id: id, name: c.name, x: c.ax + 16, z: c.az + 14, r: 22, q: q, qdx: -1, level: 20, pad: 0.02 });
-      PK_THEME[id] = { a: c.a, b: c.b, ground: c.ground, name: c.name, noBunting: true, noDecor: true };
-      PK_ROUTES.push([76, q[1], q[0] - 3.2, q[1], 3.2, 'coaster']);                      // the spur from the East Walk to the line
-    }
     PK_ROUTES.push([35, -60, 76, -60, 5, 'coaster'], [76, -110, 76, -6, 4.2, 'coaster']);   // the Promenade on east; the East Walk
   })();
-
-  // a station along z: kerbed deck, pavers, the hazard edge on the track side, lamps at each end
-  function pkEastPlatform(g, x0, x1, z0, z1, edgeX, y) {
-    var surf = y === undefined ? 0.18 : y, lift = surf - 0.18;
-    if (lift > 0.02) box(x1 - x0, lift, z1 - z0, pkMats().kerb, (x0 + x1) / 2, lift / 2, (z0 + z1) / 2, g);
-    box(x1 - x0, 0.12, z1 - z0, pkMats().kerb, (x0 + x1) / 2, 0.06 + lift, (z0 + z1) / 2, g);
-    box(x1 - x0 - 0.12, 0.07, z1 - z0 - 0.12, pkMats().pavers, (x0 + x1) / 2, 0.145 + lift, (z0 + z1) / 2, g);
-    box(0.16, 0.03, z1 - z0, MAT.hazard, edgeX, 0.17 + lift, (z0 + z1) / 2, g);
-    [z0 + 0.5, z1 - 0.5].forEach(function (z) { pkLamp(Math.min(x0, x1) + 0.4, z, 3.0, g); });
-    if (lift > 0.02) {
-      var rampLen = Math.max(2, lift * 2);
-      var ramp = box(rampLen, 0.1, z1 - z0, pkMats().kerb, x1 + rampLen / 2, lift / 2, (z0 + z1) / 2, g);
-      ramp.rotation.z = Math.atan2(lift, rampLen);
-      PK_FLOOR_RECTS.push({ axis: 'x', x0: x0, x1: x1, z0: z0, z1: z1, y: surf, ramp: rampLen });
-    }
-  }
-  // the boom gates along a platform that runs along z: each boom lies along z and lifts about x
-  function pkEastGates(g, zs, x, C, y) {
-    var lift = (y === undefined ? 0.18 : y) - 0.18;
-    zs.forEach(function (z) {
-      pkRoundCyl(0.09, 1.06, MAT.steelDark, x, 0.53 + lift, z, g, 8);
-      var boom = new THREE.Group(); boom.position.set(x, 0.92 + lift, z); g.add(boom);
-      box(0.07, 0.09, 0.92, MAT.hazard, 0, 0, -0.46, boom, { r: 0.02 });
-      box(0.05, 0.05, 0.92, MAT.steel, 0, -0.2, -0.46, boom);
-      for (var i = 0; i < 4; i++) box(0.04, 0.22, 0.04, MAT.steel, 0, -0.11, -0.12 - i * 0.24, boom);
-      box(0.1, 0.14, 0.1, MAT.red, 0, 0, -0.9, boom);
-      C.stationGateObjs.push(function (t) { boom.rotation.x = t * Math.PI / 2.1; });
-    });
-  }
-  // the control house's outside, round the cabin: a brick plinth, cream walls with timber framing, a slate hip roof with
-  // a turret, and the name board
-  function pkEastHouseShell(g, x0, x1, z0, z1, H, cfg, door) {
-    var M = pkFtM(), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, W = x1 - x0, D = z1 - z0;
-    pkPlinthRing(x0, x1, z0, z1, 0.6, 0.25, M.brick, g, door ? [{ side: 'x0', a: door[0], b: door[1] }] : null);   // round the outside, open at the door
-    box(W + 0.12, H, 0.06, M.cream, cx, H / 2, z1 + 0.04, g);                         // the back of the room, outside
-    // timber framing on the outer faces (the cabin's own walls are the inside)
-    [[cx, z0 - 0.09, W + 0.2, 0.06], [cx, z1 + 0.09, W + 0.2, 0.06]].forEach(function (f) { box(f[2], 0.14, f[3], M.wood, f[0], H - 0.1, f[1], g); box(f[2], 0.14, f[3], M.wood, f[0], 0.68, f[1], g); });
-    [[x0 - 0.09, cz], [x1 + 0.09, cz]].forEach(function (f) { box(0.06, 0.14, D + 0.2, M.wood, f[0], H - 0.1, f[1], g); });
-    // the hip roof: a four-sided cone stretched over the room, and a turret with a spire over the door end
-    var roof = new THREE.Mesh(new THREE.ConeGeometry(1, 2.4, 4, 1), M.slate);
-    roof.rotation.y = Math.PI / 4; roof.scale.set((W + 1.0) * 0.72, 1, (D + 1.0) * 0.72); roof.position.set(cx, H + 1.25, cz); roof.castShadow = true; g.add(roof);
-    pkRoundCyl(0.8, 2.0, M.cream, x0 + 0.6, H + 1.0, z1 - 0.6, g, 12);
-    pkFtSpire(g, x0 + 0.6, H + 2.0, z1 - 0.6, 1.05, 2.2, M.slate, 8);
-    box(0.4, 0.6, 0.06, M.glass, x0 + 0.6, H + 1.1, z1 + 0.21, g);
-    pkSign3D([cfg.name.toUpperCase() + ' · CONTROL'], Math.min(5.6, W - 0.4), 0.42, cx, H + 0.32, z1 + 0.24, 0, { bg: '#21402e', fg: cfg.sign }, g);
-  }
-
-  // ── Building one coaster ─────────────────────────────────────────
-  function pkBuildEast(p) {
-    var cfg = PK_EAST[p.id], th = PK_THEME[p.id], i;
-    var g = new THREE.Group(); scene.add(g);
-    var local = p.id === 'dragon' ? PK_DRAGON_LOCAL : PK_FIREBIRD_LOCAL;
-    var pts = local.map(function (q) { var w = pkEastW(cfg, q[0], q[2]); return [w[0], q[1], w[1]]; });
-    var curve = pkCoCurve(pts), len = curve.getLength();
-    var park = pkEastW(cfg, 4, -4.6), uP = pkCoUAt(curve, park[0], park[1]);
-    var at = function (xz) { var w = pkEastW(cfg, xz[0], xz[1]); return pkCoUAt(curve, w[0], w[1]); };
-    var opt = { rollIn: 12, trim: [[at(cfg.trim[0]), at(cfg.trim[1]), cfg.trim[2]]] };
-    var F = pkCoFrames(curve, 1000, pkCoProfile(curve, len, uP, opt), uP, cfg.roll ? { roll: [[at(cfg.roll[0]), at(cfg.roll[1])]] } : null);
-    var E = { curve: curve, len: len, F: F, gap: 2.35, cars: [], uPark: uP, uOfF: [], run: 50 };
-    pkCoLevel(F, curve, E.uPark, 4 * 2.35 + 1.4, 1.4);
-    var seats = [];
-    for (i = 0; i < 5; i++) {
-      var car = pkCoCar(cfg.cars[i]);
-      scene.add(car.g); E.cars.push(car);
-      car.seats.forEach(function (s) { seats.push({ par: car.g, x: s.x, y: s.y, z: s.z, ry: 0, guest: null }); });
-    }
-    var ax = cfg.ax, az = cfg.az;
-    pkCoTrackBuild(g, E, {
-      spineMat: std({ color: cfg.spine, roughness: 0.45, metalness: 0.3 }), supMat: std({ color: cfg.legs, roughness: 0.6, metalness: 0.25 }),
-      tieMat: std({ color: 0x2a2a30, roughness: 0.75 }),
-      skip: function (x, z) { return x < ax + 0.8 && z > az - 1 && z < az + 31.5; }      // the platform and the control house
-    });
-    pkCoPlan(E, opt);
-    // the station along the west side of the track, the control house beyond its far end, a paved forecourt to the walk
-    pkPaved(ax - 77, 34, pkMats().pavers, (77 + ax) / 2 - 0.6, 0.02, az + 14, 2.4);
-    pkEastPlatform(g, ax - 4.0, ax - 1.0, az + 0.2, az + 20.4, ax - 1.08, 0.6);
-    // the canopy over the platform: posts along the back edge, a slate roof along the station, the name on its gable end
-    var cg = new THREE.Group(); cg.position.set(ax - 2.5, 0, az + 10.3); cg.rotation.y = Math.PI / 2; g.add(cg);
-    pkGableRoof(20.4, 3.6, 1.1, pkFtM().slate, pkFtM().cream, 0, 3.15, 0, cg, 0.3);
-    for (i = 0; i <= 5; i++) { var pz = az + 0.6 + i * 3.94; pkRoundCyl(0.09, 3.15, pkFtM().iron, ax - 3.9, 1.575, pz, g, 8); solid(ax - 4.05, ax - 3.75, pz - 0.15, pz + 0.15, 0, 3.15); }
-    pkSign3D([cfg.name.toUpperCase()], 2.8, 0.44, ax - 2.5, 3.55, az + 0.06, Math.PI, { bg: '#21402e', fg: cfg.sign }, g);
-    var a = pkAttr({
-      id: p.id, name: cfg.name, x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], qdx: -1, g: g, seats: seats,
-      board: 11, run: E.run, unload: 6, exit: [ax - 4.8, az + 2.0],
-      extra: E, tickRun: function (at2) { pkCoRun(at2); }
-    });
-    var C = pkCtl(a);
-    E.a = a;
-    var gz = []; for (i = 0; i < 5; i++) gz.push(az + 15 - i * 2.35);
-    pkEastGates(g, gz, ax - 1.1, C, 0.6);
-    E.cars.forEach(function (c) { C.barObjs.push(function (b) { c.bar.rotation.x = -1.35 * (1 - b); }); });
-    pkCoPlace(E, E.uPark);
-    // the control house: the room is the halls' cabin kit, bigger, with its long window on the platform side (north)
-    var K = { u0: ax - 6.6, u1: ax - 0.9, z0: az + 22.2, z1: az + 26.8, door: [az + 24.0, az + 25.1] };
-    pkCabinBuild(g, a, { s: 1, AX: 0, K: K, trim: 0xf1e6cc, band: cfg.a, name: cfg.name, sign: cfg.sign, H: 3.0 });
-    pkEastHouseShell(g, K.u0, K.u1, K.z0, K.z1, 3.0, cfg, K.door);
-    // the yard fence: west of the track north of the platform and south of the house, along the north and south ends
-    var y0 = az - 13, y1 = az + 41.2;
-    pkParkFence(ax - 0.8, y0, ax - 0.8, az - 0.4);
-    pkParkFence(ax - 0.8, az + 27.4, ax - 0.8, y1);
-    pkParkFence(ax - 0.8, y0, 122.2, y0);
-    pkParkFence(ax - 0.8, y1, 122.2, y1);
-    return a;
-  }
-  // built before the standard pass with the other coasters, so the booth pass sees a.booth (the house) and builds none
-  var _pkBuildAttractionsEast = pkBuildAttractions;
-  pkBuildAttractions = function () {
-    PK_PLOTS.forEach(function (p) {
-      if (!PK_EAST[p.id]) return;
-      var a = pkBuildEast(p);
-      a.level = p.level; a.plot = p; a.open = pkRideSavedOpen(p.id);
-      if (S.rides) S.rides[p.id] = a.open;
-    });
-    _pkBuildAttractionsEast();
-  };
   // ── Why ──────────────────────────────────────────────────────────
   // The park's one indoor/outdoor coaster, in the south-east corner the park takes in for it (the fence along z 30 east of
   // the car park moves out to z 71). You queue at the castle's west door, board in the half-light of the great hall, and the
@@ -20444,7 +20251,8 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     st: [], xing: [], units: [], len: 56, built: false, t: null, depot: null
   };
   var TR_GAPS = [   // the gates the stations have in the park's palisade: { axis: the run's own axis, x, z, w }
-    { axis: 'z', x: -32.5, z: 62, w: 5 }, { axis: 'z', x: 123, z: -2, w: 5 },   { axis: 'x', x: 95, z: 71, w: 5 }
+    { axis: 'z', x: -32.5, z: 62, w: 5 }, { axis: 'z', x: 123, z: -2, w: 5 },   { axis: 'x', x: 72.5, z: 71, w: 5 },
+    { axis: 'x', x: -118, z: 56, w: 5 }   // Central Station's footpath through the kids'-garden fence (the theatre pulled the fence west to x -132)
   ];
   // the palisade steps around each gate: the run is cut in two and each half is built (and made solid) on its own
   var _trPalisade = pkPalisade;
@@ -20655,9 +20463,9 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   }
   var TR_STATIONS = [
     { id: 'central', name: 'CENTRAL STATION', x: -128, z: 34, walk: [[-117.4, 34], [-117.4, 62], [-30, 62]], roof: 'slateRed' },
-    { id: 'windmill', name: 'WINDMILL HALT', x: -62, z: -134, walk: [[-62, -123.4], [-17, -123.4], [-17, -160]], roof: 'slateRed' },
-    { id: 'dragon', name: 'DRAGON GATE', x: 170, z: -2, walk: [[159.4, -2], [121, -2]], roof: 'slateGreen' },
-    { id: 'lake', name: 'LAKESIDE HALT', x: 95, z: 112, walk: [[95, 101.4], [95, 66]], roof: 'slateRed' }
+    { id: 'windmill', name: 'WINDMILL HALT', x: -62, z: -134, walk: [[-62, -123.4], [-17, -123.4], [-17, -160]], guest: false, roof: 'slateRed' },
+    { id: 'dragon', name: 'DRAGON GATE', x: 170, z: -2, walk: [[159.4, -2], [121, -2]], guest: false, roof: 'slateGreen' },
+    { id: 'lake', name: 'LAKESIDE HALT', x: 95, z: 112, walk: [[95, 102.2], [72.5, 102.2], [72.5, 64.6]], roof: 'slateRed' }
   ];
   // wagon centres along a stopped train, in a station's local x (the front buffer stops 28 m ahead of the middle of the platform)
   function trWagonX(k) { return 12.3 - 5.1 * k; }
@@ -20839,10 +20647,27 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     trBuildCabinet(st);
     
     var p0 = trLocalToWorld(st, 0, 9.8), pts = def.walk.slice(); pts[0] = [p0.x, p0.z]; trPath(3.4, pts);
+    trRegisterWalk(st, def);
     trDrawBoard(st, true);
     return st;
   }
   function trLocalToWorld(st, lx, lz) { return { x: st.x + st.dx * lx - st.dz * lz, z: st.z + st.dz * lx + st.dx * lz }; }
+  // the ground a guest may walk on at a station: its platform and ramp (in the station's local frame), plus every footpath
+  // segment (def.walk). These are the slabs trPath draws, but they lie outside the park's palisade, so the route finder is
+  // told to open them here.
+  function trWalkRect(st, lx0, lx1, lz0, lz1) {
+    var a = trLocalToWorld(st, lx0, lz0), b = trLocalToWorld(st, lx1, lz0), c = trLocalToWorld(st, lx0, lz1), d = trLocalToWorld(st, lx1, lz1);
+    PK_WALK_EXTRA.push({ x0: Math.min(a.x, b.x, c.x, d.x), x1: Math.max(a.x, b.x, c.x, d.x), z0: Math.min(a.z, b.z, c.z, d.z), z1: Math.max(a.z, b.z, c.z, d.z) });
+  }
+  function trRegisterWalk(st, def) {
+    trWalkRect(st, -32.4, 32.4, 1.3, 12.9);                       // the platform and its ramp
+    var p0 = trLocalToWorld(st, 0, 9.8), hw = 2.2, pts = def.walk.slice();
+    pts[0] = [p0.x, p0.z];
+    for (var i = 0; i < pts.length - 1; i++) {
+      var a = pts[i], b = pts[i + 1];
+      PK_WALK_EXTRA.push({ x0: Math.min(a[0], b[0]) - hw, x1: Math.max(a[0], b[0]) + hw, z0: Math.min(a[1], b[1]) - hw, z1: Math.max(a[1], b[1]) + hw });
+    }
+  }
 
   // ── The control cabinet ──────────────────────────────────────────
   function trBuildCabinet(st) {
@@ -21736,12 +21561,30 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     TR_STATIONS.forEach(function (d, i) { trBuildStation(d, i); });
     TR_GAPS.forEach(function (g) { trPortal(g.axis === 'z' ? g.x : g.x, g.axis === 'z' ? g.z : g.z, g.axis); });
     trBuildDepot(); trBuildTrain();
+    trExtendNav();
     TR.t = { s: 0, mode: 'M', v: 0, dir: 1, throttle: 0, brake: 1, engine: true, press: 0.78, fire: 0.38, glass: 0.62, cutoff: 0, cocks: true, cylCold: 1, damper: 0.5, blower: 0, injL: false, injR: false, dynamo: true, mr: 1, bc: 1, sand: false, sandT: 0, slip: 0, safety: false, priming: false, greenT: 0, fireman: false, lowT: 0, knockT: 0, draught: 0, doorsOpen: false, doorAmt: 0, driving: false, seat: null, look: { yaw: 0, pitch: 0 }, brakeKey: false, autoAlign: false, hornKey: false, whistleKey: false, thirdPerson: false, camDist: 5.5, hornOn: false, whistleOn: false, hornAuto: 0, whistleAuto: 0, msgT: 0, at: -1, nextSt: 0, dwell: 0, departFrom: -1, atb: '', cabDisplayT: 0 };
+    TR.guestQueue = []; TR.guestSpawnT = 0;
 
     R.auto = !!R.auto && pkOpCount() > 0;
     trResetToStation(0);
     trBuildHud();
     TR.built = true;
+  }
+  // the route finder's grid covers the park and a small margin; the railway's platforms and footpaths lie outside the
+  // palisade, past that grid's edge, so they could never be walked to. Grow the grid outward to hold them, keeping the
+  // same 0.6 m cell lattice (whole cells only) so the park's narrow ways keep their tuned edges.
+  function trExtendNav() {
+    if (typeof navSetup !== 'function') return;
+    var cell = NAV.cell, x0 = NAV.x0, z0 = NAV.z0, x1 = x0 + NAV.w * cell, z1 = z0 + NAV.h * cell;
+    var nx0 = x0, nz0 = z0, nx1 = x1, nz1 = z1;
+    for (var i = 0; i < PK_WALK_EXTRA.length; i++) {
+      var r = PK_WALK_EXTRA[i];
+      nx0 = Math.min(nx0, r.x0 - 1); nx1 = Math.max(nx1, r.x1 + 1);
+      nz0 = Math.min(nz0, r.z0 - 1); nz1 = Math.max(nz1, r.z1 + 1);
+    }
+    nx0 = Math.floor((nx0 - x0) / cell) * cell + x0; nz0 = Math.floor((nz0 - z0) / cell) * cell + z0;
+    nx1 = Math.ceil((nx1 - x0) / cell) * cell + x0; nz1 = Math.ceil((nz1 - z0) / cell) * cell + z0;
+    if (nx0 !== x0 || nz0 !== z0 || nx1 !== x1 || nz1 !== z1) navSetup({ x0: nx0, z0: nz0, width: nx1 - nx0, depth: nz1 - nz0, cell: cell });
   }
   function trResetToStation(i) {
     var t = TR.t, st = TR.st[i]; t.mode = 'M'; t.s = st.s + trStopOff(); t.v = 0; t.at = i; t.nextSt = (i + 1) % TR.st.length; t.dwell = 0; t.brake = 1; t.throttle = 0;
@@ -22083,6 +21926,8 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     trAnimate(dt, run);
     trCrossingsTick(dt);
     trStationsTick(dt);
+    trStationBoard();
+    trStationAlight();
     trVoiceTick(dt);
     trDriveTick(dt);
     trHud(dt);
@@ -22236,6 +22081,116 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var l3 = (t.at >= 0 ? 'AT ' + TR.st[t.at].name + (t.dwell > 0 ? '   DEPARTS IN ' + Math.ceil(t.dwell) + ' s' : '   READY') : 'NEXT ' + st.name + '   ' + dist + ' m') + '   DOORS ' + (t.doorsOpen ? 'OPEN' : 'SHUT') + (R.auto ? '   AUTO' : '') + (t.mode === 'D' ? '   DEPOT LINE' : '');
     TR.hud.textContent = l1 + '\n' + l2 + '\n' + l3; TR.hud.hidden = false;
   }
+  // -- Guest boarding for the Lindenburg Railway ---------------------
+  // A minimal system: guests queue at the current station; they board only
+  // when the train is stopped, the train doors are open AND the station gates
+  // are open ("both gates open"). They alight when the train next stops.
+  function trNearestStation(x, z) {
+    if (!TR.st || !TR.st.length) return -1;
+    var best = -1, bd = 1e9;
+    for (var i = 0; i < TR.st.length; i++) {
+      var st = TR.st[i];
+      if (st.def && st.def.guest === false) continue;   // a staff/scenic halt guests do not use
+      var d = (st.x - x) * (st.x - x) + (st.z - z) * (st.z - z);
+      if (d < bd) { bd = d; best = i; }
+    }
+    return best;
+  }
+  // where a guest stands to board: the middle of the platform, in the world
+  function trStationPlatform(i) {
+    var st = TR.st[i]; if (!st) return null;
+    var p = trLocalToWorld(st, 0, 4.6);
+    return { x: p.x, z: p.z };
+  }
+  // where an alighting guest walks back into the park: the far end of the footpath (the park spur for the Windmill Halt)
+  function trStationWalkIn(i) {
+    var st = TR.st[i]; if (!st) return null;
+    var pts = st.def && st.def.park ? st.def.park : (st.def && st.def.walk);
+    if (!pts || !pts.length) return { x: st.x, z: st.z };
+    return { x: pts[pts.length - 1][0], z: pts[pts.length - 1][1] };
+  }
+  function trGuestQueueJoin(gu) {
+    if (!gu || !TR.guestQueue || TR.guestQueue.indexOf(gu) >= 0) return false;
+    TR.guestQueue.push(gu);
+    gu.state = 'trainQueue';
+    return true;
+  }
+  function trGuestQueueLeave(gu) {
+    if (!TR.guestQueue) return;
+    var i = TR.guestQueue.indexOf(gu);
+    if (i >= 0) TR.guestQueue.splice(i, 1);
+  }
+  function trStationBoard() {
+    var t = TR.t;
+    if (t.at < 0 || t.v > 0.3 || !t.doorsOpen) return;
+    var st = TR.st[t.at];
+    if (!st || !(st.gatesAmt > 0.5)) return;
+    // find free seats across all wagons, boarding only the guests already waiting at this station
+    var queue = TR.guestQueue.slice();
+    for (var qi = 0; qi < queue.length; qi++) {
+      var gu = queue[qi];
+      if (gu.trainAt !== t.at) continue;
+      var seat = null, unit = null;
+      for (var ui = 0; ui < TR.units.length; ui++) {
+        var u = TR.units[ui];
+        if (!u.seats) continue;
+        for (var si = 0; si < u.seats.length; si++) {
+          if (!u.seats[si].taken) { seat = u.seats[si]; unit = u; break; }
+        }
+        if (seat) break;
+      }
+      if (!seat) break;
+      seat.taken = true; seat.guest = gu;
+      gu.trainSeat = seat; gu.trainUnit = unit;
+      gu.rides = (gu.rides || 0) + 1;
+      gu.mood = 'happy';
+      gu.trainAt = undefined;
+      gu.state = 'trainRide';
+      trGuestQueueLeave(gu);
+    }
+  }
+  var _trAlightDone = false;
+  function trStationAlight() {
+    var t = TR.t;
+    if (t.at < 0 || t.v > 0.3) { _trAlightDone = false; return; }
+    if (_trAlightDone) return;
+    if (t.dwell > 28) return; // just arrived; wait a moment
+    var st = TR.st[t.at];
+    if (st && st.def && st.def.guest === false) { _trAlightDone = true; return; }   // a scenic halt (Windmill): ride on through
+    _trAlightDone = true;
+    TR.units.forEach(function (u) {
+      if (!u.seats) return;
+      u.seats.forEach(function (s) {
+        if (s.taken && s.guest) {
+          s.guest.state = 'trainAlight';
+          s.guest.trainStation = t.at;
+          s.guest.trainAt = undefined;
+          s.guest.rec.path = [];
+          s.taken = false; s.guest = null;
+        }
+      });
+    });
+  }
+  // expose for guest AI
+  window.trGuestQueueJoin = trGuestQueueJoin;
+  window.trGuestQueueLeave = trGuestQueueLeave;
+  window.trNearestStation = trNearestStation;
+  window.trStationPlatform = trStationPlatform;
+  window.trStationWalkIn = trStationWalkIn;
+  window.trStationBoard = trStationBoard;
+  // a few dev-console commands for the railway
+  GAME.commands.trainauto = function (on) { trSetAuto(on === undefined ? !trState().auto : !!on); return 'railway auto ' + (trState().auto ? 'on' : 'off'); };
+  GAME.commands.traingo = function () { trSetAuto(true); return 'railway auto on'; };
+  GAME.commands.trainstop = function () { trSetAuto(false); TR.t.throttle = 0; TR.t.brake = 1; return 'railway auto off, brakes on'; };
+  GAME.commands.trainhere = function (i) { var n = Math.max(0, Math.min(TR.st.length - 1, Math.round(+i || 0))); trResetToStation(n); return 'train placed at ' + TR.st[n].name; };
+  GAME.commands.traindoor = function (want) { trToggleDoors(want === undefined ? undefined : !!want); return 'train doors ' + (TR.t.doorsOpen ? 'open' : 'shut'); };
+  GAME.commands.trainpoints = function () { trThrowPoints(); return 'points: ' + (trState().points === 'depot' ? 'the depot' : 'the main line'); };
+  GAME.commands.trainrefuel = function () { trQuickFill(); return 'tender topped up'; };
+  GAME.commands.trainnav = function () {
+    if (!TR.st || !TR.st.length) return 'no stations';
+    var lines = TR.st.map(function (st) { var p = trStationPlatform(TR.st.indexOf(st)); var w = trStationWalkIn(TR.st.indexOf(st)); return st.name + ' platform ' + Math.round(p.x) + ',' + Math.round(p.z) + ' walk-in ' + Math.round(w.x) + ',' + Math.round(w.z); });
+    return lines.join(' | ');
+  };
 (function() {
   var PK_3P = { on: false, camDist: 5.5, body: null };
   Object.defineProperty(GAME, 'crosshair', {
@@ -24614,7 +24569,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     box(0.06, 2.05, 0.93, navy, 0, 1.03, 0.47, hinge); var dg = box(0.07, 0.7, 0.6, glass, 0, 1.5, 0.47, hinge); dg.userData.noBake = true;
     sphere(0.035, X.gold, 0.06, 1.0, 0.82, hinge);
     pkRoomDoor(hinge, 0.95, 2.05, -Math.PI / 2 * 0.95, 'the booth door', a);
-    pkRoomKit(g, a, { x: (x0 + x1) / 2, z: (z0 + z1) / 2, y: 0, ry: Math.PI, W: x1 - x0, D: z1 - z0, H: Hb, cabBack: true, cabAt: [-1.5, 1.15], key: [-0.78, 1.9], clock: [0, 2.42], tc: [0.95, 1.3], sw: [(x1 - x0) / 2 - 0.35, (z1 - z0) / 2 - 0.06, Math.PI, 1.25], mon: [0, 2.15, -(z1 - z0) / 2 + 0.6, 0], console: 'droom' });
+    pkRoomKit(g, a, { x: (x0 + x1) / 2, z: (z0 + z1) / 2, y: 0, ry: Math.PI, W: x1 - x0, D: z1 - z0, H: Hb, cabBack: true, cabAt: [-1.5, 1.15], key: [-0.78, 1.9], clock: [0, 2.42], tc: [0.95, 1.3], sw: [(x1 - x0) / 2 - 0.35, (z1 - z0) / 2 - 0.06, Math.PI, 1.25], mon: [0, 2.15, -(z1 - z0) / 2 + 0.6, 0], chair: 1.5, console: 'droom' });
   }
   // the rail: an I-beam along the whole course, hung from the roof on rods (or from the swamp tree on arms in the spiral)
   function pkDvRail(g) {
@@ -25828,7 +25783,8 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // the key box, the chair, the lights and their switch, the status board, the stack lamp) without the glazed cabin round
   // it, for a ride whose room is built into its own building in its own style (Danse Macabre's sacristy, Droomvlucht's
   // booth in the U). o: { x, z, y, ry, W, D, H, cab (-1 or 1: the side wall the cabinet stands on) or cabBack (on the back wall), sw: [x, z, ry] the light
-  // switch by the door, mon: [x, y, z, ry] the monitors, stack: false to leave the lamp off }. In the room's own frame local
+  // switch by the door, mon: [x, y, z, ry] the monitors, stack: false to leave the lamp off, chair: the desk's gap from the
+  // window (1.2 default) }. In the room's own frame local
   // -z is the window the operator looks out of over the desk, +z the back wall.
   function pkRoomKit(g, a, o) {
     var R = new THREE.Group(); R.position.set(o.x, o.y || 0, o.z); R.rotation.y = o.ry || 0; g.add(R);
@@ -25845,7 +25801,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     pkBkClock(k, cl[0], cl[1], D / 2 - 0.09, Math.PI, 0.14);
     a.boothClock = pkBkTimeClock(k, tc[0], tc[1], D / 2 - 0.08, Math.PI, a.id, a.name);
     pkBkKeyBox(k, kb[0], kb[1], D / 2 - 0.08, Math.PI);
-    pkBkChair(k, 0.1, -D / 2 + 1.2, Math.PI, 0);
+    pkBkChair(k, 0.1, -D / 2 + (o.chair || 1.2), Math.PI, 0);
     var bat = pkBkBatten(k, 0, H - 0.17, 0.2, 0, 1.4);
     a.boothLights = pkBkLights(a.id, k, [bat], 0, H - 0.5, 0.2);
     a.boothLights.setPower(!!a.open);
@@ -28060,6 +28016,452 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     t.PK_XP_STAGES = PK_XP_STAGES;
     t.PK_XP_LANDS = PK_XP_LANDS;
     return t;
+  };
+  // ── Why ──────────────────────────────────────────────────────────
+  // Two wooden tracks (Water, blue, and Vuur, red) run side by side and race, in the spirit of Efteling's Joris en de Draak.
+  // Both climb twin lift hills, drop, run a double out-and-back and come home through one shared station hall; the first
+  // train home wins. The strip is long and narrow, so the out-and-back runs along world z (north) and the two tracks sit
+  // side by side across world x (east). One pkAttr attraction holds both tracks so the shared station, dispatch and winner
+  // stay one coupled unit.
+  //
+  // Plan view of ONE track (Vuur is its exact mirror across the centre line). lx = north, d = distance from the centre line:
+  //
+  //   lane D1 (2.5)  station -> lift -> drop -> pass 1 north ----.
+  //   lane D2 (8.5)  <- final pass south, down to the station    |  (big outer turn, R 9)
+  //   lane D3 (14.5) pass 3 north ---.                           |
+  //   lane D4 (20.5) pass 2 south <--|---------------------------'
+  //                       south turn '
+  //
+  // No lane ever crosses another: the loop is a "W" whose last leg tucks back under the station through a small
+  // south turn, so the train always enters the station heading north.
+  var PK_JORIS = {
+    name: 'Joris en de Draak', ax: 100, az: -1, qz: 1, a: 0x2f6fbf, b: 0xc8452a, spine: 0x8a6a4a, legs: 0x5a4028, ground: 0x8fa080, sign: '#f0c04a'
+  };
+  // local frame -> world: forward (local x) runs north (world -z), yard (local z) runs east (world +x)
+  function pkJorisW(lx, lz) { return [PK_JORIS.ax + lz, PK_JORIS.az - lx]; }
+  function pkJorisSm(x) { x = x < 0 ? 0 : (x > 1 ? 1 : x); return x * x * (3 - 2 * x); }
+  // One track as a chain of straights (with optional smooth hills) and half-circle turns. Every piece starts exactly
+  // where the last one ended, so the spline never has a jump to wobble around. yd < 0 is Water, yd > 0 is Vuur (mirror).
+  function pkJorisPoints(yd) {
+    var sg = yd < 0 ? -1 : 1, P = [], cx0 = 14, cd = 2.5, cy = 0.6;
+    var D1 = 2.5, D2 = 8.5, D3 = 14.5, D4 = 20.5;
+    function add(x, d, y) { P.push([x, y, sg * d]); cx0 = x; cd = d; cy = y; }
+    // a straight from the current point to (x1, d1, y1); o.h/o.n add n sin^2 humps h high, o.ease smooths the height change
+    function run(x1, d1, y1, o) {
+      o = o || {};
+      var x0 = cx0, d0 = cd, y0 = cy, dx = x1 - x0, dd = d1 - d0, dy = y1 - y0;
+      var k = Math.max(2, Math.ceil(Math.sqrt(dx * dx + dd * dd + dy * dy) / 1.6));
+      for (var i = 1; i <= k; i++) {
+        var t = i / k, te = o.ease ? t * t * (3 - 2 * t) : t, s = Math.sin(Math.PI * (o.n || 1) * t);
+        add(x0 + dx * t, d0 + dd * t, y0 + dy * te + (o.h ? o.h * s * s : 0));
+      }
+    }
+    // a 180 degree turn from lane da to lane db around x = cx; north turns bulge to +x, south turns bulge to -x
+    function arc(cx, da, db, y1, north) {
+      var R = Math.abs(db - da) / 2, mid = (da + db) / 2, sg2 = db > da ? 1 : -1, y0 = cy, k = Math.ceil(Math.PI * R / 1.3);
+      for (var i = 1; i <= k; i++) {
+        var t = i / k, th = sg2 * (-Math.PI / 2 + Math.PI * t), lx = north ? cx + R * Math.cos(th) : cx - R * Math.cos(th);
+        add(lx, mid + R * Math.sin(th), y0 + (y1 - y0) * t);
+      }
+    }
+    // the station roll and the lift
+    run(24, D1, 0.6);
+    run(54, D1, 22);
+    run(72, D1, 5, { ease: true });                    // the first drop
+    // pass 1, north: two airtime hills
+    run(94, D1, 5, { h: sg > 0 ? 5.5 : 6.5, n: 1 });
+    run(116, D1, 5, { h: sg > 0 ? 7.5 : 6.5, n: 1 });
+    run(123, D1, 6.5);
+    arc(123, D1, D4, 6.5, true);                       // the big outer turn to the far lane
+    // pass 2, south on the outer lane
+    run(100, D4, 5, { h: sg > 0 ? 6.5 : 5, n: 1 });
+    run(76, D4, 5, { h: sg > 0 ? 5.5 : 7, n: 1 });
+    run(54, D4, 5, { h: sg > 0 ? 4.5 : 3.4, n: 2 });
+    run(36, D4, 5, { h: sg > 0 ? 4.0 : 5.5, n: 1 });
+    arc(36, D4, D3, 5, false);                         // the south turn, over to the third lane
+    // pass 3, north
+    run(60, D3, 5, { h: sg > 0 ? 7.0 : 6, n: 1 });
+    run(84, D3, 5, { h: sg > 0 ? 5.5 : 7, n: 1 });
+    run(106, D3, 5, { h: sg > 0 ? 4.8 : 3.6, n: 2 });
+    run(123, D3, 6);
+    arc(123, D3, D2, 6, true);                         // the small north turn
+    // pass 4, south, then the brake run down beside the hall
+    run(102, D2, 5, { h: sg > 0 ? 4.5 : 5.5, n: 1 });
+    run(78, D2, 5, { h: sg > 0 ? 6.5 : 7.5, n: 1 });
+    run(56, D2, 5, { h: sg > 0 ? 4.2 : 3.5, n: 2 });
+    run(40, D2, 4.2, { h: sg > 0 ? 5.0 : 4, n: 1 });
+    run(24, D2, 2.2);
+    run(8, D2, 1.2);
+    arc(8, D2, D1, 1.0, false);                        // tuck back under the station, now heading north again
+    run(14, D1, 0.6);                                  // and roll into the station (this is also where the lap began)
+    return P;
+  }
+  // ── Registering the plot and the street ─────────────────────────
+  (function () {
+    var q = [PK_JORIS.ax - 5.2, PK_JORIS.qz];
+    PK_PLOTS.push({ id: 'joris', name: PK_JORIS.name, x: PK_JORIS.ax + 15, z: PK_JORIS.qz, r: 26, q: q, qdx: -1, level: 20, pad: 0.02 });
+    PK_THEME.joris = { a: PK_JORIS.a, b: PK_JORIS.b, ground: PK_JORIS.ground, name: PK_JORIS.name, noBunting: true, noDecor: true };
+    PK_ROUTES.push([76, q[1], q[0] - 3.2, q[1], 3.2, 'coaster']);   // the spur from the East Walk to the line
+  })();
+  // ── Building the ride ───────────────────────────────────────────
+  function pkBuildJoris(p) {
+    var g = new THREE.Group(); scene.add(g);
+    var wood = std({ color: PK_JORIS.spine, roughness: 0.5, metalness: 0.2 }), leg = std({ color: PK_JORIS.legs, roughness: 0.65, metalness: 0.15 });
+    var tracks = [['water', -2.5, 0x2f6fbf], ['vuur', 2.5, 0xc8452a]];
+    var subs = {}, seats = [];
+    tracks.forEach(function (t) {
+      var id = t[0], yd = t[1], col = t[2];
+      var pts = pkJorisPoints(yd).map(function (q) { var w = pkJorisW(q[0], q[2]); return [w[0], q[1], w[1]]; });
+      var curve = pkCoCurve(pts), len = curve.getLength();
+      var park = pkJorisW(22, yd), uP = pkCoUAt(curve, park[0], park[1]);
+      var F = pkCoFrames(curve, 1000, pkCoProfile(curve, len, uP, { rollIn: 12 }), uP, null);
+      var E = { curve: curve, len: len, F: F, gap: 2.35, cars: [], uPark: uP, uOfF: [], run: Math.round(len / 7) };
+      pkCoLevel(F, curve, E.uPark, 4 * 2.35 + 1.4, 1.4);
+      for (var i = 0; i < 4; i++) { var car = pkCoCar(col); scene.add(car.g); E.cars.push(car); car.seats.forEach(function (s) { seats.push({ par: car.g, x: s.x, y: s.y, z: s.z, ry: 0, guest: null, track: id }); }); }
+      pkCoTrackBuild(g, E, { spineMat: wood, supMat: leg, tieMat: std({ color: 0x4a3a28, roughness: 0.8 }), railMat: MAT.steelDark });
+      pkCoPlan(E, { rollIn: 12 });
+      pkCoPlace(E, E.uPark);
+      subs[id] = E;
+    });
+    var run = Math.max(subs.water.run, subs.vuur.run);
+    var a = pkAttr({
+      id: 'joris', name: PK_JORIS.name, x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], qdx: -1, g: g, seats: seats,
+      board: 11, run: run, unload: 6, exit: [PK_JORIS.ax - 8, 3],
+      extra: subs, tickRun: function (at2) { pkJorisRun(at2); },
+      start: function (at2) { pkJorisStart(at2); }
+    });
+    subs.water.a = subs.vuur.a = a;
+    subs.winner = null; subs.lag = 0; subs.winsWater = 0; subs.winsVuur = 0;
+    // the fork: each guest picks Water or Vuur as they reach the front of the line and boards that track
+    a.pickSeat = function (gu) {
+      if (!gu.side) gu.side = Math.random() < 0.5 ? 'water' : 'vuur';
+      var prefer = gu.side, fall = -1, i, s;
+      for (i = 0; i < a.seats.length; i++) {
+        s = a.seats[i];
+        if (s.guest || s.player) continue;
+        if (fall < 0) fall = i;
+        if (s.track === prefer) return i;
+      }
+      return fall;
+    };
+    // the rider's way: down the line, into the lower hall at the station's south, up the Water or Vuur stair to the platform
+    var HX = PK_JORIS.ax;
+    var entry = { x: HX - 3.5, z: -7.5 };                       // west of the operator's stair, south of the hall
+    var fork = { x: HX, z: -10.7 };                             // the split inside the lower hall
+    var wB = { x: HX - 1.05, z: -10.7 }, wT = { x: HX - 1.05, z: -13 };
+    var vB = { x: HX + 1.05, z: -10.7 }, vT = { x: HX + 1.05, z: -13 };
+    a.seatPath = function (from, w) {
+      var side = w.x < HX ? 'water' : 'vuur';
+      var b = side === 'water' ? wB : vB, t = side === 'water' ? wT : vT;
+      return route(from, entry).concat([fork, b, t], route(t, { x: w.x, z: w.z }));
+    };
+    // the station hall; it also hangs the banners, the FINISH sign and the two WINNAAR flags on its south face
+    subs.fin = pkJorisStation(g, a);
+    // the overhead control room: the operator's cabin tucked into the hall facade, glazed onto both tracks, reached by a stair
+    var cx = PK_JORIS.ax;
+    var K = { u0: cx - 3, u1: cx + 3, z0: -14.4, z1: -10.6, door: [-13.2, -12.3] };
+    var n0 = g.children.length;
+    pkCabinBuild(g, a, { s: 1, AX: 0, K: K, y: 3.5, trim: 0xfff2a8, band: PK_JORIS.b, name: PK_JORIS.name, sign: PK_JORIS.sign, H: 3.2 });
+    pkJorisStripBase(g, n0, cx);                       // the kit's grey concrete plinth under the cabin goes; the timber gallery carries it
+    // the walkable route: stair head at z -9, a landing across the hall front and along both cabin sides (the cabin door opens onto them)
+    PK_FLOOR_RECTS.push({ axis: 'z', x0: cx - 2, x1: cx + 2, z0: -9.0, z1: -9.0, y: 3.62, ramp: 6.5 });
+    PK_FLOOR_RECTS.push({ x0: cx - 4.4, x1: cx + 4.4, z0: -10.6, z1: -9.0, y: 3.62 });
+    PK_FLOOR_RECTS.push({ x0: cx - 4.4, x1: cx - 3, z0: -14.4, z1: -10.6, y: 3.62 });
+    PK_FLOOR_RECTS.push({ x0: cx + 3, x1: cx + 4.4, z0: -14.4, z1: -10.6, y: 3.62 });
+    pkJorisStair(g, cx);
+    pkJorisGallery(g, cx);
+    // the lower hall: the split into the two coloured stairs, and the deck and stair heights the riders walk
+    pkJorisLowerHall(g, HX);
+    // Edna lies in her swamp west of the lift, her head turned toward the passing trains
+    subs.dragon = pkJorisDragon(g, PK_JORIS.ax - 16, PK_JORIS.az - 22);
+    return a;
+  }
+  // hide whatever the cabin kit built as a grounded base under the cabin floor (its grey concrete plinth)
+  function pkJorisStripBase(g, n0, cx) {
+    g.updateMatrixWorld(true);
+    for (var i = n0; i < g.children.length; i++) {
+      g.children[i].traverse(function (o) {
+        if (!o.isMesh) return;
+        var b = new THREE.Box3().setFromObject(o);
+        if (b.max.y <= 3.48 && b.min.x >= cx - 3.4 && b.max.x <= cx + 3.4 && b.min.z >= -14.9 && b.max.z <= -10.1) o.visible = false;
+      });
+    }
+  }
+  // ── The timber stair up to the landing: open treads on two raked stringers, risers, posts and iron handrails ──
+  function pkJorisStair(g, cx) {
+    var tread = std({ color: 0x7a5a3a, roughness: 0.85 }), dark = std({ color: 0x3a2a1a, roughness: 0.7 }), wood = std({ color: 0x6a4a30, roughness: 0.85 });
+    var iron = std({ color: 0x2a2d32, roughness: 0.5, metalness: 0.6 });
+    var Z0 = -9.0, TOP = 3.62, RUN = 6.5, ang = Math.atan2(TOP, RUN), L = Math.sqrt(TOP * TOP + RUN * RUN), m, i;
+    for (i = 0; i < 7; i++) {
+      var top = TOP - (i + 0.5) * (TOP / 7), zz = Z0 + 0.465 + i * (RUN / 7);
+      box(3.4, 0.12, 0.85, tread, cx, top, zz, g);
+      box(3.4, TOP / 7, 0.06, dark, cx, top - TOP / 14 - 0.06, zz - 0.4, g);
+    }
+    [-1.8, 1.8].forEach(function (sx) {
+      m = box(0.18, 0.45, L, wood, cx + sx, TOP / 2 - 0.1, Z0 + RUN / 2, g); if (m && m.rotation) m.rotation.x = ang;
+      m = box(0.07, 0.07, L, iron, cx + sx * 1.03, TOP / 2 + 0.95, Z0 + RUN / 2, g); if (m && m.rotation) m.rotation.x = ang;
+      for (var j = 0; j < 7; j++) { var tp = TOP - (j + 0.5) * (TOP / 7); cyl(0.04, 0.95, iron, cx + sx * 1.03, tp + 0.47, Z0 + 0.465 + j * (RUN / 7), g, 6); }
+    });
+  }
+  // the gallery floor around the cabin: a landing across the hall front and along both cabin sides, on beams, joists and braces, with rails
+  function pkJorisGallery(g, cx) {
+    var wood = std({ color: 0x6a4a30, roughness: 0.85 }), dark = std({ color: 0x3a2a1a, roughness: 0.7 }), deck = std({ color: 0x8a6a48, roughness: 0.85 });
+    var iron = std({ color: 0x2a2d32, roughness: 0.5, metalness: 0.6 }), m;
+    box(9, 0.4, 0.45, dark, cx, 3.1, -9.0, g);
+    box(8.8, 0.3, 1.6, deck, cx, 3.47, -9.8, g);
+    [-1, 1].forEach(function (sg) {
+      box(1.4, 0.3, 3.8, deck, cx + sg * 3.7, 3.47, -12.5, g);
+      box(0.25, 0.3, 5.6, wood, cx + sg * 3.7, 3.15, -11.8, g);
+      m = box(1.7, 0.2, 0.22, dark, cx + sg * 3.8, 2.5, -9.0, g); if (m && m.rotation) m.rotation.z = sg * 0.78;
+      box(1.4, 0.08, 0.08, iron, cx + sg * 3.7, 4.55, -14.4, g);
+      box(2.5, 0.08, 0.08, iron, cx + sg * 3.15, 4.55, -9.0, g);
+      [[cx + sg * 3.0, -14.4], [cx + sg * 4.4, -14.4], [cx + sg * 1.9, -9.0], [cx + sg * 3.15, -9.0], [cx + sg * 4.4, -9.0]].forEach(function (p) { cyl(0.04, 0.95, iron, p[0], 4.1, p[1], g, 6); });
+    });
+  }
+  // one of the two split stairs: five timber treads up onto a platform, the risers and handrail in the track's colour
+  function pkJorisSplitStair(g, px, col) {
+    var tread = std({ color: 0x7a5a3a, roughness: 0.85 }), dark = std({ color: 0x3a2a1a, roughness: 0.7 }), sideM = std({ color: col, roughness: 0.6 });
+    var iron = std({ color: 0x2a2d32, roughness: 0.5, metalness: 0.6 });
+    var Z0 = -13, RUN = 2.3, TOP = 0.6, ang = Math.atan2(TOP, RUN), L = Math.sqrt(TOP * TOP + RUN * RUN), i, m;
+    for (i = 0; i < 5; i++) {
+      var top = TOP - (i + 0.5) * (TOP / 5), zz = Z0 + 0.23 + i * (RUN / 5);
+      box(1.3, 0.12, RUN / 5, tread, px, top, zz, g);
+      box(1.3, TOP / 5, 0.05, sideM, px, top - TOP / 10 - 0.06, zz - 0.2, g);
+    }
+    [-0.7, 0.7].forEach(function (sx) {
+      m = box(0.16, 0.4, L, dark, px + sx, TOP / 2 - 0.05, Z0 + RUN / 2, g); if (m && m.rotation) m.rotation.x = ang;
+      m = box(0.05, 0.05, L, sideM, px + sx * 1.03, TOP / 2 + 0.55, Z0 + RUN / 2, g); if (m && m.rotation) m.rotation.x = ang;
+      for (var j = 0; j < 5; j++) { var tp = TOP - (j + 0.5) * (TOP / 5); cyl(0.03, 0.6, iron, px + sx * 1.03, tp - 0.3, Z0 + 0.23 + j * (RUN / 5), g, 6); }
+    });
+  }
+  // ── The lower hall: the ground-floor entry at the station's south, under the control gallery, where the line forks
+  // into the blue Water stair (west) and the red Vuur stair (east) up to the two boarding decks. ──
+  function pkJorisLowerHall(g, HX) {
+    var wood = std({ color: 0x6a4a30, roughness: 0.85 }), plank = std({ color: 0x7a5a3a, roughness: 0.9 }), dark = std({ color: 0x3a2a1a, roughness: 0.7 });
+    var blue = std({ color: PK_JORIS.a, roughness: 0.7 }), red = std({ color: PK_JORIS.b, roughness: 0.7 }), goldM = std({ color: 0xc9a23a, roughness: 0.4, metalness: 0.6 });
+    var floorM = std({ color: 0x4a3826, roughness: 0.92 });
+    // the hall floor between the two stairs
+    box(7.4, 0.08, 3.4, floorM, HX, 0.04, -12.2, g);
+    // a low timber rail round the split so the two lanes read as a fork, open at the south where the line arrives
+    [[-3.7, -10.55], [3.7, -10.55], [-3.7, -13.6], [3.7, -13.6]].forEach(function (p) { cyl(0.07, 1.0, dark, HX + p[0], 0.5, p[1], g, 8); });
+    [[-3.7, -10.55], [3.7, -10.55]].forEach(function (p) { cyl(0.05, 1.0, goldM, HX + p[0], 0.5, p[1], g, 6); });
+    box(6.6, 0.08, 0.08, wood, HX - 1.85, 0.95, -10.55, g); box(6.6, 0.08, 0.08, wood, HX + 1.85, 0.95, -10.55, g);
+    // the two stairs
+    pkJorisSplitStair(g, HX - 1.05, PK_JORIS.a);
+    pkJorisSplitStair(g, HX + 1.05, PK_JORIS.b);
+    // signs over each stair and the "choose your track" board over the split
+    pkSign3D(['WATER'], 1.4, 0.4, HX - 1.05, 2.0, -12.6, 0, { bg: PK_JORIS.a, fg: '#ffffff' }, g);
+    pkSign3D(['VUUR'], 1.4, 0.4, HX + 1.05, 2.0, -12.6, 0, { bg: PK_JORIS.b, fg: '#ffffff' }, g);
+    pkSign3D(['KIES UW SPOOR', 'WATER OF VUUR'], 2.3, 0.55, HX, 3.2, -10.45, 0, { bg: '#1b232c', fg: PK_JORIS.sign }, g);
+    // the deck and stair heights the riders walk: the decks at 0.6, each stair ramping up onto it from the hall floor
+    PK_FLOOR_RECTS.push({ x0: HX - 3.0, x1: HX - 0.2, z0: -26, z1: -12.9, y: 0.6 });
+    PK_FLOOR_RECTS.push({ x0: HX + 0.2, x1: HX + 3.0, z0: -26, z1: -12.9, y: 0.6 });
+    PK_FLOOR_RECTS.push({ axis: 'z', x0: HX - 1.6, x1: HX - 0.5, z0: -12.9, z1: -12.9, y: 0.6, ramp: 2.4 });
+    PK_FLOOR_RECTS.push({ axis: 'z', x0: HX + 0.5, x1: HX + 1.6, z0: -12.9, z1: -12.9, y: 0.6, ramp: 2.4 });
+  }
+  // a triangular gable infill for the hall ends
+  function pkJorisGable(w, rise, depth, mat, x, y, z, parent) {
+    var sh = new THREE.Shape(); sh.moveTo(-w / 2, 0); sh.lineTo(w / 2, 0); sh.lineTo(0, rise); sh.lineTo(-w / 2, 0);
+    var m = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: depth, bevelEnabled: false }), mat);
+    m.position.set(x, y, z - depth / 2); parent.add(m); return m;
+  }
+  // ── The station hall (the Tuyghuys): a stone-footed timber longhouse over the two boarding tracks. The ends are open for the
+  // trains. The control room is not a loose box: it is a gallery carried on cross beams, joists and knee braces that
+  // spring from the hall's own wall posts, with a timber soffit under it, sitting inside the hall like a mezzanine. ──
+  function pkJorisStation(g, a) {
+    var ax = PK_JORIS.ax, az = PK_JORIS.az;
+    var wood = std({ color: 0x3a2a1a, roughness: 0.7 }), plank = std({ color: 0x9a7a5a, roughness: 0.85 }), siding = std({ color: 0xa88a6a, roughness: 0.8 }), dark = std({ color: 0x2a1a0a, roughness: 0.65 });
+    var iron = std({ color: 0x2a2d32, roughness: 0.5, metalness: 0.6 }), stoneA = std({ color: 0xaaa090, roughness: 0.95 }), stoneB = std({ color: 0x76716a, roughness: 0.95 });
+    var floorM = std({ color: 0x4a3826, roughness: 0.92 }), deckM = std({ color: 0x8a6a48, roughness: 0.85 });
+    var blue = std({ color: PK_JORIS.a, roughness: 0.7 }), red = std({ color: PK_JORIS.b, roughness: 0.7 }), goldM = std({ color: 0xc9a23a, roughness: 0.4, metalness: 0.6 });
+    var z1 = az - 9, z0 = az - 26, zc = (z0 + z1) / 2, len = z1 - z0, W = 4.5, H = 8, i;
+    // floor, and one boarding deck per track on the inside of each train
+    box(W * 2 + 0.6, 0.1, len, floorM, ax, 0.05, zc, g);
+    [-1, 1].forEach(function (sg) {
+      box(1.5, 0.5, len - 2.6, deckM, ax + sg * 1.05, 0.35, zc, g);
+      box(0.12, 0.02, len - 3, MAT.hazard, ax + sg * 1.82, 0.62, zc, g);
+    });
+    // side walls: a rubble stone plinth, plank infill, heavy posts, a mid rail and top plate, iron straps, shields and banners
+    var bays = 5, bw = (len - 0.44) / bays;
+    [-W, W].forEach(function (sx) {
+      var inx = ax + sx - (sx > 0 ? 1 : -1) * 0.2;
+      for (i = 0; i * 1.4 < len; i++) { var sl = Math.min(1.3, len - i * 1.4); box(0.6, 0.7 + (i % 3) * 0.06, sl, i % 2 ? stoneA : stoneB, ax + sx, 0.35, z1 - i * 1.4 - sl / 2, g); }
+      box(0.25, H - 0.7, len, siding, ax + sx, 0.7 + (H - 0.7) / 2, zc, g);
+      box(0.5, 0.3, len, dark, ax + sx, H - 0.15, zc, g);
+      box(0.4, 0.24, len, dark, ax + sx, 3.15, zc, g);
+      for (i = 0; i <= bays; i++) box(0.45, H, 0.45, dark, ax + sx, H / 2, z0 + 0.22 + i * bw, g);
+      var ox = ax + sx + (sx > 0 ? 1 : -1) * 0.17;
+      for (i = 0; z1 - 0.5 - i * 1.0 > z0 + 0.3; i++) box(0.08, H - 0.9, 0.14, dark, ox, 0.7 + (H - 0.9) / 2, z1 - 0.5 - i * 1.0, g);
+      box(0.1, 0.14, len, iron, ox, 2.0, zc, g); box(0.1, 0.14, len, iron, ox, 4.7, zc, g);
+      for (i = 0; i < bays; i++) {
+        var bz = z0 + 0.22 + (i + 0.5) * bw;
+        box(0.06, 0.12, bw * 0.85, iron, inx, 1.9, bz, g);
+        box(0.06, 0.12, bw * 0.85, iron, inx, 4.7, bz, g);
+        var sh = cyl(0.5, 0.06, i % 2 ? red : blue, inx, 3.9, bz, g, 18); if (sh && sh.rotation) sh.rotation.z = Math.PI / 2;
+        sphere(0.12, goldM, inx - (sx > 0 ? 1 : -1) * 0.04, 3.9, bz, g);
+        box(0.05, 1.7, 0.8, i % 2 ? blue : red, inx, 6.3, bz, g);
+        box(0.06, 0.1, 0.9, goldM, inx, 7.2, bz, g);
+      }
+    });
+    // the two end facades: a heavy header over the open train gap, iron lintel, big posts and a gable infill above
+    [z1, z0].forEach(function (zz) {
+      box(W * 2 + 0.8, H - 5.2, 0.3, wood, ax, 5.2 + (H - 5.2) / 2, zz, g);
+      box(W * 2 + 0.8, 0.3, 0.45, dark, ax, 5.2, zz, g);
+      box(W * 2 + 0.8, 0.1, 0.5, iron, ax, 5.02, zz, g);
+      box(0.6, 5.2, 0.6, dark, ax - W, 2.6, zz, g); box(0.6, 5.2, 0.6, dark, ax + W, 2.6, zz, g);
+      pkJorisGable(W * 2 + 0.8, 2.2, 0.3, plank, ax, H, zz, g);
+    });
+    // lanterns at the south corners
+    [-W, W].forEach(function (sx) { sphere(0.22, glowMat(0xffd070, 1.4), ax + sx, 4.7, z1 + 0.5, g); });
+    // wall sconces between bays on both side walls
+    for (i = 1; i < bays; i++) {
+      var sz = z0 + 0.22 + i * bw;
+      [-W, W].forEach(function (sx) { sphere(0.16, glowMat(0xffd070, 1.6), ax + sx + (sx > 0 ? 0.35 : -0.35), 3.6, sz, g); });
+    }
+    // the roof, a ridge beam, and a carved dragon head on each gable
+    var gr = new THREE.Group(); gr.position.set(ax, H, zc); gr.rotation.y = Math.PI / 2; g.add(gr);
+    pkGableRoof(len, W * 2 + 0.6, 3.2, dark, wood, 0, 0, 0, gr, 0.4);
+    box(0.35, 0.3, len + 1.2, dark, ax, H + 2.2, zc, g);
+    [[z1 + 0.7, 0], [z0 - 0.7, Math.PI]].forEach(function (f) {
+      var fg = new THREE.Group(); fg.position.set(ax, H + 2.15, f[0]); fg.rotation.y = f[1]; g.add(fg);
+      var nk = cyl(0.14, 1.3, dark, 0, 0.55, 0.35, fg, 6); if (nk && nk.rotation) nk.rotation.x = 0.5;
+      sphere(0.28, dark, 0, 1.15, 0.7, fg).scale.set(0.8, 0.8, 1.5);
+      sphere(0.06, glowMat(0xffc830, 1.4), 0.14, 1.25, 0.85, fg); sphere(0.06, glowMat(0xffc830, 1.4), -0.14, 1.25, 0.85, fg);
+    });
+    // the control gallery: the cabin sits on two cross beams and joists carried by the wall posts, braced with knees, soffit below
+    [-14.5, -10.5].forEach(function (zz) {
+      box(W * 2, 0.4, 0.45, dark, ax, 3.1, zz, g);
+      [-1, 1].forEach(function (sg) { var kb = box(1.7, 0.2, 0.22, dark, ax + sg * 3.8, 2.5, zz, g); if (kb && kb.rotation) kb.rotation.z = sg * 0.78; });
+    });
+    [-3, 0, 3].forEach(function (jx) { box(0.25, 0.3, 4.3, wood, ax + jx, 3.15, -12.5, g); });
+    box(6.4, 0.1, 4.4, wood, ax, 3.42, -12.5, g);
+    // the south facade, seen by the queue: title, banners over each lane, FINISH, and the two winner flags
+    var F = new THREE.Group(); F.position.set(ax, 0, z1 + 0.2); g.add(F);
+    pkSign3D(['TUYGHUYS'], 3.4, 0.8, 0, 7.15, 0, 0, { bg: '#1b232c', fg: PK_JORIS.sign }, F);
+    pkSign3D(['WATER  -  VUUR'], 3.0, 0.45, 0, 5.15, 0, 0, { bg: '#8a6a4a', fg: '#f0c04a' }, F);
+    pkSign3D(['FINISH'], 2.6, 0.5, 0, 6.2, 0, 0, { bg: '#1b232c', fg: '#f0c04a' }, F);
+    // checkered finish arch over the south facade
+    for (var ci = -5; ci <= 5; ci++) {
+      box(0.55, 0.28, 0.12, std({ color: (ci % 2 === 0) ? 0xffffff : 0x1b232c, roughness: 0.7 }), ci * 0.6, 7.6, -0.05, F);
+    }
+    box(7.2, 0.18, 0.12, std({ color: 0x8a6a4a, roughness: 0.8 }), 0, 7.45, -0.05, F);
+    // bunting across the south facade
+    for (var bi = -6; bi <= 6; bi++) {
+      var bb = box(0.45, 0.22, 0.06, std({ color: (bi % 2 === 0) ? PK_JORIS.a : PK_JORIS.b, roughness: 0.6 }), bi * 0.55, 8.0, -0.05, F);
+      if (bb && bb.rotation) bb.rotation.z = (bi % 2 === 0) ? 0.25 : -0.25;
+    }
+    [[-3, PK_JORIS.a, 'WATER'], [3, PK_JORIS.b, 'VUUR']].forEach(function (t) {
+      box(2.1, 1.5, 0.08, std({ color: t[1], roughness: 0.6 }), t[0], 6.65, 0, F);
+      pkSign3D([t[2]], 1.8, 0.6, t[0], 6.65, 0.06, 0, { bg: t[1], fg: '#ffffff' }, F);
+    });
+    var winWater = pkSign3D(['WINNAAR'], 2.0, 0.36, -3, 5.55, 0.06, 0, { bg: PK_JORIS.a, fg: '#ffffff' }, F);
+    var winVuur = pkSign3D(['WINNAAR'], 2.0, 0.36, 3, 5.55, 0.06, 0, { bg: PK_JORIS.b, fg: '#ffffff' }, F);
+    winWater.visible = false; winVuur.visible = false;
+    // gold chandeliers over the lanes, hung from the roof on chains
+    [14, 20].forEach(function (lx) {
+      [-2.5, 2.5].forEach(function (lz) {
+        var ch = new THREE.Group(); ch.position.set(ax + lz, 6.2, az - lx); g.add(ch);
+        pkRing(0.7, 0.05, goldM, 0, 0, 0, ch, 20); pkRing(0.4, 0.04, goldM, 0, -0.16, 0, ch, 16);
+        cyl(0.03, 1.6, goldM, 0, 0.8, 0, ch, 6);
+        for (var c = 0; c < 6; c++) { var ca = c / 6 * 6.28; cyl(0.03, 0.16, glowMat(0xfff2c0, 1.4), Math.cos(ca) * 0.68, -0.08, Math.sin(ca) * 0.68, ch, 4); }
+      });
+    });
+    // boom gates at the boarding decks, so the trains are held at the platform like the other coasters
+    var C = (typeof pkCtl === 'function') ? pkCtl(a) : null;
+    if (C) pkCoGates(g, [ax - 1.05, ax + 1.05], z1, C, 0.6);
+    // proper platforms on each boarding deck: kerb, pavers, edge stripe, planters and lamps (like the other coasters)
+    pkCoPlatform(g, ax - 1.85, ax - 0.25, z0, z1, PK_THEME.joris, 0.6);
+    pkCoPlatform(g, ax + 0.25, ax + 1.85, z0, z1, PK_THEME.joris, 0.6);
+    // a canopy over the south entrance, sheltering the boarding area
+    pkCoCanopy(g, ax - 4.6, ax + 4.6, z1 + 0.6, 2.4, 'Joris en de Draak', PK_THEME.joris, 0.6);
+    return { water: winWater, vuur: winVuur };
+  }
+  // ── Edna: the dragon in her swamp beside the lift. Her body lies north-south, her tail trails north and her head
+  // is turned east toward the track. ──
+  function pkJorisDragon(g, x, z) {
+    var green = std({ color: 0x3f6b34, roughness: 0.8 }), dark = std({ color: 0x2a4a22, roughness: 0.85 });
+    var d = new THREE.Group(); d.position.set(x, 0, z); g.add(d);
+    // the body and the tail
+    sphere(2.2, green, 0, 2.6, 0, d).scale.set(0.8, 0.7, 1.6);
+    var i, t;
+    for (i = 0; i < 6; i++) { t = i / 5; sphere(1.6 * (1 - t * 0.7), green, 0, 2.3 - t * 0.5, -2.6 - i * 1.3, d); }
+    // a row of spikes down the back and along the tail
+    for (i = 0; i < 5; i++) {
+      var zz = 1.6 - i * 1.2, top = 2.6 + 1.54 * Math.sqrt(1 - (zz / 3.52) * (zz / 3.52));
+      var sp = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.9, 4), dark); sp.position.set(0, top + 0.25, zz); d.add(sp);
+    }
+    for (i = 0; i < 6; i++) {
+      t = i / 5; var r = 1.6 * (1 - t * 0.7), sp2 = new THREE.Mesh(new THREE.ConeGeometry(0.3 * (1 - t * 0.4), 0.8, 4), dark);
+      sp2.position.set(0, 2.3 - t * 0.5 + r + 0.2, -2.6 - i * 1.3); d.add(sp2);
+    }
+    // the neck leans east, the head looks east over the track
+    cyl(0.7, 3.2, green, 0.8, 4.4, 0.4, d, 10).rotation.z = -0.35;
+    var head = new THREE.Group(); head.position.set(1.6, 6.4, 0.4); head.rotation.y = Math.PI / 2; d.add(head);
+    d.userData.head = head;
+    sphere(1.0, green, 0, 0, 0, head); sphere(0.5, green, 0, -0.1, 0.9, head);
+    sphere(0.12, glowMat(0xffc830, 1.4), 0.55, 0.25, 0.8, head); sphere(0.12, glowMat(0xffc830, 1.4), -0.55, 0.25, 0.8, head);
+    var fire = sphere(0.32, glowMat(0xff5a1a, 2.4), 0, -0.2, 1.15, head);
+    d.userData.fire = fire;
+    // the legs
+    [[-1.1, -1.0], [1.1, -1.0], [-1.1, 1.0], [1.1, 1.0]].forEach(function (p) { cyl(0.4, 1.4, dark, p[0], 0.7, p[1], d, 8); });
+    // the wings, folded back
+    [[-1], [1]].forEach(function (s) { var w = new THREE.Mesh(new THREE.ConeGeometry(2.6, 3.2, 4, 1), dark); w.position.set(s[0] * 1.3, 4.2, -0.4); w.rotation.set(0, 0, s[0] * -0.6); w.scale.set(1, 1, 0.25); d.add(w); });
+    // the swamp: dark water, eggs and a charred tree
+    var pond = new THREE.Mesh(new THREE.CircleGeometry(5.5, 24), std({ color: 0x1a2a20, roughness: 0.1, metalness: 0.2, transparent: true, opacity: 0.85 })); pond.rotation.x = -Math.PI / 2; pond.position.y = 0.04; d.add(pond);
+    for (var e = 0; e < 4; e++) { var a2 = e / 4 * 6.28; sphere(0.5, std({ color: 0xc8c0a0, roughness: 0.8 }), Math.cos(a2) * 3.4, 0.3, Math.sin(a2) * 3.4, d).scale.set(0.7, 0.6, 0.7); }
+    cyl(0.25, 3.0, std({ color: 0x2a1a12, roughness: 1 }), 3.2, 1.5, -2.0, d, 6).rotation.z = 0.2;
+    return d;
+  }
+  // each lap picks a winner and the loser lags a little, so the race is decided on the track
+  function pkJorisStart(at) {
+    var E = at.extra;
+    E.winner = Math.random() < 0.5 ? 'water' : 'vuur';
+    E.lag = 14 + Math.floor(Math.random() * 16);
+    E.announced = false;
+    toast(at.name + ': the king calls - whoever slays the dragon wins a thousand-and-one ducats!', 'good');
+  }
+  // both trains run together; the winner's train is the one not lagged, the loser closes most of the gap on the final
+  // approach so neither train jumps at the finish, and the flag follows the winner
+  function pkJorisRun(at) {
+    var E = at.extra, w = E.water, v = E.vuur;
+    var p = at.state === 'running' ? clamp(at.t / at.run, 0, 1) : 0;
+    // Edna watches the trains go by: her head turns with the race, and her fire pulses as they pass
+    if (E.dragon) {
+      var head = E.dragon.userData && E.dragon.userData.head;
+      if (head) head.rotation.y = Math.PI / 2 + Math.sin(p * Math.PI * 2) * 0.25;
+      var fire = E.dragon.userData && E.dragon.userData.fire;
+      if (fire) { var sc = 1 + 0.35 * (0.5 + 0.5 * Math.sin(p * Math.PI * 4)); fire.scale.set(sc, sc, sc); }
+    }
+    var fade = 1 - 0.8 * pkJorisSm((p - 0.7) / 0.3);
+    function step(sub, lag) {
+      if (!sub || !sub.uOfF || !sub.uOfF.length) return;
+      var M = sub.uOfF.length - 1, f = p * M;
+      f = Math.max(0, f - (lag || 0) * fade);
+      var k = Math.min(M - 1, Math.floor(f)), r = f - k;
+      pkCoPlace(sub, (sub.u0 + sub.uOfF[k] + (sub.uOfF[k + 1] - sub.uOfF[k]) * r) % 1);
+    }
+    step(w, E.winner === 'water' ? 0 : E.lag);
+    step(v, E.winner === 'vuur' ? 0 : E.lag);
+    if (E.fin) {
+      var won = at.state !== 'running' && !!E.winner;
+      E.fin.water.visible = won && E.winner === 'water';
+      E.fin.vuur.visible = won && E.winner === 'vuur';
+      if (won && !E.announced) { E.announced = true;
+        if (E.winner === 'water') E.winsWater = (E.winsWater || 0) + 1; else E.winsVuur = (E.winsVuur || 0) + 1;
+        toast(at.name + ': ' + (E.winner === 'water' ? 'Water' : 'Vuur') + ' wins the race! (Water ' + E.winsWater + ' - Vuur ' + E.winsVuur + ')', 'good'); sfx('chime'); }
+      if (at.state === 'running') E.announced = false;
+    }
+  }
+  // built before the standard pass so the booth pass sees a.booth (the control house) and builds none
+  var _pkBuildAttractionsJoris = pkBuildAttractions;
+  pkBuildAttractions = function () {
+    PK_PLOTS.forEach(function (p) {
+      if (p.id !== 'joris') return;
+      var a = pkBuildJoris(p);
+      a.level = p.level; a.plot = p; a.open = pkRideSavedOpen(p.id);
+      if (S.rides) S.rides[p.id] = a.open;
+    });
+    _pkBuildAttractionsJoris();
   };
   (function () {
     var canvasId = 'co-canvas';

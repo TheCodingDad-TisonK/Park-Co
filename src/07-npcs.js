@@ -36,7 +36,7 @@
         guardNorth: {
           names: ['Ingrid'], look: guard, speed: 1.15,
           steps: beat([go('gardenWalk', 8), go('darkWoods', 6), go('dropTower', 6), go('promWest'), go('halls', 8), go('promWest'), go('bandstand', 6),
-            go('promEast'), go('coasterCountry', 6), go('eastWalk'), go('firebird', 6), go('dragon', 8), go('promEast'), go('gardenWalk')])
+            go('promEast'), go('coasterCountry', 6), go('eastWalk'), go('promEast'), go('gardenWalk')])
         },
         // the car park: beside the barrier, watching the cars come in off the road
         guardGate: {
@@ -68,7 +68,6 @@
         darkWoods: { x: -36, z: -24 }, dropTower: { x: -36, z: -52 }, promWest: { x: -20, z: -60 }, halls: { x: -46.5, z: -70 },
         gardenWest: { x: -28, z: -44 }, gardenWalk: { x: 2, z: -44 }, clock: { x: 6, z: -58 }, bandstand: { x: 2, z: -66 }, maze: { x: 9.5, z: -72 },
         coasterCountry: { x: 40, z: -24 }, promEast: { x: 50, z: -60 }, eastWalk: { x: 76, z: -20 },
-        firebird: { x: 77, z: -36 }, dragon: { x: 77, z: -92 },
         lotDrive: { x: 0, z: 74 }
       }
     });

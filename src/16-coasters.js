@@ -984,6 +984,12 @@
     pkBkSwitch(k, (xn - cx) + s * 0.1, 1.2, (d1 - cz) + 0.25, s * Math.PI / 2, a.boothLights, a.name);
     pkBkStack(a, k, s * 1.3, H + 0.02, 0.9);
     pkBkCamera(k, -s * (W / 2 + 0.02), H - 0.3, K.z0 - cz + 0.3, s * Math.PI / 2 + Math.PI, 0.5);
+    // a small filing cabinet and a potted plant in the back corner, so the room reads as lived-in
+    box(0.5, 0.9, 0.45, std({ color: 0x3a3a42, roughness: 0.7 }), xf - s * 0.4, 0.45, K.z1 - 0.5, g);
+    box(0.5, 0.08, 0.45, std({ color: 0x2a2a30, roughness: 0.8 }), xf - s * 0.4, 0.92, K.z1 - 0.5, g);
+    var plantPot = new THREE.Group(); plantPot.position.set(xf - s * 1.0, 0.12, K.z1 - 0.5); g.add(plantPot);
+    cyl(0.18, 0.28, std({ color: 0x6b4a2a, roughness: 0.8 }), 0, 0.14, 0, plantPot, 10);
+    sphere(0.32, std({ color: 0x2f6b3a, roughness: 0.85 }), 0, 0.42, 0, plantPot);
     // the status board on the back wall, facing the operator
     var screen = touchScreen({
       w: 380, h: 320, pw: 0.94, ph: 0.80, x: cx, y: 1.62, z: K.z1 - 0.1, ry: Math.PI, parent: g, title: a.name,

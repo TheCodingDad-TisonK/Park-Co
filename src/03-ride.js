@@ -304,9 +304,8 @@
     PK.opLights.setPower(pkCoasterOpen());
     pkBkSwitch(scene, DX0 - 0.35, 1.2, Z1 - 0.11, Math.PI, PK.opLights, 'the control room');
     // the coaster desk under the long window, facing it: the operator works the ride with the platform and the train in
-    // front of them; the status board hangs on the north wall at their right hand
+    // front of them; the status board hangs on the north wall at their right hand.
     pkBuildCoasterConsole({ x: X0 + 0.6, z: -0.85, ry: Math.PI / 2 });
-    pkBkChair(scene, X0 + 1.55, -0.85, -Math.PI / 2, 0);
     box(1.08, 0.96, 0.06, MAT.steelDark, 14.8, 2.02, Z0 + 0.07);
     // the station desk on the north wall: oak on a steel frame, the CCTV monitors on their stands, the radio and the log
     var sdz = Z0 + 0.5;

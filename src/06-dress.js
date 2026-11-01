@@ -132,8 +132,8 @@
       pkRoundCyl(0.075, 1.30, MAT.steelDark, xN, 0.65, z, parent, 8);
       sphere(0.075, pkMats().gold, xN, 1.33, z, parent);
     });
-    var leafL = new THREE.Group(); leafL.position.set(xN, 0, zA); parent.add(leafL);
-    var leafR = new THREE.Group(); leafR.position.set(xN, 0, zB); parent.add(leafR);
+    var leafL = new THREE.Group(); leafL.position.set(xN, 0, zA); leafL.userData.dynamic = true; parent.add(leafL);
+    var leafR = new THREE.Group(); leafR.position.set(xN, 0, zB); leafR.userData.dynamic = true; parent.add(leafR);
     var gateMat = std({ color: 0x2f3a42, roughness: 0.5, metalness: 0.35 }), lw = P / 2 - 0.03;
     pkBevelBox(0.055, 0.92, lw, gateMat, 0, 0.55, lw / 2, leafL, 0.015);
     pkBevelBox(0.055, 0.92, lw, gateMat, 0, 0.55, -lw / 2, leafR, 0.015);
@@ -199,7 +199,7 @@
     [-1, 1].forEach(function (s) {
       pkRoundCyl(0.06, H + 0.15, steel, s * (w / 2 + 0.04), (H + 0.15) / 2, 0, g, 8); sphere(0.075, gold, s * (w / 2 + 0.04), H + 0.2, 0, g);
       pkRoundCyl(0.12, 0.06, steel, s * (w / 2 + 0.04), 0.03, 0, g, 10);
-      var piv = new THREE.Group(); piv.position.set(s * w / 2, 0, 0); g.add(piv);
+      var piv = new THREE.Group(); piv.position.set(s * w / 2, 0, 0); piv.userData.dynamic = true; g.add(piv);
       var lw = w / 2 - 0.04, dx = -s;                      // each leaf runs from its hinge toward the middle
       box(lw, 0.06, 0.05, gold, dx * lw / 2, H, 0, piv, { r: 0.015 });
       box(lw, 0.05, 0.04, steel, dx * lw / 2, 0.2, 0, piv);

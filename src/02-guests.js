@@ -285,6 +285,7 @@
         else if (PK.iceOpen && !gu.ate && gu.hunger > 50 && S.bank >= S.icePrice) pkGo(gu, -8, 10.4, 'toIce');
         else if (PK.toyOpen && Math.random() < 0.15) pkGo(gu, -18, 10.4, 'toToy');
         else if (!gu.trash && randf(0, 1) < 0.22 && pkGuestLifeStart(gu)) { /* a bench, a phone call, a smoke, a chat */ }
+        else if ((gu.rides || 0) < 5 && randf(0, 1) < 0.10 && typeof trGuestQueueJoin === 'function' && TR.st && TR.st.length && trGuestQueueJoin(gu)) { gu.trainAt = undefined; /* off to the Lindenburg Railway */ }
         else if ((gu.rides || 0) < 4 && randf(0, 1) < 0.8 && (pkQueueJoin(gu) || pkAttrPick(gu))) { /* off to another ride */ }
         else pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
       }
@@ -292,6 +293,39 @@
       if (arrived) pkGuestBinArrive(gu);
     } else if (gu.state === 'toBench') {
       if (arrived) { gu.state = 'bench'; rec.path = []; rec.yaw = gu.benchYaw; }
+    } else if (gu.state === 'trainQueue') {
+      if (!rec.path.length) {
+        if (gu.trainAt === undefined) {
+          if (typeof trNearestStation === 'function' && typeof trStationPlatform === 'function') {
+            gu.trainAt = trNearestStation(rec.x, rec.z);
+            if (gu.trainAt >= 0) { var tp = trStationPlatform(gu.trainAt); pkGo(gu, tp.x, tp.z, 'trainQueue'); }
+            else { if (typeof trGuestQueueLeave === 'function') trGuestQueueLeave(gu); gu.state = 'off'; }
+          } else gu.state = 'off';
+        } else {
+          // reached the platform: stand and wait for the train, the doors and the gates
+          gu.state = 'trainWait'; gu.trainWait = 0;
+        }
+      }
+    } else if (gu.state === 'trainWait') {
+      gu.trainWait = (gu.trainWait || 0) + dt;
+      if (PK.closed || gu.trainWait > 150) { if (typeof trGuestQueueLeave === 'function') trGuestQueueLeave(gu); gu.trainAt = undefined; gu.state = 'off'; }
+    } else if (gu.state === 'trainRide') {
+      // follow the seat on the moving train
+      if (gu.trainSeat && gu.trainUnit && gu.trainUnit.g) {
+        var u = gu.trainUnit, s = gu.trainSeat;
+        var c = Math.cos(u.g.rotation.y), sn = Math.sin(u.g.rotation.y);
+        rec.x = u.g.position.x + (s.x * c - s.z * sn);
+        rec.z = u.g.position.z + (s.x * sn + s.z * c);
+        rec.yaw = u.g.rotation.y + (s.face || 0);
+        rec.path = [];
+      }
+    } else if (gu.state === 'trainAlight') {
+      if (!rec.path.length) {
+        var sti = (gu.trainStation >= 0 ? gu.trainStation : 0);
+        var dest = (typeof trStationWalkIn === 'function') ? trStationWalkIn(sti) : null;
+        pkGo(gu, dest ? dest.x : rec.x, dest ? dest.z : rec.z, 'trainAlight');
+      }
+      if (arrived) { gu.state = 'off'; gu.trainSeat = null; gu.trainUnit = null; gu.trainStation = -1; }
     } else if (gu.state === 'bench') {
       gu.lifeT -= dt;
       if (gu.lifeT <= 0 || PK.closed) { pkLifeEnd(gu); gu.state = 'off'; }
@@ -351,7 +385,7 @@
     if (!PK.guests) return;
     PK.guests.forEach(function (gu) {
       if (!gu) return;
-      if (gu.state === 'seated' || gu.state === 'board') return;
+      if (gu.state === 'seated' || gu.state === 'board' || gu.state === 'trainRide') return;
       if (gu.booth >= 0 && PK.booths[gu.booth]) {
         var b = PK.booths[gu.booth], bi = b.queue.indexOf(gu);
         if (bi >= 0) { b.queue.splice(bi, 1); screenDirtyAll(); }
@@ -368,6 +402,7 @@
     });
     if (PK.attractions) PK.attractions.forEach(function (a) { pkAttrQueueReslot(a); });
     pkQueueReslot(); screenDirtyAll();
+    if (typeof TR !== 'undefined' && TR.guestQueue) TR.guestQueue.length = 0;   // guests waiting for the train go home too
   }
   // ── The ticket window ─────────────────────────────────────────────
   function pkServe(bi, machine) {

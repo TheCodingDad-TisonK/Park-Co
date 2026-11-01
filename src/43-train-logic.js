@@ -7,12 +7,30 @@
     TR_STATIONS.forEach(function (d, i) { trBuildStation(d, i); });
     TR_GAPS.forEach(function (g) { trPortal(g.axis === 'z' ? g.x : g.x, g.axis === 'z' ? g.z : g.z, g.axis); });
     trBuildDepot(); trBuildTrain();
+    trExtendNav();
     TR.t = { s: 0, mode: 'M', v: 0, dir: 1, throttle: 0, brake: 1, engine: true, press: 0.78, fire: 0.38, glass: 0.62, cutoff: 0, cocks: true, cylCold: 1, damper: 0.5, blower: 0, injL: false, injR: false, dynamo: true, mr: 1, bc: 1, sand: false, sandT: 0, slip: 0, safety: false, priming: false, greenT: 0, fireman: false, lowT: 0, knockT: 0, draught: 0, doorsOpen: false, doorAmt: 0, driving: false, seat: null, look: { yaw: 0, pitch: 0 }, brakeKey: false, autoAlign: false, hornKey: false, whistleKey: false, thirdPerson: false, camDist: 5.5, hornOn: false, whistleOn: false, hornAuto: 0, whistleAuto: 0, msgT: 0, at: -1, nextSt: 0, dwell: 0, departFrom: -1, atb: '', cabDisplayT: 0 };
+    TR.guestQueue = []; TR.guestSpawnT = 0;
 
     R.auto = !!R.auto && pkOpCount() > 0;
     trResetToStation(0);
     trBuildHud();
     TR.built = true;
+  }
+  // the route finder's grid covers the park and a small margin; the railway's platforms and footpaths lie outside the
+  // palisade, past that grid's edge, so they could never be walked to. Grow the grid outward to hold them, keeping the
+  // same 0.6 m cell lattice (whole cells only) so the park's narrow ways keep their tuned edges.
+  function trExtendNav() {
+    if (typeof navSetup !== 'function') return;
+    var cell = NAV.cell, x0 = NAV.x0, z0 = NAV.z0, x1 = x0 + NAV.w * cell, z1 = z0 + NAV.h * cell;
+    var nx0 = x0, nz0 = z0, nx1 = x1, nz1 = z1;
+    for (var i = 0; i < PK_WALK_EXTRA.length; i++) {
+      var r = PK_WALK_EXTRA[i];
+      nx0 = Math.min(nx0, r.x0 - 1); nx1 = Math.max(nx1, r.x1 + 1);
+      nz0 = Math.min(nz0, r.z0 - 1); nz1 = Math.max(nz1, r.z1 + 1);
+    }
+    nx0 = Math.floor((nx0 - x0) / cell) * cell + x0; nz0 = Math.floor((nz0 - z0) / cell) * cell + z0;
+    nx1 = Math.ceil((nx1 - x0) / cell) * cell + x0; nz1 = Math.ceil((nz1 - z0) / cell) * cell + z0;
+    if (nx0 !== x0 || nz0 !== z0 || nx1 !== x1 || nz1 !== z1) navSetup({ x0: nx0, z0: nz0, width: nx1 - nx0, depth: nz1 - nz0, cell: cell });
   }
   function trResetToStation(i) {
     var t = TR.t, st = TR.st[i]; t.mode = 'M'; t.s = st.s + trStopOff(); t.v = 0; t.at = i; t.nextSt = (i + 1) % TR.st.length; t.dwell = 0; t.brake = 1; t.throttle = 0;
@@ -354,6 +372,8 @@
     trAnimate(dt, run);
     trCrossingsTick(dt);
     trStationsTick(dt);
+    trStationBoard();
+    trStationAlight();
     trVoiceTick(dt);
     trDriveTick(dt);
     trHud(dt);
@@ -507,3 +527,113 @@
     var l3 = (t.at >= 0 ? 'AT ' + TR.st[t.at].name + (t.dwell > 0 ? '   DEPARTS IN ' + Math.ceil(t.dwell) + ' s' : '   READY') : 'NEXT ' + st.name + '   ' + dist + ' m') + '   DOORS ' + (t.doorsOpen ? 'OPEN' : 'SHUT') + (R.auto ? '   AUTO' : '') + (t.mode === 'D' ? '   DEPOT LINE' : '');
     TR.hud.textContent = l1 + '\n' + l2 + '\n' + l3; TR.hud.hidden = false;
   }
+  // -- Guest boarding for the Lindenburg Railway ---------------------
+  // A minimal system: guests queue at the current station; they board only
+  // when the train is stopped, the train doors are open AND the station gates
+  // are open ("both gates open"). They alight when the train next stops.
+  function trNearestStation(x, z) {
+    if (!TR.st || !TR.st.length) return -1;
+    var best = -1, bd = 1e9;
+    for (var i = 0; i < TR.st.length; i++) {
+      var st = TR.st[i];
+      if (st.def && st.def.guest === false) continue;   // a staff/scenic halt guests do not use
+      var d = (st.x - x) * (st.x - x) + (st.z - z) * (st.z - z);
+      if (d < bd) { bd = d; best = i; }
+    }
+    return best;
+  }
+  // where a guest stands to board: the middle of the platform, in the world
+  function trStationPlatform(i) {
+    var st = TR.st[i]; if (!st) return null;
+    var p = trLocalToWorld(st, 0, 4.6);
+    return { x: p.x, z: p.z };
+  }
+  // where an alighting guest walks back into the park: the far end of the footpath (the park spur for the Windmill Halt)
+  function trStationWalkIn(i) {
+    var st = TR.st[i]; if (!st) return null;
+    var pts = st.def && st.def.park ? st.def.park : (st.def && st.def.walk);
+    if (!pts || !pts.length) return { x: st.x, z: st.z };
+    return { x: pts[pts.length - 1][0], z: pts[pts.length - 1][1] };
+  }
+  function trGuestQueueJoin(gu) {
+    if (!gu || !TR.guestQueue || TR.guestQueue.indexOf(gu) >= 0) return false;
+    TR.guestQueue.push(gu);
+    gu.state = 'trainQueue';
+    return true;
+  }
+  function trGuestQueueLeave(gu) {
+    if (!TR.guestQueue) return;
+    var i = TR.guestQueue.indexOf(gu);
+    if (i >= 0) TR.guestQueue.splice(i, 1);
+  }
+  function trStationBoard() {
+    var t = TR.t;
+    if (t.at < 0 || t.v > 0.3 || !t.doorsOpen) return;
+    var st = TR.st[t.at];
+    if (!st || !(st.gatesAmt > 0.5)) return;
+    // find free seats across all wagons, boarding only the guests already waiting at this station
+    var queue = TR.guestQueue.slice();
+    for (var qi = 0; qi < queue.length; qi++) {
+      var gu = queue[qi];
+      if (gu.trainAt !== t.at) continue;
+      var seat = null, unit = null;
+      for (var ui = 0; ui < TR.units.length; ui++) {
+        var u = TR.units[ui];
+        if (!u.seats) continue;
+        for (var si = 0; si < u.seats.length; si++) {
+          if (!u.seats[si].taken) { seat = u.seats[si]; unit = u; break; }
+        }
+        if (seat) break;
+      }
+      if (!seat) break;
+      seat.taken = true; seat.guest = gu;
+      gu.trainSeat = seat; gu.trainUnit = unit;
+      gu.rides = (gu.rides || 0) + 1;
+      gu.mood = 'happy';
+      gu.trainAt = undefined;
+      gu.state = 'trainRide';
+      trGuestQueueLeave(gu);
+    }
+  }
+  var _trAlightDone = false;
+  function trStationAlight() {
+    var t = TR.t;
+    if (t.at < 0 || t.v > 0.3) { _trAlightDone = false; return; }
+    if (_trAlightDone) return;
+    if (t.dwell > 28) return; // just arrived; wait a moment
+    var st = TR.st[t.at];
+    if (st && st.def && st.def.guest === false) { _trAlightDone = true; return; }   // a scenic halt (Windmill): ride on through
+    _trAlightDone = true;
+    TR.units.forEach(function (u) {
+      if (!u.seats) return;
+      u.seats.forEach(function (s) {
+        if (s.taken && s.guest) {
+          s.guest.state = 'trainAlight';
+          s.guest.trainStation = t.at;
+          s.guest.trainAt = undefined;
+          s.guest.rec.path = [];
+          s.taken = false; s.guest = null;
+        }
+      });
+    });
+  }
+  // expose for guest AI
+  window.trGuestQueueJoin = trGuestQueueJoin;
+  window.trGuestQueueLeave = trGuestQueueLeave;
+  window.trNearestStation = trNearestStation;
+  window.trStationPlatform = trStationPlatform;
+  window.trStationWalkIn = trStationWalkIn;
+  window.trStationBoard = trStationBoard;
+  // a few dev-console commands for the railway
+  GAME.commands.trainauto = function (on) { trSetAuto(on === undefined ? !trState().auto : !!on); return 'railway auto ' + (trState().auto ? 'on' : 'off'); };
+  GAME.commands.traingo = function () { trSetAuto(true); return 'railway auto on'; };
+  GAME.commands.trainstop = function () { trSetAuto(false); TR.t.throttle = 0; TR.t.brake = 1; return 'railway auto off, brakes on'; };
+  GAME.commands.trainhere = function (i) { var n = Math.max(0, Math.min(TR.st.length - 1, Math.round(+i || 0))); trResetToStation(n); return 'train placed at ' + TR.st[n].name; };
+  GAME.commands.traindoor = function (want) { trToggleDoors(want === undefined ? undefined : !!want); return 'train doors ' + (TR.t.doorsOpen ? 'open' : 'shut'); };
+  GAME.commands.trainpoints = function () { trThrowPoints(); return 'points: ' + (trState().points === 'depot' ? 'the depot' : 'the main line'); };
+  GAME.commands.trainrefuel = function () { trQuickFill(); return 'tender topped up'; };
+  GAME.commands.trainnav = function () {
+    if (!TR.st || !TR.st.length) return 'no stations';
+    var lines = TR.st.map(function (st) { var p = trStationPlatform(TR.st.indexOf(st)); var w = trStationWalkIn(TR.st.indexOf(st)); return st.name + ' platform ' + Math.round(p.x) + ',' + Math.round(p.z) + ' walk-in ' + Math.round(w.x) + ',' + Math.round(w.z); });
+    return lines.join(' | ');
+  };
