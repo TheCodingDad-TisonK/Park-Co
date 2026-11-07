@@ -12994,14 +12994,18 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // a track in plan and in profile: from the coaster's own curve (or the flume's own course), the lift marked, the train on
   // it car by car, a cursor on the profile, and block lamps that go red where the train is
   PK_PN_KINDS.track = function (a, sh) {
-    var E = a.extra || {}, N = 220, P3 = [], i, isFlume = !E.curve;
-    if (E.curve) { for (i = 0; i <= N; i++) { var q = E.curve.getPointAt(((E.uPark || 0) + i / N) % 1); P3.push([q.x, q.y, q.z]); } }
-    else {
+    var E = a.extra || {}, N = 220, P3 = [], P3b = null, i, isFlume = !E.curve;
+    if (E.curve) {
+      for (i = 0; i <= N; i++) { var q = E.curve.getPointAt(((E.uPark || 0) + i / N) % 1); P3.push([q.x, q.y, q.z]); }
+      // a racing twin track: the second lane (sh.curve2) is sampled now too, so the plan's bounds take in both lanes
+      if (sh.curve2) { P3b = []; for (i = 0; i <= N; i++) { var qb = sh.curve2.getPointAt(((E.uPark || 0) + i / N) % 1); P3b.push([qb.x, qb.y, qb.z]); } }
+    } else {
       var PTS = PK_FLUME_PTS, L = [], tot = 0; for (i = 0; i < PTS.length; i++) { var A = PTS[i], B = PTS[(i + 1) % PTS.length]; var l = Math.hypot(B[0] - A[0], B[1] - A[1], B[2] - A[2]); L.push(l); tot += l; }
       for (i = 0; i <= N; i++) { var d = i / N * tot, k = 0; while (k < L.length - 1 && d > L[k]) { d -= L[k]; k++; } var A2 = PTS[k], B2 = PTS[(k + 1) % PTS.length], f = L[k] ? d / L[k] : 0; P3.push([A2[0] + (B2[0] - A2[0]) * f, A2[1] + (B2[1] - A2[1]) * f, A2[2] + (B2[2] - A2[2]) * f]); }
     }
     var xmn = 1e9, xmx = -1e9, zmn = 1e9, zmx = -1e9, ymn = 1e9, ymx = -1e9;
     P3.forEach(function (p) { xmn = Math.min(xmn, p[0]); xmx = Math.max(xmx, p[0]); zmn = Math.min(zmn, p[2]); zmx = Math.max(zmx, p[2]); ymn = Math.min(ymn, p[1]); ymx = Math.max(ymx, p[1]); });
+    if (P3b) P3b.forEach(function (p) { xmn = Math.min(xmn, p[0]); xmx = Math.max(xmx, p[0]); zmn = Math.min(zmn, p[2]); zmx = Math.max(zmx, p[2]); ymn = Math.min(ymn, p[1]); ymx = Math.max(ymx, p[1]); });
     // the lift: the steady climb to the highest point in the first part of the lap
     var top = 0; for (i = 0; i <= N * 0.7; i++) if (P3[i][1] > P3[top][1]) top = i;
     var l0 = top; while (l0 > 1 && P3[l0 - 1][1] < P3[l0][1] - 1e-3) l0--;
@@ -13025,9 +13029,8 @@ function pkBuildParkCabinet(px, py, pz, ry) {
         var pl = P3.map(function (p) { return plan(p[0], p[2]); });
         c.save(); c.lineJoin = 'round'; c.lineCap = 'round';
         pkPnLine(R, pl, 'rgba(0,0,0,0.55)', 0.007); pkPnLine(R, pl, S.ink, 0.0028);
-        // a second lane (a racing twin track: sh.curve2 is the mirror of E.curve, set once it exists), drawn the same way
-        if (sh.curve2) {
-          var P3b = []; for (var ib = 0; ib <= N; ib++) { var qb = sh.curve2.getPointAt(((E.uPark || 0) + ib / N) % 1); P3b.push([qb.x, qb.y, qb.z]); }
+        // a second lane (a racing twin track: sh.curve2 is the mirror of E.curve), drawn the same way
+        if (P3b) {
           var pl2 = P3b.map(function (p) { return plan(p[0], p[2]); });
           pkPnLine(R, pl2, 'rgba(0,0,0,0.55)', 0.007); pkPnLine(R, pl2, S.acc, 0.0028);
         }
@@ -15128,6 +15131,40 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     } });
     return g;
   }
+  // ── CCTV: a screen carrying a live feed from a camera out in the park ──
+  // The engine renders the world once a frame; these cameras render it a second time, each into its own small target,
+  // so a booth screen can show real footage (the queue, the platform, the lift) instead of a drawn schematic.
+  var PK_FEEDS = [], PK_FEED_FRAME = 0;
+  function pkCctvFeed(parent, x, y, z, ry, tilt, camPos, lookAt) {
+    var g = new THREE.Group(); g.rotation.order = 'YXZ'; g.position.set(x, y, z); g.rotation.y = ry || 0; g.rotation.x = tilt || 0; parent.add(g);
+    pkBevelBox(0.5, 0.36, 0.12, pkBkStd({ color: 0x23292e, roughness: 0.5, metalness: 0.3 }), 0, 0, -0.065, g, 0.02);
+    box(0.02, 0.02, 0.004, glowMat(0x5fd38d, 1.4), 0.2, -0.16, 0.0, g);   // the power LED
+    var W = 256, H = 192;
+    var rt = new THREE.WebGLRenderTarget(W, H, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat, encoding: THREE.sRGBEncoding });
+    var cam = new THREE.PerspectiveCamera(74, W / H, 0.1, 260);
+    cam.position.set(camPos[0], camPos[1], camPos[2]); cam.lookAt(lookAt[0], lookAt[1], lookAt[2]);
+    var mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.3), new THREE.MeshBasicMaterial({ map: rt.texture }));
+    mesh.userData.noBake = true; mesh.position.set(0, 0.01, 0); g.add(mesh);
+    var glass = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.3), MAT.screenGlass); glass.position.set(0, 0.01, 0.0015); glass.renderOrder = 2; g.add(glass);
+    PK_FEEDS.push({ rt: rt, cam: cam, mesh: mesh });
+    return g;
+  }
+  hook('frame', function () {
+    if (!PK_FEEDS.length) return;
+    PK_FEED_FRAME++;
+    PK_FEEDS.forEach(function (f) { f.mesh.visible = false; });   // no screen-in-screen: hide every feed while the cameras draw
+    var rendered = false;
+    for (var i = 0; i < PK_FEEDS.length; i++) {
+      var f = PK_FEEDS[i];
+      if ((PK_FEED_FRAME + i) % 3 !== 0) continue;   // ~20 fps a feed, staggered, so the extra draws stay cheap
+      renderer.setRenderTarget(f.rt);
+      renderer.render(scene, f.cam);
+      rendered = true;
+    }
+    if (rendered) renderer.setRenderTarget(null);
+    PK_FEEDS.forEach(function (f) { f.mesh.visible = true; });
+  });
+
   // the LED board over the door: the ride's name, its state and the wait, in amber dots
   function pkBkWaitBoard(a, parent, x, y, z, ry) {
     var g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry || 0; parent.add(g);
@@ -28286,6 +28323,11 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     // the water track's curve for the plan (Vuur is its mirror, close enough for the schematic) and both trains' cars.
     subs.curve = subs.water.curve;
     subs.cars = subs.water.cars.concat(subs.vuur.cars);
+    // the mimic (part 14) also reads these straight off a.extra: hand it the water track's own, so the plan starts at the
+    // station and the profile cursor and block lamps follow the run instead of sitting at the first frame
+    subs.uPark = subs.water.uPark;
+    subs.uOfF = subs.water.uOfF;
+    subs.u0 = subs.water.u0;
     if (PK_PANEL.joris) PK_PANEL.joris.curve2 = subs.vuur.curve;   // the mimic draws both lanes once this is set (part 14)
     // where the first drop bottoms out (lx 72), on the Water curve: the race keeps both trains level until here
     var dropW = pkJorisW(74, -2.5); subs.uDrop = pkCoUAt(subs.water.curve, dropW[0], dropW[1]);
@@ -29053,13 +29095,9 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     [-1, 1].forEach(function (s) { var wg = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.12, 3), dg); wg.position.set(1.15 + s * 0.06, dy + 0.12, -0.22); wg.rotation.z = -s * 0.8; wg.scale.set(1, 1, 0.3); con.add(wg); });
     // the screens on the riser: the queue camera and the race board over the left wing, the block map over the right
     var mon = function (x, title, draw) { var sc = pkBkMonitor(con, x, 1.2, -0.2, 0, -0.08, title, draw); pkPowerScreen(sc, function () { return !!a.open; }); box(0.06, 0.04, 0.12, black, x, 1.0, -0.21, con); return sc; };
-    mon(-2.25, 'CAM 1 · the queue', function (c, s) {
-      c.fillStyle = '#071108'; c.fillRect(0, 0, s.w, s.h); c.fillStyle = '#8fe0a0'; c.font = 'bold 13px monospace'; c.textAlign = 'left'; c.textBaseline = 'alphabetic';
-      c.fillText('CAM 1  QUEUE', 8, 16); c.textAlign = 'right'; c.fillText(fmtTime(S.time), s.w - 8, 16);
-      var q = pkAttrWaiting(a); c.textAlign = 'left'; c.font = 'bold 30px monospace'; c.fillText(String(q), 12, 70); c.font = '13px monospace';
-      c.fillText('IN LINE', 12, 90); c.fillText('WAIT ~' + pkBkWait(a) + ' MIN', 12, 112); c.fillText('GATE ' + ((pkCtl(a).gateT || 0) > 0.5 ? 'OPEN' : 'SHUT'), 12, 134);
-      pkBkScanlines(c, s.w, s.h);
-    });
+    // CAM 1: a live feed from a camera over the dragon gate, looking down the queue
+    pkCctvFeed(con, -2.25, 1.2, -0.2, 0, -0.08, [90.2, 3.0, 1.5], [98, 0.5, -3]);
+    box(0.06, 0.04, 0.12, black, -2.25, 1.0, -0.21, con);
     mon(-1.45, 'RACE · blue against red', function (c, s) {
       c.fillStyle = '#0b0d12'; c.fillRect(0, 0, s.w, s.h); c.textBaseline = 'alphabetic';
       c.fillStyle = '#e8d8a0'; c.font = 'bold 13px monospace'; c.textAlign = 'center'; c.fillText('THE RACE', s.w / 2, 18);
@@ -29088,6 +29126,47 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       c.fillStyle = '#9fc6ff'; c.font = 'bold 12px monospace'; c.textAlign = 'left'; c.fillText('BLOCKS  ' + pkBkWord(a), 8, 14);
       pkBkScanlines(c, s.w, s.h);
     });
+    // four more screens hang from the ceiling, two on each side in the corners: the platform, the lift, the exit and the
+    // departure signals, so the operator can watch the whole ride without leaving the chair
+    var bracket = function (x, z, ry) {
+      var hg = new THREE.Group(); hg.position.set(x, 2.6, z); hg.rotation.y = ry; con.add(hg);
+      pkRoundCyl(0.02, 0.4, M0.iron, 0, 0.42, -0.06, hg, 6);      // the drop rod
+      box(0.94, 0.04, 0.04, M0.iron, 0, 0.24, -0.06, hg);          // the crossbar
+      return hg;
+    };
+    var sig = function () {   // the departure signal, the same as the lamps over the tracks (pkjorisSignals)
+      var C = pkCtl(a), E = a.extra, st;
+      if (!a.open) st = -1;
+      else if (a.state === 'running' || a.state === 'dispatch') {
+        if (E.pLift === undefined && E.water && E.water.uOfF && E.water.uOfF.length) { E.pLift = pkJorisShare(E, E.uLift, 0.08); E.pTop = pkJorisShare(E, E.uTop, 0.22); }
+        var p = clamp(a.t / Math.max(1, a.run), 0, 1);
+        st = p < (E.pLift || 0.08) ? 2 : p < (E.pTop || 0.22) ? 1 : 0;
+      } else st = (a.stationGates === false && (C.barsWant || 0) > 0.5) ? 1 : 0;
+      return st;
+    };
+    // the pairs hang from the ceiling, pulled in off the walls so they can turn toward the chair without poking through
+    var hgL = bracket(-2.5, 0.3, Math.PI / 2 - 0.5);   // left, angled ~29 deg toward the chair
+    pkCctvFeed(hgL, -0.27, 0, 0, 0, 0.5, [100, 4.5, -13.5], [100, 0.5, -22]);   // CAM 2: the platform
+    pkCctvFeed(hgL, 0.27, 0, 0, 0, 0.5, [100, 18, -45], [100, 2, -25]);        // CAM 3: the lift
+    var hgR = bracket(2.5, 0.3, -Math.PI / 2 + 0.5);  // right, angled ~29 deg toward the chair
+    pkCctvFeed(hgR, -0.27, 0, 0, 0, 0.5, [86.5, 3.0, -2.0], [94, 1, -1]);       // CAM 4: the exit
+    var sg = pkBkMonitor(hgR, 0.27, 0, 0, 0, 0.5, 'SIGNALS', function (c, s) {
+        c.fillStyle = '#070b11'; c.fillRect(0, 0, s.w, s.h);
+        c.fillStyle = '#e8d8a0'; c.font = 'bold 13px monospace'; c.textAlign = 'center'; c.textBaseline = 'alphabetic';
+        c.fillText('DEPARTURE', s.w / 2, 16);
+        var st = sig(), cols = [0xff2a1a, 0xffa31a, 0x2aff5a], names = ['HOLD', 'READY', 'GO'];
+        [['RED', 0xff2a1a], ['AMBER', 0xffa31a], ['GREEN', 0x2aff5a]].forEach(function (t, i) {
+          var y = 42 + i * 40;
+          c.fillStyle = st === i ? t[1] : 'rgba(255,255,255,0.14)';
+          c.beginPath(); c.arc(24, y, 10, 0, 6.283); c.fill();
+          c.fillStyle = st === i ? t[1] : '#7d8a96'; c.textAlign = 'left'; c.font = 'bold 14px monospace';
+          c.fillText(t[0], 44, y + 5);
+        });
+        c.fillStyle = '#e8d8a0'; c.textAlign = 'center'; c.font = 'bold 16px monospace';
+        c.fillText(!a.open ? 'NO POWER' : names[Math.max(0, st)], s.w / 2, 150);
+        pkBkScanlines(c, s.w, s.h);
+      });
+    pkPowerScreen(sg, function () { return !!a.open; });
   }
   // ── The winner's banners: one over each track, rolled up on a pole under the roof. Dropping, the cloth unrolls from
   // the pole (the pole turns as it pays out) to hang 3 m in the track's colour with a gold border and a fringe, its

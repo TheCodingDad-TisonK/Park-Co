@@ -185,6 +185,11 @@
     // the water track's curve for the plan (Vuur is its mirror, close enough for the schematic) and both trains' cars.
     subs.curve = subs.water.curve;
     subs.cars = subs.water.cars.concat(subs.vuur.cars);
+    // the mimic (part 14) also reads these straight off a.extra: hand it the water track's own, so the plan starts at the
+    // station and the profile cursor and block lamps follow the run instead of sitting at the first frame
+    subs.uPark = subs.water.uPark;
+    subs.uOfF = subs.water.uOfF;
+    subs.u0 = subs.water.u0;
     if (PK_PANEL.joris) PK_PANEL.joris.curve2 = subs.vuur.curve;   // the mimic draws both lanes once this is set (part 14)
     // where the first drop bottoms out (lx 72), on the Water curve: the race keeps both trains level until here
     var dropW = pkJorisW(74, -2.5); subs.uDrop = pkCoUAt(subs.water.curve, dropW[0], dropW[1]);
@@ -952,13 +957,9 @@
     [-1, 1].forEach(function (s) { var wg = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.12, 3), dg); wg.position.set(1.15 + s * 0.06, dy + 0.12, -0.22); wg.rotation.z = -s * 0.8; wg.scale.set(1, 1, 0.3); con.add(wg); });
     // the screens on the riser: the queue camera and the race board over the left wing, the block map over the right
     var mon = function (x, title, draw) { var sc = pkBkMonitor(con, x, 1.2, -0.2, 0, -0.08, title, draw); pkPowerScreen(sc, function () { return !!a.open; }); box(0.06, 0.04, 0.12, black, x, 1.0, -0.21, con); return sc; };
-    mon(-2.25, 'CAM 1 · the queue', function (c, s) {
-      c.fillStyle = '#071108'; c.fillRect(0, 0, s.w, s.h); c.fillStyle = '#8fe0a0'; c.font = 'bold 13px monospace'; c.textAlign = 'left'; c.textBaseline = 'alphabetic';
-      c.fillText('CAM 1  QUEUE', 8, 16); c.textAlign = 'right'; c.fillText(fmtTime(S.time), s.w - 8, 16);
-      var q = pkAttrWaiting(a); c.textAlign = 'left'; c.font = 'bold 30px monospace'; c.fillText(String(q), 12, 70); c.font = '13px monospace';
-      c.fillText('IN LINE', 12, 90); c.fillText('WAIT ~' + pkBkWait(a) + ' MIN', 12, 112); c.fillText('GATE ' + ((pkCtl(a).gateT || 0) > 0.5 ? 'OPEN' : 'SHUT'), 12, 134);
-      pkBkScanlines(c, s.w, s.h);
-    });
+    // CAM 1: a live feed from a camera over the dragon gate, looking down the queue
+    pkCctvFeed(con, -2.25, 1.2, -0.2, 0, -0.08, [90.2, 3.0, 1.5], [98, 0.5, -3]);
+    box(0.06, 0.04, 0.12, black, -2.25, 1.0, -0.21, con);
     mon(-1.45, 'RACE · blue against red', function (c, s) {
       c.fillStyle = '#0b0d12'; c.fillRect(0, 0, s.w, s.h); c.textBaseline = 'alphabetic';
       c.fillStyle = '#e8d8a0'; c.font = 'bold 13px monospace'; c.textAlign = 'center'; c.fillText('THE RACE', s.w / 2, 18);
@@ -987,6 +988,47 @@
       c.fillStyle = '#9fc6ff'; c.font = 'bold 12px monospace'; c.textAlign = 'left'; c.fillText('BLOCKS  ' + pkBkWord(a), 8, 14);
       pkBkScanlines(c, s.w, s.h);
     });
+    // four more screens hang from the ceiling, two on each side in the corners: the platform, the lift, the exit and the
+    // departure signals, so the operator can watch the whole ride without leaving the chair
+    var bracket = function (x, z, ry) {
+      var hg = new THREE.Group(); hg.position.set(x, 2.6, z); hg.rotation.y = ry; con.add(hg);
+      pkRoundCyl(0.02, 0.4, M0.iron, 0, 0.42, -0.06, hg, 6);      // the drop rod
+      box(0.94, 0.04, 0.04, M0.iron, 0, 0.24, -0.06, hg);          // the crossbar
+      return hg;
+    };
+    var sig = function () {   // the departure signal, the same as the lamps over the tracks (pkjorisSignals)
+      var C = pkCtl(a), E = a.extra, st;
+      if (!a.open) st = -1;
+      else if (a.state === 'running' || a.state === 'dispatch') {
+        if (E.pLift === undefined && E.water && E.water.uOfF && E.water.uOfF.length) { E.pLift = pkJorisShare(E, E.uLift, 0.08); E.pTop = pkJorisShare(E, E.uTop, 0.22); }
+        var p = clamp(a.t / Math.max(1, a.run), 0, 1);
+        st = p < (E.pLift || 0.08) ? 2 : p < (E.pTop || 0.22) ? 1 : 0;
+      } else st = (a.stationGates === false && (C.barsWant || 0) > 0.5) ? 1 : 0;
+      return st;
+    };
+    // the pairs hang from the ceiling, pulled in off the walls so they can turn toward the chair without poking through
+    var hgL = bracket(-2.5, 0.3, Math.PI / 2 - 0.5);   // left, angled ~29 deg toward the chair
+    pkCctvFeed(hgL, -0.27, 0, 0, 0, 0.5, [100, 4.5, -13.5], [100, 0.5, -22]);   // CAM 2: the platform
+    pkCctvFeed(hgL, 0.27, 0, 0, 0, 0.5, [100, 18, -45], [100, 2, -25]);        // CAM 3: the lift
+    var hgR = bracket(2.5, 0.3, -Math.PI / 2 + 0.5);  // right, angled ~29 deg toward the chair
+    pkCctvFeed(hgR, -0.27, 0, 0, 0, 0.5, [86.5, 3.0, -2.0], [94, 1, -1]);       // CAM 4: the exit
+    var sg = pkBkMonitor(hgR, 0.27, 0, 0, 0, 0.5, 'SIGNALS', function (c, s) {
+        c.fillStyle = '#070b11'; c.fillRect(0, 0, s.w, s.h);
+        c.fillStyle = '#e8d8a0'; c.font = 'bold 13px monospace'; c.textAlign = 'center'; c.textBaseline = 'alphabetic';
+        c.fillText('DEPARTURE', s.w / 2, 16);
+        var st = sig(), cols = [0xff2a1a, 0xffa31a, 0x2aff5a], names = ['HOLD', 'READY', 'GO'];
+        [['RED', 0xff2a1a], ['AMBER', 0xffa31a], ['GREEN', 0x2aff5a]].forEach(function (t, i) {
+          var y = 42 + i * 40;
+          c.fillStyle = st === i ? t[1] : 'rgba(255,255,255,0.14)';
+          c.beginPath(); c.arc(24, y, 10, 0, 6.283); c.fill();
+          c.fillStyle = st === i ? t[1] : '#7d8a96'; c.textAlign = 'left'; c.font = 'bold 14px monospace';
+          c.fillText(t[0], 44, y + 5);
+        });
+        c.fillStyle = '#e8d8a0'; c.textAlign = 'center'; c.font = 'bold 16px monospace';
+        c.fillText(!a.open ? 'NO POWER' : names[Math.max(0, st)], s.w / 2, 150);
+        pkBkScanlines(c, s.w, s.h);
+      });
+    pkPowerScreen(sg, function () { return !!a.open; });
   }
   // ── The winner's banners: one over each track, rolled up on a pole under the roof. Dropping, the cloth unrolls from
   // the pole (the pole turns as it pays out) to hang 3 m in the track's colour with a gold border and a fringe, its

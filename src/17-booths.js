@@ -406,6 +406,40 @@
     } });
     return g;
   }
+  // ── CCTV: a screen carrying a live feed from a camera out in the park ──
+  // The engine renders the world once a frame; these cameras render it a second time, each into its own small target,
+  // so a booth screen can show real footage (the queue, the platform, the lift) instead of a drawn schematic.
+  var PK_FEEDS = [], PK_FEED_FRAME = 0;
+  function pkCctvFeed(parent, x, y, z, ry, tilt, camPos, lookAt) {
+    var g = new THREE.Group(); g.rotation.order = 'YXZ'; g.position.set(x, y, z); g.rotation.y = ry || 0; g.rotation.x = tilt || 0; parent.add(g);
+    pkBevelBox(0.5, 0.36, 0.12, pkBkStd({ color: 0x23292e, roughness: 0.5, metalness: 0.3 }), 0, 0, -0.065, g, 0.02);
+    box(0.02, 0.02, 0.004, glowMat(0x5fd38d, 1.4), 0.2, -0.16, 0.0, g);   // the power LED
+    var W = 256, H = 192;
+    var rt = new THREE.WebGLRenderTarget(W, H, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat, encoding: THREE.sRGBEncoding });
+    var cam = new THREE.PerspectiveCamera(74, W / H, 0.1, 260);
+    cam.position.set(camPos[0], camPos[1], camPos[2]); cam.lookAt(lookAt[0], lookAt[1], lookAt[2]);
+    var mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.3), new THREE.MeshBasicMaterial({ map: rt.texture }));
+    mesh.userData.noBake = true; mesh.position.set(0, 0.01, 0); g.add(mesh);
+    var glass = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.3), MAT.screenGlass); glass.position.set(0, 0.01, 0.0015); glass.renderOrder = 2; g.add(glass);
+    PK_FEEDS.push({ rt: rt, cam: cam, mesh: mesh });
+    return g;
+  }
+  hook('frame', function () {
+    if (!PK_FEEDS.length) return;
+    PK_FEED_FRAME++;
+    PK_FEEDS.forEach(function (f) { f.mesh.visible = false; });   // no screen-in-screen: hide every feed while the cameras draw
+    var rendered = false;
+    for (var i = 0; i < PK_FEEDS.length; i++) {
+      var f = PK_FEEDS[i];
+      if ((PK_FEED_FRAME + i) % 3 !== 0) continue;   // ~20 fps a feed, staggered, so the extra draws stay cheap
+      renderer.setRenderTarget(f.rt);
+      renderer.render(scene, f.cam);
+      rendered = true;
+    }
+    if (rendered) renderer.setRenderTarget(null);
+    PK_FEEDS.forEach(function (f) { f.mesh.visible = true; });
+  });
+
   // the LED board over the door: the ride's name, its state and the wait, in amber dots
   function pkBkWaitBoard(a, parent, x, y, z, ry) {
     var g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry || 0; parent.add(g);

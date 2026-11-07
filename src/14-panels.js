@@ -750,14 +750,18 @@
   // a track in plan and in profile: from the coaster's own curve (or the flume's own course), the lift marked, the train on
   // it car by car, a cursor on the profile, and block lamps that go red where the train is
   PK_PN_KINDS.track = function (a, sh) {
-    var E = a.extra || {}, N = 220, P3 = [], i, isFlume = !E.curve;
-    if (E.curve) { for (i = 0; i <= N; i++) { var q = E.curve.getPointAt(((E.uPark || 0) + i / N) % 1); P3.push([q.x, q.y, q.z]); } }
-    else {
+    var E = a.extra || {}, N = 220, P3 = [], P3b = null, i, isFlume = !E.curve;
+    if (E.curve) {
+      for (i = 0; i <= N; i++) { var q = E.curve.getPointAt(((E.uPark || 0) + i / N) % 1); P3.push([q.x, q.y, q.z]); }
+      // a racing twin track: the second lane (sh.curve2) is sampled now too, so the plan's bounds take in both lanes
+      if (sh.curve2) { P3b = []; for (i = 0; i <= N; i++) { var qb = sh.curve2.getPointAt(((E.uPark || 0) + i / N) % 1); P3b.push([qb.x, qb.y, qb.z]); } }
+    } else {
       var PTS = PK_FLUME_PTS, L = [], tot = 0; for (i = 0; i < PTS.length; i++) { var A = PTS[i], B = PTS[(i + 1) % PTS.length]; var l = Math.hypot(B[0] - A[0], B[1] - A[1], B[2] - A[2]); L.push(l); tot += l; }
       for (i = 0; i <= N; i++) { var d = i / N * tot, k = 0; while (k < L.length - 1 && d > L[k]) { d -= L[k]; k++; } var A2 = PTS[k], B2 = PTS[(k + 1) % PTS.length], f = L[k] ? d / L[k] : 0; P3.push([A2[0] + (B2[0] - A2[0]) * f, A2[1] + (B2[1] - A2[1]) * f, A2[2] + (B2[2] - A2[2]) * f]); }
     }
     var xmn = 1e9, xmx = -1e9, zmn = 1e9, zmx = -1e9, ymn = 1e9, ymx = -1e9;
     P3.forEach(function (p) { xmn = Math.min(xmn, p[0]); xmx = Math.max(xmx, p[0]); zmn = Math.min(zmn, p[2]); zmx = Math.max(zmx, p[2]); ymn = Math.min(ymn, p[1]); ymx = Math.max(ymx, p[1]); });
+    if (P3b) P3b.forEach(function (p) { xmn = Math.min(xmn, p[0]); xmx = Math.max(xmx, p[0]); zmn = Math.min(zmn, p[2]); zmx = Math.max(zmx, p[2]); ymn = Math.min(ymn, p[1]); ymx = Math.max(ymx, p[1]); });
     // the lift: the steady climb to the highest point in the first part of the lap
     var top = 0; for (i = 0; i <= N * 0.7; i++) if (P3[i][1] > P3[top][1]) top = i;
     var l0 = top; while (l0 > 1 && P3[l0 - 1][1] < P3[l0][1] - 1e-3) l0--;
@@ -781,9 +785,8 @@
         var pl = P3.map(function (p) { return plan(p[0], p[2]); });
         c.save(); c.lineJoin = 'round'; c.lineCap = 'round';
         pkPnLine(R, pl, 'rgba(0,0,0,0.55)', 0.007); pkPnLine(R, pl, S.ink, 0.0028);
-        // a second lane (a racing twin track: sh.curve2 is the mirror of E.curve, set once it exists), drawn the same way
-        if (sh.curve2) {
-          var P3b = []; for (var ib = 0; ib <= N; ib++) { var qb = sh.curve2.getPointAt(((E.uPark || 0) + ib / N) % 1); P3b.push([qb.x, qb.y, qb.z]); }
+        // a second lane (a racing twin track: sh.curve2 is the mirror of E.curve), drawn the same way
+        if (P3b) {
           var pl2 = P3b.map(function (p) { return plan(p[0], p[2]); });
           pkPnLine(R, pl2, 'rgba(0,0,0,0.55)', 0.007); pkPnLine(R, pl2, S.acc, 0.0028);
         }
