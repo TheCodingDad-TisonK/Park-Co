@@ -890,7 +890,7 @@
     var T = { rpm: 0, v: 0, vy: 0, g: 1, h: 0, volts: 0, amps: 0, wind: 3, deck: 0, n: 0, moving: false, phase: '', block: 'STATION', blk: 0, lap: 0, flow: 0, level: 64, fog: 100, room: 0, roomName: '', fx: false, fall: false };
     var mim = (PK_PN_KINDS[sh.kind] || PK_PN_KINDS.rotor)(a, sh);
     var BX = [0.265, 0.367, 0.469, 0.571], B = [['gates', 'GATES'], ['bars', 'BARS'], ['station', 'STN GATES'], ['test', 'TEST']];
-    var IL = ['KEY', 'GATES SHUT', 'BARS DOWN', 'SEATED'];
+    var IL = ['KEY', a.rowWait ? 'STN GATES' : 'GATES SHUT', 'BARS DOWN', 'SEATED'];
     var Wn = PK_PN_WIN, serial = pkPnSerial(a.id);
     var P = pkCtlPanel({
       w: PW, h: PH, x: 0, y: PY, z: PZ, tilt: -TILT, key: 'pk-booth-desk-' + a.id, parent: con,
@@ -1029,7 +1029,10 @@
         parts.buttons.bars.setLit(live && C.barsWant > 0.5);
         // the interlock chain and the READY lamp: the same conditions pkBoothDispatch checks, in the order it checks them
         var walking = pkAttrWalkers(a), loading = a.state === 'boarding' || a.state === 'ready';
-        var links = [!!C.key && !C.maint, !C.gates, C.barsWant > 0.5, a.riders > 0 && !walking];
+        // the second link is the barrier between the riders and the train: the boarding/queue gate, or, on a ride whose
+        // line waits at its rows (the Dragon Ride), the station platform gates - the green GATES button is the queue gate
+        // alone there and must not gate the dispatch
+        var links = [!!C.key && !C.maint, a.rowWait ? (a.stationGates === false) : !C.gates, C.barsWant > 0.5, a.riders > 0 && !walking];
         var ready = live && !C.maint && loading && links[0] && links[1] && links[2] && links[3];
         parts.chain.forEach(function (l, k) { l.on = power ? (links[k] ? true : 'dim') : false; l.mat.emissive.setHex(links[k] ? 0x5fd38d : 0xff6b5e); });
         parts.ready.on = ready ? (C.auto ? true : 'flash') : false;

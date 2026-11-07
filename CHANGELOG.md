@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.5 (2026-11-07): World Update
+
+- Maintenance release.
+
 ## 1.6.4 (2026-11-07): World Update
 
 - Maintenance release.

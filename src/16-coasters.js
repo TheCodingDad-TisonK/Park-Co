@@ -965,6 +965,7 @@
     sol(xf - 0.08, xf + 0.08, K.z0, K.z1, 0, H);
     sol(xn - 0.08, xn + 0.08, K.z0, d0, 0, H);
     sol(xn - 0.08, xn + 0.08, d1, K.z1, 0, H);
+    sol(xa, xb, K.z1 - T - 0.04, K.z1, 0, H);   // the back panel (south wall), behind the operator: a wall like the rest
     // the desk under the long window, the operator facing the track with the platform on the side
     var con = new THREE.Group(); con.position.set(cx, 0.12, K.z0 + 0.5); g.add(con);
     // o.desk(a, con, W) builds a ride's own desk (and its own screens) instead of the kit's; the ride panel still goes in its middle
