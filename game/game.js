@@ -29146,7 +29146,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     };
     // the pairs hang from the ceiling, pulled in off the walls so they can turn toward the chair without poking through
     var hgL = bracket(-2.5, 0.3, Math.PI / 2 - 0.5);   // left, angled ~29 deg toward the chair
-    pkCctvFeed(hgL, -0.27, 0, 0, 0, 0.5, [100, 4.5, -13.5], [100, 0.5, -22]);   // CAM 2: the platform
+    pkCctvFeed(hgL, -0.27, 0, 0, 0, 0.5, [100, 2.6, -12.4], [100, 0.6, -21]);   // CAM 2: the platform, straight on from the boarding end
     pkCctvFeed(hgL, 0.27, 0, 0, 0, 0.5, [100, 18, -45], [100, 2, -25]);        // CAM 3: the lift
     var hgR = bracket(2.5, 0.3, -Math.PI / 2 + 0.5);  // right, angled ~29 deg toward the chair
     pkCctvFeed(hgR, -0.27, 0, 0, 0, 0.5, [86.5, 3.0, -2.0], [94, 1, -1]);       // CAM 4: the exit
