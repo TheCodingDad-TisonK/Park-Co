@@ -14444,7 +14444,8 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     box(W, 0.12, D, std({ color: 0x2e2e34, roughness: 0.95 }), cx, 0.06, cz, g);
     if (lift) {
       box(W + 0.1, lift, D + 0.1, pkMats().kerb, cx, -lift / 2, cz, g);                      // the cabin's stone base
-      PK_FLOOR_RECTS.push({ axis: 'z', x0: xa, x1: xb, z0: K.z0, z1: K.z1, y: lift + 0.12 });
+      // the cabin's own floor is for the operator alone: guests pass underneath (only a walker with a height stands on it)
+      PK_FLOOR_RECTS.push({ axis: 'z', x0: xa, x1: xb, z0: K.z0, z1: K.z1, y: lift + 0.12, overhead: true });
     }
     // the long window over the track: parapet, glass, header, posts
     box(W, 0.95, T, trim, cx, 0.475, K.z0 + T / 2, g);
@@ -28332,9 +28333,12 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     pkJorisStripBase(g, n0, cx);                       // the kit's grey concrete plinth under the cabin goes; the timber gallery carries it
     // the walkable gallery: a landing across the hall front, at the booth's back, where the operator's stair arrives
     // (pkJorisStair adds its own ramp), and along both cabin sides (the cabin door opens onto the west one)
-    PK_FLOOR_RECTS.push({ x0: cx - 4.4, x1: cx + 4.4, z0: -10.6, z1: -9.0, y: 3.62 });
-    PK_FLOOR_RECTS.push({ x0: cx - 4.4, x1: cx - 3, z0: -14.4, z1: -10.6, y: 3.62 });
-    PK_FLOOR_RECTS.push({ x0: cx + 3, x1: cx + 4.4, z0: -14.4, z1: -10.6, y: 3.62 });
+    // the gallery and its stair are the operator's own (STAFF ONLY), standing over the riders' lower hall: guests walk
+    // straight through the hall beneath, so these floors are 'overhead' — only a walker with a height (the operator)
+    // stands on them; guests pass under and stay on the hall floor below.
+    PK_FLOOR_RECTS.push({ x0: cx - 4.4, x1: cx + 4.4, z0: -10.6, z1: -9.0, y: 3.62, overhead: true });
+    PK_FLOOR_RECTS.push({ x0: cx - 4.4, x1: cx - 3, z0: -14.4, z1: -10.6, y: 3.62, overhead: true });
+    PK_FLOOR_RECTS.push({ x0: cx + 3, x1: cx + 4.4, z0: -14.4, z1: -10.6, y: 3.62, overhead: true });
     pkJorisStair(g, cx);
     pkJorisGallery(g, cx);
     pkJorisEnclosure(g, cx);
@@ -28525,7 +28529,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     }, parent);
     // the arch gate, closed, holds the player back like the generic lane's boarding gate does (part 15, pkLaneCollides)
     var Q = PK_JORIS_Q;
-    PK.lanes.push({ a: a, x0: Q[0] - 1, x1: Q[0] + 1, zA: Q[1] - 2.2, zB: Q[1] + 2.2, gx: Q[0], gz0: Q[1] - 2, gz1: Q[1] + 2, segs: [], rows: 1, leafL: null, leafR: null });
+    PK.lanes.push({ a: a, x0: Q[0] - 1, x1: Q[0] + 1, zA: Q[1] - 2.2, zB: Q[1] + 2.2, gx: Q[0], gz0: Q[1] - 2, gz1: Q[1] + 2, segs: [], rows: 1, leafL: a.jorisGateL || null, leafR: a.jorisGateR || null });
   }
   // hide whatever the cabin kit built as a grounded base under the cabin floor (its grey concrete plinth)
   function pkJorisStripBase(g, n0, cx) {
@@ -28559,7 +28563,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       m = box(0.05, 0.05, L, iron, sx + s * (HW + 0.05), TOP / 2 + 0.9, ZF - RUN / 2, g); m.rotation.x = ang;
       for (var j = 0; j < N; j += 2) cyl(0.03, 0.9, iron, sx + s * (HW + 0.05), TOP * (j + 1) / N + 0.45, ZF - (j + 0.5) * RUN / N, g, 6);
     });
-    PK_FLOOR_RECTS.push({ axis: 'z', x0: sx - HW, x1: sx + HW, z0: -9.2, z1: ZF - RUN, y: TOP, ramp: RUN });
+    PK_FLOOR_RECTS.push({ axis: 'z', x0: sx - HW, x1: sx + HW, z0: -9.2, z1: ZF - RUN, y: TOP, ramp: RUN, overhead: true });
     // (its walls and roof are pkJorisEnclosure's) the STAFF ONLY sign over the doorway at its foot
     pkSign3D(['STAFF ONLY'], 1.0, 0.24, sx, 2.0, ZF + 0.08, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
   }
@@ -29097,7 +29101,9 @@ function pkBuildParkCabinet(px, py, pz, ry) {
         var y = 0.28 - i * 0.28;
         var hood = box(0.26, 0.02, 0.14, housing, 0, y + 0.13, 0.17, h); hood.rotation.x = -0.25;
         var off = pkRoundCyl(0.1, 0.03, std({ color: new THREE.Color(col).multiplyScalar(0.18).getHex(), roughness: 0.3 }), 0, y, 0.11, h, 16); off.rotation.x = Math.PI / 2;
-        var on = pkRoundCyl(0.1, 0.032, glowMat(col, 2.2), 0, y, 0.115, h, 16); on.rotation.x = Math.PI / 2; on.visible = false;
+        // the lit lamp is a plain unlit disc (MeshBasicMaterial), not a glowMat: glowMat lamps are collected into the
+        // ride-light circuit and dimmed to nothing while the sun is up, which would leave the signal dark all day
+        var on = pkRoundCyl(0.1, 0.032, new THREE.MeshBasicMaterial({ color: col }), 0, y, 0.115, h, 16); on.rotation.x = Math.PI / 2; on.visible = false;
         return on;
       });
       heads.push(lamps);
@@ -29189,6 +29195,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       return h;
     };
     var GL = leaf(-1), GR = leaf(1);
+    if (A) { A.jorisGateL = GL; A.jorisGateR = GR; }   // the lane (built straight after) picks these up as its gate leaves
     if (C) C.gateObjs.push(function (t) { GL.rotation.y = t * 1.45; GR.rotation.y = -t * 1.45; });
     [[-1, PK_JORIS.a], [1, PK_JORIS.b]].forEach(function (t) {
       var bx = t[0] * (R + 0.6);

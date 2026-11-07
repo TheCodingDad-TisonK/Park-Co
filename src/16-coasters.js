@@ -936,7 +936,8 @@
     box(W, 0.12, D, std({ color: 0x2e2e34, roughness: 0.95 }), cx, 0.06, cz, g);
     if (lift) {
       box(W + 0.1, lift, D + 0.1, pkMats().kerb, cx, -lift / 2, cz, g);                      // the cabin's stone base
-      PK_FLOOR_RECTS.push({ axis: 'z', x0: xa, x1: xb, z0: K.z0, z1: K.z1, y: lift + 0.12 });
+      // the cabin's own floor is for the operator alone: guests pass underneath (only a walker with a height stands on it)
+      PK_FLOOR_RECTS.push({ axis: 'z', x0: xa, x1: xb, z0: K.z0, z1: K.z1, y: lift + 0.12, overhead: true });
     }
     // the long window over the track: parapet, glass, header, posts
     box(W, 0.95, T, trim, cx, 0.475, K.z0 + T / 2, g);
