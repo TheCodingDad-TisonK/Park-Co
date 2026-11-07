@@ -355,7 +355,7 @@
         else if (gu.lifeKind === 'phone') carry = pkArmRaised(1);
         else if (gu.lifeKind === 'chat' && gu.lifeLook) look = gu.lifeLook;
       }
-      var mode = moving ? 'walk' : (gu.state === 'boothQueue' || gu.state === 'queue' || gu.state === 'qwait' || gu.state === 'board' ? 'wait' : 'idle');
+      var mode = moving ? 'walk' : (gu.state === 'boothQueue' || gu.state === 'queue' || gu.state === 'qwait' || gu.state === 'board' || gu.state === 'rowWait' || gu.state === 'rowHold' ? 'wait' : 'idle');
       animateHuman(g, dt, mode, rec.speed, look, carry);
       if (g.userData.pkCig) g.userData.pkCig.visible = (!moving && gu.state === 'life' && gu.lifeKind === 'smoke');
       if (g.userData.pkPhone) g.userData.pkPhone.visible = (!moving && gu.state === 'life' && gu.lifeKind === 'phone');

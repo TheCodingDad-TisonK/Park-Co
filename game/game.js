@@ -6432,7 +6432,7 @@
         else if (gu.lifeKind === 'phone') carry = pkArmRaised(1);
         else if (gu.lifeKind === 'chat' && gu.lifeLook) look = gu.lifeLook;
       }
-      var mode = moving ? 'walk' : (gu.state === 'boothQueue' || gu.state === 'queue' || gu.state === 'qwait' || gu.state === 'board' ? 'wait' : 'idle');
+      var mode = moving ? 'walk' : (gu.state === 'boothQueue' || gu.state === 'queue' || gu.state === 'qwait' || gu.state === 'board' || gu.state === 'rowWait' || gu.state === 'rowHold' ? 'wait' : 'idle');
       animateHuman(g, dt, mode, rec.speed, look, carry);
       if (g.userData.pkCig) g.userData.pkCig.visible = (!moving && gu.state === 'life' && gu.lifeKind === 'smoke');
       if (g.userData.pkPhone) g.userData.pkPhone.visible = (!moving && gu.state === 'life' && gu.lifeKind === 'phone');
@@ -28326,6 +28326,18 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       var side = w.x < HX ? -1 : 1, b = side < 0 ? wB : vB, t = side < 0 ? wT : vT, aisle = HX + side * 0.5;
       return pkJorisLineFrom(from.x, from.z).concat([entry, fork, b, t, { x: aisle, z: -13.4 }, { x: aisle, z: w.z }, { x: w.x, z: w.z }]);
     };
+    // the row spots stay fixed while the train runs (the cars move, the pens do not), so they are remembered once here
+    // against the parked train; the queue fills them while the ride is out on the track (pkjorisFillRows)
+    a.parkedRow = a.seats.map(function (seat) { return a.rowSpot(seat); });
+    // leaving: a rider stands up in the car and walks out the way they came in - down the stair, through the lower hall
+    // and down the line to the exit, instead of blinking out of the car
+    a.walkOut = function (from) {
+      var side = from.x < HX ? -1 : 1, b = side < 0 ? wB : vB, t = side < 0 ? wT : vT, aisle = HX + side * 0.5;
+      var out = [{ x: aisle, z: from.z }, { x: aisle, z: -13.4 }, t, b, fork, entry];
+      for (var i = 0; i < PK_JORIS_LINE.length; i++) out.push({ x: PK_JORIS_LINE[i][0], z: PK_JORIS_LINE[i][1] });
+      out.push({ x: a.exit[0], z: a.exit[1] });
+      return out;
+    };
     // the station hall; it also hangs the banners, the FINISH sign and the two WINNAAR flags on its south face
     subs.banners = pkJorisStation(g, a);
     pkJorisRowGates(g, a, subs);                       // a gate on the platform edge at every car's seat row
@@ -28459,6 +28471,11 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       }
     });
     if (board && at.state === 'idle') { at.state = 'boarding'; at.t = 0; at.boarding = 0; at.manualStart = true; }
+    // while the train is out, the empty pens are filled from the line and the next batch waits at their rows
+    if (at.state === 'running') {
+      if (E.held) E.held.forEach(function (h) { if (h.gu.state === 'walkRow' && !h.gu.rec.path.length) h.gu.state = 'rowWait'; });
+      if (C.gates && at.queue.length && !PK.closed) pkJorisFillRows(at);
+    }
     // the queue gate open with the train home: the line comes up to the rows whenever the ride is not already boarding
     if (home && C.gates && at.state === 'idle' && at.queue.length && !PK.closed && C.key && !C.maint && !C.fault) pkAttrBegin(at);
     else if (home && C.gates && (at.state === 'unloading' && !at.awaitBars) && at.queue.length && !PK.closed) pkAttrFill(at);
@@ -28473,6 +28490,37 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       s.guest = null; gu.seat = null; gu.state = 'rowHold';
       E.held.push({ gu: gu, si: si });
     });
+  }
+  // while the train is out on the track the platform pens are empty: the line comes up and fills them, one guest to a row,
+  // and they wait there for the train home (pkJorisQueueTick seats them once the riders have left). The rows are fixed
+  // (a.parkedRow), so a guest walks to a pen even though the car they will board is still on its lap.
+  function pkJorisFillRows(at) {
+    var E = at.extra; E.held = E.held || [];
+    var taken = {};
+    E.held.forEach(function (h) { taken[h.si] = true; });
+    var n = 0;
+    while (at.queue.length && n < at.seats.length) {
+      var gu = at.queue[0];
+      if (gu.state !== 'qwait' && gu.state !== 'qmove') break;
+      var side = gu.side || (gu.side = Math.random() < 0.5 ? 'water' : 'vuur');
+      var si = -1, fall = -1;
+      for (var i = 0; i < at.seats.length; i++) {
+        if (taken[i]) continue;
+        if (fall < 0) fall = i;
+        if (at.seats[i].track === side) { si = i; break; }
+      }
+      if (si < 0) si = fall;
+      if (si < 0) break;
+      at.queue.shift();
+      gu.slot = -1;
+      gu.state = 'walkRow';
+      gu.rec.path = at.seatPath({ x: gu.rec.x, z: gu.rec.z }, at.parkedRow[si]);
+      if (!gu.rec.path.length) gu.state = 'rowWait';
+      E.held.push({ gu: gu, si: si });
+      taken[si] = true;
+      n++;
+    }
+    if (n) { pkAttrReslot(at); screenDirtyAll(); }
   }
   function pkJorisLane(a, parent) {
     var M0 = pkMats(), C = pkCtl(a), P = PK_JORIS_LINE;
