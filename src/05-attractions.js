@@ -33,6 +33,7 @@
   // a guest's way to slot i: over the park to the lane's entry (or the end of the line, if it runs out of the lane), then
   // along the rows; a guest already in the lane just shuffles up it
   function pkAttrWalkTo(a, gu, i, fromSlot) {
+    if (a.walkTo) return a.walkTo(gu, i, fromSlot);   // a ride with a line of its own walks its guests along it
     if (fromSlot !== undefined && fromSlot > i) return pkAttrLanePath(a, fromSlot, i);
     var E = Math.max(i, pkAttrLane(a).N);
     return route({ x: gu.rec.x, z: gu.rec.z }, pkAttrSlot(a, E)).concat(pkAttrLanePath(a, E, i));
@@ -71,6 +72,7 @@
     var n = 0;
     for (var i = 0; i < a.seats.length; i++) {
       var seat = a.seats[i]; if (!seat.guest) continue;
+      if (a.rowWait && (seat.guest.state === 'walkRow' || seat.guest.state === 'rowWait')) continue;   // still on the platform, waiting to get on
       var gu = seat.guest; seat.guest = null; gu.seat = null; gu.clap = false;
       if (a.walkOut) {
         // a show lets out: everyone stands up where they sat and walks out the way they came in (a.walkOut gives the path)
@@ -109,7 +111,9 @@
   }
   function pkAttrFill(a) {
     var n = 0;
-    if (a.stationGates === false) return 0;   // the station gate is shut: nobody walks through it
+    // the station gate is shut: nobody walks through it (a ride with a.rowWait lets them on up to its platform to wait at
+    // their row: they step into their seats when the station gates open)
+    if (a.stationGates === false && !a.rowWait) return 0;
     while (a.queue.length && n < a.cap) {
       var gu = a.queue[0];
       if (gu.state !== 'qwait' && gu.state !== 'qmove') break;
@@ -118,7 +122,14 @@
       if (si < 0) break;
       var seat = a.seats[si];
       a.queue.shift();
-      gu.seat = seat; seat.guest = gu; gu.slot = -1; gu.state = 'walkSeat';
+      gu.seat = seat; seat.guest = gu; gu.slot = -1;
+      if (a.rowWait) {   // up to the platform, to wait at this seat's row (the ride's own tick seats them)
+        gu.state = 'walkRow';
+        gu.rec.path = a.seatPath({ x: gu.rec.x, z: gu.rec.z }, a.rowSpot(seat));
+        if (!gu.rec.path.length) gu.state = 'rowWait';
+        n++; continue;
+      }
+      gu.state = 'walkSeat';
       var w = pkAttrSeatWorld(seat);
       gu.rec.path = a.seatPath ? a.seatPath({ x: gu.rec.x, z: gu.rec.z }, w) : route({ x: gu.rec.x, z: gu.rec.z }, { x: w.x, z: w.z });   // a ride with stairs gives its own way up
       if (!gu.rec.path.length) pkAttrSit(a, gu, seat);   // already at the seat
@@ -132,7 +143,9 @@
   // guests still walking from the gate to their seat: the gates stay open and the ride waits
   function pkAttrWalkers(a) {
     var n = 0;
-    for (var i = 0; i < a.seats.length; i++) { var s = a.seats[i]; if (s.guest && s.guest.state === 'walkSeat') n++; }
+    // (guests waiting at their rows behind shut station gates are not boarding yet: they do not hold the ride)
+    var rows = a.stationGates !== false;
+    for (var i = 0; i < a.seats.length; i++) { var s = a.seats[i], st = s.guest && s.guest.state; if (st === 'walkSeat' || (rows && (st === 'walkRow' || st === 'rowWait'))) n++; }
     return n;
   }
   // the queue as a guest sees it: guests standing on a lane slot, not the ones still walking over from the gate
@@ -151,18 +164,20 @@
     if (a.state !== 'idle' && a.state !== 'unloading') return;
     var C = pkCtl(a);
     if (C.maint || !C.key) return;       // locked out at the cabinet, or the operator key off: nobody boards
-    if (a.stationGates === false) return;   // the station gate is shut: nobody walks through it
+    if (a.stationGates === false && !a.rowWait) return;   // the station gate is shut: nobody walks through it
     a.state = 'boarding'; a.t = 0; C.gates = true; pkAttrBarsUp(a, C);
     pkAttrReslot(a);
     a.boarding = 0;
     pkAttrFill(a);
-    if (!a.queue.length && !a.riders && !pkAttrWalkers(a)) { a.state = 'idle'; C.gates = false; }
+    if (!a.queue.length && !a.riders && !pkAttrWalkers(a)) { a.state = 'idle'; if (!a.rowWait) C.gates = false; }
   }
   function pkAttrStart(a) {
     var C = pkCtl(a);
     // the line holds the ride only while it can still board: gates shut or seats full, whoever is left waits for the next cycle
-    if (C.fault || C.maint || !C.key || (a.queue.length && C.gates && pkAttrHasSeat(a)) || a.riders <= 0 || pkAttrWalkers(a)) return false;
-    a.state = 'running'; a.t = 0; C.gates = false; C.barsWant = 1;
+    if (C.fault || C.maint || !C.key || (a.queue.length && C.gates && !a.rowWait && pkAttrHasSeat(a)) || a.riders <= 0 || pkAttrWalkers(a)) return false;
+    a.state = 'running'; a.t = 0; C.barsWant = 1;
+    if (!a.rowWait) C.gates = false;   // a queue gate of its own (a.rowWait) stays as the operator left it
+    if (a.holdRows) a.holdRows(a);     // and whoever waits at a row keeps their place there for the next train
     sfx('bell');
     if (a.start) a.start(a);
     screenDirtyAll(); hudDirty = true;
@@ -219,9 +234,10 @@
         // the house has not been closed up yet)
         var full = !pkAttrHasSeat(a), walkers = a.boarding, notClosed = a.curtain ? C.gates : C.barsWant < 1;
         if (a.riders > 0 && !walkers && notClosed && (full || (a.t >= (a.boardMin || a.board - 1.4) && !a.queue.length) || a.t >= a.board + 6)) {   // a.boardMin: a ride with a long boarding can go sooner once its line has emptied
-          C.gates = false; C.barsWant = 1; a.t = Math.max(a.t, a.board - 1.4);
+          if (!a.rowWait) C.gates = false;
+          C.barsWant = 1; a.t = Math.max(a.t, a.board - 1.4);
         }
-        if (a.t >= a.board && C.barsWant >= 1 && !C.gates && a.riders > 0 && !walkers) pkAttrStart(a);
+        if (a.t >= a.board && C.barsWant >= 1 && (!C.gates || a.rowWait) && a.riders > 0 && !walkers) pkAttrStart(a);
       }
     } else if (a.state === 'ready') {
         if (auto && !PK.closed) pkAttrStart(a);
@@ -233,7 +249,7 @@
         if (C.barsWant < 0.5) pkAttrLetOff(a); else return;
       }
       if (a.t >= a.unload) {
-        a.state = 'idle'; a.t = 0; if (auto) C.gates = false;
+        a.state = 'idle'; a.t = 0; if (auto && !a.rowWait) C.gates = false;
         if (!PK.closed && (auto || a.manualStart) && a.queue.length) { a.manualStart = false; pkAttrBegin(a); }
         screenDirtyAll();
       }

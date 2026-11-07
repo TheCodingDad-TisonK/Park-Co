@@ -485,9 +485,11 @@
     "mesh plane 2.6x6.6@13.6,5.8,0.05": { hidden: true },
     "mesh plane 200x8@0,76,0.01": { x: -0.15 },
     "mesh plane 3.2x0.8@0,-4.4,3": { y: 3.65, z: 0 },
+    "mesh plane 3.2x6.7@74.25,-6,0.07": { hidden: true },
     "mesh plane 3.4x22.4@9.5,-69.5,0.04": { hidden: true },
     "mesh plane 3.7x10.3@14,-63.3,0.04": { hidden: true },
     "mesh plane 3.7x10.3@14,-63.3,0.05": { hidden: true },
+    "mesh plane 3.9x7.4@74.25,-6,0.07": { hidden: true },
     "mesh plane 3x9.6@14,-63.3,0.04": { z: -63.25, hidden: true },
     "mesh plane 3x9.6@14,-63.3,0.05": { hidden: true },
     "mesh plane 4.1x23.1@9.5,-69.5,0.04": { x: 9.45, z: -69.55, hidden: true },
@@ -792,4 +794,5 @@
     { id: "wc-mvr2vt6j-b", of: "mesh box 0.8x0.85x1.9@9.5,23.6,0.43", x: 7.6, y: 0.43, z: 24.1, ry: -180, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvr2xb9j-f", of: "mesh box 1x0.22x2.1@9.5,23.6,0.11", x: 7.55, y: 0.11, z: 26.25, ry: -180, sx: 1, sy: 1, sz: 1 },
     { id: "wc-mvr2xb9k-g", of: "mesh box 0.8x0.85x1.9@9.5,23.6,0.43", x: 7.6, y: 0.43, z: 26.25, ry: -180, sx: 1, sy: 1, sz: 1 },
+    { id: "wc-mw67uzny-1", of: "mesh buffer@0,33,0.01", x: 1.5, y: 0.01, z: 34.5, ry: 0, sx: 1, sy: 1, sz: 1 },
   ]);

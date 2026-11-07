@@ -412,13 +412,13 @@
       sig: { label: 'DOCK BELL', sfx: 'pkFlumeBell', words: 'the dock bell rings', col: 'teal' },
       ann: [['voice', 'DOCK\nBELL', '#7fd0ff'], ['pumps', 'PUMPS\nRUNNING', '#5fd38d']],
       tele: function (a, C, T) { return ['FLOW ' + T.flow.toFixed(0) + ' M3/H  LVL ' + T.level.toFixed(0) + '%', 'LOGS ' + T.n + '  ' + T.block + '  ' + (T.v * 3.6).toFixed(0) + ' KM/H']; } },
-    danse: { style: 'gothic', title: 'Danse Macabre', model: 'DYNAMIC MOTION STAGE 6 · 36 SEATS · 3 M DROP', kind: 'stage', seatCol: 0xff8a3d,
+    danse: { style: 'gothic', title: 'Dance Macabre', model: 'DYNAMIC MOTION STAGE 6 · 36 SEATS · 3 M DROP', kind: 'stage', seatCol: 0xff8a3d,
       caps: { test: 'purple', station: 'cream' },
       g2: { unit: 'deg', min: 0, max: 14, ticks: 7, red: 0.86, get: function (T) { return (T.tilt || 0) / 14; } },
-      sig: { label: 'ORGAN', sfx: 'pkDanseOrgan', words: 'the organ strikes up the danse', col: 'purple' },
+      sig: { label: 'ORGAN', sfx: 'pkDanseOrgan', words: 'the organ strikes up the dance', col: 'purple' },
       ann: [['voice', 'ORGAN', '#ff8a3d'], ['motion', 'PLATFORM\nTILT', '#c9a0ff']],
       tele: function (a, C, T) { return ['PLATFORM ' + (T.h || 0).toFixed(1) + ' M  TILT ' + (T.tilt || 0).toFixed(0) + ' DEG', 'STALLS ' + (T.n || 0) + '  BEAT ' + ((T.beat || 0) + 1)]; } },
-    droom: { style: 'droom', title: 'Droomvlucht', model: 'SUSPENDED DARK RIDE 6 · 7 DREAMS · 18 KM/H', kind: 'flight', seatCol: 0xe0c0ff,
+    droom: { style: 'droom', title: 'Dream Flight', model: 'SUSPENDED DARK RIDE 6 · 7 DREAMS · 18 KM/H', kind: 'flight', seatCol: 0xe0c0ff,
       caps: { test: 'purple', station: 'cream' },
       g2: { unit: 'm', min: 0, max: 3, ticks: 6, red: 0.0, get: function (T) { return (T.h || 0) / 3; } },
       sig: { label: 'LULLABY', sfx: 'pkDroomChime', words: 'the music box plays its lullaby', col: 'purple' },
@@ -452,7 +452,7 @@
       sig: { label: 'THE OWL', sfx: 'pkOwl', words: 'an owl calls from the crown', col: 'teal' } },
     mountain: { style: 'mountain', title: 'The Mountain King', model: 'MINE TRAIN MK-1 · INTO THE HALL', kind: 'track', coaster: true,
       sig: { label: 'THE HALL', sfx: 'pkMountainKing', words: 'in the hall of the Mountain King', col: 'navy' } },
-    joris: { style: 'forest', title: 'Joris en de Draak', model: 'TWIN WOOD RACER JR-2 · WATER AND VUUR', kind: 'track', coaster: true,
+    joris: { style: 'forest', title: 'Dragon Ride', model: 'TWIN WOOD RACER JR-2 · BLUE AND RED', kind: 'track', coaster: true,
       sig: { label: 'THE ROAR', sfx: 'pkOwl', words: 'the dragon stirs', col: 'green' } }
   };
   // every coaster on the kit gets the same instruments and windows, sized to its own top speed
@@ -781,6 +781,12 @@
         var pl = P3.map(function (p) { return plan(p[0], p[2]); });
         c.save(); c.lineJoin = 'round'; c.lineCap = 'round';
         pkPnLine(R, pl, 'rgba(0,0,0,0.55)', 0.007); pkPnLine(R, pl, S.ink, 0.0028);
+        // a second lane (a racing twin track: sh.curve2 is the mirror of E.curve, set once it exists), drawn the same way
+        if (sh.curve2) {
+          var P3b = []; for (var ib = 0; ib <= N; ib++) { var qb = sh.curve2.getPointAt(((E.uPark || 0) + ib / N) % 1); P3b.push([qb.x, qb.y, qb.z]); }
+          var pl2 = P3b.map(function (p) { return plan(p[0], p[2]); });
+          pkPnLine(R, pl2, 'rgba(0,0,0,0.55)', 0.007); pkPnLine(R, pl2, S.acc, 0.0028);
+        }
         if (lift) { var lp = pl.slice(Math.floor(lift[0] * N), Math.ceil(lift[1] * N) + 1); pkPnLine(R, lp, S.acc, 0.0045); c.setLineDash([R.L(0.003), R.L(0.003)]); pkPnLine(R, lp, 'rgba(0,0,0,0.6)', 0.002); c.setLineDash([]); }
         c.restore();
         var st = plan(P3[0][0], P3[0][2]); c.save(); c.fillStyle = S.acc; c.fillRect(R.X(st[0]) - R.L(0.008), R.Y(st[1]) - R.L(0.008), R.L(0.016), R.L(0.016)); c.restore();

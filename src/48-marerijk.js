@@ -15,11 +15,11 @@
     HALL: { x0: -94, x1: -80, z0: -24, z1: -1, h: 7 },   // the station hall, walled off from the scenes
     SP: { x: -86, z: 4.5, r: 4.2, y0: 12.5, y1: 4.6 },   // the spiral round the swamp tree: top and bottom of its rail
     DOOR: -9, EXIT: -22, HANG: 2.55, N: 12, GAP: 2.7, DGAP: 6 };   // DGAP: how far the last one out has to be before the next goes: the walkway never stops
-  PK_LANDS.marerijk = { name: 'MARERIJK', a: 0x8a5fb3, b: 0xf0c04a, pave: 0xc9b0d9, sign: '#e0c0ff' };
+  PK_LANDS.marerijk = { name: 'DREAM REALM', a: 0x8a5fb3, b: 0xf0c04a, pave: 0xc9b0d9, sign: '#e0c0ff' };
   PK_ROUTES.push([-74, -40, -74, 12, 4.0, 'marerijk']);   // the promenade: south off the Arena path, along the palace front
   PK_ARCHES.push([-74, -36.5, 'z', 'marerijk']);
-  PK_PLOTS.push({ id: 'droom', name: 'Droomvlucht', x: -95, z: -1, r: 16, q: [-88.0, -2.75], level: 22, pad: 0.02 });
-  PK_THEME.droom = { a: 0x8a5fb3, b: 0xf0c04a, ground: 0xb9a8c9, name: 'Droomvlucht', noBunting: true, noDecor: true, portal: function () {} };
+  PK_PLOTS.push({ id: 'droom', name: 'Dream Flight', x: -95, z: -1, r: 16, q: [-88.0, -2.75], level: 22, pad: 0.02 });
+  PK_THEME.droom = { a: 0x8a5fb3, b: 0xf0c04a, ground: 0xb9a8c9, name: 'Dream Flight', noBunting: true, noDecor: true, portal: function () {} };
   PK_KEEP.push([-95, -24, 13], [-95, -4, 13], [-95, 16, 13], [-95, 27, 9], [-77, -9, 8], [-77, -24, 6]);   // the woods stand round it, not in it
 
   // ── Materials ────────────────────────────────────────────────────
@@ -254,7 +254,7 @@
     box(0.2, 0.04, 2.6, X.trim, fx + 1.2, 0.02, dz, g);
     pkDmRose(g, fx + 2.45, 9.7, dz, Math.PI / 2, 1.9, X.night, X.gold);
     var moon = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.9, 24, 1, 0.6, 3.6), X.win); moon.position.set(fx + 2.5, 9.7, dz); moon.rotation.y = Math.PI / 2; g.add(moon);
-    sign(['DROOMVLUCHT'], 4.6, 0.7, fx + 2.52, 7.05, dz, Math.PI / 2, { bg: '#2a1f4a', fg: '#f0d8ff' }, g);
+    sign(['DREAM FLIGHT'], 4.6, 0.7, fx + 2.52, 7.05, dz, Math.PI / 2, { bg: '#2a1f4a', fg: '#f0d8ff' }, g);
     [-3.2, 0, 3.2].forEach(function (o, k) {
       var tz = dz + o, th = k === 1 ? 3.0 : 2.0, tr = k === 1 ? 0.9 : 0.6;
       cyl(tr, th, X.stucco, fx + 1.6, 13.4 + th / 2, tz, g, 14);
@@ -293,7 +293,7 @@
     var ez = D.EXIT;
     [-1, 1].forEach(function (s) { cyl(0.12, 3.2, X.trim, fx + 2.0, 1.6, ez + s * 1.2, g, 10); });
     var pr = new THREE.Group(); pr.position.set(fx + 1.1, 3.2, ez); pr.rotation.y = Math.PI / 2; g.add(pr); pkGableRoof(3.0, 2.4, 1.2, X.roof, X.stucco, 0, 0, 0, pr, 0.2);
-    sign(['UITGANG  *  DROMERIJEN'], 2.4, 0.36, fx + 2.15, 2.8, ez, Math.PI / 2, { bg: '#2a1f4a', fg: '#f0d8ff' }, g);
+    sign(['EXIT  *  DREAM SHOP'], 2.4, 0.36, fx + 2.15, 2.8, ez, Math.PI / 2, { bg: '#2a1f4a', fg: '#f0d8ff' }, g);
     [[dz - 11.2, dz - 4.7], [dz + 4.7, dz + 11.2]].forEach(function (pz, k) {
       var px0 = fx + 0.2, px1 = fx + 3.7, cz = (pz[0] + pz[1]) / 2, pw = pz[1] - pz[0];
       var mx = (px0 + px1) / 2 + 0.25, mw = px1 - px0 + 0.5;
@@ -365,7 +365,7 @@
     box(1.0, 0.05, U.z - H.z0 - 1.0, X.gold, legB + 0.72, 0.075, (H.z0 + 1.0 + U.z) / 2, g).scale.x = 0.06;
     // the black columns in the U
     [[U.x, -11.4]].forEach(function (c) { cyl(0.22, h, X.dark, c[0], h / 2, c[1], g, 14); box(0.8, 0.5, 0.8, X.dark, c[0], 0.25, c[1], g); solid(c[0] - 0.4, c[0] + 0.4, c[1] - 0.4, c[1] + 0.4, 0, h); });
-    sign(['UITGANG'], 1.2, 0.3, H.x1 - 0.7, 3.0, D.EXIT, -Math.PI / 2, { bg: '#123a22', fg: '#c8ffd8' }, g);
+    sign(['EXIT'], 1.2, 0.3, H.x1 - 0.7, 3.0, D.EXIT, -Math.PI / 2, { bg: '#123a22', fg: '#c8ffd8' }, g);
     pkDvHallDress(g, legA, legB, U, h);
     var lt = new THREE.PointLight(0xffe8c8, 1.2, 22, 1.6); lt.position.set(-87, 5.6, -13); g.add(lt);
   }
@@ -393,7 +393,7 @@
     };
     rail(-83.3, D.DOOR - 1.5, -83.3, -7.95); rail(-83.3, -5.45, -83.3, -4.85); rail(-83.3, -4.85, D.X1 - 0.7, -4.85); rail(-83.3, D.DOOR - 1.5, D.X1 - 0.7, D.DOOR - 1.5);   // the gate is in the platform side, on the walkway
     box(2.7, 0.04, 5.8, pkPadMat(0xc9b0d9), -81.95, 0.07, -7.6, g);
-    sign(['DROOMVLUCHT  >'], 1.4, 0.26, -83.24, 1.35, -9.25, Math.PI / 2, { bg: '#1a2236', fg: '#e8c870' }, g);
+    sign(['DREAM FLIGHT  >'], 1.4, 0.26, -83.24, 1.35, -9.25, Math.PI / 2, { bg: '#1a2236', fg: '#e8c870' }, g);
     // the doors' gilt arch inside, and a globe either side
     var arch = pkDmFrame(pkDmArch(3.4, 3.6, 5.0), pkDmArch(2.6, 3.4, 4.6), 0.12, X.gold, g, D.X1 - 0.66, 0, D.DOOR); arch.rotation.y = Math.PI / 2;
     [-1.9, 1.9].forEach(function (o) { pkRod(D.X1 - 0.62, 2.8, D.DOOR + o, D.X1 - 0.95, 2.8, D.DOOR + o, 0.02, X.gold, g, 6); sphere(0.17, X.globe, D.X1 - 0.95, 2.62, D.DOOR + o, g); });
@@ -437,7 +437,7 @@
     box(x1 - x0, Hb, 0.04, navy, (x0 + x1) / 2, Hb / 2, z0 + 0.02, g); solid(x0, x1, z0, z0 + 0.12, 0, Hb);
     [[x0, z0], [x1, z0], [x0, z1], [x1, z1]].forEach(function (c) { box(0.12, Hb, 0.12, navy, c[0], Hb / 2, c[1], g); });
     box(x1 - x0 + 0.3, 0.16, z1 - z0 + 0.3, navy, (x0 + x1) / 2, Hb + 0.08, (z0 + z1) / 2, g);
-    sign(['DROOMVLUCHT'], 1.8, 0.24, x1 + 0.08, 2.6, (z0 + z1) / 2, Math.PI / 2, { bg: '#1a2236', fg: '#e8c870' }, g);
+    sign(['DREAM FLIGHT'], 1.8, 0.24, x1 + 0.08, 2.6, (z0 + z1) / 2, Math.PI / 2, { bg: '#1a2236', fg: '#e8c870' }, g);
     // its door: navy, glazed above, swinging out to the west
     var hinge = pkMover(g, x0, F, z0 + 1.3); hinge.rotation.y = 0;
     box(0.06, 2.05, 0.93, navy, 0, 1.03, 0.47, hinge); var dg = box(0.07, 0.7, 0.6, glass, 0, 1.5, 0.47, hinge); dg.userData.noBake = true;
@@ -749,7 +749,7 @@
     for (var i = 0; i < D.N; i++) E.gons.push(pkDvGondola(g, i, seats, bars));
     E.gons.forEach(function (gd, k) { gd.s = D.L - 0.05 - k * D.GAP; pkDvPlace(D, gd, gd.s, 0.016, 0); });   // parked in the station, nose to tail back from the line
     var a = pkAttr({
-      id: 'droom', name: 'Droomvlucht', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats,
+      id: 'droom', name: 'Dream Flight', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats,
       board: 20, run: D.run, unload: 8, exit: [D.X1 + 6.0, D.EXIT], extra: E
     });
     a.stationGates = false; a.tickOwn = pkDvSystem; a.continuous = true;

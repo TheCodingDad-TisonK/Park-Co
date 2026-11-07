@@ -13,6 +13,10 @@
   // toward the paving never is, so nobody dropped on the lawn by the editor is stuck there.
   var PK_PF = { m: null, block: null, W: 0, D: 0, X0: 0, Z0: 0, C: 0.5, group: null, dirty: 0, runs: 0, posts: 0 };
   var PK_PF_H = 0.95;   // the rail's height
+  // [x0, x1, z0, z1] footprints of things that carry their own rails and lift the walker off the ground (a footbridge
+  // and its ramps): not paving, not lawn either, so no rail is drawn into them and walking onto them is never refused
+  var PK_PF_OPEN = [];
+  function pkPfOpen(x, z) { for (var i = 0; i < PK_PF_OPEN.length; i++) { var r = PK_PF_OPEN[i]; if (x > r[0] && x < r[1] && z > r[2] && z < r[3]) return true; } return false; }
 
   function pkPfMask() {
     var P = PK_PF, C = P.C;
@@ -49,7 +53,7 @@
     var m = new Uint8Array(W * D);
     for (var j = 0; j < D; j++) for (var i = 0; i < W; i++) {
       var x = P.X0 + (i + 0.5) * C, z = P.Z0 + (j + 0.5) * C;
-      m[j * W + i] = px[((D - 1 - j) * W + i) * 4] > 127 || floorY(x, z, 0) > 0.02 ? 1 : 0;
+      m[j * W + i] = !pkPfOpen(x, z) && (px[((D - 1 - j) * W + i) * 4] > 127 || floorY(x, z, 0) > 0.02) ? 1 : 0;
     }
     pkPfClose(m, W, D, 2);       // a strip of lawn under 2 m between two pavings (a doorway, a booth's steps) is walked across
     pkPfClean(m, W, D, 1, 60);   // a stray slab or a step stone on the lawn is no path
@@ -99,7 +103,9 @@
     var P = PK_PF, W = P.W, D = P.D, C = P.C, block = new Uint8Array(W * D), walled = new Uint8Array(W * D), pad = 0.8;
     for (var j = 0; j < D; j++) for (var i = 0; i < W; i++) {
       var k = j * W + i; if (P.m[k]) continue;
-      if (pkPfInside(P.X0 + (i + 0.5) * C, P.Z0 + (j + 0.5) * C)) block[k] = 1;
+      var cx = P.X0 + (i + 0.5) * C, cz = P.Z0 + (j + 0.5) * C;
+      if (pkPfOpen(cx, cz)) { walled[k] = 1; continue; }
+      if (pkPfInside(cx, cz)) block[k] = 1;
     }
     solids.forEach(function (s) {
       if (s.y0 > 1.2 || s.y1 < 0.3) return;

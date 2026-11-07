@@ -928,7 +928,7 @@
     if (lift) { var g0 = g; g = new THREE.Group(); g.position.y = lift; g0.add(g); }
     var cfg = { name: o.name, sign: o.sign };
     function X(u) { return AX + s * u; }
-    var trim = std({ color: o.trim, roughness: 0.7, metalness: 0.15 });
+    var trim = std({ map: pkMats().clap.map, color: o.trim, roughness: 0.7, metalness: 0.15 });
     var band = std({ color: o.band, roughness: 0.5, metalness: 0.3 });
     var glass = std({ color: 0x9fc6cc, roughness: 0.1, metalness: 0.2, transparent: true, opacity: 0.34 });
     var xa = Math.min(X(K.u0), X(K.u1)), xb = Math.max(X(K.u0), X(K.u1)), cx = (xa + xb) / 2, cz = (K.z0 + K.z1) / 2, W = xb - xa, D = K.z1 - K.z0;
@@ -940,14 +940,15 @@
     }
     // the long window over the track: parapet, glass, header, posts
     box(W, 0.95, T, trim, cx, 0.475, K.z0 + T / 2, g);
-    box(W - 0.2, 1.4, 0.05, glass, cx, 1.65, K.z0 + T / 2, g);
+    var GH = H - 1.5, GY = 0.95 + GH / 2;   // the glass fills parapet (0.95) to header (H - 0.55); 1.4 at the default H 2.9
+    box(W - 0.2, GH, 0.05, glass, cx, GY, K.z0 + T / 2, g);
     box(W, 0.55, T, trim, cx, H - 0.275, K.z0 + T / 2, g);
     [xa + 0.06, cx, xb - 0.06].forEach(function (px) { box(0.12, H, 0.16, trim, px, H / 2, K.z0 + T / 2, g); });
     box(W + 0.1, 0.12, 0.2, band, cx, 0.98, K.z0 + 0.02, g);
     // the platform side: a window at the track end, then the door
     var d0 = K.door[0], d1 = K.door[1];
     box(T, 0.95, d0 - K.z0, trim, xn, 0.475, (K.z0 + d0) / 2, g);
-    box(0.05, 1.4, d0 - K.z0 - 0.2, glass, xn, 1.65, (K.z0 + d0) / 2, g);
+    box(0.05, GH, d0 - K.z0 - 0.2, glass, xn, GY, (K.z0 + d0) / 2, g);
     box(T, 0.55, d0 - K.z0, trim, xn, H - 0.275, (K.z0 + d0) / 2, g);
     box(T, H - 2.1, d1 - d0, trim, xn, 2.1 + (H - 2.1) / 2, (d0 + d1) / 2, g);
     box(T, H, K.z1 - d1, trim, xn, H / 2, (d1 + K.z1) / 2, g);
@@ -965,15 +966,17 @@
     sol(xn - 0.08, xn + 0.08, d1, K.z1, 0, H);
     // the desk under the long window, the operator facing the track with the platform on the side
     var con = new THREE.Group(); con.position.set(cx, 0.12, K.z0 + 0.5); g.add(con);
-    pkBkDesk(con, 2.1);
+    // o.desk(a, con, W) builds a ride's own desk (and its own screens) instead of the kit's; the ride panel still goes in its middle
+    if (o.desk) o.desk(a, con, W); else pkBkDesk(con, 2.1);
     pkBoothPanel(a, con);
-    sol(cx - 1.05, cx + 1.05, K.z0 + 0.1, K.z0 + 0.82, 0, 0.95);
+    var dw = o.desk ? W / 2 - 0.15 : 1.05;
+    sol(cx - dw, cx + dw, K.z0 + 0.1, K.z0 + 0.82, 0, 0.95);
     // the kit, in a frame at the room's middle: local -z is the long window, +z the back
     var k = new THREE.Group(); k.position.set(cx, 0.12, cz); g.add(k);
     var fxl = (xf - cx) - s * 0.17;
     pkBkCabinet(a, k, fxl, 1.42, 0.2, -s * Math.PI / 2);
     sol(Math.min(xf, xf - s * 0.36), Math.max(xf, xf - s * 0.36), cz - 0.3, cz + 0.7, 0, 2.0);
-    pkBkMonitors(a, k, 0, 1.95, K.z0 + 0.36 - cz, 0, 0.32);
+    if (!o.desk) pkBkMonitors(a, k, 0, 1.95, K.z0 + 0.36 - cz, 0, 0.32);
     pkBkClock(k, -s * 1.15, 2.2, K.z1 - 0.09 - cz, Math.PI, 0.14);
     a.boothClock = pkBkTimeClock(k, -s * 1.2, 1.5, K.z1 - 0.08 - cz, Math.PI, a.id, a.name);
     pkBkKeyBox(k, s * 1.2, 2.05, K.z1 - 0.08 - cz, Math.PI);

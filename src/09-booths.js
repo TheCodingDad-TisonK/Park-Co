@@ -121,6 +121,20 @@ function pkBoothGates(a) {
   if (!C.key) return pkBoothRefuse(a.name + ' is locked - turn the operator key on');
   if (C.fault) return pkBoothRefuse('Reset ' + a.name + ' first');
   if (C.maint) return pkBoothRefuse(a.name + ' is locked out - turn the key to RUN');
+  if (a.rowWait) {
+    // a ride whose line waits at its rows (the Dragon Ride): GATES is the queue gate alone, open or shut whenever the
+    // operator likes. The station gates are what stand between the guests and the train.
+    if (!C.gates && PK.closed) return pkBoothRefuse('The park is closed');
+    C.gates = !C.gates;
+    if (C.gates) {
+      if (a.state === 'idle') { a.state = 'boarding'; a.t = 0; a.boarding = 0; a.manualStart = true; }
+      pkAttrReslot(a);
+      if (a.state === 'boarding' || a.state === 'ready') pkAttrFill(a);
+    } else if (a.state === 'boarding' && !a.seats.some(function (s) { return s.guest; })) { a.state = 'idle'; a.t = 0; a.manualStart = false; }
+    sfx('ok'); toast(a.name + ': queue gate ' + (C.gates ? 'open' : 'shut'), C.gates ? 'good' : '');
+    screenDirtyAll();
+    return true;
+  }
   if (a.state === 'running') return pkBoothRefuse('Not while ' + a.name + ' is running');
   if (a.awaitBars) return pkBoothRefuse('Raise the restraints first: the riders are still aboard ' + a.name);
   if (C.gates && a.state !== 'idle') {   // an idle ride's gates count as shut: a press there always opens them
@@ -157,7 +171,8 @@ function pkBoothDispatch(a) {
   if (a.state !== 'boarding' && a.state !== 'ready') return pkBoothRefuse(a.state === 'idle' ? 'Board the guests first' : a.name + ' is ' + a.state);
   if (pkAttrWalkers(a)) return pkBoothRefuse('Wait for the riders to sit');
   if (!a.riders) return pkBoothRefuse('Nobody is aboard ' + a.name);
-  if (C.gates) return pkBoothRefuse('Close the gates before dispatch');
+  if (C.gates && !a.rowWait) return pkBoothRefuse('Close the gates before dispatch');
+  if (a.rowWait && a.stationGates !== false) return pkBoothRefuse('Close the station gates before dispatch');
   if (C.barsWant < 0.5) return pkBoothRefuse('Secure the restraints before dispatch');
   if (!pkAttrStart(a)) return pkBoothRefuse('Could not dispatch ' + a.name);
   if (pkOnDutyAt(a.id)) pkXp(1);   // on duty here: the operator's own dispatch earns a little more

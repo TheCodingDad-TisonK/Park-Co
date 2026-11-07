@@ -34,7 +34,7 @@
     return G.h0 + G.rise * k;
   }
   var _pkThPrevFloor = pkFloor;   // the guests' floor and the player's (GAME.floorY reads pkFloor)
-  pkFloor = function (x, z) { var h = pkTheaterFloorAt(x, z); return h === null ? _pkThPrevFloor(x, z) : h; };
+  pkFloor = function (x, z, y) { var h = pkTheaterFloorAt(x, z); return h === null ? _pkThPrevFloor(x, z, y) : h; };
 
   // ── Materials ────────────────────────────────────────────────────
   var PK_TH_M = null, PK_TH_WHITE = null;

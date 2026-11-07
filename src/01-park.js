@@ -26,7 +26,7 @@
     { id: 'dodgems',   name: 'Dodgems',      x: 56,  z: 3,  r: 8.2,  q: [44, 3],    level: 8 },
     { id: 'droptower', name: 'Drop tower',   x: -54, z: -52, r: 6.5, q: [-44, -52], level: 9 },
     { id: 'flume',     name: 'Log flume',    x: 54,  z: -32, r: 9.0, q: [46.4, -24], level: 10 },
-    { id: 'danse',     name: 'Danse Macabre',  x: -58, z: -24, r: 12,  q: [-44, -24],  level: 11, qside: -1, pad: 0.02 }   // part 49: the boarding row at the abbey's doors; the abbey lays its own ground
+    { id: 'danse',     name: 'Dance Macabre',  x: -58, z: -24, r: 12,  q: [-44, -24],  level: 11, qside: -1, pad: 0.02 }   // part 49: the boarding row at the abbey's doors; the abbey lays its own ground
   ];
   // the ladder: what the park earns its way to. Every ride is open from the first day; the levels open the services.
   var PK_LEVELS = [
@@ -157,25 +157,54 @@
   // the platform sits south of the track, so the queue and the guests reach it without crossing the rails.
   // a short ramp at its south edge carries the player and the guests up the 0.6 m step.
   var PK_FLOOR_RECTS = [];
-  function pkRaisedFloor(x, z) {
-    for (var i = 0; i < PK_FLOOR_RECTS.length; i++) {
-      var r = PK_FLOOR_RECTS[i];
-      if (r.axis === 'z') {
-        if (x <= r.x0 || x >= r.x1 || z <= r.z0) continue;
-        if (z < r.z1) return r.y;
-        if (r.ramp && z < r.z1 + r.ramp) return r.y * (1 - (z - r.z1) / r.ramp);
-      } else {
-        if (z <= r.z0 || z >= r.z1 || x <= r.x0) continue;
-        if (x < r.x1) return r.y;
-        if (r.ramp && x < r.x1 + r.ramp) return r.y * (1 - (x - r.x1) / r.ramp);
+  // one rect's height at (x, z), or null where it does not reach. A ramp falls from y to y0 (default 0) over r.ramp past
+  // z1 (or x1); rampDir -1 runs it the other way, falling past z0 toward -z.
+  function pkRectFloor(r, x, z) {
+    var y0 = r.y0 || 0;
+    if (r.axis === 'z') {
+      if (x <= r.x0 || x >= r.x1) return null;
+      if (r.rampDir === -1) {
+        if (z >= r.z1) return null;
+        if (z > r.z0) return r.y;
+        if (r.ramp && z > r.z0 - r.ramp) return y0 + (r.y - y0) * (1 - (r.z0 - z) / r.ramp);
+        return null;
       }
+      if (z <= r.z0) return null;
+      if (z < r.z1) return r.y;
+      if (r.ramp && z < r.z1 + r.ramp) return y0 + (r.y - y0) * (1 - (z - r.z1) / r.ramp);
+      return null;
     }
+    if (z <= r.z0 || z >= r.z1) return null;
+    if (r.rampDir === -1) {
+      if (x >= r.x1) return null;
+      if (x > r.x0) return r.y;
+      if (r.ramp && x > r.x0 - r.ramp) return y0 + (r.y - y0) * (1 - (r.x0 - x) / r.ramp);
+      return null;
+    }
+    if (x <= r.x0) return null;
+    if (x < r.x1) return r.y;
+    if (r.ramp && x < r.x1 + r.ramp) return y0 + (r.y - y0) * (1 - (x - r.x1) / r.ramp);
     return null;
   }
-  function pkFloor(x, z) {
+  // Without y: the first rect that reaches (x, z), as before. With y (the walker's feet): floors can stack (a lower hall
+  // under a gallery, a platform under a booth), so take the highest floor within a step of the feet, or none at all if
+  // every floor here is overhead, so the walker stays on the ground beneath it instead of being lifted onto it.
+  var PK_FLOOR_STEP = 0.8;
+  function pkRaisedFloor(x, z, y) {
+    var best = null;
+    for (var i = 0; i < PK_FLOOR_RECTS.length; i++) {
+      if (y === undefined && PK_FLOOR_RECTS[i].overhead) continue;   // a footbridge: walkers without a height (guests) pass under it
+      var h = pkRectFloor(PK_FLOOR_RECTS[i], x, z);
+      if (h === null) continue;
+      if (y === undefined) return h;
+      if (h <= y + PK_FLOOR_STEP && (best === null || h > best)) best = h;
+    }
+    return best;
+  }
+  function pkFloor(x, z, y) {
     if (pkOnPlatform(x, z)) return PK_PLATFORM_Y;
     if (x > -10 && x < 10 && z >= -0.6 && z < 0.4) return PK_PLATFORM_Y * (0.4 - z);
-    var rf = pkRaisedFloor(x, z);
+    var rf = pkRaisedFloor(x, z, y);
     if (rf !== null) return rf;
     return pkBkFloorAt(x, z);            // up the steps into a ride's booth (part 17)
   }
@@ -506,7 +535,7 @@
   // ── The game ──────────────────────────────────────────────────────
   var GAME = {
     handle: 'PARK_CO', version: '0.2.1', editMode: false,
-    floorY: function (x, z) { return pkFloor(x, z); },
+    floorY: function (x, z, y) { return pkFloor(x, z, y); },
     insideWalk: function (x, z) { return pkInsidePark(x, z); },
     // the coaster's control room (part 03, PK_OP): indoors, under its roof, inside its four walls
     indoors: function (x, z) { var O = PK_OP; return x > O.x0 && x < O.x1 && z > O.z0 && z < O.z1; },

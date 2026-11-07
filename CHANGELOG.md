@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.3 (2026-11-07): Word Update
+
+- Maintenance release.
+
 ## 1.6.2 (2026-11-01): World Update
 
 - Maintenance release.
