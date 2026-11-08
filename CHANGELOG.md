@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.7.4 (2026-11-08): Controller Support
+
+## Park Co now supports controllers
+- Added controller support
+- Added keybind menu
+- Added "Reset To Default" into the settings page + keybind menu
+
 ## 1.7.3 (2026-11-08): Bug Patch
 
 - Issue where the shared booths ins control panel was ignoring light mesh - fixed

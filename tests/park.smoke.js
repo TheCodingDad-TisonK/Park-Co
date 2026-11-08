@@ -677,6 +677,31 @@ module.exports = `
     T.TR.st.forEach((st, i) => { if (st.def && st.def.guest === false) { scenic++; return; }
       const p = window.trStationPlatform(i), c = T.navCell(p); if (seen[key(c.i, c.j)] === 1) reach++; });
     ok(reach === 2 && scenic === 2, 'guests can walk from the gate to every railway guest-station platform (' + reach + '/2 reachable, ' + scenic + ' scenic halts)'); }
+  // the gamepad and the key bindings
+  { const d = T.pad.dead;
+    ok(d(0) === 0 && d(0.18) === 0 && d(0.3) > 0 && d(1) === 1 && d(-1) === -1 && d(-0.18) === 0, 'the pad deadzone reads 0 inside 0.18 and saturates at ±1');
+    ok(T.pad.connected() === false, 'no gamepad is plugged into the test window');
+    const b = T.bind(), pb = T.padBind();
+    ok(b.forward === 'KeyW' && b.back === 'KeyS' && b.jump === 'Space' && b.use === 'KeyE' && b.menu === 'Escape', 'the keyboard defaults stand: ' + JSON.stringify(b));
+    ok(pb.jump === 0 && pb.run === 10 && pb.use === 2 && pb.alt === 3 && pb.cancel === 1 && pb.menu === 9, 'the controller defaults stand: ' + JSON.stringify(pb));
+    T.rebindKey('forward', 'ArrowUp'); T.rebindPad('jump', 5);
+    ok(T.bind().forward === 'ArrowUp' && T.padBind().jump === 5, 'a key and a button rebind: forward ' + T.bind().forward + ', jump button ' + T.padBind().jump);
+    const saved = JSON.parse(localStorage.getItem('park-co-settings'));
+    ok(!!saved && saved.bind.forward === 'ArrowUp' && saved.padBind.jump === 5, 'the rebinds are saved with the settings');
+    T.rebindKey('forward', 'KeyW'); T.rebindPad('jump', 0); }
+  // the controls panel: a button on the Settings page opens it, it lists the bindings, reset restores the defaults, and it closes
+  { T.openPanel('controls');
+    ok(T.ui.panelOpen && document.getElementById('dc-panel-title').textContent === 'Controls & key bindings' && /data-bind="forward"/.test(document.getElementById('dc-panel-body').innerHTML) && /data-padbind="jump"/.test(document.getElementById('dc-panel-body').innerHTML), 'the controls panel opens and lists the keyboard and controller bindings');
+    T.rebindKey('forward', 'ArrowUp'); T.rebindPad('jump', 5);
+    document.querySelector('[data-bind-reset]').click();
+    ok(T.bind().forward === 'KeyW' && T.padBind().jump === 0, 'the reset button restores the defaults');
+    T.closePanel(); ok(!T.ui.panelOpen, 'and it closes'); }
+  // the settings reset: a button next to Controls restores every setting and the bindings to their defaults
+  { T.openMenu(); T.menuAct('settings');
+    T.SET.sens = 2.5; T.SET.invertY = true; T.SET.fov = 95; T.rebindKey('use', 'KeyF');
+    document.querySelector('[data-reset-settings]').click();
+    ok(T.SET.sens === 1 && T.SET.invertY === false && T.SET.fov === 75 && T.bind().use === 'KeyE', 'the settings reset restores the defaults: sens ' + T.SET.sens + ', fov ' + T.SET.fov + ', use ' + T.bind().use);
+    T.closeMenu(); }
   // the pure layer
   ok(T.fmtTime(25.5) === '01:30' && T.money(-1234) === '-$1,234', 'time and money helpers');
   ok(T.bevelGeo(1, 1, 1) === T.bevelGeo(1, 1, 1) && T.propSeed('a', 1) !== T.propSeed('b', 1), 'the geometry cache and the prop seed');
