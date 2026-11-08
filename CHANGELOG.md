@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.2 (2026-11-08): Menu Patch
+
+- Added missing leftovers from previous update
+
 ## 1.7.1 (2026-11-08): Menu Update
 
 - Added "changelog" page to the MainMenu

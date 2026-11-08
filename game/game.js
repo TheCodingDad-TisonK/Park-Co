@@ -3693,11 +3693,11 @@
   CO.menus({
     "theme": {
       "accent": "#f5b53d",
-      "panel": "#30435a",
+      "panel": "#2d3e52",
       "text": "#eef1f5",
       "muted": "#a0acb8",
-      "width": 530,
-      "radius": 18,
+      "width": 550,
+      "radius": 21,
       "dim": 0.86
     },
     "start": {
@@ -3719,7 +3719,7 @@
         },
         {
           "label": "Changelog",
-          "action": "page credits"
+          "action": "page Changelog"
         },
         {
           "label": "How to play",
@@ -3764,11 +3764,11 @@
     "pages": {
       "Changelog": {
         "title": "Version history:",
-        "text": "[ v1.7.0 - Mayor Update ]\n- Added three new rides: Dragon Ride, Dream Flight and Dance Macabre\n- Live CCTV camera feeds in every operator booth, showing the queue and the platform\n- Improved frame rate: static geometry now merges by material, about a fifth faster\n- Fixed guests walking through booth floors, and their boarding and exit paths\n- Fixed the departure signals, the dispatch interlock and the booth back wall\n- Fixed the custom booth panels for the new rides"
+        "text": "[ v1.7.2 ]\n- Added missing leftovers from previous update\n\n[ v1.7.1 ]\n- Added \"changelog\" page to the MainMenu\n- Added \"credits\" page to the MainMenu\n- Changed theming of MainMenu\n\n[ v1.7.0 - Mayor Update ]\n- Added three new rides: Dragon Ride, Dream Flight and Dance Macabre\n- Live CCTV camera feeds in every operator booth, showing the queue and the platform\n- Improved frame rate: static geometry now merges by material, about a fifth faster\n- Fixed guests walking through booth floors, and their boarding and exit paths\n- Fixed the departure signals, the dispatch interlock and the booth back wall\n- Fixed the custom booth panels for the new rides"
       },
       "Credits": {
-        "title": "Credits",
-        "text": "Made by\n- TisonK (TheCodingDad-TisonK)\n\nBuilt on\n- Co Engine -> github\n\nThanks to everyone who kept the queue moving\n\nPark Co · 2026"
+        "title": "Credits:",
+        "text": "Made by\n- TisonK (TheCodingDad-TisonK)\n\nBuilt on\n- Co Engine (v0.13.5)\n\nThanks to everyone who kept the queue moving\n\nPark Co · 2026"
       }
     }
   });
