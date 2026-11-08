@@ -207,7 +207,7 @@ function pkCtlBtn(g, x, y, o) {
   var cg = new THREE.Group(); cg.position.set(x, y, 0.012); cg.userData.dynamic = true; g.add(cg);
   var cap = new THREE.Mesh(roundCylGeo(r, r * 0.93, 0.021, 20), M.caps[o.col || 'green']);
   cap.rotation.x = Math.PI / 2; cap.position.z = 0.010; cap.castShadow = true; cg.add(cap);
-  var ledMat = glowMat(o.lampCol || 0x5fd38d, 0.0);
+  var ledMat = std({ color: 0x111111, emissive: o.lampCol || 0x5fd38d, emissiveIntensity: 0, roughness: 0.4 }); ledMat.userData.noBake = true;   // not a glowMat: the ride-light circuit dims glow lenses by day, which would leave the LED dark
   var led = new THREE.Mesh(new THREE.TorusGeometry(r * 0.70, r * 0.075, 6, 20), ledMat);
   led.position.z = 0.021; cg.add(led);
   var pressT = 0;
@@ -423,7 +423,7 @@ function pkCtlLamp(g, x, y, o) {
   var M = pkCtlM(), r = o.r || 0.026;
   var bez = new THREE.Mesh(roundCylGeo(r * 1.34, r * 1.40, 0.012, 16), M.bezel);
   bez.rotation.x = Math.PI / 2; bez.position.set(x, y, 0.006); g.add(bez);
-  var mat = glowMat(o.col || 0x5fd38d, 0.10);
+  var mat = std({ color: 0x111111, emissive: o.col || 0x5fd38d, emissiveIntensity: 0.10, roughness: 0.4 }); mat.userData.noBake = true;   // not a glowMat: the ride-light circuit dims glow lenses by day
   var lens = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 10), mat);
   lens.position.set(x, y, 0.016); lens.scale.z = 0.86; g.add(lens);
   // a bright pip on top of the lens so a lit lamp reads from across the room

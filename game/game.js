@@ -5,7 +5,7 @@
   // The engine parts come first in the closure, the game's parts after. The engine declares the names both sides share
   // here, unassigned, and fills them when the game calls CO.setup (the renderer, the scene, the palette) and CO.boot (the
   // state, the shell, the frame loop). A game part may use any of them at its top level once CO.setup has run.
-  var CO = { version: '0.13.2', cfg: null, game: null, root: null, flash: 0, ready: false, paused: false, stepOnce: false, editor: null };
+  var CO = { version: '0.13.5', cfg: null, game: null, root: null, flash: 0, ready: false, paused: false, stepOnce: false, editor: null };
   var S, SET, SAVE, SETTINGS_KEY, BOOT_SLOT, BOOT_SAVE;               // 40-state fills these
   var canvas, renderer, scene, camera;                                 // 10-three fills these in CO.setup
   var player = null, focus = null, hudDirty = true;                    // 42-player owns player and focus; the HUD throttle flag is read everywhere
@@ -3691,6 +3691,15 @@
   CO.material("pk-metal-rich", {"size":256,"repeat":[1,1],"layers":[{"type":"fill","color":"#4a5058"},{"type":"grain","alpha":0.25},{"type":"speckle","color":"#2a2d33","n":2000}],"roughness":0.4,"metalness":0.8,"bump":{"amp":8,"strength":0.4}});
   CO.material("pk-brick", {"size":512,"repeat":[4,4],"layers":[{"type":"fill","color":"#c9c2b4"},{"type":"bricks","color":"#8a4a3a","color2":"#95553f","size":64,"size2":22,"gap":2,"vary":true},{"type":"grain","alpha":0.12},{"type":"blotches","color":"#6a3a2a","n":40,"sz":90,"dark":true}],"roughness":0.95,"metalness":0.05,"bump":{"amp":16,"strength":0.8}});
   CO.menus({
+    "theme": {
+      "accent": "#f5b53d",
+      "panel": "#30435a",
+      "text": "#eef1f5",
+      "muted": "#a0acb8",
+      "width": 530,
+      "radius": 18,
+      "dim": 0.86
+    },
     "start": {
       "title": "Park Co",
       "subtitle": "Sell the tickets, work the ride, keep the queue moving.",
@@ -3701,16 +3710,24 @@
           "primary": true
         },
         {
+          "label": "Save slots",
+          "action": "slots"
+        },
+        {
           "label": "Settings",
           "action": "settings"
+        },
+        {
+          "label": "Changelog",
+          "action": "page credits"
         },
         {
           "label": "How to play",
           "action": "guide"
         },
         {
-          "label": "Save slots",
-          "action": "slots"
+          "label": "Credits",
+          "action": "page Credits"
         },
         {
           "label": "Quit",
@@ -3735,10 +3752,6 @@
           "action": "guide"
         },
         {
-          "label": "Save file",
-          "action": "saves"
-        },
-        {
           "label": "Main menu",
           "action": "quit"
         }
@@ -3747,6 +3760,16 @@
     "settings": {
       "hide": [],
       "custom": []
+    },
+    "pages": {
+      "Changelog": {
+        "title": "Version history:",
+        "text": "[ v1.7.0 - Mayor Update ]\n- Added three new rides: Dragon Ride, Dream Flight and Dance Macabre\n- Live CCTV camera feeds in every operator booth, showing the queue and the platform\n- Improved frame rate: static geometry now merges by material, about a fifth faster\n- Fixed guests walking through booth floors, and their boarding and exit paths\n- Fixed the departure signals, the dispatch interlock and the booth back wall\n- Fixed the custom booth panels for the new rides"
+      },
+      "Credits": {
+        "title": "Credits",
+        "text": "Made by\n- TisonK (TheCodingDad-TisonK)\n\nBuilt on\n- Co Engine -> github\n\nThanks to everyone who kept the queue moving\n\nPark Co · 2026"
+      }
     }
   });
   CO.npcs({
@@ -4207,7 +4230,7 @@
         "x": -9.55,
         "z": 36.8,
         "ry": 0,
-        "off": true
+        "off": false
       },
       {
         "id": "cashierEast",
@@ -4215,7 +4238,7 @@
         "x": 8.45,
         "z": 36.8,
         "ry": 0,
-        "off": true
+        "off": false
       }
     ],
     "spots": {
@@ -11402,7 +11425,7 @@ function pkCtlBtn(g, x, y, o) {
   var cg = new THREE.Group(); cg.position.set(x, y, 0.012); cg.userData.dynamic = true; g.add(cg);
   var cap = new THREE.Mesh(roundCylGeo(r, r * 0.93, 0.021, 20), M.caps[o.col || 'green']);
   cap.rotation.x = Math.PI / 2; cap.position.z = 0.010; cap.castShadow = true; cg.add(cap);
-  var ledMat = glowMat(o.lampCol || 0x5fd38d, 0.0);
+  var ledMat = std({ color: 0x111111, emissive: o.lampCol || 0x5fd38d, emissiveIntensity: 0, roughness: 0.4 }); ledMat.userData.noBake = true;   // not a glowMat: the ride-light circuit dims glow lenses by day, which would leave the LED dark
   var led = new THREE.Mesh(new THREE.TorusGeometry(r * 0.70, r * 0.075, 6, 20), ledMat);
   led.position.z = 0.021; cg.add(led);
   var pressT = 0;
@@ -11618,7 +11641,7 @@ function pkCtlLamp(g, x, y, o) {
   var M = pkCtlM(), r = o.r || 0.026;
   var bez = new THREE.Mesh(roundCylGeo(r * 1.34, r * 1.40, 0.012, 16), M.bezel);
   bez.rotation.x = Math.PI / 2; bez.position.set(x, y, 0.006); g.add(bez);
-  var mat = glowMat(o.col || 0x5fd38d, 0.10);
+  var mat = std({ color: 0x111111, emissive: o.col || 0x5fd38d, emissiveIntensity: 0.10, roughness: 0.4 }); mat.userData.noBake = true;   // not a glowMat: the ride-light circuit dims glow lenses by day
   var lens = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 10), mat);
   lens.position.set(x, y, 0.016); lens.scale.z = 0.86; g.add(lens);
   // a bright pip on top of the lens so a lit lamp reads from across the room

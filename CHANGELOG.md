@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.1 (2026-11-08): Menu Update
+
+- Added "changelog" page to the MainMenu
+- Added "credits" page to the MainMenu
+- Changed theming of MainMenu
+
 ## 1.7.0 (2026-11-08): Mayor Update
 
 - Added three new rides: Dragon Ride, Dream Flight and Dance Macabre

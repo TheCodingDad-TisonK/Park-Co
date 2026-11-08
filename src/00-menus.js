@@ -1,5 +1,14 @@
 //@ the menus the editor saved: the start screen, the pause menu, the settings and their pages, as data. Written by the Co Engine editor; it sorts first in src/. Edit it in the editor rather than here.
   CO.menus({
+    "theme": {
+      "accent": "#f5b53d",
+      "panel": "#30435a",
+      "text": "#eef1f5",
+      "muted": "#a0acb8",
+      "width": 530,
+      "radius": 18,
+      "dim": 0.86
+    },
     "start": {
       "title": "Park Co",
       "subtitle": "Sell the tickets, work the ride, keep the queue moving.",
@@ -10,16 +19,24 @@
           "primary": true
         },
         {
+          "label": "Save slots",
+          "action": "slots"
+        },
+        {
           "label": "Settings",
           "action": "settings"
+        },
+        {
+          "label": "Changelog",
+          "action": "page credits"
         },
         {
           "label": "How to play",
           "action": "guide"
         },
         {
-          "label": "Save slots",
-          "action": "slots"
+          "label": "Credits",
+          "action": "page Credits"
         },
         {
           "label": "Quit",
@@ -44,10 +61,6 @@
           "action": "guide"
         },
         {
-          "label": "Save file",
-          "action": "saves"
-        },
-        {
           "label": "Main menu",
           "action": "quit"
         }
@@ -56,5 +69,15 @@
     "settings": {
       "hide": [],
       "custom": []
+    },
+    "pages": {
+      "Changelog": {
+        "title": "Version history:",
+        "text": "[ v1.7.0 - Mayor Update ]\n- Added three new rides: Dragon Ride, Dream Flight and Dance Macabre\n- Live CCTV camera feeds in every operator booth, showing the queue and the platform\n- Improved frame rate: static geometry now merges by material, about a fifth faster\n- Fixed guests walking through booth floors, and their boarding and exit paths\n- Fixed the departure signals, the dispatch interlock and the booth back wall\n- Fixed the custom booth panels for the new rides"
+      },
+      "Credits": {
+        "title": "Credits",
+        "text": "Made by\n- TisonK (TheCodingDad-TisonK)\n\nBuilt on\n- Co Engine -> github\n\nThanks to everyone who kept the queue moving\n\nPark Co · 2026"
+      }
     }
   });
