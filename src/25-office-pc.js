@@ -471,8 +471,75 @@
     if (typeof PK_OPS !== 'undefined') PK_OPS.list.forEach(function (o) { out.push({ name: o.name, charId: 'operator', x: o.x, z: o.z, st: pkOpWords(o) }); });
     return out;
   }
-  // a camera: a stretch of the park from above, the paths and the rides, the guests and the staff on them, live
-  var PK_PC_CAMS = [['GATE AND CAR PARK', -34, 34, 24, 74], ['MIDWAY AND STATION SQUARE', -30, 30, -10, 30], ['THE FAIRGROUND AND THE DARK WOODS', -72, -14, -78, 40], ['GARDENS, COASTER COUNTRY, EAST WALK', -36, 123, -118, -8]];
+  // a camera over a part of the park: a real render, not a schematic. Each has its own small target and a camera placed
+  // high looking at the spot, and the Security app shows all of them live.
+  var PK_PC_CAMS = [
+    { name: 'GATE', pos: [0, 11, 46], look: [0, 1.5, 30] },
+    { name: 'CAR PARK', pos: [0, 13, 72], look: [-18, 1, 56] },
+    { name: 'MIDWAY', pos: [0, 10, 20], look: [0, 1.2, -10] },
+    { name: 'STATION SQUARE', pos: [10, 8, 14], look: [0, 1, 0] },
+    { name: 'THE COASTER', pos: [20, 12, -2], look: [0, 3, -16] },
+    { name: 'COASTER QUEUE', pos: [13, 5, 8], look: [7, 1.2, 2] },
+    { name: 'WEST FAIR', pos: [-26, 9, 22], look: [-38, 2, 14] },
+    { name: 'FERRIS WHEEL', pos: [28, 10, 24], look: [34, 6, 20] },
+    { name: 'DARK WOODS', pos: [-44, 10, -22], look: [-58, 4, -30] },
+    { name: 'EAST FAIR', pos: [42, 10, -24], look: [54, 3, -30] },
+    { name: 'DRAGON RIDE', pos: [88, 8, -4], look: [92, 2, -16] },
+    { name: 'SKYLINE', pos: [-52, 11, -166], look: [-55, 4, -174] }
+  ];
+  // One camera renders a frame (round-robin) and reads back into a canvas the Security app draws, so a dozen live feeds
+  // stay a single extra scene pass plus one small readback. They only run while the Security app is up.
+  var PK_SEC = { cams: [], next: 0, built: false, sel: -1 };
+  function pkSecBuild() {
+    if (PK_SEC.built) return;
+    PK_SEC.built = true;
+    var W = 256, H = 160;
+    PK_PC_CAMS.forEach(function (def, i) {
+      var rt = new THREE.WebGLRenderTarget(W, H, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat, encoding: THREE.sRGBEncoding });
+      var cam = new THREE.PerspectiveCamera(74, W / H, 0.1, 260);
+      cam.rotation.order = 'YXZ';
+      cam.position.set(def.pos[0], def.pos[1], def.pos[2]); cam.lookAt(def.look[0], def.look[1], def.look[2]);
+      cam.updateMatrixWorld(true);
+      var pan = 0, tilt = 0;
+      if (S.secCams && S.secCams[i]) { pan = S.secCams[i][0] || 0; tilt = S.secCams[i][1] || 0; }
+      var cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+      PK_SEC.cams.push({ def: def, rt: rt, cam: cam, cv: cv, ctx: cv.getContext('2d'), buf: new Uint8Array(W * H * 4), have: false, baseYaw: cam.rotation.y, basePitch: cam.rotation.x, pan: pan, tilt: tilt });
+    });
+  }
+  // turn one camera: pan sweeps it left/right, tilt up/down, both clamped and saved with the park
+  function pkSecRotate(i, dPan, dTilt) {
+    var f = PK_SEC.cams[i]; if (!f) return;
+    f.pan = clamp(f.pan + dPan, -Math.PI, Math.PI);
+    f.tilt = clamp(f.tilt + dTilt, -1.2, 1.2);
+    if (!S.secCams) S.secCams = {};
+    S.secCams[i] = [f.pan, f.tilt];
+    if (PK_PC.sc) PK_PC.sc.dirty = true;
+    sfx('click');
+  }
+  hook('frame', function () {
+    if (!PK_SEC.built || PK_PC.app !== 'cctv') return;
+    var f = PK_SEC.cams[PK_SEC.next]; PK_SEC.next = (PK_SEC.next + 1) % PK_SEC.cams.length;
+    f.cam.rotation.y = f.baseYaw + f.pan; f.cam.rotation.x = clamp(f.basePitch + f.tilt, -1.4, 1.4);
+    renderer.setRenderTarget(f.rt); renderer.render(scene, f.cam); renderer.setRenderTarget(null);
+    renderer.readRenderTargetPixels(f.rt, 0, 0, f.rt.width, f.rt.height, f.buf);
+    var img = f.ctx.createImageData(f.rt.width, f.rt.height), d = img.data, b = f.buf, W2 = f.rt.width, H2 = f.rt.height;
+    for (var y = 0; y < H2; y++) { var src = y * W2 * 4, dst = (H2 - 1 - y) * W2 * 4; for (var x = 0; x < W2 * 4; x++) d[dst + x] = b[src + x]; }   // readback is bottom-up: flip
+    f.ctx.putImageData(img, 0, 0); f.have = true;
+    if (PK_PC.sc) PK_PC.sc.dirty = true;   // redraw the Security app so the new frame shows
+  });
+  // in the fullscreen camera view the arrow keys aim it and Esc steps back to the grid; captured before the engine's keys
+  document.addEventListener('keydown', function (e) {
+    if (PK_PC.app !== 'cctv' || !PK_SEC.full || PK_SEC.sel < 0) return;
+    var dp = 0, dt = 0;
+    if (e.code === 'Escape') { PK_SEC.full = false; PK_PC.sc.dirty = true; }
+    else if (e.code === 'ArrowLeft') dp = -0.12;
+    else if (e.code === 'ArrowRight') dp = 0.12;
+    else if (e.code === 'ArrowUp') dt = 0.08;
+    else if (e.code === 'ArrowDown') dt = -0.08;
+    else return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (dp || dt) pkSecRotate(PK_SEC.sel, dp, dt);
+  }, true);
   function pkPCCam(c, x, y, w, h, cam, i) {
     var x0 = cam[1], x1 = cam[2], z0 = cam[3], z1 = cam[4], k = Math.min(w / (x1 - x0), h / (z1 - z0));
     var ox = x + w / 2 - (x0 + x1) / 2 * k, oz = y + h / 2 - (z0 + z1) / 2 * k;
@@ -493,13 +560,41 @@
     pkPCText(c, fmtTime(S.time), x + w - 8, y + 16, 11, '#8fe0a0', false, 'right');
     if (Math.floor(worldTime * 1.5 + i) % 2 === 0) { c.fillStyle = '#ff3b30'; c.beginPath(); c.arc(x + w - 14, y + h - 12, 4, 0, 6.283); c.fill(); pkPCText(c, 'REC', x + w - 22, y + h - 8, 10, '#ff6b5e', true, 'right'); }
   }
+  // draw one live feed into a rect, cropping to fill it so the frame never stretches
+  function pkSecDraw(c, f, x, y, w, h) {
+    if (!f.have) { c.fillStyle = '#0d1a12'; c.fillRect(x, y, w, h); return; }
+    var s = Math.max(w / f.cv.width, h / f.cv.height), dw = f.cv.width * s, dh = f.cv.height * s;
+    c.drawImage(f.cv, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+  }
   function pkPCCctv(c, sc, X, Y, W, H) {
-    var cw = (W - 8) / 2, ch = (H - 34) / 2;
-    PK_PC_CAMS.forEach(function (cam, i) { pkPCCam(c, X + (i % 2) * (cw + 8), Y + Math.floor(i / 2) * (ch + 8), cw, ch, cam, i); });
+    pkSecBuild();
+    // the picked camera fills the app, aimed with the arrow keys
+    if (PK_SEC.full && PK_SEC.sel >= 0) {
+      var f = PK_SEC.cams[PK_SEC.sel];
+      pkSecDraw(c, f, X, Y, W, H);
+      c.strokeStyle = 'rgba(255,255,255,0.18)'; c.lineWidth = 1; c.strokeRect(X + 0.5, Y + 0.5, W - 1, H - 1);
+      c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(X, Y, W, 24);
+      c.fillStyle = '#8fe0a0'; c.beginPath(); c.arc(X + 12, Y + 12, 3.5, 0, 6.283); c.fill();
+      pkPCText(c, f.def.name.toUpperCase() + ' · LIVE', X + 24, Y + 16, 14, '#eef1f5', true);
+      pkPCText(c, 'pan ' + Math.round(f.pan * 57.3) + '° · tilt ' + Math.round(f.tilt * 57.3) + '°', X + W - 14, Y + 16, 12, '#8fe0a0', false, 'right');
+      c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(X, Y + H - 26, W, 26);
+      pkPCText(c, 'Arrow keys aim the camera · Esc back', X + 14, Y + H - 9, 12, '#c3ccd4');
+      pkPCBtn(sc, X + W - 150, Y + H - 48, 136, 28, 'Back to grid', function () { PK_SEC.full = false; }, true);
+      return;
+    }
+    var cols = 4, rows = 3, gap = 6, cw = (W - (cols - 1) * gap) / cols, ch = (H - (rows - 1) * gap) / rows;
+    PK_SEC.cams.forEach(function (f, i) {
+      var x = X + (i % cols) * (cw + gap), y = Y + Math.floor(i / cols) * (ch + gap);
+      pkSecDraw(c, f, x, y, cw, ch);
+      c.strokeStyle = 'rgba(255,255,255,0.14)'; c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, cw - 1, ch - 1);
+      c.fillStyle = 'rgba(0,0,0,0.55)'; c.fillRect(x, y, cw, 16);
+      c.fillStyle = '#8fe0a0'; c.beginPath(); c.arc(x + 9, y + 8, 3, 0, 6.283); c.fill();
+      pkPCText(c, f.def.name, x + 18, y + 12, 9, '#eef1f5', true);
+      if (Math.floor(worldTime * 1.5 + i) % 2 === 0) { c.fillStyle = '#ff3b30'; c.beginPath(); c.arc(x + cw - 8, y + 8, 3, 0, 6.283); c.fill(); }
+      pkPCZone(sc, x, y, cw, ch, f.def.name, function () { PK_SEC.sel = i; PK_SEC.full = true; });
+    });
     var guards = npcList.filter(function (n) { return !n.gone && /^guard/.test(n.charId); });
-    var ly = Y + H - 12;
-    [['#f5d36b', 'guests'], ['#5fd38d', 'grounds'], ['#8fc3ff', 'guards'], ['#ff8a5c', 'tickets'], ['#ffd166', 'rides'], ['#ffffff', 'you']].forEach(function (k, i) { c.fillStyle = k[0]; c.beginPath(); c.arc(X + 8 + i * 74, ly - 4, 4, 0, 6.283); c.fill(); pkPCText(c, k[1], X + 18 + i * 74, ly, 12, '#a0acb8'); });
-    pkPCText(c, guards.length ? guards.map(function (n) { return n.name; }).join(', ') + ' on patrol' : 'No guards on duty', X + W, ly, 12, '#8fc3ff', true, 'right');
+    pkPCText(c, guards.length ? guards.map(function (n) { return n.name; }).join(', ') + ' on patrol' : 'No guards on duty', X + W, Y + H + 2, 12, '#8fc3ff', true, 'right');
   }
   function pkPCMail(c, sc, X, Y, W, H) {
     pkPCPanel(c, X, Y, W, H, 'Park news, newest first');
@@ -520,7 +615,7 @@
   }
 
   var _pkPCT = GAME.T;
-  GAME.T = function () { var t = _pkPCT(); t.PK_PC = PK_PC; t.pkFeature = pkFeature; return t; };
+  GAME.T = function () { var t = _pkPCT(); t.PK_PC = PK_PC; t.pkFeature = pkFeature; t.PK_SEC = PK_SEC; t.pkSecRotate = pkSecRotate; return t; };
   // ── Live: the colour cycle, the fans, the bank's history, the lock ──
   animate(function (dt) {
     if (!PK_PC.sc) return;

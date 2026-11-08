@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.7.6 (2026-11-08): Security Update
+
+- Real CAM feed of several points accros the park
+- When focussed on a feed you can use the arrow keys to change the camera position
+
 ## 1.7.5 (2026-11-08): Bug Fixes
 
 - Fixed a issue where the tablet was showing a grey barcode looking screen on top of the tablet

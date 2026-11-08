@@ -708,6 +708,13 @@ module.exports = `
     T.pkFeature('carousel'); ok(S.featured === null, 'featuring it again unmarks it');
     T.pkFeature('coaster'); ok(S.featured === 'coaster', 'the coaster can be featured too');
     T.pkFeature('coaster'); }
+  // the Security app: twelve live cameras, each with its own render target and canvas
+  { T.PK_PC.app = 'cctv'; T.PK_PC.sc.dirty = true; T.drawScreens(0.016);
+    ok(T.PK_SEC.cams.length === 12 && T.PK_SEC.cams.every((f) => !!f.rt && !!f.cam && !!f.cv && !!f.ctx), 'the Security app runs ' + T.PK_SEC.cams.length + ' live cameras');
+    const cam = T.PK_SEC.cams[0], yaw0 = cam.cam.rotation.y, pitch0 = cam.cam.rotation.x;
+    T.pkSecRotate(0, 0.4, 0.25);
+    ok(Math.abs(cam.pan - 0.4) < 1e-9 && Math.abs(cam.tilt - 0.25) < 1e-9 && S.secCams && Math.abs(S.secCams[0][0] - 0.4) < 1e-9, 'a camera pans and tilts, and the aim is saved');
+    T.pkSecRotate(0, -cam.pan, -cam.tilt); ok(Math.abs(cam.pan) < 1e-9 && Math.abs(cam.tilt) < 1e-9, 'and it returns to level'); }
   // the pure layer
   ok(T.fmtTime(25.5) === '01:30' && T.money(-1234) === '-$1,234', 'time and money helpers');
   ok(T.bevelGeo(1, 1, 1) === T.bevelGeo(1, 1, 1) && T.propSeed('a', 1) !== T.propSeed('b', 1), 'the geometry cache and the prop seed');
