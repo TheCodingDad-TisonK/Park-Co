@@ -15,7 +15,7 @@
   // Every button is a tap zone on the screen (E or a click while aiming at it); the full management panel is a tap away.
   var PK_PC = { app: 'home', awake: false, idle: 0, page: 0, hist: [], lastSample: -1, sc: null, side: null, x: 0, z: 0, hue: 0, rgb: [] };
   var PK_PC_APPS = [['home', 'Dashboard', '#f5b53d'], ['money', 'Finance', '#5fd38d'], ['rides', 'Rides', '#ff8a5c'], ['guests', 'Guests', '#8fc3ff'],
-    ['staff', 'Staff', '#c79bff'], ['cctv', 'Security', '#ff6b5e'], ['mail', 'Inbox', '#f0d58a'], ['exp', 'Expansion', '#9fd0ff']];
+    ['staff', 'Staff', '#c79bff'], ['cctv', 'Security', '#ff6b5e'], ['mail', 'Inbox', '#f0d58a'], ['marketing', 'Marketing', '#ff6fa5'], ['exp', 'Expansion', '#9fd0ff']];
   var PK_PC_W = 960, PK_PC_H = 420, PK_PC_SIDE = 150, PK_PC_TOP = 30;
 
   // ── The hardware ──────────────────────────────────────────────────
@@ -158,7 +158,7 @@
     pkPCBtn(sc, 10, H - 82, PK_PC_SIDE - 20, 30, 'Full panel', function () { if (tabletOpen) pkTabletToggle(false); openPanel('admin'); });
     pkPCBtn(sc, 10, H - 44, PK_PC_SIDE - 20, 30, 'Lock', function () { PK_PC.awake = false; }, false);
     var X = PK_PC_SIDE + 12, Y = PK_PC_TOP + 12, CW = W - X - 12, CH = H - Y - 12;
-    ({ home: pkPCHome, money: pkPCMoney, rides: pkPCRides, guests: pkPCGuests, staff: pkPCStaff, cctv: pkPCCctv, mail: pkPCMail, exp: pkPCExpansion }[PK_PC.app] || pkPCHome)(c, sc, X, Y, CW, CH);
+    ({ home: pkPCHome, money: pkPCMoney, rides: pkPCRides, guests: pkPCGuests, staff: pkPCStaff, cctv: pkPCCctv, mail: pkPCMail, marketing: pkPCMarketing, exp: pkPCExpansion }[PK_PC.app] || pkPCHome)(c, sc, X, Y, CW, CH);
   }
   // the lock screen: the time, big, over the wallpaper; a tap anywhere signs in
   function pkPCLock(c, sc) {
@@ -377,6 +377,33 @@
     pkPCBtn(sc, X + W - 236, py + 4, 104, 30, 'Previous', function () { PK_PC.page = Math.max(0, PK_PC.page - 1); }, PK_PC.page > 0);
     pkPCBtn(sc, X + W - 124, py + 4, 112, 30, 'Next', function () { PK_PC.page = Math.min(pages - 1, PK_PC.page + 1); }, PK_PC.page < pages - 1);
   }
+  // ── Marketing ──────────────────────────────────────────────────────
+  // Feature a ride and the guests make straight for it, so its queue fills first and it runs far more often. One ride at a
+  // time; tap it again to unfeature it. The choice is saved with the park.
+  function pkFeature(id) {
+    var name = id === 'coaster' ? 'The coaster' : (PK.attrById[id] ? PK.attrById[id].name : id);
+    if (S.featured === id) { S.featured = null; sfx('click'); toast('No ride featured now', ''); }
+    else { S.featured = id; sfx('unlock'); toast(name + ' is featured - the guests make for it', 'good'); }
+    screenDirtyAll(); hudDirty = true;
+  }
+  function pkPCMarketing(c, sc, X, Y, W, H) {
+    var rows = pkPCRideRows(), per = 8, pages = Math.ceil(rows.length / per); PK_PC.page = clamp(PK_PC.page, 0, pages - 1);
+    pkPCPanel(c, X, Y, W, H, 'Marketing · feature a ride');
+    pkPCText(c, 'Feature a ride and the guests make straight for it, filling its queue first.', X + 14, Y + 24, 12, '#8b98a4');
+    rows.slice(PK_PC.page * per, PK_PC.page * per + per).forEach(function (r, i) {
+      var y = Y + 40 + i * 34;
+      if (i % 2 === 0) { c.fillStyle = 'rgba(255,255,255,0.03)'; c.fillRect(X + 6, y, W - 12, 32); }
+      c.fillStyle = r.bad ? '#ff6b5e' : !r.open ? '#6b7781' : '#5fd38d'; c.beginPath(); c.arc(X + 16, y + 16, 5, 0, 6.283); c.fill();
+      pkPCText(c, r.name, X + 22, y + 21, 14, '#eef1f5', true);
+      var id = r.coaster ? 'coaster' : r.a.id, on = S.featured === id;
+      pkPCText(c, on ? 'guests flock here' : (r.open ? 'the usual line' : 'breaker off'), X + 320, y + 21, 12, on ? '#f5b53d' : '#6b7781');
+      pkPCBtn(sc, X + W - 162, y + 3, 150, 26, on ? 'Featured' : 'Feature', function () { pkFeature(id); }, !on, on ? '#f0c04a' : '#5fd38d');
+    });
+    var py = Y + H - 40;
+    pkPCText(c, 'Page ' + (PK_PC.page + 1) + ' of ' + pages + '   ·   ' + (S.featured ? 'featured: ' + (S.featured === 'coaster' ? 'the coaster' : (PK.attrById[S.featured] ? PK.attrById[S.featured].name : S.featured)) : 'no ride featured'), X + 16, py + 24, 13, '#8b98a4');
+    pkPCBtn(sc, X + W - 236, py + 4, 104, 30, 'Previous', function () { PK_PC.page = Math.max(0, PK_PC.page - 1); }, PK_PC.page > 0);
+    pkPCBtn(sc, X + W - 124, py + 4, 112, 30, 'Next', function () { PK_PC.page = Math.min(pages - 1, PK_PC.page + 1); }, PK_PC.page < pages - 1);
+  }
   var PK_PC_GROUPS = [['Arriving', ['walkBooth', 'boothQueue', 'walkTurn'], '#8fc3ff'], ['Queuing', ['queue', 'qwait', 'walkQueue'], '#f0c04a'], ['Riding', ['board', 'seated', 'walkSeat'], '#ff9d6b'],
     ['Walking', ['walkAttr', 'toSnack', 'off'], '#5fd38d'], ['Leaving', ['leave'], '#a0acb8']];
   function pkPCGuests(c, sc, X, Y, W, H) {
@@ -493,7 +520,7 @@
   }
 
   var _pkPCT = GAME.T;
-  GAME.T = function () { var t = _pkPCT(); t.PK_PC = PK_PC; return t; };
+  GAME.T = function () { var t = _pkPCT(); t.PK_PC = PK_PC; t.pkFeature = pkFeature; return t; };
   // ── Live: the colour cycle, the fans, the bank's history, the lock ──
   animate(function (dt) {
     if (!PK_PC.sc) return;

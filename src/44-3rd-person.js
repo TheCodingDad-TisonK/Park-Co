@@ -70,15 +70,26 @@
       var px = player.x, py = player.y, pz = player.z, yaw = player.yaw;
       PK_3P.body.visible = true;
       PK_3P.body.rotation.y = yaw + Math.PI;
-      animateHuman(PK_3P.body, dt, player.keys && (player.keys.KeyW || player.keys.KeyA || player.keys.KeyS || player.keys.KeyD) ? 'walk' : 'idle', 1, null, false);
-      // animateHuman resets the model's vertical offset, so reapply the player's position after animating.
-      PK_3P.body.position.set(px, py, pz);
-      if (!player.grounded) {
-        var B = PK_3P.body.userData;
-        B.legs[0].rotation.x = -0.6; B.legs[1].rotation.x = -0.85;
-        B.legs[0].userData.knee.rotation.x = 0.65; B.legs[1].userData.knee.rotation.x = 0.9;
-        B.arms[0].rotation.x = -1.0; B.arms[1].rotation.x = -1.0;
-        B.arms[0].userData.elbow.rotation.x = -0.25; B.arms[1].userData.elbow.rotation.x = -0.25;
+      var sitting = typeof PK_SIT !== 'undefined' && PK_SIT;
+      if (sitting) {
+        // seated at a desk: fold the body onto the chair instead of leaving it standing through it. The seat sits ~0.72
+        // below the seated eye (the train's cushion uses the same), and the hips hang 0.86 above the body's feet line.
+        var baseY = sitting.y + sitting.eyeY - 0.72 - 0.86;
+        PK_3P.body.userData.baseY = baseY;
+        PK_3P.body.position.set(px, baseY, pz);
+        animateHuman(PK_3P.body, dt, 'sit', 0, null, false);
+      } else {
+        var moving = player.keys && (player.keys[BIND.forward] || player.keys[BIND.back] || player.keys[BIND.left] || player.keys[BIND.right] || (player.pad && (player.pad.x || player.pad.y)));
+        animateHuman(PK_3P.body, dt, moving ? 'walk' : 'idle', 1, null, false);
+        // animateHuman resets the model's vertical offset, so reapply the player's position after animating.
+        PK_3P.body.position.set(px, py, pz);
+        if (!player.grounded) {
+          var B = PK_3P.body.userData;
+          B.legs[0].rotation.x = -0.6; B.legs[1].rotation.x = -0.85;
+          B.legs[0].userData.knee.rotation.x = 0.65; B.legs[1].userData.knee.rotation.x = 0.9;
+          B.arms[0].rotation.x = -1.0; B.arms[1].rotation.x = -1.0;
+          B.arms[0].userData.elbow.rotation.x = -0.25; B.arms[1].userData.elbow.rotation.x = -0.25;
+        }
       }
 
       // Camera follows behind the direction the player is facing.

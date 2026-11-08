@@ -16,7 +16,7 @@
     for (var speaker = -2; speaker <= 2; speaker++) sphere(0.0018, MAT.black, speaker * 0.006, -PK_TAB_PH / 2 - 0.007, 0.005, g);
     var homeRing = new THREE.Mesh(new THREE.TorusGeometry(0.006, 0.0012, 5, 16), chrome); homeRing.position.set(PK_TAB_PW / 2 - 0.016, -PK_TAB_PH / 2 - 0.012, 0.005); g.add(homeRing);
     sphere(0.004, MAT.black, 0, PK_TAB_PH / 2 + 0.016, 0.001, g);
-    var sc = touchScreen({ w: PK_PC_W, h: PK_PC_H, res: 1.2, pw: PK_TAB_PW, ph: PK_TAB_PH, x: 0, y: 0, z: 0.004, parent: g, title: 'Tablet', draw: pkPCDraw });
+    var sc = touchScreen({ w: PK_PC_W, h: PK_PC_H, res: 2, pw: PK_TAB_PW, ph: PK_TAB_PH, x: 0, y: 0, z: 0.006, parent: g, title: 'Tablet', draw: pkPCDraw });
     sc.mesh.raycast = pkTabletNoRaycast;   // shut until Tab opens it (three.js raycasts invisible meshes too, so visible alone will not gate it)
     PK_TABLET.g = g; PK_TABLET.sc = sc;
     var drawTabletOS = sc.draw;

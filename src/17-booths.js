@@ -636,7 +636,7 @@
   GAME.playerOverride = function (dt) {
     if (PK_SIT) {
       var k = player.keys;
-      if (k.KeyW || k.KeyS || k.KeyA || k.KeyD) { pkBkStand(); return false; }
+      if (k[BIND.forward] || k[BIND.back] || k[BIND.left] || k[BIND.right] || (player.pad && (player.pad.x || player.pad.y))) { pkBkStand(); return false; }
       player.x = PK_SIT.x; player.z = PK_SIT.z; player.y = PK_SIT.y; player.vy = 0;
       camera.position.set(PK_SIT.x, PK_SIT.y + PK_SIT.eyeY, PK_SIT.z);   // a seated eye on the bigger chair, over the desk
       camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');

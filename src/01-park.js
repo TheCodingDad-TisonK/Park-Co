@@ -559,7 +559,7 @@
     freshState: function () {
       return { day: 1, time: 9, bank: 500, level: 1, log: [], ledger: [], stats: { earned: 0, spent: 0 }, layout: {}, custom: [], hdoors: {},
         ticketPrice: 25, snackPrice: 6, icePrice: 4, toyPrice: 5, auto: false, ctlAuto: {}, ctlKey: {}, coasterKey: false, cycles: 0, xp: 0, clerk: true, operator: false, snackOpen: false, iceOpen: false, toyOpen: false, train2: false, lights: false, rideLights: false,   // the starter clerk works day one for free
-        wear: 0, rides: {}, today: { tickets: 0, snacks: 0, rides: 0, earned: 0, ice: 0, toys: 0 }, gateOpen: true,
+        wear: 0, rides: {}, featured: null, today: { tickets: 0, snacks: 0, rides: 0, earned: 0, ice: 0, toys: 0 }, gateOpen: true,
         expansion: { stage: 0, commissioned: 0, opened: [] } };   // part 53: the expansion gate (none commissioned yet)
     },
     // a day one save from before the starter clerk gets one too; later days keep the park they earned

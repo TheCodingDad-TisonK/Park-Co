@@ -5,7 +5,7 @@
   // The engine parts come first in the closure, the game's parts after. The engine declares the names both sides share
   // here, unassigned, and fills them when the game calls CO.setup (the renderer, the scene, the palette) and CO.boot (the
   // state, the shell, the frame loop). A game part may use any of them at its top level once CO.setup has run.
-  var CO = { version: '0.13.7', cfg: null, game: null, root: null, flash: 0, ready: false, paused: false, stepOnce: false, editor: null };
+  var CO = { version: '0.13.9', cfg: null, game: null, root: null, flash: 0, ready: false, paused: false, stepOnce: false, editor: null };
   var S, SET, SAVE, SETTINGS_KEY, BOOT_SLOT, BOOT_SAVE;               // 40-state fills these
   var canvas, renderer, scene, camera;                                 // 10-three fills these in CO.setup
   var player = null, focus = null, hudDirty = true;                    // 42-player owns player and focus; the HUD throttle flag is read everywhere
@@ -239,7 +239,7 @@
     MAT.cork = std({ map: TEX.cork, roughness: 0.95 });
     MAT.fabric = std({ map: TEX.fabric, roughness: 1 });
     MAT.screen = new THREE.MeshBasicMaterial({ color: 0x0d1216 }); MAT.screen.userData.noBake = true;
-    MAT.screenGlass = new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.08, roughness: 0.04, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.03, depthWrite: false });
+    MAT.screenGlass = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.08, depthWrite: false });   // unlit: no clearcoat mirror reflecting the room over the display
     MAT.skylight = new THREE.MeshBasicMaterial({ map: TEX.skylight });
     MAT.lamp = new THREE.MeshBasicMaterial({ color: 0xfff6e4 });
     MAT.exit = new THREE.MeshBasicMaterial({ color: 0x5fd38d }); MAT.exit.userData.noBake = true;
@@ -803,7 +803,7 @@
   var screens = [];
   function touchScreen(o) {
     var res = o.res || 1, c = document.createElement('canvas'); c.width = o.w * res; c.height = o.h * res; var ctx = c.getContext('2d'); if (res !== 1) ctx.setTransform(res, 0, 0, res, 0, 0);   // res: canvas pixels per logical pixel; the layout and the tap zones stay in logical pixels
-    var t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+    var t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false;   // a screen redrawn in place never needs mipmaps, and NPOT mipmaps band/grey on some GPUs
     var mesh = new THREE.Mesh(new THREE.PlaneGeometry(o.pw, o.ph), new THREE.MeshBasicMaterial({ map: t })); mesh.material.userData.noBake = true; mesh.position.set(o.x, o.y, o.z); mesh.rotation.y = o.ry || 0; parentOf(o.parent).add(mesh);
     var glass = new THREE.Mesh(new THREE.PlaneGeometry(o.pw, o.ph), MAT.screenGlass); glass.position.set(0, 0, 0.0015); glass.renderOrder = 2; mesh.add(glass);
     var sc = { w: o.w, h: o.h, res: res, ctx: ctx, tex: t, mesh: mesh, zones: [], draw: o.draw, cur: null, ripple: 0, title: o.title, dirty: true, autoPage: o.autoPage }; mesh.userData.screen = sc;
@@ -6098,7 +6098,7 @@
     freshState: function () {
       return { day: 1, time: 9, bank: 500, level: 1, log: [], ledger: [], stats: { earned: 0, spent: 0 }, layout: {}, custom: [], hdoors: {},
         ticketPrice: 25, snackPrice: 6, icePrice: 4, toyPrice: 5, auto: false, ctlAuto: {}, ctlKey: {}, coasterKey: false, cycles: 0, xp: 0, clerk: true, operator: false, snackOpen: false, iceOpen: false, toyOpen: false, train2: false, lights: false, rideLights: false,   // the starter clerk works day one for free
-        wear: 0, rides: {}, today: { tickets: 0, snacks: 0, rides: 0, earned: 0, ice: 0, toys: 0 }, gateOpen: true,
+        wear: 0, rides: {}, featured: null, today: { tickets: 0, snacks: 0, rides: 0, earned: 0, ice: 0, toys: 0 }, gateOpen: true,
         expansion: { stage: 0, commissioned: 0, opened: [] } };   // part 53: the expansion gate (none commissioned yet)
     },
     // a day one save from before the starter clerk gets one too; later days keep the park they earned
@@ -8266,6 +8266,11 @@
   }
   // ── Who picks which ride ─────────────────────────────────────────
   function pkAttrPick(gu) {
+    // the featured ride: guests make straight for it, so its queue fills first (part 25's Marketing app)
+    if (S.featured) {
+      var f = PK.attrById[S.featured];
+      if (f && f.open && f.ctl && !f.ctl.fault && !f.ctl.maint && f.queue.length < f.seats.length * 3 && !(gu.gaveUp && gu.gaveUp[f.id]) && Math.random() < 0.65) return pkAttrQueueJoin(gu, f);
+    }
     var open = [];
     // a ride with its operator key OFF still takes a line (the guests wait for it to open), but one that is running is
     // preferred; a ride in a fault or in MAINT takes nobody, and a guest does not go back to a line they gave up on
@@ -8278,6 +8283,10 @@
     return pkAttrQueueJoin(gu, pick);
   }
   function pkGuestPickRide(gu) {
+    if (S.featured === 'coaster') {   // the featured coaster: guests make for its queue
+      var fOk = pkCoasterOpen() && PK.ride.state !== 'fault' && !(gu.gaveUp && gu.gaveUp.coaster);
+      if (fOk && Math.random() < 0.65 && pkQueueJoin(gu)) return;
+    }
     var coasterOk = pkCoasterOpen() && PK.ride.state !== 'fault' && !(gu.gaveUp && gu.gaveUp.coaster);
     var anyOpen = false;
     for (var i = 0; i < PK.attractions.length; i++) if (PK.attractions[i].open) { anyOpen = true; break; }
@@ -10177,7 +10186,10 @@ function pkBoothGates(a) {
       if (a.state === 'idle') { a.state = 'boarding'; a.t = 0; a.boarding = 0; a.manualStart = true; }
       pkAttrReslot(a);
       if (a.state === 'boarding' || a.state === 'ready') pkAttrFill(a);
-    } else if (a.state === 'boarding' && !a.seats.some(function (s) { return s.guest; })) { a.state = 'idle'; a.t = 0; a.manualStart = false; }
+    } else {
+      a.manualStart = false;   // shut by hand: the ride must not auto-open the gate for the next batch (it was re-opening as riders left)
+      if (a.state === 'boarding' && !a.seats.some(function (s) { return s.guest; })) { a.state = 'idle'; a.t = 0; }
+    }
     sfx('ok'); toast(a.name + ': queue gate ' + (C.gates ? 'open' : 'shut'), C.gates ? 'good' : '');
     screenDirtyAll();
     return true;
@@ -15544,7 +15556,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   GAME.playerOverride = function (dt) {
     if (PK_SIT) {
       var k = player.keys;
-      if (k.KeyW || k.KeyS || k.KeyA || k.KeyD) { pkBkStand(); return false; }
+      if (k[BIND.forward] || k[BIND.back] || k[BIND.left] || k[BIND.right] || (player.pad && (player.pad.x || player.pad.y))) { pkBkStand(); return false; }
       player.x = PK_SIT.x; player.z = PK_SIT.z; player.y = PK_SIT.y; player.vy = 0;
       camera.position.set(PK_SIT.x, PK_SIT.y + PK_SIT.eyeY, PK_SIT.z);   // a seated eye on the bigger chair, over the desk
       camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
@@ -17236,7 +17248,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // Every button is a tap zone on the screen (E or a click while aiming at it); the full management panel is a tap away.
   var PK_PC = { app: 'home', awake: false, idle: 0, page: 0, hist: [], lastSample: -1, sc: null, side: null, x: 0, z: 0, hue: 0, rgb: [] };
   var PK_PC_APPS = [['home', 'Dashboard', '#f5b53d'], ['money', 'Finance', '#5fd38d'], ['rides', 'Rides', '#ff8a5c'], ['guests', 'Guests', '#8fc3ff'],
-    ['staff', 'Staff', '#c79bff'], ['cctv', 'Security', '#ff6b5e'], ['mail', 'Inbox', '#f0d58a'], ['exp', 'Expansion', '#9fd0ff']];
+    ['staff', 'Staff', '#c79bff'], ['cctv', 'Security', '#ff6b5e'], ['mail', 'Inbox', '#f0d58a'], ['marketing', 'Marketing', '#ff6fa5'], ['exp', 'Expansion', '#9fd0ff']];
   var PK_PC_W = 960, PK_PC_H = 420, PK_PC_SIDE = 150, PK_PC_TOP = 30;
 
   // ── The hardware ──────────────────────────────────────────────────
@@ -17379,7 +17391,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     pkPCBtn(sc, 10, H - 82, PK_PC_SIDE - 20, 30, 'Full panel', function () { if (tabletOpen) pkTabletToggle(false); openPanel('admin'); });
     pkPCBtn(sc, 10, H - 44, PK_PC_SIDE - 20, 30, 'Lock', function () { PK_PC.awake = false; }, false);
     var X = PK_PC_SIDE + 12, Y = PK_PC_TOP + 12, CW = W - X - 12, CH = H - Y - 12;
-    ({ home: pkPCHome, money: pkPCMoney, rides: pkPCRides, guests: pkPCGuests, staff: pkPCStaff, cctv: pkPCCctv, mail: pkPCMail, exp: pkPCExpansion }[PK_PC.app] || pkPCHome)(c, sc, X, Y, CW, CH);
+    ({ home: pkPCHome, money: pkPCMoney, rides: pkPCRides, guests: pkPCGuests, staff: pkPCStaff, cctv: pkPCCctv, mail: pkPCMail, marketing: pkPCMarketing, exp: pkPCExpansion }[PK_PC.app] || pkPCHome)(c, sc, X, Y, CW, CH);
   }
   // the lock screen: the time, big, over the wallpaper; a tap anywhere signs in
   function pkPCLock(c, sc) {
@@ -17598,6 +17610,33 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     pkPCBtn(sc, X + W - 236, py + 4, 104, 30, 'Previous', function () { PK_PC.page = Math.max(0, PK_PC.page - 1); }, PK_PC.page > 0);
     pkPCBtn(sc, X + W - 124, py + 4, 112, 30, 'Next', function () { PK_PC.page = Math.min(pages - 1, PK_PC.page + 1); }, PK_PC.page < pages - 1);
   }
+  // ── Marketing ──────────────────────────────────────────────────────
+  // Feature a ride and the guests make straight for it, so its queue fills first and it runs far more often. One ride at a
+  // time; tap it again to unfeature it. The choice is saved with the park.
+  function pkFeature(id) {
+    var name = id === 'coaster' ? 'The coaster' : (PK.attrById[id] ? PK.attrById[id].name : id);
+    if (S.featured === id) { S.featured = null; sfx('click'); toast('No ride featured now', ''); }
+    else { S.featured = id; sfx('unlock'); toast(name + ' is featured - the guests make for it', 'good'); }
+    screenDirtyAll(); hudDirty = true;
+  }
+  function pkPCMarketing(c, sc, X, Y, W, H) {
+    var rows = pkPCRideRows(), per = 8, pages = Math.ceil(rows.length / per); PK_PC.page = clamp(PK_PC.page, 0, pages - 1);
+    pkPCPanel(c, X, Y, W, H, 'Marketing · feature a ride');
+    pkPCText(c, 'Feature a ride and the guests make straight for it, filling its queue first.', X + 14, Y + 24, 12, '#8b98a4');
+    rows.slice(PK_PC.page * per, PK_PC.page * per + per).forEach(function (r, i) {
+      var y = Y + 40 + i * 34;
+      if (i % 2 === 0) { c.fillStyle = 'rgba(255,255,255,0.03)'; c.fillRect(X + 6, y, W - 12, 32); }
+      c.fillStyle = r.bad ? '#ff6b5e' : !r.open ? '#6b7781' : '#5fd38d'; c.beginPath(); c.arc(X + 16, y + 16, 5, 0, 6.283); c.fill();
+      pkPCText(c, r.name, X + 22, y + 21, 14, '#eef1f5', true);
+      var id = r.coaster ? 'coaster' : r.a.id, on = S.featured === id;
+      pkPCText(c, on ? 'guests flock here' : (r.open ? 'the usual line' : 'breaker off'), X + 320, y + 21, 12, on ? '#f5b53d' : '#6b7781');
+      pkPCBtn(sc, X + W - 162, y + 3, 150, 26, on ? 'Featured' : 'Feature', function () { pkFeature(id); }, !on, on ? '#f0c04a' : '#5fd38d');
+    });
+    var py = Y + H - 40;
+    pkPCText(c, 'Page ' + (PK_PC.page + 1) + ' of ' + pages + '   ·   ' + (S.featured ? 'featured: ' + (S.featured === 'coaster' ? 'the coaster' : (PK.attrById[S.featured] ? PK.attrById[S.featured].name : S.featured)) : 'no ride featured'), X + 16, py + 24, 13, '#8b98a4');
+    pkPCBtn(sc, X + W - 236, py + 4, 104, 30, 'Previous', function () { PK_PC.page = Math.max(0, PK_PC.page - 1); }, PK_PC.page > 0);
+    pkPCBtn(sc, X + W - 124, py + 4, 112, 30, 'Next', function () { PK_PC.page = Math.min(pages - 1, PK_PC.page + 1); }, PK_PC.page < pages - 1);
+  }
   var PK_PC_GROUPS = [['Arriving', ['walkBooth', 'boothQueue', 'walkTurn'], '#8fc3ff'], ['Queuing', ['queue', 'qwait', 'walkQueue'], '#f0c04a'], ['Riding', ['board', 'seated', 'walkSeat'], '#ff9d6b'],
     ['Walking', ['walkAttr', 'toSnack', 'off'], '#5fd38d'], ['Leaving', ['leave'], '#a0acb8']];
   function pkPCGuests(c, sc, X, Y, W, H) {
@@ -17714,7 +17753,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   }
 
   var _pkPCT = GAME.T;
-  GAME.T = function () { var t = _pkPCT(); t.PK_PC = PK_PC; return t; };
+  GAME.T = function () { var t = _pkPCT(); t.PK_PC = PK_PC; t.pkFeature = pkFeature; return t; };
   // ── Live: the colour cycle, the fans, the bank's history, the lock ──
   animate(function (dt) {
     if (!PK_PC.sc) return;
@@ -18051,7 +18090,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     for (var speaker = -2; speaker <= 2; speaker++) sphere(0.0018, MAT.black, speaker * 0.006, -PK_TAB_PH / 2 - 0.007, 0.005, g);
     var homeRing = new THREE.Mesh(new THREE.TorusGeometry(0.006, 0.0012, 5, 16), chrome); homeRing.position.set(PK_TAB_PW / 2 - 0.016, -PK_TAB_PH / 2 - 0.012, 0.005); g.add(homeRing);
     sphere(0.004, MAT.black, 0, PK_TAB_PH / 2 + 0.016, 0.001, g);
-    var sc = touchScreen({ w: PK_PC_W, h: PK_PC_H, res: 1.2, pw: PK_TAB_PW, ph: PK_TAB_PH, x: 0, y: 0, z: 0.004, parent: g, title: 'Tablet', draw: pkPCDraw });
+    var sc = touchScreen({ w: PK_PC_W, h: PK_PC_H, res: 2, pw: PK_TAB_PW, ph: PK_TAB_PH, x: 0, y: 0, z: 0.006, parent: g, title: 'Tablet', draw: pkPCDraw });
     sc.mesh.raycast = pkTabletNoRaycast;   // shut until Tab opens it (three.js raycasts invisible meshes too, so visible alone will not gate it)
     PK_TABLET.g = g; PK_TABLET.sc = sc;
     var drawTabletOS = sc.draw;
@@ -22549,15 +22588,26 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       var px = player.x, py = player.y, pz = player.z, yaw = player.yaw;
       PK_3P.body.visible = true;
       PK_3P.body.rotation.y = yaw + Math.PI;
-      animateHuman(PK_3P.body, dt, player.keys && (player.keys.KeyW || player.keys.KeyA || player.keys.KeyS || player.keys.KeyD) ? 'walk' : 'idle', 1, null, false);
-      // animateHuman resets the model's vertical offset, so reapply the player's position after animating.
-      PK_3P.body.position.set(px, py, pz);
-      if (!player.grounded) {
-        var B = PK_3P.body.userData;
-        B.legs[0].rotation.x = -0.6; B.legs[1].rotation.x = -0.85;
-        B.legs[0].userData.knee.rotation.x = 0.65; B.legs[1].userData.knee.rotation.x = 0.9;
-        B.arms[0].rotation.x = -1.0; B.arms[1].rotation.x = -1.0;
-        B.arms[0].userData.elbow.rotation.x = -0.25; B.arms[1].userData.elbow.rotation.x = -0.25;
+      var sitting = typeof PK_SIT !== 'undefined' && PK_SIT;
+      if (sitting) {
+        // seated at a desk: fold the body onto the chair instead of leaving it standing through it. The seat sits ~0.72
+        // below the seated eye (the train's cushion uses the same), and the hips hang 0.86 above the body's feet line.
+        var baseY = sitting.y + sitting.eyeY - 0.72 - 0.86;
+        PK_3P.body.userData.baseY = baseY;
+        PK_3P.body.position.set(px, baseY, pz);
+        animateHuman(PK_3P.body, dt, 'sit', 0, null, false);
+      } else {
+        var moving = player.keys && (player.keys[BIND.forward] || player.keys[BIND.back] || player.keys[BIND.left] || player.keys[BIND.right] || (player.pad && (player.pad.x || player.pad.y)));
+        animateHuman(PK_3P.body, dt, moving ? 'walk' : 'idle', 1, null, false);
+        // animateHuman resets the model's vertical offset, so reapply the player's position after animating.
+        PK_3P.body.position.set(px, py, pz);
+        if (!player.grounded) {
+          var B = PK_3P.body.userData;
+          B.legs[0].rotation.x = -0.6; B.legs[1].rotation.x = -0.85;
+          B.legs[0].userData.knee.rotation.x = 0.65; B.legs[1].userData.knee.rotation.x = 0.9;
+          B.arms[0].rotation.x = -1.0; B.arms[1].rotation.x = -1.0;
+          B.arms[0].userData.elbow.rotation.x = -0.25; B.arms[1].userData.elbow.rotation.x = -0.25;
+        }
       }
 
       // Camera follows behind the direction the player is facing.

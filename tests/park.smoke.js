@@ -702,6 +702,12 @@ module.exports = `
     document.querySelector('[data-reset-settings]').click();
     ok(T.SET.sens === 1 && T.SET.invertY === false && T.SET.fov === 75 && T.bind().use === 'KeyE', 'the settings reset restores the defaults: sens ' + T.SET.sens + ', fov ' + T.SET.fov + ', use ' + T.bind().use);
     T.closeMenu(); }
+  // the marketing app: feature a ride and unfeature it
+  { ok(S.featured === null, 'no ride is featured at the start');
+    T.pkFeature('carousel'); ok(S.featured === 'carousel', 'featuring a ride marks it in the save');
+    T.pkFeature('carousel'); ok(S.featured === null, 'featuring it again unmarks it');
+    T.pkFeature('coaster'); ok(S.featured === 'coaster', 'the coaster can be featured too');
+    T.pkFeature('coaster'); }
   // the pure layer
   ok(T.fmtTime(25.5) === '01:30' && T.money(-1234) === '-$1,234', 'time and money helpers');
   ok(T.bevelGeo(1, 1, 1) === T.bevelGeo(1, 1, 1) && T.propSeed('a', 1) !== T.propSeed('b', 1), 'the geometry cache and the prop seed');

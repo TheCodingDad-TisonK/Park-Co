@@ -130,7 +130,10 @@ function pkBoothGates(a) {
       if (a.state === 'idle') { a.state = 'boarding'; a.t = 0; a.boarding = 0; a.manualStart = true; }
       pkAttrReslot(a);
       if (a.state === 'boarding' || a.state === 'ready') pkAttrFill(a);
-    } else if (a.state === 'boarding' && !a.seats.some(function (s) { return s.guest; })) { a.state = 'idle'; a.t = 0; a.manualStart = false; }
+    } else {
+      a.manualStart = false;   // shut by hand: the ride must not auto-open the gate for the next batch (it was re-opening as riders left)
+      if (a.state === 'boarding' && !a.seats.some(function (s) { return s.guest; })) { a.state = 'idle'; a.t = 0; }
+    }
     sfx('ok'); toast(a.name + ': queue gate ' + (C.gates ? 'open' : 'shut'), C.gates ? 'good' : '');
     screenDirtyAll();
     return true;

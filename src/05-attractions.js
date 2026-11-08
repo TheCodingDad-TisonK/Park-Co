@@ -257,6 +257,11 @@
   }
   // ── Who picks which ride ─────────────────────────────────────────
   function pkAttrPick(gu) {
+    // the featured ride: guests make straight for it, so its queue fills first (part 25's Marketing app)
+    if (S.featured) {
+      var f = PK.attrById[S.featured];
+      if (f && f.open && f.ctl && !f.ctl.fault && !f.ctl.maint && f.queue.length < f.seats.length * 3 && !(gu.gaveUp && gu.gaveUp[f.id]) && Math.random() < 0.65) return pkAttrQueueJoin(gu, f);
+    }
     var open = [];
     // a ride with its operator key OFF still takes a line (the guests wait for it to open), but one that is running is
     // preferred; a ride in a fault or in MAINT takes nobody, and a guest does not go back to a line they gave up on
@@ -269,6 +274,10 @@
     return pkAttrQueueJoin(gu, pick);
   }
   function pkGuestPickRide(gu) {
+    if (S.featured === 'coaster') {   // the featured coaster: guests make for its queue
+      var fOk = pkCoasterOpen() && PK.ride.state !== 'fault' && !(gu.gaveUp && gu.gaveUp.coaster);
+      if (fOk && Math.random() < 0.65 && pkQueueJoin(gu)) return;
+    }
     var coasterOk = pkCoasterOpen() && PK.ride.state !== 'fault' && !(gu.gaveUp && gu.gaveUp.coaster);
     var anyOpen = false;
     for (var i = 0; i < PK.attractions.length; i++) if (PK.attractions[i].open) { anyOpen = true; break; }
