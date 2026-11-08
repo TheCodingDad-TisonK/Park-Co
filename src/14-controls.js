@@ -842,6 +842,7 @@ function pkCtlAnnun(g, x, y, w, h, label, o) {
   var M = pkCtlM(), map = pkCtlAnnTex(label, o.col || '#f0c04a');
   pkBevelBox(w + 0.014, h + 0.014, 0.014, M.bezel, x, y, 0.004, g, 0.003);
   var mat = new THREE.MeshStandardMaterial({ map: map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.05, roughness: 0.3, metalness: 0.05 });
+  mat.userData.noBake = true;   // its emissiveIntensity is animated, so it must never be folded into the static bake
   var m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat); m.position.set(x, y, 0.0115); g.add(m);
   var api = { label: label, on: false, mat: mat, level: 0, t: 0 };
   pkCtlLive({

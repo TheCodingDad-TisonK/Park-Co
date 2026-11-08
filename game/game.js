@@ -5,7 +5,7 @@
   // The engine parts come first in the closure, the game's parts after. The engine declares the names both sides share
   // here, unassigned, and fills them when the game calls CO.setup (the renderer, the scene, the palette) and CO.boot (the
   // state, the shell, the frame loop). A game part may use any of them at its top level once CO.setup has run.
-  var CO = { version: '0.13.5', cfg: null, game: null, root: null, flash: 0, ready: false, paused: false, stepOnce: false, editor: null };
+  var CO = { version: '0.13.6', cfg: null, game: null, root: null, flash: 0, ready: false, paused: false, stepOnce: false, editor: null };
   var S, SET, SAVE, SETTINGS_KEY, BOOT_SLOT, BOOT_SAVE;               // 40-state fills these
   var canvas, renderer, scene, camera;                                 // 10-three fills these in CO.setup
   var player = null, focus = null, hudDirty = true;                    // 42-player owns player and focus; the HUD throttle flag is read everywhere
@@ -459,7 +459,7 @@
   function bakeable(o) {
     if (!o.isMesh || o.isInstancedMesh || o.isSprite || !o.visible) return false;
     for (var a = o.parent; a; a = a.parent) if (a.visible === false) return false;   /* a removed world item stays out of the bake */
-    var m = o.material; if (!m || Array.isArray(m) || m.userData.glow || m.userData.noBake || m.transparent) return false;
+    var m = o.material; if (!m || Array.isArray(m) || m.userData.glow || m.userData.noBake || m.emissiveMap || m.transparent) return false;
     if (o.userData.it || o.userData.noBake || inter.indexOf(o) >= 0) return false;
     if (!(o.geometry && o.geometry.attributes && o.geometry.attributes.position)) return false;
     for (var p = o; p; p = p.parent) { if (p.userData && p.userData.dynamic) return false; if (!p.visible) return false; if (p === camera) return false; }
@@ -12060,6 +12060,7 @@ function pkCtlAnnun(g, x, y, w, h, label, o) {
   var M = pkCtlM(), map = pkCtlAnnTex(label, o.col || '#f0c04a');
   pkBevelBox(w + 0.014, h + 0.014, 0.014, M.bezel, x, y, 0.004, g, 0.003);
   var mat = new THREE.MeshStandardMaterial({ map: map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.05, roughness: 0.3, metalness: 0.05 });
+  mat.userData.noBake = true;   // its emissiveIntensity is animated, so it must never be folded into the static bake
   var m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat); m.position.set(x, y, 0.0115); g.add(m);
   var api = { label: label, on: false, mat: mat, level: 0, t: 0 };
   pkCtlLive({

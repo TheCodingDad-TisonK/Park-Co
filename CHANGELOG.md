@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.3 (2026-11-08): Bug Patch
+
+- Issue where the shared booths ins control panel was ignoring light mesh - fixed
+
 ## 1.7.2 (2026-11-08): Menu Patch
 
 - Added missing leftovers from previous update
