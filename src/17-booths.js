@@ -408,12 +408,13 @@
   }
   // ── CCTV: a screen carrying a live feed from a camera out in the park ──
   // The engine renders the world once a frame; these cameras render it a second time, each into its own small target,
-  // so a booth screen can show real footage (the queue, the platform, the lift) instead of a drawn schematic.
-  var PK_FEEDS = [], PK_FEED_FRAME = 0;
-  function pkCctvFeed(parent, x, y, z, ry, tilt, camPos, lookAt) {
+  // so a booth screen can show real footage (the queue, the platform, the lift) instead of a drawn schematic. With a
+  // booth on every ride that is a lot of extra draws, so a feed only renders while the player is within range of it.
+  var PK_FEEDS = [], PK_FEED_FRAME = 0, PK_FEED_RANGE = 30;
+  function pkCctvFeed(parent, x, y, z, ry, tilt, camPos, lookAt, power) {
     var g = new THREE.Group(); g.rotation.order = 'YXZ'; g.position.set(x, y, z); g.rotation.y = ry || 0; g.rotation.x = tilt || 0; parent.add(g);
     pkBevelBox(0.5, 0.36, 0.12, pkBkStd({ color: 0x23292e, roughness: 0.5, metalness: 0.3 }), 0, 0, -0.065, g, 0.02);
-    box(0.02, 0.02, 0.004, glowMat(0x5fd38d, 1.4), 0.2, -0.16, 0.0, g);   // the power LED
+    var led = box(0.02, 0.02, 0.004, glowMat(0x5fd38d, 1.4), 0.2, -0.16, 0.0, g);   // the power LED
     var W = 256, H = 192;
     var rt = new THREE.WebGLRenderTarget(W, H, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat, encoding: THREE.sRGBEncoding });
     var cam = new THREE.PerspectiveCamera(74, W / H, 0.1, 260);
@@ -421,23 +422,28 @@
     var mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.3), new THREE.MeshBasicMaterial({ map: rt.texture }));
     mesh.userData.noBake = true; mesh.position.set(0, 0.01, 0); g.add(mesh);
     var glass = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.3), MAT.screenGlass); glass.position.set(0, 0.01, 0.0015); glass.renderOrder = 2; g.add(glass);
-    PK_FEEDS.push({ rt: rt, cam: cam, mesh: mesh });
+    PK_FEEDS.push({ rt: rt, cam: cam, mesh: mesh, led: led, power: power, on: true, g: g, pos: null });
     return g;
   }
   hook('frame', function () {
     if (!PK_FEEDS.length) return;
     PK_FEED_FRAME++;
-    PK_FEEDS.forEach(function (f) { f.mesh.visible = false; });   // no screen-in-screen: hide every feed while the cameras draw
+    var px = camera.position.x, pz = camera.position.z, r2 = PK_FEED_RANGE * PK_FEED_RANGE;
+    PK_FEEDS.forEach(function (f) { f.on = !f.power || !!f.power(); f.mesh.visible = false; });   // no screen-in-screen: hide every feed while the cameras draw
     var rendered = false;
     for (var i = 0; i < PK_FEEDS.length; i++) {
       var f = PK_FEEDS[i];
+      if (!f.on) continue;   // a dead breaker: the pane goes black and its camera does not run
+      if (!f.pos) { var wp = f.g.getWorldPosition(new THREE.Vector3()); f.pos = { x: wp.x, z: wp.z }; }   // the booth is static: resolve its world spot once
+      var dx = f.pos.x - px, dz = f.pos.z - pz;
+      if (dx * dx + dz * dz > r2) continue;   // the player is nowhere near: leave the last frame up, skip the draw
       if ((PK_FEED_FRAME + i) % 3 !== 0) continue;   // ~20 fps a feed, staggered, so the extra draws stay cheap
       renderer.setRenderTarget(f.rt);
       renderer.render(scene, f.cam);
       rendered = true;
     }
     if (rendered) renderer.setRenderTarget(null);
-    PK_FEEDS.forEach(function (f) { f.mesh.visible = true; });
+    PK_FEEDS.forEach(function (f) { f.mesh.visible = true; f.mesh.material.color.setHex(f.on ? 0xffffff : 0x000000); if (f.led) f.led.visible = f.on; });
   });
 
   // the LED board over the door: the ride's name, its state and the wait, in amber dots
@@ -474,48 +480,23 @@
     return sc;
   }
   function pkBkMonitors(a, parent, x, y, z, ry, spread) {
-    var C = pkCtl(a), sp = spread || 0.27;
-    // a bracket from the ceiling, the two screens hung on it, toed in toward the chair
+    var sp = spread || 0.27;
+    // a bracket from the ceiling, the two screens hung on it, toed in toward the chair. Both now carry a live camera
+    // (the queue and the station) instead of the drawn schematic they used to, so every booth sees the real ride.
     var M = pkMats(), g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry || 0; parent.add(g);
     pkRoundCyl(0.02, 0.36, M.iron, 0, 0.42, -0.06, g, 6);
     box(sp * 2 + 0.4, 0.04, 0.04, M.iron, 0, 0.24, -0.06, g);
-    var m1 = pkBkMonitor(g, -sp, 0.0, 0.0, 0.18, 0.22, 'CAM 1 · the queue', function (c, s) {
-      c.fillStyle = '#071108'; c.fillRect(0, 0, s.w, s.h);
-      c.fillStyle = '#8fe0a0'; c.font = 'bold 13px monospace'; c.textAlign = 'left'; c.textBaseline = 'alphabetic';
-      c.fillText('CAM 1  QUEUE', 8, 16); c.textAlign = 'right'; c.fillText(fmtTime(S.time), s.w - 8, 16);
-      var n = Math.max(6, Math.min(12, a.cap || 8)), q = pkAttrWaiting(a), bw = (s.w - 24) / n;
-      c.strokeStyle = 'rgba(143,224,160,0.6)'; c.lineWidth = 1.5; c.strokeRect(10, 56, s.w - 20, 46);
-      for (var i = 0; i < n; i++) {
-        c.strokeStyle = 'rgba(143,224,160,0.25)'; c.strokeRect(12 + i * bw, 60, bw - 4, 38);
-        if (i < q) { c.fillStyle = '#cfe9d4'; c.beginPath(); c.arc(12 + i * bw + (bw - 4) / 2, 79, Math.min(9, bw / 3), 0, 6.283); c.fill(); }
-      }
-      c.fillStyle = '#8fe0a0'; c.textAlign = 'left'; c.font = '13px monospace';
-      c.fillText('IN LINE ' + q + (q > n ? ' (+' + (q - n) + ' BEYOND)' : ''), 10, 128);
-      c.fillText('WAIT ~' + pkBkWait(a) + ' MIN', 10, 148);
-      if (Math.floor(PK_BK_T) % 2 === 0) { c.fillStyle = '#ff3b30'; c.beginPath(); c.arc(s.w - 14, 150, 5, 0, 6.283); c.fill(); }
-      pkBkScanlines(c, s.w, s.h);
-    });
-    pkPowerScreen(m1, function () { return !!a.open; });
-    var m2 = pkBkMonitor(g, sp, 0.0, 0.0, -0.18, 0.22, 'CAM 2 · the ride', function (c, s) {
-      c.fillStyle = '#070b11'; c.fillRect(0, 0, s.w, s.h);
-      c.fillStyle = '#9fc6ff'; c.font = 'bold 13px monospace'; c.textAlign = 'left'; c.textBaseline = 'alphabetic';
-      c.fillText('CAM 2  ' + a.name.toUpperCase().slice(0, 14), 8, 16);
-      var N = a.seats.length, cols = Math.min(8, N), rows = Math.ceil(N / cols), cw = (s.w - 24) / cols, ch = Math.min(26, 70 / rows);
-      for (var i = 0; i < N; i++) {
-        var cx = 12 + (i % cols) * cw, cy = 30 + Math.floor(i / cols) * (ch + 4);
-        c.strokeStyle = 'rgba(159,198,255,0.45)'; c.strokeRect(cx, cy, cw - 4, ch);
-        if (a.seats[i].guest) { c.fillStyle = '#d7e6ff'; c.fillRect(cx + 3, cy + 3, cw - 10, ch - 6); }
-      }
-      var y0 = 30 + rows * (ch + 4) + 10;
-      c.fillStyle = C.fault ? '#ff6b5e' : '#9fc6ff'; c.font = 'bold 14px monospace';
-      c.fillText(pkBkWord(a), 10, y0 + 6);
-      var f = a.state === 'running' ? clamp((a.t || 0) / Math.max(1, a.run || 1), 0, 1) : a.state === 'boarding' ? clamp((a.t || 0) / Math.max(1, a.board || 1), 0, 1) : 0;
-      c.strokeStyle = 'rgba(159,198,255,0.6)'; c.strokeRect(10, y0 + 16, s.w - 20, 12);
-      c.fillStyle = a.state === 'running' ? '#ff9d6b' : '#9fc6ff'; c.fillRect(12, y0 + 18, (s.w - 24) * f, 8);
-      c.fillStyle = '#9fc6ff'; c.font = '12px monospace'; c.fillText('BARS ' + (C.bars > 0.5 ? 'LOCKED' : 'OPEN') + '   GATES ' + (C.gateT > 0.5 ? 'OPEN' : 'SHUT'), 10, s.h - 10);
-      pkBkScanlines(c, s.w, s.h);
-    });
-    pkPowerScreen(m2, function () { return !!a.open; });
+    // CAM 1 · the queue: a camera at the gate, looking down the line to the midway (the line runs from its head along dir)
+    var dir = (a.qdx || 0) >= 0 ? 1 : -1;
+    var qCam = [a.qx - dir * 2.6, 3.6, a.qz], qLook = [a.qx + dir * 5.0, 0.8, a.qz];
+    // CAM 2 · the ride: over the station, centred on the seats as they stand parked (the platform the riders step onto)
+    var cx = a.x || 0, cz = a.z || 0, n = 0, sx = 0, sz = 0;
+    (a.seats || []).forEach(function (s) { if (!s.par) return; var w = pkAttrSeatWorld(s); sx += w.x; sz += w.z; n++; });
+    if (n) { cx = sx / n; cz = sz / n; }
+    var pCam = [cx + dir * 4.4, 4.8, cz], pLook = [cx, 1.1, cz];
+    var power = function () { return !!a.open; };
+    pkCctvFeed(g, -sp, 0, 0, 0.18, 0.22, qCam, qLook, power);
+    pkCctvFeed(g, sp, 0, 0, -0.18, 0.22, pCam, pLook, power);
     return g;
   }
 

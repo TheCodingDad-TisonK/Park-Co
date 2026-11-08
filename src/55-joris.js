@@ -958,7 +958,7 @@
     // the screens on the riser: the queue camera and the race board over the left wing, the block map over the right
     var mon = function (x, title, draw) { var sc = pkBkMonitor(con, x, 1.2, -0.2, 0, -0.08, title, draw); pkPowerScreen(sc, function () { return !!a.open; }); box(0.06, 0.04, 0.12, black, x, 1.0, -0.21, con); return sc; };
     // CAM 1: a live feed from a camera over the dragon gate, looking down the queue
-    pkCctvFeed(con, -2.25, 1.2, -0.2, 0, -0.08, [90.2, 3.0, 1.5], [98, 0.5, -3]);
+    pkCctvFeed(con, -2.25, 1.2, -0.2, 0, -0.08, [90.2, 3.0, 1.5], [98, 0.5, -3], function () { return !!a.open; });
     box(0.06, 0.04, 0.12, black, -2.25, 1.0, -0.21, con);
     mon(-1.45, 'RACE · blue against red', function (c, s) {
       c.fillStyle = '#0b0d12'; c.fillRect(0, 0, s.w, s.h); c.textBaseline = 'alphabetic';
@@ -1008,10 +1008,11 @@
     };
     // the pairs hang from the ceiling, pulled in off the walls so they can turn toward the chair without poking through
     var hgL = bracket(-2.5, 0.3, Math.PI / 2 - 0.5);   // left, angled ~29 deg toward the chair
-    pkCctvFeed(hgL, -0.27, 0, 0, 0, 0.5, [100, 2.6, -12.4], [100, 0.6, -21]);   // CAM 2: the platform, straight on from the boarding end
-    pkCctvFeed(hgL, 0.27, 0, 0, 0, 0.5, [100, 18, -45], [100, 2, -25]);        // CAM 3: the lift
+    var on = function () { return !!a.open; };
+    pkCctvFeed(hgL, -0.27, 0, 0, 0, 0.5, [100, 2.6, -12.4], [100, 0.6, -21], on);   // CAM 2: the platform, straight on from the boarding end
+    pkCctvFeed(hgL, 0.27, 0, 0, 0, 0.5, [100, 18, -45], [100, 2, -25], on);        // CAM 3: the lift
     var hgR = bracket(2.5, 0.3, -Math.PI / 2 + 0.5);  // right, angled ~29 deg toward the chair
-    pkCctvFeed(hgR, -0.27, 0, 0, 0, 0.5, [86.5, 3.0, -2.0], [94, 1, -1]);       // CAM 4: the exit
+    pkCctvFeed(hgR, -0.27, 0, 0, 0, 0.5, [86.5, 3.0, -2.0], [94, 1, -1], on);       // CAM 4: the exit
     var sg = pkBkMonitor(hgR, 0.27, 0, 0, 0, 0.5, 'SIGNALS', function (c, s) {
         c.fillStyle = '#070b11'; c.fillRect(0, 0, s.w, s.h);
         c.fillStyle = '#e8d8a0'; c.font = 'bold 13px monospace'; c.textAlign = 'center'; c.textBaseline = 'alphabetic';
