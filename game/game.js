@@ -470,6 +470,18 @@
   // the site grid, so the cells behind the player cull away and only the scenery near the view is drawn. A material spread too
   // thin for a cell (a lone mesh in each) still merges whole, exactly as it did before, so no mesh regresses to a separate draw.
   var BAKE_CHUNK = 96;   // metres: the side of the grid cell the static bake splits into
+  // Two meshes merge only if they carry the SAME material object. Games build hundreds of visually identical materials (each
+  // std({...}) call is a fresh material), so merge by the material's rendering properties instead: same look = same draw.
+  function bakeMatKey(m) {
+    var t = function (x) { return x ? x.uuid : ''; };
+    return m.type + '|' + (m.color && m.color.getHex ? m.color.getHex() : '') + '|' +
+      (m.emissive && m.emissive.getHex ? m.emissive.getHex() : '') + '|' + (m.emissiveIntensity || 0) + '|' +
+      (m.roughness || 0) + '|' + (m.metalness || 0) + '|' + (m.opacity === undefined ? 1 : m.opacity) + '|' +
+      (m.transparent ? 1 : 0) + '|' + m.side + '|' + (m.flatShading ? 1 : 0) + '|' + (m.vertexColors ? 1 : 0) + '|' +
+      (m.envMapIntensity || 0) + '|' + t(m.map) + '|' + t(m.normalMap) + '|' + t(m.roughnessMap) + '|' + t(m.metalnessMap) + '|' +
+      t(m.emissiveMap) + '|' + t(m.alphaMap) + '|' + t(m.aoMap) + '|' + t(m.envMap) + '|' +
+      (m.name || '') + '|' + (m.customProgramCacheKey ? m.customProgramCacheKey() : '');
+  }
   var _bakeWp = new THREE.Vector3();
   function bakeBatch(mat, items) {
     var pos = [], nor = [], uv = [], hasUv = true;
@@ -497,7 +509,7 @@
     var byMat = {}, list = [];
     scene.traverse(function (o) { if (bakeable(o)) list.push(o); });
     list.forEach(function (o) {
-      var k = o.material.uuid + (o.castShadow ? 'c' : '') + (o.receiveShadow ? 'r' : '');
+      var k = bakeMatKey(o.material) + (o.castShadow ? 'c' : '') + (o.receiveShadow ? 'r' : '');
       (byMat[k] = byMat[k] || { mat: o.material, items: [] }).items.push(o);
     });
     Object.keys(byMat).forEach(function (k) {
@@ -4195,7 +4207,7 @@
         "x": -9.55,
         "z": 36.8,
         "ry": 0,
-        "off": false
+        "off": true
       },
       {
         "id": "cashierEast",
@@ -4203,7 +4215,7 @@
         "x": 8.45,
         "z": 36.8,
         "ry": 0,
-        "off": false
+        "off": true
       }
     ],
     "spots": {
@@ -15134,8 +15146,9 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // ── CCTV: a screen carrying a live feed from a camera out in the park ──
   // The engine renders the world once a frame; these cameras render it a second time, each into its own small target,
   // so a booth screen can show real footage (the queue, the platform, the lift) instead of a drawn schematic. With a
-  // booth on every ride that is a lot of extra draws, so a feed only renders while the player is within range of it.
-  var PK_FEEDS = [], PK_FEED_FRAME = 0, PK_FEED_RANGE = 30;
+  // booth on every ride that is a lot of extra draws, so a feed only renders while the player is near and facing it, and
+  // never more than one feed draws in a frame (the extra render is a full scene pass, so it has to stay cheap).
+  var PK_FEEDS = [], PK_FEED_RANGE = 30, PK_FEED_NEXT = 0;
   function pkCctvFeed(parent, x, y, z, ry, tilt, camPos, lookAt, power) {
     var g = new THREE.Group(); g.rotation.order = 'YXZ'; g.position.set(x, y, z); g.rotation.y = ry || 0; g.rotation.x = tilt || 0; parent.add(g);
     pkBevelBox(0.5, 0.36, 0.12, pkBkStd({ color: 0x23292e, roughness: 0.5, metalness: 0.3 }), 0, 0, -0.065, g, 0.02);
@@ -15152,22 +15165,24 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   }
   hook('frame', function () {
     if (!PK_FEEDS.length) return;
-    PK_FEED_FRAME++;
     var px = camera.position.x, pz = camera.position.z, r2 = PK_FEED_RANGE * PK_FEED_RANGE;
-    PK_FEEDS.forEach(function (f) { f.on = !f.power || !!f.power(); f.mesh.visible = false; });   // no screen-in-screen: hide every feed while the cameras draw
-    var rendered = false;
-    for (var i = 0; i < PK_FEEDS.length; i++) {
-      var f = PK_FEEDS[i];
+    var cf = new THREE.Vector3(); camera.getWorldDirection(cf);
+    var fx = cf.x, fz = cf.z, fl = Math.hypot(fx, fz); if (fl < 1e-4) { fx = 0; fz = 1; } else { fx /= fl; fz /= fl; }
+    PK_FEEDS.forEach(function (f) { f.on = !f.power || !!f.power(); f.mesh.visible = false; });   // no screen-in-screen: hide every feed while a camera draws
+    // at most ONE feed a frame, round-robin over the ones the player can actually see, so the extra scene pass stays cheap
+    for (var step = 0; step < PK_FEEDS.length; step++) {
+      PK_FEED_NEXT = (PK_FEED_NEXT + 1) % PK_FEEDS.length;
+      var f = PK_FEEDS[PK_FEED_NEXT];
       if (!f.on) continue;   // a dead breaker: the pane goes black and its camera does not run
       if (!f.pos) { var wp = f.g.getWorldPosition(new THREE.Vector3()); f.pos = { x: wp.x, z: wp.z }; }   // the booth is static: resolve its world spot once
-      var dx = f.pos.x - px, dz = f.pos.z - pz;
-      if (dx * dx + dz * dz > r2) continue;   // the player is nowhere near: leave the last frame up, skip the draw
-      if ((PK_FEED_FRAME + i) % 3 !== 0) continue;   // ~20 fps a feed, staggered, so the extra draws stay cheap
+      var dx = f.pos.x - px, dz = f.pos.z - pz, d2 = dx * dx + dz * dz;
+      if (d2 > r2) continue;                 // too far to matter: leave the last frame up
+      if (dx * fx + dz * fz < 0) continue;   // behind the player: leave the last frame up
       renderer.setRenderTarget(f.rt);
       renderer.render(scene, f.cam);
-      rendered = true;
+      renderer.setRenderTarget(null);
+      break;
     }
-    if (rendered) renderer.setRenderTarget(null);
     PK_FEEDS.forEach(function (f) { f.mesh.visible = true; f.mesh.material.color.setHex(f.on ? 0xffffff : 0x000000); if (f.led) f.led.visible = f.on; });
   });
 

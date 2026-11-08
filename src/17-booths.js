@@ -409,8 +409,9 @@
   // ── CCTV: a screen carrying a live feed from a camera out in the park ──
   // The engine renders the world once a frame; these cameras render it a second time, each into its own small target,
   // so a booth screen can show real footage (the queue, the platform, the lift) instead of a drawn schematic. With a
-  // booth on every ride that is a lot of extra draws, so a feed only renders while the player is within range of it.
-  var PK_FEEDS = [], PK_FEED_FRAME = 0, PK_FEED_RANGE = 30;
+  // booth on every ride that is a lot of extra draws, so a feed only renders while the player is near and facing it, and
+  // never more than one feed draws in a frame (the extra render is a full scene pass, so it has to stay cheap).
+  var PK_FEEDS = [], PK_FEED_RANGE = 30, PK_FEED_NEXT = 0;
   function pkCctvFeed(parent, x, y, z, ry, tilt, camPos, lookAt, power) {
     var g = new THREE.Group(); g.rotation.order = 'YXZ'; g.position.set(x, y, z); g.rotation.y = ry || 0; g.rotation.x = tilt || 0; parent.add(g);
     pkBevelBox(0.5, 0.36, 0.12, pkBkStd({ color: 0x23292e, roughness: 0.5, metalness: 0.3 }), 0, 0, -0.065, g, 0.02);
@@ -427,22 +428,24 @@
   }
   hook('frame', function () {
     if (!PK_FEEDS.length) return;
-    PK_FEED_FRAME++;
     var px = camera.position.x, pz = camera.position.z, r2 = PK_FEED_RANGE * PK_FEED_RANGE;
-    PK_FEEDS.forEach(function (f) { f.on = !f.power || !!f.power(); f.mesh.visible = false; });   // no screen-in-screen: hide every feed while the cameras draw
-    var rendered = false;
-    for (var i = 0; i < PK_FEEDS.length; i++) {
-      var f = PK_FEEDS[i];
+    var cf = new THREE.Vector3(); camera.getWorldDirection(cf);
+    var fx = cf.x, fz = cf.z, fl = Math.hypot(fx, fz); if (fl < 1e-4) { fx = 0; fz = 1; } else { fx /= fl; fz /= fl; }
+    PK_FEEDS.forEach(function (f) { f.on = !f.power || !!f.power(); f.mesh.visible = false; });   // no screen-in-screen: hide every feed while a camera draws
+    // at most ONE feed a frame, round-robin over the ones the player can actually see, so the extra scene pass stays cheap
+    for (var step = 0; step < PK_FEEDS.length; step++) {
+      PK_FEED_NEXT = (PK_FEED_NEXT + 1) % PK_FEEDS.length;
+      var f = PK_FEEDS[PK_FEED_NEXT];
       if (!f.on) continue;   // a dead breaker: the pane goes black and its camera does not run
       if (!f.pos) { var wp = f.g.getWorldPosition(new THREE.Vector3()); f.pos = { x: wp.x, z: wp.z }; }   // the booth is static: resolve its world spot once
-      var dx = f.pos.x - px, dz = f.pos.z - pz;
-      if (dx * dx + dz * dz > r2) continue;   // the player is nowhere near: leave the last frame up, skip the draw
-      if ((PK_FEED_FRAME + i) % 3 !== 0) continue;   // ~20 fps a feed, staggered, so the extra draws stay cheap
+      var dx = f.pos.x - px, dz = f.pos.z - pz, d2 = dx * dx + dz * dz;
+      if (d2 > r2) continue;                 // too far to matter: leave the last frame up
+      if (dx * fx + dz * fz < 0) continue;   // behind the player: leave the last frame up
       renderer.setRenderTarget(f.rt);
       renderer.render(scene, f.cam);
-      rendered = true;
+      renderer.setRenderTarget(null);
+      break;
     }
-    if (rendered) renderer.setRenderTarget(null);
     PK_FEEDS.forEach(function (f) { f.mesh.visible = true; f.mesh.material.color.setHex(f.on ? 0xffffff : 0x000000); if (f.led) f.led.visible = f.on; });
   });
 

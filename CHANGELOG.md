@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7.0 (2026-11-08): Mayor Update
+
+- Added three new rides: Dragon Ride, Dream Flight and Dance Macabre
+- Live CCTV camera feeds in every operator booth, showing the queue and the platform
+- Improved frame rate: static geometry now merges by material, about a fifth faster
+- Fixed guests walking through booth floors, and their boarding and exit paths
+- Fixed the departure signals, the dispatch interlock and the booth back wall
+- Fixed the custom booth panels for the new rides
+
 ## 1.6.9 (2026-11-08): World Update
 
 - Maintenance release.
