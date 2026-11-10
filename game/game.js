@@ -20248,108 +20248,28 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   }, true);
   (function () {
     if (typeof NAV === 'undefined' || !NAV) return;
-    var SQ2 = Math.SQRT2;
-    var pkPullLine = navLine;   // the engine's line test, kept before anything of ours touches the name
-    var pkOldRoute = route;     // and the engine's own finder, the fallback for a route the heap does not close
-    var AG = null, ACAME = null, ASET = null, AHK = null, AHV = null, Astamp = 0;
-    function alloc() {
-      var n = NAV.w * NAV.h;
-      if (!AG || AG.length !== n) {
-        AG = new Float32Array(n); ACAME = new Int32Array(n); ASET = new Uint32Array(n);
-        AHK = new Int32Array(n * 9); AHV = new Float32Array(n * 9);   // a cell can be pushed more than once; the heap must hold them all
+    function pkWalkAlong(rec, path, speed, dt) {
+      if (!path || !path.length) return true;
+      var step = speed * dt, look = Math.max(0.6, Math.min(1.5, speed * 0.6));
+      // a waypoint within the look-ahead is already behind the guest's turn: aim at the next one, so the corner is
+      // rounded off rather than walked as two straight legs with a pivot on the corner
+      while (path.length > 1) {
+        var ax = path[0].x - rec.x, az = path[0].z - rec.z;
+        if (ax * ax + az * az > look * look) break;
+        path.shift();
       }
+      var p = path[0], dx = p.x - rec.x, dz = p.z - rec.z, d = Math.sqrt(dx * dx + dz * dz) || 1;
+      var move = Math.min(step, d);
+      rec.x += dx / d * move; rec.z += dz / d * move;
+      rec.yaw = easeYaw(rec.yaw || 0, Math.atan2(dx, dz), Math.min(1, dt * 9));
+      if (d <= Math.max(step, 0.06)) {
+        if (path.length === 1) { rec.x = p.x; rec.z = p.z; path.length = 0; return true; }
+        path.shift();
+      }
+      return path.length === 0;
     }
-    // a binary heap of cell keys, ordered by f
-    var hn = 0;
-    function hPush(k, f) {
-      var i = hn++;
-      while (i > 0) { var p = (i - 1) >> 1; if (AHV[p] <= f) break; AHK[i] = AHK[p]; AHV[i] = AHV[p]; i = p; }
-      AHK[i] = k; AHV[i] = f;
-    }
-    function hPop() {
-      var top = AHK[0], lastK = AHK[--hn], lastV = AHV[hn], i = 0;
-      while (true) {
-        var l = i * 2 + 1, r = l + 1, c = -1;
-        if (l < hn) c = l;
-        if (r < hn && AHV[r] < AHV[l]) c = r;
-        if (c < 0 || AHV[c] >= lastV) break;
-        AHK[i] = AHK[c]; AHV[i] = AHV[c]; i = c;
-      }
-      AHK[i] = lastK; AHV[i] = lastV;
-      return top;
-    }
-    // the straightest run the paving allows between two points. Walks the grid cell by cell (a DDA), so a line can
-    // never slip between two samples through a thin rail or a kerb the way an even sampling can.
-    function pkLineClear(a, b) {
-      var x0 = (a.x - NAV.x0) / NAV.cell, z0 = (a.z - NAV.z0) / NAV.cell;
-      var x1 = (b.x - NAV.x0) / NAV.cell, z1 = (b.z - NAV.z0) / NAV.cell;
-      var i = Math.floor(x0), j = Math.floor(z0), i1 = Math.floor(x1), j1 = Math.floor(z1);
-      if (!navOpen(i, j)) return false;
-      var dx = x1 - x0, dz = z1 - z0, sx = dx > 0 ? 1 : -1, sz = dz > 0 ? 1 : -1;
-      var tdx = dx !== 0 ? Math.abs(1 / dx) : Infinity, tdz = dz !== 0 ? Math.abs(1 / dz) : Infinity;
-      var tx = dx !== 0 ? (dx > 0 ? (i + 1 - x0) : (x0 - i)) * tdx : Infinity;
-      var tz = dz !== 0 ? (dz > 0 ? (j + 1 - z0) : (z0 - j)) * tdz : Infinity;
-      var guard = 0;
-      while ((i !== i1 || j !== j1) && guard++ < 6000) {
-        if (tx < tz) { tx += tdx; i += sx; } else { tz += tdz; j += sz; }
-        if (!navOpen(i, j)) return false;
-      }
-      return true;
-    }
-    function pkRoute(a, b) {
-      if (NAV.dirty || !NAV.grid) navBuild();
-      alloc();
-      var sc = navNearestOpen(navCell(a)), gc = navNearestOpen(navCell(b));
-      var W = NAV.w, key = function (i, j) { return j * W + i; };
-      var sk = key(sc.i, sc.j), gk = key(gc.i, gc.j);
-      if (sk === gk) return [b];
-      var stamp = ++Astamp, heur = function (i, j) {
-        var dx = Math.abs(i - gc.i), dz = Math.abs(j - gc.j);
-        return (dx + dz) + (SQ2 - 2) * Math.min(dx, dz);
-      };
-      hn = 0;
-      AG[sk] = 0; ACAME[sk] = -1; ASET[sk] = stamp;
-      hPush(sk, heur(sc.i, sc.j));
-      var found = -1, steps = 0, cap = NAV.steps || 60000;
-      while (hn > 0 && steps++ < cap) {
-        var cur = hPop();
-        if (cur === gk) { found = gk; break; }
-        var ci = cur % W, cj = (cur - ci) / W, cg = AG[cur];
-        for (var dj = -1; dj <= 1; dj++) for (var di = -1; di <= 1; di++) {
-          if (!di && !dj) continue;
-          var ni = ci + di, nj = cj + dj;
-          if (!navOpen(ni, nj)) continue;
-          if (di && dj && (!navOpen(ci + di, cj) || !navOpen(ci, cj + dj))) continue;   // no corner cutting
-          var nk = key(ni, nj), ng = cg + (di && dj ? SQ2 : 1);
-          if (ASET[nk] === stamp && AG[nk] <= ng) continue;
-          ASET[nk] = stamp; AG[nk] = ng; ACAME[nk] = cur;
-          hPush(nk, ng + heur(ni, nj));
-        }
-      }
-      if (found < 0) return null;   // the caller falls back to the engine's finder
-      var cells = [], k2 = found;
-      while (k2 !== sk && k2 >= 0) {
-        cells.push({ x: NAV.x0 + ((k2 % W) + 0.5) * NAV.cell, z: NAV.z0 + (Math.floor(k2 / W) + 0.5) * NAV.cell });
-        k2 = ACAME[k2];
-      }
-      cells.reverse();
-      cells.push(b);
-      // pull the path straight. The engine's own line test does the pulling: it samples the grid and refuses to squeeze
-      // a diagonal between two blocked cells, which is what keeps a pulled run on the paving rather than across a
-      // flower bed at a corner. A pure cell-by-cell test was tried and cut corners it should not have.
-      var out = [], from = a, idx = 0;
-      while (idx < cells.length) {
-        var far = idx;
-        for (var m = cells.length - 1; m > idx; m--) if (pkPullLine(from, cells[m])) { far = m; break; }
-        out.push(cells[far]); from = cells[far]; idx = far + 1;
-      }
-      return out;
-    }
-    route = function (a, b) {
-      var r = pkRoute(a, b);
-      return r || pkOldRoute(a, b);   // a long route the heap did not close is the engine's to find, as before
-    };
-    CO.pkRoute = pkRoute;
+    walkAlong = pkWalkAlong;
+    CO.pkWalk = pkWalkAlong;
   })();
 
   // ── The rider banners: a painted cloth for each of the five, used in the stand and on the castle front ──
@@ -30257,11 +30177,13 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     // Measured on the park as it stood: 81k meshes in the scene, 20k of them in view, 5.9k draw calls, 4.5M triangles a
     // frame, 66 point lights (10 compiled at a time) and a sky dome whose far side is outside the camera's far plane.
     // The three quality levels only changed the render scale, the shadow map and how many lamps compiled, so all three
-    // ran at the same frame rate. These are the dials that matter, and the level now moves them.
+    // ran at the same frame rate. These are the dials that matter, and the level now moves them: how far the sharp
+    // scenery is drawn, how far the fog has swallowed the rest, how dense the woods were planted and how big the sun map
+    // is. A level is a draw distance now, which is what a player expects a level to be.
     var PK_Q = {
-      high:   { lights: 8,  cull: 150, tree: 1.00, shadow: 1024 },
-      medium: { lights: 5,  cull: 100, tree: 0.72, shadow: 1024 },
-      low:    { lights: 3,  cull: 75,  tree: 0.45, shadow: 512 }
+      high:   { lights: 8, cull: 150, fog: 110, tree: 1.00, shadow: 1024 },
+      medium: { lights: 5, cull: 100, fog: 84,  tree: 0.72, shadow: 1024 },
+      low:    { lights: 3, cull: 72,  fog: 60,  tree: 0.45, shadow: 512 }
     };
     function pkQualityName() { return (typeof SET === 'object' && SET && PK_Q[SET.quality]) ? SET.quality : 'high'; }
     function pkQuality() { return PK_Q[pkQualityName()]; }
@@ -30471,11 +30393,40 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       }
     }
     hook('frame', function (dt) { pkCullStatic(dt, false); });
-    // Off for now: merging inside a moving group welds shut every part the game animates *within* it (a lever's arm,
-    // a door leaf, a key that turns, the restraint bar on a car). Those parts carry no dynamic flag of their own, so the
-    // merge cannot tell them from the shell. Re-enable only with a way to know what a group's animation touches.
-    var PK_MERGE_DYNAMIC = false;
-    hook('boot', function () { pkCollectStatic(); pkCullStatic(0, true); if (PK_MERGE_DYNAMIC) pkMergeDynamic(); });
+    // ── The small moving parts ───────────────────────────────────────
+    // A ride's vehicles, horses, boats and dodgem cars are each a group of their own, and each is a dozen draws. At
+    // eighty metres a carousel horse is four pixels: the group is skipped once the fog has it. Only groups that stand on
+    // their own are touched (a wheel inside a car is not a group of its own in this sense), and only small ones, so a
+    // train or a big gondola is never dropped.
+    var PK_SMALL_DYN = [], PK_SMALL_T = 0;
+    function pkCollectSmallDynamic() {
+      PK_SMALL_DYN = [];
+      scene.updateMatrixWorld(true);
+      scene.traverse(function (o) {
+        if (!o.userData || !o.userData.dynamic || !o.parent) return;
+        for (var p = o.parent; p; p = p.parent) if (p.userData && p.userData.dynamic) return;   // part of a bigger moving thing
+        var box = new THREE.Box3().setFromObject(o), size = box.getSize(new THREE.Vector3());
+        if (Math.max(size.x, size.y, size.z) > 6) return;   // a carriage, a train, a gondola: never dropped
+        o.userData.pkSmallDyn = true;
+        PK_SMALL_DYN.push(o);
+      });
+    }
+    function pkCullSmallDynamic(dt, force) {
+      PK_SMALL_T -= dt || 0;
+      if (!force && PK_SMALL_T > 0) return;
+      PK_SMALL_T = 0.3;
+      if (!PK_SMALL_DYN.length) return;
+      var reach = (scene.fog ? scene.fog.far : 110) + 18, cx = camera.position.x, cz = camera.position.z, _v = new THREE.Vector3();
+      for (var i = 0; i < PK_SMALL_DYN.length; i++) {
+        var o = PK_SMALL_DYN[i];
+        o.getWorldPosition(_v);
+        var dx = _v.x - cx, dz = _v.z - cz;
+        var show = !(dx * dx + dz * dz > reach * reach);
+        if (o.visible !== show) o.visible = show;
+      }
+    }
+    hook('frame', function (dt) { pkCullSmallDynamic(dt, false); });
+    hook('boot', function () { pkCollectStatic(); pkCullStatic(0, true); pkCollectSmallDynamic(); pkCullSmallDynamic(0, true);  });
     CO.pkRecollectStatic = pkCollectStatic;
 
     // ── The moving groups ────────────────────────────────────────────
@@ -30569,6 +30520,11 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       if (sun && sun.shadow.mapSize.x !== q.shadow) {
         sun.shadow.mapSize.set(q.shadow, q.shadow);
         if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+      }
+      // the draw distance follows the level: the fog closes in with the cull, so what is not drawn is already fogged over
+      if (typeof PK_FOG !== 'undefined' && typeof pkFogApply === 'function') {
+        PK_FOG.far = q.fog; PK_FOG.near = Math.max(10, Math.round(q.fog * 0.38));
+        pkFogApply();
       }
       pkCullBaked(0, true);
       pkCullStatic(0, true);

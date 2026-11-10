@@ -10,8 +10,10 @@ The park's frame rate, the north end and the guests, in one pass.
   by colour into vertex-coloured batches, and a car's shell merges into a few draws while its lap bar stays its own part.
   In a view from the gate this is 6,446 draw calls down to about 3,500.
 - **Quality levels that mean something.** The three sets used to differ only in resolution and shadow map, and changing
-  them recompiled every material in the park (a freeze), so all three ran at the same rate. High, medium and low now
-  differ in how far the scenery is drawn and how dense the woods are, without a recompile.
+  them recompiled every material in the park (a freeze), so all three ran at the same rate. A level is a draw distance
+  now: high draws to 150 m with light fog, medium to 100 m, low to 72 m with the fog closed in, and each brings its own
+  shadow map and tree density. Small moving parts (carousel horses, dodgem cars, boats, gates) are skipped once the fog
+  has them. Measured from the gate: 3,068 draws at high, 2,350 at medium, 1,916 at low.
 - **Booth cameras** render four frames a second instead of one full pass every frame, which was the whole frame again.
 - **Fewer trees**, and four crowns a tree instead of six.
 
@@ -25,7 +27,8 @@ The park's frame rate, the north end and the guests, in one pass.
   short queue rather than built, dressed and routed in a single frame.
 - **Guest looks**: coordinated outfits from a palette instead of random primaries, with hats, glasses and a little
   variation in height.
-- **The walk across the park** uses a heap and an octile guess, with the engine's finder kept as the fallback.
+- **The walk across the park**: guests now aim at a point just ahead on their path and round corners instead of stopping
+  to pivot on every waypoint.
 
 ## Rides
 - **The Wild Hunt** takes the place of Nocturne, The Wreck and Moonwood: one big outdoor coaster on the north strip,

@@ -8,11 +8,13 @@
     // Measured on the park as it stood: 81k meshes in the scene, 20k of them in view, 5.9k draw calls, 4.5M triangles a
     // frame, 66 point lights (10 compiled at a time) and a sky dome whose far side is outside the camera's far plane.
     // The three quality levels only changed the render scale, the shadow map and how many lamps compiled, so all three
-    // ran at the same frame rate. These are the dials that matter, and the level now moves them.
+    // ran at the same frame rate. These are the dials that matter, and the level now moves them: how far the sharp
+    // scenery is drawn, how far the fog has swallowed the rest, how dense the woods were planted and how big the sun map
+    // is. A level is a draw distance now, which is what a player expects a level to be.
     var PK_Q = {
-      high:   { lights: 8,  cull: 150, tree: 1.00, shadow: 1024 },
-      medium: { lights: 5,  cull: 100, tree: 0.72, shadow: 1024 },
-      low:    { lights: 3,  cull: 75,  tree: 0.45, shadow: 512 }
+      high:   { lights: 8, cull: 150, fog: 110, tree: 1.00, shadow: 1024 },
+      medium: { lights: 5, cull: 100, fog: 84,  tree: 0.72, shadow: 1024 },
+      low:    { lights: 3, cull: 72,  fog: 60,  tree: 0.45, shadow: 512 }
     };
     function pkQualityName() { return (typeof SET === 'object' && SET && PK_Q[SET.quality]) ? SET.quality : 'high'; }
     function pkQuality() { return PK_Q[pkQualityName()]; }
@@ -222,11 +224,40 @@
       }
     }
     hook('frame', function (dt) { pkCullStatic(dt, false); });
-    // Off for now: merging inside a moving group welds shut every part the game animates *within* it (a lever's arm,
-    // a door leaf, a key that turns, the restraint bar on a car). Those parts carry no dynamic flag of their own, so the
-    // merge cannot tell them from the shell. Re-enable only with a way to know what a group's animation touches.
-    var PK_MERGE_DYNAMIC = false;
-    hook('boot', function () { pkCollectStatic(); pkCullStatic(0, true); if (PK_MERGE_DYNAMIC) pkMergeDynamic(); });
+    // ── The small moving parts ───────────────────────────────────────
+    // A ride's vehicles, horses, boats and dodgem cars are each a group of their own, and each is a dozen draws. At
+    // eighty metres a carousel horse is four pixels: the group is skipped once the fog has it. Only groups that stand on
+    // their own are touched (a wheel inside a car is not a group of its own in this sense), and only small ones, so a
+    // train or a big gondola is never dropped.
+    var PK_SMALL_DYN = [], PK_SMALL_T = 0;
+    function pkCollectSmallDynamic() {
+      PK_SMALL_DYN = [];
+      scene.updateMatrixWorld(true);
+      scene.traverse(function (o) {
+        if (!o.userData || !o.userData.dynamic || !o.parent) return;
+        for (var p = o.parent; p; p = p.parent) if (p.userData && p.userData.dynamic) return;   // part of a bigger moving thing
+        var box = new THREE.Box3().setFromObject(o), size = box.getSize(new THREE.Vector3());
+        if (Math.max(size.x, size.y, size.z) > 6) return;   // a carriage, a train, a gondola: never dropped
+        o.userData.pkSmallDyn = true;
+        PK_SMALL_DYN.push(o);
+      });
+    }
+    function pkCullSmallDynamic(dt, force) {
+      PK_SMALL_T -= dt || 0;
+      if (!force && PK_SMALL_T > 0) return;
+      PK_SMALL_T = 0.3;
+      if (!PK_SMALL_DYN.length) return;
+      var reach = (scene.fog ? scene.fog.far : 110) + 18, cx = camera.position.x, cz = camera.position.z, _v = new THREE.Vector3();
+      for (var i = 0; i < PK_SMALL_DYN.length; i++) {
+        var o = PK_SMALL_DYN[i];
+        o.getWorldPosition(_v);
+        var dx = _v.x - cx, dz = _v.z - cz;
+        var show = !(dx * dx + dz * dz > reach * reach);
+        if (o.visible !== show) o.visible = show;
+      }
+    }
+    hook('frame', function (dt) { pkCullSmallDynamic(dt, false); });
+    hook('boot', function () { pkCollectStatic(); pkCullStatic(0, true); pkCollectSmallDynamic(); pkCullSmallDynamic(0, true);  });
     CO.pkRecollectStatic = pkCollectStatic;
 
     // ── The moving groups ────────────────────────────────────────────
@@ -320,6 +351,11 @@
       if (sun && sun.shadow.mapSize.x !== q.shadow) {
         sun.shadow.mapSize.set(q.shadow, q.shadow);
         if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+      }
+      // the draw distance follows the level: the fog closes in with the cull, so what is not drawn is already fogged over
+      if (typeof PK_FOG !== 'undefined' && typeof pkFogApply === 'function') {
+        PK_FOG.far = q.fog; PK_FOG.near = Math.max(10, Math.round(q.fog * 0.38));
+        pkFogApply();
       }
       pkCullBaked(0, true);
       pkCullStatic(0, true);

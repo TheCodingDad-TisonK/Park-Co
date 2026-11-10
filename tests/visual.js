@@ -101,6 +101,9 @@ async function main() {
     await run(`(() => {
       const T = window.PARK_CO.T;
       T.closePanel(); T.closeMenu(); T.hideCards();
+      // the welcome card is a page element of its own, and it would stand in front of every shot: take it out
+      document.querySelectorAll('.pk-welcome-card').forEach((e) => { e.style.display = 'none'; });
+      ['dc-start', 'dc-panel', 'dc-menu', 'dc-hud'].forEach((id) => { const e = document.getElementById(id); if (e) e.style.display = 'none'; });
       ${s.night ? '' : "T.devCommand('setTime', 12); T.devCommand('weather', 'clear');"}
       T.player.x = ${s.pos[0]}; T.player.z = ${s.pos[1]}; T.player.y = 0; T.player.vy = 0; T.player.grounded = true;
       T.lookAt(${s.look[0]}, ${s.look[1]}, ${s.look[2]});
