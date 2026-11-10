@@ -24,7 +24,7 @@
         },
         gardener: {
           names: ['Truus'], look: { shirt: '#4d7a3a', pants: '#3a2f24', skin: '#e0b48e', hair: '#b8b8b8' }, speed: 1.0,
-          steps: [].concat(W('clock', 40, 6), W('maze', 30, 5))
+          steps: [].concat(W('gardenWalk', 40, 9), W('bandstand', 30, 6))
         },
         // the south beat: the plaza, the midway, the Fairground and the Thrills
         guardSouth: {
@@ -66,7 +66,7 @@
         fairCross: { x: -31, z: 3 }, teacups: { x: -40, z: 3 }, kidsLane: { x: -46.8, z: 36 },
         thrillCross: { x: 35, z: 3 }, dodgems: { x: 42, z: 3 }, baron: { x: 57, z: 19 },
         darkWoods: { x: -36, z: -24 }, dropTower: { x: -36, z: -52 }, promWest: { x: -20, z: -60 }, halls: { x: -46.5, z: -70 },
-        gardenWest: { x: -28, z: -44 }, gardenWalk: { x: 2, z: -44 }, clock: { x: 6, z: -58 }, bandstand: { x: 2, z: -66 }, maze: { x: 9.5, z: -72 },
+        gardenWest: { x: -28, z: -44 }, gardenWalk: { x: 2, z: -44 }, bandstand: { x: 2, z: -66 },
         coasterCountry: { x: 40, z: -24 }, promEast: { x: 50, z: -60 }, eastWalk: { x: 76, z: -20 },
         lotDrive: { x: 0, z: 74 }
       }

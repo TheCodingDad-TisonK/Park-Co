@@ -6150,7 +6150,7 @@
       ride: function () { return 'ride ' + PK.ride.state + (S.auto ? ' (auto)' : ' (manual)') + ', ' + PK.ride.riders + ' riding, ' + S.cycles + ' cycles'; },
       ticket: function (n) { return 'adults ' + money(pkPrice(+n || 0)); },
       xp: function (n) { pkXp(+n || 0); return 'xp ' + PK.xp + ', level ' + PK.level; },
-      spawn: function (n) { var k = clamp(+n || 1, 1, 20); for (var i = 0; i < k; i++) pkSpawnGuest(); return k + ' guests arrive'; },
+      spawn: function (n) { var k = clamp(+n || 1, 1, 20); pkSpawnLater(k); return k + ' guests on their way'; },
       auto: function () { var on = pkSetAuto(!pkCoasterAuto()); return 'coaster auto ' + (on ? 'on' : 'off'); },
       dispatch: function () { return pkDispatch() ? 'dispatched' : 'the ride will not go: ' + PK.ride.fault; },
       rides: function () { return pkOpenCount() + ' of ' + (PK.attractions.length + 1) + ' open: ' + pkRideList(); },
@@ -6282,7 +6282,14 @@
   }
   function pkSpawnGuest() {
     var g = pkTakeHuman();
+    // Where a guest enters the park. It used to be one 36 m strip in front of the gate, so a spawn of twenty dropped
+    // twenty bodies on the same paving and sent them all at the same window: a knot of people, a burst of route finding
+    // and a stutter. They are spread over the drive and the forecourt now, and a few are tried until one is walkable.
     var x = randf(-18, 18), z = randf(58, 64);
+    for (var tryN = 0; tryN < 6; tryN++) {
+      var tx = randf(-24, 24), tz = randf(46, 66);
+      if (navFreeAt(tx, tz)) { x = tx; z = tz; break; }
+    }
     g.position.set(x, 0, z);
     g.rotation.set(0, Math.PI, 0);
     var gu = {
@@ -6295,6 +6302,15 @@
     PK.guests.push(gu);
     return gu;
   }
+  // twenty at once is twenty people built, dressed and routed in one frame: the spawn command puts them on a short
+  // queue instead, so a crowd walks in over a second or two and the frame stays smooth
+  var PK_SPAWN_Q = [];
+  function pkSpawnLater(n) { var t = performance.now(); for (var i = 0; i < n; i++) PK_SPAWN_Q.push(t + i * 90); return n; }
+  hook('frame', function () {
+    if (!PK_SPAWN_Q.length) return;
+    var now = performance.now(), n = 0;
+    while (PK_SPAWN_Q.length && PK_SPAWN_Q[0] <= now && n < 6) { PK_SPAWN_Q.shift(); pkSpawnGuest(); n++; }
+  });
   function pkGuestAt(x, z) {
     if (!PK.guests || !PK.guests.length) return null;
     var best = null, bd = 9;
@@ -9301,7 +9317,7 @@
         },
         gardener: {
           names: ['Truus'], look: { shirt: '#4d7a3a', pants: '#3a2f24', skin: '#e0b48e', hair: '#b8b8b8' }, speed: 1.0,
-          steps: [].concat(W('clock', 40, 6), W('maze', 30, 5))
+          steps: [].concat(W('gardenWalk', 40, 9), W('bandstand', 30, 6))
         },
         // the south beat: the plaza, the midway, the Fairground and the Thrills
         guardSouth: {
@@ -9343,7 +9359,7 @@
         fairCross: { x: -31, z: 3 }, teacups: { x: -40, z: 3 }, kidsLane: { x: -46.8, z: 36 },
         thrillCross: { x: 35, z: 3 }, dodgems: { x: 42, z: 3 }, baron: { x: 57, z: 19 },
         darkWoods: { x: -36, z: -24 }, dropTower: { x: -36, z: -52 }, promWest: { x: -20, z: -60 }, halls: { x: -46.5, z: -70 },
-        gardenWest: { x: -28, z: -44 }, gardenWalk: { x: 2, z: -44 }, clock: { x: 6, z: -58 }, bandstand: { x: 2, z: -66 }, maze: { x: 9.5, z: -72 },
+        gardenWest: { x: -28, z: -44 }, gardenWalk: { x: 2, z: -44 }, bandstand: { x: 2, z: -66 },
         coasterCountry: { x: 40, z: -24 }, promEast: { x: 50, z: -60 }, eastWalk: { x: 76, z: -20 },
         lotDrive: { x: 0, z: 74 }
       }
@@ -10930,8 +10946,8 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
     [22, 3, 46, 3, 4, 'thrill'],                                                                                   // the Thrills avenue: dodgems
     [35, 3, 35, -60, 3.6, 'coaster'], [35, -24, 47.5, -24, 3.8, 'coaster'],                                         // Coaster Country: log flume
     [-31, -60, 35, -60, 5, 'garden'],                                                                               // the North Promenade
-    [-31, -44, 35, -44, 4.4, 'garden'], [2, -44, 2, -60, 4, 'garden'],                                              // the Garden Walk and its spine to the clock
-    [2, -60, 2, -66, 3.6, 'garden'], [9.5, -60, 9.5, -79, 3.4, 'garden'], [14, -60, 14, -66.6, 3, 'garden']          // to the bandstand, the maze and the windmill
+    [-31, -44, 35, -44, 4.4, 'garden'], [2, -44, 2, -66, 4, 'garden'],                                              // the Garden Walk and its spine to the bandstand
+    [14, -60, 14, -66.6, 3, 'garden']                                                                               // the windmill's spur
   ];
   // the arches over the streets where each land begins: [x, z, the way the street runs ('x' or 'z'), land]
   var PK_ARCHES = [[-17.5, 3, 'x', 'fair'], [23.5, 3, 'x', 'thrill'], [-31, -6.5, 'z', 'dark'], [35, -6.5, 'z', 'coaster']];
@@ -11196,16 +11212,16 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
   // A park is more than its rides. These are the places to stop: somewhere to eat where the streets cross, and a garden quarter at the
   // north end where the west and east spines meet. They are scenery - nothing here is staffed or sold - but they are solid, lit and lived in.
   var PK_PLAZAS = [{ x: -31, z: 3, r: 5.6 }, { x: 35, z: 3, r: 5.6 }, { x: 2, z: -44, r: 5.6 }];   // the two crossroads, and the Garden Walk's middle
-  var PK_GARDEN = { clock: { x: 2, z: -60, r: 6.6 }, band: { x: 2, z: -73.5 }, maze: { x: 5, z: -86 }, mill: { x: 14, z: -70 } };
-  var PK_SAILS = null, PK_CLOCK = null;
+  var PK_GARDEN = { band: { x: 2, z: -73.5 }, mill: { x: 14, z: -70 } };
+  var PK_SAILS = null;
   PK_PLAZAS.forEach(function (p) { PK_KEEP.push([p.x, p.z, p.r + 1.5]); });
-  PK_KEEP.push([2, -60, 8.5], [2, -73.5, 8.5], [5, -86, 11], [14, -70, 7], [2, -69, 5]);
+  PK_KEEP.push([2, -73.5, 8.5], [14, -70, 7], [2, -69, 5]);
 
   function pkFace(x, z, tx, tz) { return Math.atan2(tx - x, tz - z); }
 
   function pkGardensBuild() {
     PK_PLAZAS.forEach(pkPlaza);
-    pkFlowerClock(); pkBandstand(); pkWindmill(); pkMaze(); pkPicnic();
+    pkBandstand(); pkWindmill(); pkPicnic();
   }
 
   // ── A food stall: counter, canopy, sign, a few goods ─────────────
@@ -11240,26 +11256,6 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
     });
     // benches on the open arcs between the stalls, and a lamp in each
     [[0, -1], [0, 1]].forEach(function (d) { /* the streets run through the middle; the arcs are the corners */ });
-  }
-
-  // ── The flower clock ─────────────────────────────────────────────
-  // a planted dial laid on the promenade, with hands that tell the park's own time
-  function pkFlowerClock() {
-    var C = PK_GARDEN.clock, x = C.x, z = C.z, M = pkMats();
-    var rings = [[C.r + 0.5, M.stoneDark, 0.0440], [C.r, std({ color: 0x4d7a3a, roughness: 0.95 }), 0.0450], [C.r * 0.86, std({ color: 0xd94f6a, roughness: 0.9 }), 0.0460],
-      [C.r * 0.70, std({ color: 0xf3c84a, roughness: 0.9 }), 0.0470], [C.r * 0.56, std({ color: 0xf4f1e6, roughness: 0.9 }), 0.0480]];
-    rings.forEach(function (rg) { pkPavedDisc(rg[0], rg[1], x, rg[2], z, null, 1.4); });
-    for (var h = 0; h < 12; h++) {           // the hour marks
-      var a = h / 12 * Math.PI * 2, rr = C.r * 0.63, tick = box(0.28, 0.03, h % 3 === 0 ? 1.1 : 0.6, M.iron, x + Math.sin(a) * rr, 0.052, z - Math.cos(a) * rr);
-      tick.rotation.y = -a;
-    }
-    pkLathe([[0, 0], [0.5, 0], [0.5, 0.3], [0.2, 0.45], [0, 0.45]], M.gold, x, 0.05, z, null, 14);
-    var hands = new THREE.Group(); hands.position.set(x, 0.09, z); hands.userData.dynamic = true; scene.add(hands);
-    var hh = new THREE.Group(), mh = new THREE.Group(); hands.add(hh); hands.add(mh);
-    var hb = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.05, 2.6), M.iron); hb.position.z = -1.1; hh.add(hb);
-    var mb = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.05, 3.8), M.gold); mb.position.z = -1.7; mb.position.y = 0.03; mh.add(mb);
-    PK_CLOCK = { hour: hh, min: mh };
-    [[-1, 0], [1, 0]].forEach(function (d) { pkLamp(x + d[0] * (C.r + 1.6), z + 3.4, 4.4); });
   }
 
   // ── The bandstand ────────────────────────────────────────────────
@@ -11314,43 +11310,6 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
     [[-4.2, 5.2], [4.2, 5.2]].forEach(function (p) { pkFlowerBed(x + p[0], z + p[1], 2.4, 1.2); });
   }
 
-  // ── The hedge maze ───────────────────────────────────────────────
-  // 5 x 5 cells, carved by a seeded depth-first walk, so every cell can be reached and the same maze stands every time.
-  // The way in is on the south side, off the promenade; in the middle there is a fountain-topped plinth to reach.
-  function pkMaze() {
-    var Mz = PK_GARDEN.maze, N = 5, cs = 2.6, T = 0.85, H = 2.2, rng = pkRng(31337), M = pkMats();
-    var ox = Mz.x - N * cs / 2, oz = Mz.z - N * cs / 2;
-    var vis = [], right = [], down = [];   // right[r][c]: wall east of cell; down[r][c]: wall south of cell
-    for (var r = 0; r < N; r++) { vis.push([]); right.push([]); down.push([]); for (var c = 0; c < N; c++) { vis[r].push(false); right[r].push(true); down[r].push(true); } }
-    var stack = [[N - 1, 2]]; vis[N - 1][2] = true;
-    while (stack.length) {
-      var cur = stack[stack.length - 1], opts = [];
-      [[-1, 0], [1, 0], [0, -1], [0, 1]].forEach(function (d) { var nr = cur[0] + d[0], nc = cur[1] + d[1]; if (nr >= 0 && nr < N && nc >= 0 && nc < N && !vis[nr][nc]) opts.push([nr, nc, d]); });
-      if (!opts.length) { stack.pop(); continue; }
-      var pick = opts[Math.floor(rng() * opts.length)], d2 = pick[2];
-      if (d2[0] === 1) down[cur[0]][cur[1]] = false; else if (d2[0] === -1) down[pick[0]][pick[1]] = false;
-      else if (d2[1] === 1) right[cur[0]][cur[1]] = false; else right[pick[0]][pick[1]] = false;
-      vis[pick[0]][pick[1]] = true; stack.push([pick[0], pick[1]]);
-    }
-    function wallH(r, c) { pkHedge(ox + (c + 0.5) * cs, oz + r * cs, cs + T, T, H); }     // along x, on the line above row r
-    function wallV(r, c) { pkHedge(ox + c * cs, oz + (r + 0.5) * cs, T, cs + T, H); }     // along z, on the line left of column c
-    for (var c2 = 0; c2 < N; c2++) wallH(0, c2);                       // north edge
-    for (var c3 = 0; c3 < N; c3++) if (c3 !== 2) wallH(N, c3);         // south edge, with the way in at column 2
-    for (var r2 = 0; r2 < N; r2++) { wallV(r2, 0); wallV(r2, N); }     // west and east edges
-    for (var r3 = 0; r3 < N; r3++) for (var c4 = 0; c4 < N; c4++) {
-      if (c4 < N - 1 && right[r3][c4]) wallV(r3, c4 + 1);
-      if (r3 < N - 1 && down[r3][c4]) wallH(r3 + 1, c4);
-    }
-    // the prize: a plinth and a gilded ball, at the middle cell
-    var mx = ox + 2.5 * cs, mz = oz + 2.5 * cs;
-    pkBevelBox(0.9, 0.9, 0.9, M.stone, mx, 0.45, mz, null, 0.05); sphere(0.38, M.gold, mx, 1.3, mz);
-    pkPavedDisc(1.1, M.paversWarm, mx, 0.041, mz, null, 1.0);
-    // a sign at the way in
-    var gx = ox + 2.5 * cs, gz = oz + N * cs;
-    pkRoundCyl(0.05, 1.6, M.iron, gx + 1.9, 0.8, gz + 0.6, null, 6);
-    pkSign3D(['THE HEDGE MAZE'], 1.9, 0.4, gx + 1.9, 1.7, gz + 0.62, 0, { bg: '#23493a', fg: '#f5e9c2' });
-  }
-
   // ── The picnic lawn ──────────────────────────────────────────────
   function pkPicnic() {
     var M = pkMats();
@@ -11367,14 +11326,9 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
     [[-12, -76], [16, -76]].forEach(function (p) { pkBin(p[0], p[1]); solid(p[0] - 0.4, p[0] + 0.4, p[1] - 0.4, p[1] + 0.4, 0, 1.0); });
   }
 
-  // ── Life: the sails turn, the clock tells the park's time ────────
+  // ── Life: the sails turn on the windmill ─────────────────────────
   function pkGardensTick(dt) {
     if (PK_SAILS) PK_SAILS.rotation.z -= dt * 0.35;
-    if (PK_CLOCK && typeof S !== 'undefined' && S) {
-      var hrs = S.time % 12, mins = (S.time * 60) % 60;
-      PK_CLOCK.hour.rotation.y = -(hrs / 12) * Math.PI * 2;
-      PK_CLOCK.min.rotation.y = -(mins / 60) * Math.PI * 2;
-    }
   }
   var _pkGardensPrevTick = GAME.tick;
   GAME.tick = function (dt) { _pkGardensPrevTick(dt); pkGardensTick(dt); };
@@ -30093,8 +30047,23 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       return mesh;
     }
     // take the merged meshes out of the graph. The parent is kept so unbake can put every one back where it stood.
+    // A flat ground piece stays: the path fence (part 24) finds the paving by rendering the scene's ground-level meshes
+    // white from above, and it looks them up in the scene graph, so the paving has to remain findable. There are a few
+    // hundred of them, they are hidden, and the merged copy is what draws.
+    var _pkBB = new THREE.Box3();
     function pkDetach(o) {
       if (!o.parent) return;
+      var g = o.geometry;
+      if (g && g.attributes && g.attributes.position) {
+        if (!g.boundingBox) g.computeBoundingBox();
+        if (g.boundingBox) {
+          _pkBB.copy(g.boundingBox).applyMatrix4(o.matrixWorld);
+          if (_pkBB.max.y < 0.35 && _pkBB.max.y > -0.1 && _pkBB.max.y - _pkBB.min.y < 0.35 && _pkBB.max.x - _pkBB.min.x < 300) {
+            o.visible = false; o.userData.bakedAway = true; baked.hidden++;
+            return;
+          }
+        }
+      }
       PK_BAKED_AWAY.push({ o: o, p: o.parent });
       o.parent.remove(o);
       o.userData.bakedAway = true;

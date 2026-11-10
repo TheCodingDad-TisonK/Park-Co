@@ -611,7 +611,7 @@
       ride: function () { return 'ride ' + PK.ride.state + (S.auto ? ' (auto)' : ' (manual)') + ', ' + PK.ride.riders + ' riding, ' + S.cycles + ' cycles'; },
       ticket: function (n) { return 'adults ' + money(pkPrice(+n || 0)); },
       xp: function (n) { pkXp(+n || 0); return 'xp ' + PK.xp + ', level ' + PK.level; },
-      spawn: function (n) { var k = clamp(+n || 1, 1, 20); for (var i = 0; i < k; i++) pkSpawnGuest(); return k + ' guests arrive'; },
+      spawn: function (n) { var k = clamp(+n || 1, 1, 20); pkSpawnLater(k); return k + ' guests on their way'; },
       auto: function () { var on = pkSetAuto(!pkCoasterAuto()); return 'coaster auto ' + (on ? 'on' : 'off'); },
       dispatch: function () { return pkDispatch() ? 'dispatched' : 'the ride will not go: ' + PK.ride.fault; },
       rides: function () { return pkOpenCount() + ' of ' + (PK.attractions.length + 1) + ' open: ' + pkRideList(); },

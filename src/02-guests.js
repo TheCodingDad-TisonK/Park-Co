@@ -19,7 +19,14 @@
   }
   function pkSpawnGuest() {
     var g = pkTakeHuman();
+    // Where a guest enters the park. It used to be one 36 m strip in front of the gate, so a spawn of twenty dropped
+    // twenty bodies on the same paving and sent them all at the same window: a knot of people, a burst of route finding
+    // and a stutter. They are spread over the drive and the forecourt now, and a few are tried until one is walkable.
     var x = randf(-18, 18), z = randf(58, 64);
+    for (var tryN = 0; tryN < 6; tryN++) {
+      var tx = randf(-24, 24), tz = randf(46, 66);
+      if (navFreeAt(tx, tz)) { x = tx; z = tz; break; }
+    }
     g.position.set(x, 0, z);
     g.rotation.set(0, Math.PI, 0);
     var gu = {
@@ -32,6 +39,15 @@
     PK.guests.push(gu);
     return gu;
   }
+  // twenty at once is twenty people built, dressed and routed in one frame: the spawn command puts them on a short
+  // queue instead, so a crowd walks in over a second or two and the frame stays smooth
+  var PK_SPAWN_Q = [];
+  function pkSpawnLater(n) { var t = performance.now(); for (var i = 0; i < n; i++) PK_SPAWN_Q.push(t + i * 90); return n; }
+  hook('frame', function () {
+    if (!PK_SPAWN_Q.length) return;
+    var now = performance.now(), n = 0;
+    while (PK_SPAWN_Q.length && PK_SPAWN_Q[0] <= now && n < 6) { PK_SPAWN_Q.shift(); pkSpawnGuest(); n++; }
+  });
   function pkGuestAt(x, z) {
     if (!PK.guests || !PK.guests.length) return null;
     var best = null, bd = 9;

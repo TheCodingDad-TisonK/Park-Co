@@ -22,8 +22,8 @@
     [22, 3, 46, 3, 4, 'thrill'],                                                                                   // the Thrills avenue: dodgems
     [35, 3, 35, -60, 3.6, 'coaster'], [35, -24, 47.5, -24, 3.8, 'coaster'],                                         // Coaster Country: log flume
     [-31, -60, 35, -60, 5, 'garden'],                                                                               // the North Promenade
-    [-31, -44, 35, -44, 4.4, 'garden'], [2, -44, 2, -60, 4, 'garden'],                                              // the Garden Walk and its spine to the clock
-    [2, -60, 2, -66, 3.6, 'garden'], [9.5, -60, 9.5, -79, 3.4, 'garden'], [14, -60, 14, -66.6, 3, 'garden']          // to the bandstand, the maze and the windmill
+    [-31, -44, 35, -44, 4.4, 'garden'], [2, -44, 2, -66, 4, 'garden'],                                              // the Garden Walk and its spine to the bandstand
+    [14, -60, 14, -66.6, 3, 'garden']                                                                               // the windmill's spur
   ];
   // the arches over the streets where each land begins: [x, z, the way the street runs ('x' or 'z'), land]
   var PK_ARCHES = [[-17.5, 3, 'x', 'fair'], [23.5, 3, 'x', 'thrill'], [-31, -6.5, 'z', 'dark'], [35, -6.5, 'z', 'coaster']];

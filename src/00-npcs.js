@@ -97,20 +97,20 @@
         "steps": [
           {
             "do": "walk",
-            "to": "clock"
+            "to": "gardenWalk"
           },
           {
             "do": "wander",
-            "radius": 6,
+            "radius": 9,
             "seconds": 40
           },
           {
             "do": "walk",
-            "to": "maze"
+            "to": "bandstand"
           },
           {
             "do": "wander",
-            "radius": 5,
+            "radius": 6,
             "seconds": 30
           }
         ]
@@ -549,17 +549,9 @@
         "x": 2,
         "z": -44
       },
-      "clock": {
-        "x": 6,
-        "z": -58
-      },
       "bandstand": {
         "x": 2,
         "z": -66
-      },
-      "maze": {
-        "x": 9.5,
-        "z": -72
       },
       "coasterCountry": {
         "x": 40,

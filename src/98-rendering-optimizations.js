@@ -103,8 +103,23 @@
       return mesh;
     }
     // take the merged meshes out of the graph. The parent is kept so unbake can put every one back where it stood.
+    // A flat ground piece stays: the path fence (part 24) finds the paving by rendering the scene's ground-level meshes
+    // white from above, and it looks them up in the scene graph, so the paving has to remain findable. There are a few
+    // hundred of them, they are hidden, and the merged copy is what draws.
+    var _pkBB = new THREE.Box3();
     function pkDetach(o) {
       if (!o.parent) return;
+      var g = o.geometry;
+      if (g && g.attributes && g.attributes.position) {
+        if (!g.boundingBox) g.computeBoundingBox();
+        if (g.boundingBox) {
+          _pkBB.copy(g.boundingBox).applyMatrix4(o.matrixWorld);
+          if (_pkBB.max.y < 0.35 && _pkBB.max.y > -0.1 && _pkBB.max.y - _pkBB.min.y < 0.35 && _pkBB.max.x - _pkBB.min.x < 300) {
+            o.visible = false; o.userData.bakedAway = true; baked.hidden++;
+            return;
+          }
+        }
+      }
       PK_BAKED_AWAY.push({ o: o, p: o.parent });
       o.parent.remove(o);
       o.userData.bakedAway = true;
