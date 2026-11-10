@@ -38,7 +38,7 @@ module.exports = `
   ok(!!T.pkScreen() && !!T.pkSnack() && !!T.pkConsole() && !!T.pkConsole().parts.buttons.gates && !!T.pkConsole().parts.gauges.speed && !!T.pkConsole().parts.lever, 'the operator room has its screen and a real desk: buttons, a throttle and gauges');
   ok(T.pkScreen().zones.length === 0, 'the room screen reports the ride; it does not take taps');
   { const attractions = T.PK.attractions;
-    ok(attractions.length === 20 && attractions.every((a) => !!a.booth && !!a.boothScreen), 'every attraction has an operator booth and screen');
+    ok(attractions.length === 18 && attractions.every((a) => !!a.booth && !!a.boothScreen), 'every attraction has an operator booth and screen');
     ok(attractions.every((a) => {
       const sc = a.boothScreen, m = sc.mesh, g = a.booth, wp = m.getWorldPosition(new T.THREE.Vector3());
       const dx = wp.x - g.position.x, dz = wp.z - g.position.z;
@@ -108,7 +108,7 @@ module.exports = `
     ok(C.maint === false && a.state === 'boarding', 'back to RUN, the line boards: ' + a.state);
     C.gates = false; a.state = 'idle'; a.queue.length = 0; T.pkAttrUnseatAll(a); g.state = 'leave'; g.attr = null; }
   ok(!!T.PK.console && T.PK.console.parts.mode && T.PK.console.parts.stop, 'the control desk runs off the physical hardware');
-  ok(!!T.pkCabinet() && !!T.pkCabinet().rides.carousel && !!T.pkCabinet().rides.coaster && Object.keys(T.pkCabinet().rides).length === 20 && !!T.pkCabinet().gauges.load, 'the park switchboard has all 20 ride breakers, the coaster among them, and its own dials');
+  ok(!!T.pkCabinet() && !!T.pkCabinet().rides.carousel && !!T.pkCabinet().rides.coaster && Object.keys(T.pkCabinet().rides).length === 18 && !!T.pkCabinet().gauges.load, 'the park switchboard has all 18 ride breakers, the coaster among them, and its own dials');
   { const L = T.pkCabinet().lights, was = S.lights;
     L.flip(); const on = L.on === true && S.lights === true && T.PK.lights === true;
     L.flip(); const off = L.on === false && S.lights === false && T.PK.lights === false;
@@ -303,7 +303,7 @@ module.exports = `
     for (let k = 0; k < 1200 && R.riders < 2; k++) { T.pkRideTick(0.05); T.pkGuestTick(0.05); }
     ok(R.riders === 2 && next.every((g) => g.state === 'seated'), 'the second line walks in from the lane'); }
   // the rides
-  ok(T.PK.attractions.length === 20, 'twenty rides besides the main coaster: ' + T.PK.attractions.length);
+  ok(T.PK.attractions.length === 18, 'eighteen rides besides the main coaster: ' + T.PK.attractions.length);
   ok(T.PK.attrById.carousel && T.PK.attrById.carousel.seats.length === 8, 'the carousel has eight horses');
   ok(T.PK.attrById.ferris && T.PK.attrById.ferris.seats.length === 16, 'the ferris wheel has eight cabins of two');
   { const d = T.CO.npcs(), ids = d.workers.map((w) => w.id);
@@ -328,7 +328,7 @@ module.exports = `
     T.pkCtl(a).fault = ''; a.state = 'unloading'; a.t = a.unload; a.queue.length = 0; a.riders = 0; T.pkAttrTick(a, 0.05); T.pkAttrUnseatAll(a); guest.state = 'gone'; T.pkGuestTick(0.01); T.PK.guests.push(...keep); }
   // the real queue lanes and the player's own turn on the rides
   // every ride but the Skyline, whose line waits up on her platform (it is reached by the tower's lift, not a street lane)
-  ok(T.pkLanes().length === 19 && T.pkLanes().every((L) => L.a && L.a.id !== 'skyline' && !!L.leafL && !!L.leafR), 'every ride has a fenced queue lane and a boarding gate, the Skyline its platform');
+  ok(T.pkLanes().length === 17 && T.pkLanes().every((L) => L.a && L.a.id !== 'skyline' && !!L.leafL && !!L.leafR), 'every ride has a fenced queue lane and a boarding gate, the Skyline its platform');
   // the arena's lane holds a sixty-seat show's line and Danse Macabre's and Droomvlucht's theirs (36 and 24 riders), so they run deeper than a ride's three rows; they still fold and still keep to 8.5 m
   ok(T.pkLanes().every((L) => L.x1 > L.x0 && L.zB > L.zA && L.x1 - L.x0 < 8.5 && (L.zB - L.zA < 3.6 || L.a.id === 'theater' || L.a.id === 'danse' || L.a.id === 'droom' || L.a.id === 'joris') && L.rows % 2 === 1),
     'the lanes fold into switchbacks, none longer than 8.5 m: ' + T.pkLanes().map((L) => L.a.id + ' ' + (L.x1 - L.x0).toFixed(1) + 'x' + (L.zB - L.zA).toFixed(1)).join(', '));
@@ -416,9 +416,10 @@ module.exports = `
     a.state = 'idle'; a.t = 0; a.riders = 0; T.pkAttrTick(a, 0.016);
     ok(maxY > 9 && tilt > 0.2, a.name + ' flies its loops: peak y ' + maxY.toFixed(1) + ', tilt ' + tilt.toFixed(2));
     ok(E.cars[0].g.position.y < 2.5 && Math.abs(E.cars[0].g.position.z - a.extra.curve.getPointAt(a.extra.uPark).z) < 0.6, a.name + ' parks back at the station'); });
-  // the three indoor coasters fly their own circuits in the dark and park back at the platform
-  ['nocturne', 'wreck', 'moonwood'].forEach((id) => {
-    const a = T.PK.attrById[id], E = a.extra;
+  // the Wild Hunt took the place of the three indoor halls: one big outdoor coaster across the north strip
+  { const a = T.PK.attrById.wildhunt, E = a && a.extra;
+    ok(!!a && !!E && E.len > 140 && a.seats.length === 12, 'the Wild Hunt stands where the three halls were: ' + (E ? E.len.toFixed(0) : '?') + ' m of track, ' + (a ? a.seats.length : 0) + ' seats');
+    ok(!T.PK.attrById.nocturne && !T.PK.attrById.wreck && !T.PK.attrById.moonwood, 'Nocturne, The Wreck and Moonwood are gone');
     a.ctl.auto = true; a.ctl.fault = ''; a.queue.length = 0; a.riders = 1;
     a.state = 'running';
     let maxY = 0, tilt = 0;
@@ -429,21 +430,9 @@ module.exports = `
       tilt = Math.max(tilt, Math.abs(car.quaternion.x) + Math.abs(car.quaternion.z));
     }
     a.state = 'idle'; a.t = 0; a.riders = 0; T.pkAttrTick(a, 0.016);
-    ok(maxY > 10 && tilt > 0.05 && E.len > 110, a.name + ' flies its circuit: ' + E.len.toFixed(0) + ' m, lift to ' + maxY.toFixed(1) + ' m, tilt ' + tilt.toFixed(2));
+    ok(maxY > 12 && tilt > 0.05, a.name + ' flies its circuit: lift to ' + maxY.toFixed(1) + ' m, tilt ' + tilt.toFixed(2));
     ok(E.cars[0].g.position.y < 2.5, a.name + ' parks back at the station');
-    ok(a.booth && a.boothScreen && a.seats.length === 8 && a.riders === 0, a.name + ' has its own control cabin');
-  });
-  // the halls are the big ones: back wall at z -110.5 (the old one at -94.5 is gone), the north fence behind them at -118
-  { const x = [-50, -20, 30], back = x.every((xx) => T.collides(xx, -110.5)), old = x.some((xx) => T.collides(xx + 7, -94.5)), fence = T.collides(-50, -118) && !T.collides(-50, -114);
-    ok(back && !old && fence, 'the indoor halls run back to z -110.5 and the north fence stands at -118 (back ' + back + ', old wall ' + old + ', fence ' + fence + ')'); }
-  // the cabin doors open off the end of the platform: walk the player in from the platform (a west hall and an east one)
-  [[-62, 1, 'nocturne'], [42, -1, 'moonwood']].forEach(function (c) {
-    var x0 = c[0] + c[1] * 14.3, s = []; for (var uu = 14.3; uu < 16.6; uu += 0.3) s.push(uu.toFixed(1) + ':' + (T.collides(c[0] + c[1] * uu, -80.9) ? 1 : 0));
-    T.PK.attrById[c[2]].boothDoor.setNow(1);
-    T.player.x = x0; T.player.z = -80.9; T.player.y = 0; T.player.yaw = -c[1] * Math.PI / 2;
-    T.player.keys.KeyW = true; for (let i = 0; i < 30; i++) T.updatePlayer(0.05); T.player.keys.KeyW = false;
-    ok((T.player.x - c[0]) * c[1] > 15.6, 'the ' + c[2] + ' cabin door walks (' + s.join(' ') + ') u ' + ((T.player.x - c[0]) * c[1]).toFixed(2));
-  });
+    ok(a.booth && a.boothScreen, a.name + ' has its own control booth'); }
   // the kids' area turns, and the pedal line crawls its oval
   ['kround', 'kpots'].forEach((id) => {
     const a = T.PK.attrById[id];
@@ -462,9 +451,9 @@ module.exports = `
   // speeds as real rides go: every coaster's top speed from its own drop, a lift at chain speed, a slow wheel, a true free fall;
   // and every coaster's lift ridden upright (the track's roll is held to the world's up, not wound in by the turns)
   { const kmh = (v) => Math.round(v * 3.6), top = {};
-    ['serpent', 'baron', 'nocturne', 'wreck', 'moonwood'].forEach((id) => { top[id] = kmh(T.PK.attrById[id].extra.vTop); });
+    ['serpent', 'baron', 'wildhunt'].forEach((id) => { top[id] = kmh(T.PK.attrById[id].extra.vTop); });
     const P = T.pkCoProfile(T.PK.curve, T.PK.len, T.PK.stationU, { lift: T.PK.liftU }), main = kmh(Math.max.apply(null, P.V));
-    ok(top.serpent > 50 && top.serpent < 80 && top.baron > 55 && top.baron < 85 && top.nocturne > 30 && top.nocturne < 55 && main > 55 && main < 80,
+    ok(top.serpent > 50 && top.serpent < 80 && top.baron > 55 && top.baron < 85 && top.wildhunt > 55 && top.wildhunt < 85 && main > 55 && main < 80,
       'coaster top speeds are real-world: coaster ' + main + ', ' + JSON.stringify(top) + ' km/h');
     ok(Math.abs(T.pkSpeedAt((T.PK.liftU[0] + T.PK.liftU[1]) / 2) - 2.4) < 0.01 && T.PK.attrById.ferris.run >= 40 && T.PK.attrById.droptower.run >= 18,
       'the lift climbs at chain speed, the wheel turns slowly, the tower holds before it drops');
@@ -474,14 +463,14 @@ module.exports = `
       let corkUp = 1; for (let i = 0; i < F.n; i++) { const p = F.p[i]; if (p.x > -6 && p.x < 13 && p.z > -31 && p.z < -25.5 && p.y > 7.5) corkUp = Math.min(corkUp, F.up[i].y); }
       ok(len > 280 && ymax > 18 && upMin < -0.9 && corkUp < -0.8 && vt <= 6.05, 'the main coaster: ' + len.toFixed(0) + ' m, lift to ' + ymax.toFixed(1) + ' m, upside down in the loop (up ' + upMin.toFixed(2) + ') and the corkscrew (' + corkUp.toFixed(2) + '), trimmed to ' + vt.toFixed(1) + ' m/s'); }
     let worst = 0;
-    ['serpent', 'nocturne', 'wreck', 'moonwood'].forEach((id) => { const E = T.PK.attrById[id].extra, F = E.F, L = T.pkCoProfile(E.curve, E.len, E.uPark);
+    ['serpent', 'wildhunt'].forEach((id) => { const E = T.PK.attrById[id].extra, F = E.F, L = T.pkCoProfile(E.curve, E.len, E.uPark);
       for (let j = L.lift[0]; j <= L.lift[1]; j++) { const i = Math.round(((E.uPark + j / L.K) % 1) * F.n) % F.n, t = F.t[i];
         if (Math.abs(t.y) < 0.85) worst = Math.max(worst, Math.acos(Math.min(1, F.up[i].y / Math.sqrt(1 - t.y * t.y))) * 57.3); } });
     ok(worst < 30, 'every lift is ridden upright (worst roll on a lift ' + worst.toFixed(0) + ' deg)'); }
   // the level ladder and the prices
   ok(T.PK_LEVELS.length === 34 && T.PK_LEVELS[0].name === 'The gate' && T.PK_LEVELS[6].unlock === 'lights' && T.PK_LEVELS[25].name === 'The Skyline' && T.PK_LEVELS[33].name === 'The East Fair', 'the level ladder runs from the gate to the park lights and on to the five expansion stages');
   ok(T.pkPrice(5) === 30 && T.pkPrice(-100) === 5 && T.pkPrice(1000) === 200, 'the ticket price clamps 5 to 200');
-  ok(T.pkOpenCount() === 21, 'every ride is open from the first day (' + T.pkOpenCount() + ')');
+  ok(T.pkOpenCount() === 19, 'every ride is open from the first day (' + T.pkOpenCount() + ')');
   { const x0 = T.PK.xp; T.pkXp(60); ok(T.PK.xp === x0 + 60 && T.PK.level >= 2 && T.PK.snackOpen === true && S.snackOpen === true, 'xp opens the snack stand at level 2'); }
   ok(T.pkSnackPrice(1) === 7 && T.pkSnackPrice(-100) === 1, 'the snack price clamps 1 to 40');
   // the snack stand
@@ -581,8 +570,8 @@ module.exports = `
   { const ph = T.photo, keep = { x: T.player.x, z: T.player.z, y: T.player.y, ed: T.CO.editor }, was = { x: ph.x, y: ph.y, z: ph.z, yaw: ph.yaw };
     T.CO.editor = T.CO.editor || { on: false }; ph.x = 30; ph.y = 25; ph.z = -40; ph.yaw = 1.0; T.runHooks('photo', false);
     const landed = Math.hypot(T.player.x - 30, T.player.z + 40) < 3 && T.player.y < 0.5 && !T.collides(T.player.x, T.player.z) && Math.abs(T.player.yaw - 1.0) < 1e-6;
-    ph.x = -50; ph.y = 8; ph.z = -94.75; T.runHooks('photo', false);           // over the middle of a wall: nudged off it
-    const free = !T.collides(T.player.x, T.player.z) && Math.hypot(T.player.x + 50, T.player.z + 94.75) < 8.5;
+    ph.x = -22; ph.y = 8; ph.z = 43.5; T.runHooks('photo', false);           // over the office wall: nudged off it
+    const free = !T.collides(T.player.x, T.player.z) && Math.hypot(T.player.x + 22, T.player.z - 43.5) < 8.5;
     if (keep.ed === undefined) delete T.CO.editor; T.player.x = keep.x; T.player.z = keep.z; T.player.y = keep.y; Object.assign(ph, was);
     ok(landed && free, 'leaving Scene mode in the editor lands you under the camera (' + landed + ', off walls ' + free + ')'); }
   // the rides' dressing is made of editor items of their own: a gateway, the station's fence, entrance and exit, a decoration

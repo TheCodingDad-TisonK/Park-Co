@@ -222,33 +222,39 @@
       }
     }
     hook('frame', function (dt) { pkCullStatic(dt, false); });
-    hook('boot', function () { pkCollectStatic(); pkCullStatic(0, true); pkMergeDynamic(); });
+    // Off for now: merging inside a moving group welds shut every part the game animates *within* it (a lever's arm,
+    // a door leaf, a key that turns, the restraint bar on a car). Those parts carry no dynamic flag of their own, so the
+    // merge cannot tell them from the shell. Re-enable only with a way to know what a group's animation touches.
+    var PK_MERGE_DYNAMIC = true;
+    hook('boot', function () { pkCollectStatic(); pkCullStatic(0, true); if (PK_MERGE_DYNAMIC) pkMergeDynamic(); });
     CO.pkRecollectStatic = pkCollectStatic;
 
     // ── The moving groups ────────────────────────────────────────────
-    // The bake cannot touch anything under a `dynamic` group, and the rides are built from 1,200 of those: a train, a
-    // carousel, a dodgem, each a group of a few hundred separate meshes that move together. Individually they are 2,500
-    // draws in a view of the park. A group moves as one, so its own parts can be merged: the geometry goes into the
-    // group's space and the group still turns, slides and bobs exactly as before. A nested dynamic group is left whole,
-    // because that is a part with an animation of its own (a horse, a wheel, a door).
+    // The bake cannot touch anything under a `dynamic` group, and the rides are built from 1,200 of those: a car, a
+    // carriage, a dodgem, each a group of a few dozen separate meshes that move together. A group moves as one, so the
+    // meshes that hang directly off it can be merged: the geometry goes into the group's space and the group still
+    // turns, slides and bobs exactly as before.
+    //
+    // Direct children only, and that is the whole rule. A part the game animates by itself - a lap bar, a door leaf, a
+    // lever's arm - hangs off a pivot of its own, one level down, and is left exactly as it was. Merging the whole
+    // subtree instead welded those parts shut (the levers, the keys and the station boom bars came out as blobs), which
+    // is why this pass only ever touches the shell of a group.
     function pkMergeDynamic() {
       scene.updateMatrixWorld(true);
       var groups = [];
       scene.traverse(function (o) { if (o.userData && o.userData.dynamic) groups.push(o); });
-      var inv = new THREE.Matrix4(), _m = new THREE.Matrix4();
+      var inv = new THREE.Matrix4();
       groups.forEach(function (G) {
         if (!G.parent) return;
         var list = [];
-        (function walk(node) {
-          node.children.forEach(function (c) {
-            if (c.userData && c.userData.dynamic) return;   // animated on its own: hands off
-            if (c.isMesh && c.visible && c.geometry && c.material && !Array.isArray(c.material) && !c.userData.it && !c.userData.noBake) {
-              var m = c.material;
-              if (!(m.userData && (m.userData.noBake || m.userData.glow)) && !m.transparent && !m.emissiveMap && !(m.emissive && (m.emissive.r + m.emissive.g + m.emissive.b) > 0.02)) list.push(c);
-            }
-            walk(c);
-          });
-        })(G);
+        G.children.forEach(function (c) {
+          if (!c.isMesh || c.isInstancedMesh || !c.visible || !c.geometry || !c.material || Array.isArray(c.material)) return;
+          if (c.userData.dynamic || c.userData.it || c.userData.noBake || c.userData.pkPathFence) return;
+          var m = c.material;
+          if (m.userData && (m.userData.noBake || m.userData.glow)) return;
+          if (m.transparent || m.emissiveMap || (m.emissive && (m.emissive.r + m.emissive.g + m.emissive.b) > 0.02)) return;
+          list.push(c);
+        });
         if (list.length < 2) return;
         inv.copy(G.matrixWorld).invert();
         var byKey = {};

@@ -905,8 +905,8 @@ var PK_CAB_RIDES = [
   ['coaster', 'THE COASTER'], ['carousel', 'CAROUSEL'], ['teacups', 'TEACUPS'], ['ferris', 'FERRIS WHEEL'],
   ['dodgems', 'DODGEMS'], ['droptower', 'DROP TOWER'], ['flume', 'LOG FLUME'], ['danse', 'DANCE MACABRE'],
   ['kround', 'LITTLE ROUNDABOUT'], ['kpots', 'WOBBLY POTS'], ['kpuffin', 'PUFFIN LINE'],
-  ['serpent', 'THE SERPENT'], ['baron', "BARON'S DROP"], ['nocturne', 'NOCTURNE'], ['wreck', 'THE WRECK'],
-  ['moonwood', 'MOONWOOD'], ['mountain', 'THE MOUNTAIN KING'],
+  ['serpent', 'THE SERPENT'], ['baron', "BARON'S DROP"], ['wildhunt', 'THE WILD HUNT'],
+  ['mountain', 'THE MOUNTAIN KING'],
   ['droom', 'DREAM FLIGHT'], ['joris', 'DRAGON RIDE']
 ];
 var PK_CAB_PER_COL = 10;

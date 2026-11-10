@@ -535,15 +535,72 @@
     pkCoPlace(E, E.uPark);
     return a;
   }
+  // ── The Wild Hunt ────────────────────────────────────────────────
+  // The big one, in place of the three indoor halls: one outdoor coaster across the whole north strip. Out of the station
+  // it swings east and climbs the chain lift up the east side, runs the crest the length of the strip (26 m up, above the
+  // treeline), turns at the west end and comes back along the south side over a long drop and a pair of airtime hills.
+  // The station faces the promenade, so the queue comes up the walk the old halls shared.
+  var PK_HUNT_PTS = [
+    [-6, 1.0, -84.5], [0, 1.0, -84.5], [6, 1.0, -84.5], [12, 1.05, -84.6],               // the station straight
+    [18, 2.2, -85.6], [22, 4.4, -88.0], [24, 7.2, -91.2],                                 // out of the station, into the lift
+    [24, 11.0, -95.2], [23, 15.5, -99.0], [20, 20.0, -102.0],
+    [15, 23.0, -103.8], [8, 25.0, -104.6], [0, 25.8, -104.9], [-8, 26.0, -104.9],          // the crest
+    [-16, 25.8, -104.6], [-24, 25.0, -103.8], [-31, 24.0, -102.4],
+    [-37, 22.0, -100.0], [-40, 20.0, -96.6], [-41, 17.5, -92.8], [-40, 14.5, -89.2],       // the west turnaround
+    [-36, 10.5, -86.6], [-31, 6.0, -84.9], [-26, 3.2, -84.2],                              // the first drop
+    [-21, 3.4, -84.2], [-16, 6.2, -84.4], [-11, 4.0, -84.6],                               // the airtime hill
+    [-8, 2.0, -84.6]
+  ];
+  function pkBuildWildHunt(p) {
+    var th = PK_THEME.wildhunt, i;
+    var g = new THREE.Group(); scene.add(g);
+    var curve = pkCoCurve(PK_HUNT_PTS), len = curve.getLength(), uP = pkCoUAt(curve, 4, -84.5);
+    var F = pkCoFrames(curve, 620, pkCoProfile(curve, len, uP), uP);
+    var E = { curve: curve, len: len, F: F, gap: 2.35, cars: [], uPark: uP, uOfF: [], run: 30 };
+    pkCoLevel(F, curve, E.uPark, 5 * 2.35 + 1.4, 1.4);
+    var seats = [], cols = [0x6b4f8a, 0xc9a227, 0x2a2434, 0xc9a227, 0x6b4f8a, 0x2a2434];
+    for (i = 0; i < 6; i++) {
+      var car = pkCoCar(cols[i]);
+      scene.add(car.g);
+      E.cars.push(car);
+      car.seats.forEach(function (s) {
+        seats.push({ par: car.g, x: s.x, y: s.y, z: s.z, ry: 0, guest: null });
+      });
+    }
+    var spineMat = std({ color: 0x6b4f8a, roughness: 0.4, metalness: 0.35 });
+    var supMat = std({ color: 0x3a2f45, roughness: 0.55, metalness: 0.25 });
+    pkCoTrackBuild(g, E, {
+      spineMat: spineMat, supMat: supMat, tieMat: std({ color: 0x2b2434, roughness: 0.75 }),
+      skip: function (x, z) { return z > -86.6 && x > -7.5 && x < 15.5; }   // no legs through the station and its platform
+    });
+    pkCoPlan(E);
+    // the station: platform on the promenade side, boom gates at the train, a canopy with the name
+    pkCoPlatform(g, -5.0, 14.5, -84.2, -81.7, th, 1.0);
+    var a = pkAttr({
+      id: 'wildhunt', name: 'The Wild Hunt', x: p.x, z: p.z,
+      qx: p.q[0], qz: p.q[1], qdx: 1, g: g, seats: seats,
+      board: 12, run: E.run, unload: 7, exit: [12.4, -82.7],
+      extra: E, tickRun: function (at) { pkCoRun(at); }
+    });
+    var C = pkCtl(a);
+    E.a = a;
+    pkCoGates(g, [0.6, 3.0, 5.4, 7.8, 10.2], -84.25, C, 1.0);
+    pkCoCanopy(g, -4.2, 14.0, -81.8, 2.3, 'THE WILD HUNT', th, 1.0);
+    E.cars.forEach(function (c) {
+      C.barObjs.push(function (b) { c.bar.rotation.x = -1.35 * (1 - b); });
+    });
+    pkCoPlace(E, E.uPark);
+    return a;
+  }
   // ── Registering the plots ────────────────────────────────────────
   // Pushed at load time, before the trees are scattered and before the dressing runs, so the planting
   // keeps clear, the dressing dresses them, and the booth pass gives them the standard cabins.
   PK_PLOTS.push(
     { id: 'serpent', name: 'The Serpent', x: 55, z: -77.5, r: 12.5, q: [44.5, -65], level: 12, pad: 0.93 },
     { id: 'baron', name: "Baron's Drop", x: 57, z: 19, r: 12, q: [58.6, 19], qdx: 1, level: 13, pad: 0.82, boothAt: [67.4, 9.8] },   // the line runs east from the gate: the train comes home up the west side
-    { id: 'nocturne', name: 'Nocturne', x: -50, z: -94.75, r: 16, q: [-59.1, -76.4], qdx: 1, level: 14, pad: 0.02 },
-    { id: 'wreck', name: 'The Wreck', x: -20, z: -94.75, r: 16, q: [-29.1, -76.4], qdx: 1, level: 15, pad: 0.02 },
-    { id: 'moonwood', name: 'Moonwood', x: 30, z: -94.75, r: 16, q: [39.1, -76.4], qdx: -1, level: 16, pad: 0.02 }
+    // The Wild Hunt stands where the three indoor halls were: one big outdoor coaster across the north strip, the length of
+    // the old halls and then some. It takes the place of Nocturne, The Wreck and Moonwood in one go.
+    { id: 'wildhunt', name: 'The Wild Hunt', x: -8, z: -94, r: 30, q: [-1.0, -80.2], qdx: 1, level: 15, pad: 0.02, boothAt: [-8.6, -78.6] }
   );
   // the kids' area on the west lawn
   PK_PLOTS.push(
@@ -556,23 +613,19 @@
   PK_THEME.kpuffin = { a: 0x8a6a4a, b: 0xf0c04a, ground: 0x9ab07a, name: 'Puffin Line' };
   PK_THEME.serpent = { a: 0x2f8f6f, b: 0xf0c04a, ground: 0x9aab8c, name: 'The Serpent', noBunting: true, noDecor: true };
   PK_THEME.baron = { a: 0x8a3b2c, b: 0xd8c9a8, ground: 0xa89a8a, name: "Baron's Drop", noBunting: true, noDecor: true };
-  PK_THEME.nocturne = { a: 0x8f7bd6, b: 0xd8dcff, ground: 0x767b93, name: 'Nocturne', noBunting: true, noDecor: true };
-  PK_THEME.wreck = { a: 0xd8a24a, b: 0x6a4f33, ground: 0x8a7c66, name: 'The Wreck', noBunting: true, noDecor: true };
-  PK_THEME.moonwood = { a: 0x8fd3c7, b: 0xc9a06a, ground: 0x7c7058, name: 'Moonwood', noBunting: true, noDecor: true };
+  PK_THEME.wildhunt = { a: 0x3a2a4a, b: 0xc9a227, ground: 0x5a5548, name: 'The Wild Hunt', noBunting: true, noDecor: true };
   // the spurs from the North Promenade up to the queues, and the kids' lane from the Fairground avenue down into the kids'
   // garden, west of the carousel, past the three little rides' gateways
   PK_ROUTES.push(
     [35, -60, 35, -65, 4.2, 'coaster'], [35, -65, 41, -65, 4.2, 'coaster'],
-    [-46.5, -60, -31, -60, 5, 'dark'],
-    [-46.5, -60, -46.5, -76.4, 3.4, 'dark'], [-16.5, -60, -16.5, -76.4, 3.4, 'dark'], [26.5, -60, 26.5, -76.4, 3.4, 'coaster'],
+    [-38, -60, -20, -60, 5, 'dark'], [-14, -60, -1, -60, 5, 'dark'], [-1, -60, -1, -81.6, 4.6, 'dark'],   // the Wild Hunt's approach and its queue apron
     [-46.8, 5.4, -46.8, 50, 3.4, 'fair']
   );
   PK_KEEP.push([35.5, -62.5, 5.5], [42.5, -65.5, 5], [-38.5, 42, 6.5]);
 
   function pkCoastersBuild() {
     var makers = {
-      serpent: pkBuildSerpent, baron: pkBuildBaron,
-      nocturne: pkBuildIndoor, wreck: pkBuildIndoor, moonwood: pkBuildIndoor,
+      serpent: pkBuildSerpent, baron: pkBuildBaron, wildhunt: pkBuildWildHunt,
       kround: pkBuildKiddie, kpots: pkBuildKiddie, kpuffin: pkBuildPuffin
     };
     PK_PLOTS.forEach(function (p) {
