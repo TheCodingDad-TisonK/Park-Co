@@ -411,7 +411,7 @@
   // so a booth screen can show real footage (the queue, the platform, the lift) instead of a drawn schematic. With a
   // booth on every ride that is a lot of extra draws, so a feed only renders while the player is near and facing it, and
   // never more than one feed draws in a frame (the extra render is a full scene pass, so it has to stay cheap).
-  var PK_FEEDS = [], PK_FEED_RANGE = 30, PK_FEED_NEXT = 0;
+  var PK_FEEDS = [], PK_FEED_RANGE = 30, PK_FEED_NEXT = 0, PK_FEED_T = 0;
   function pkCctvFeed(parent, x, y, z, ry, tilt, camPos, lookAt, power) {
     var g = new THREE.Group(); g.rotation.order = 'YXZ'; g.position.set(x, y, z); g.rotation.y = ry || 0; g.rotation.x = tilt || 0; parent.add(g);
     pkBevelBox(0.5, 0.36, 0.12, pkBkStd({ color: 0x23292e, roughness: 0.5, metalness: 0.3 }), 0, 0, -0.065, g, 0.02);
@@ -426,8 +426,13 @@
     PK_FEEDS.push({ rt: rt, cam: cam, mesh: mesh, led: led, power: power, on: true, g: g, pos: null });
     return g;
   }
-  hook('frame', function () {
+  hook('frame', function (dt) {
     if (!PK_FEEDS.length) return;
+    // A live picture only needs a few frames a second. Rendering it every frame was a second full pass over the park,
+    // which is the whole frame again: standing in a booth halved the frame rate. Four frames a second reads as live.
+    PK_FEED_T -= dt || 0;
+    if (PK_FEED_T > 0) return;
+    PK_FEED_T = 0.25;
     var px = camera.position.x, pz = camera.position.z, r2 = PK_FEED_RANGE * PK_FEED_RANGE;
     var cf = new THREE.Vector3(); camera.getWorldDirection(cf);
     var fx = cf.x, fz = cf.z, fl = Math.hypot(fx, fz); if (fl < 1e-4) { fx = 0; fz = 1; } else { fx /= fl; fz /= fl; }

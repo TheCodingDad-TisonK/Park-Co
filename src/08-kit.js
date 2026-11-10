@@ -403,19 +403,17 @@
   }
   // trees: lumpy leaf crowns on a rounded trunk. The crowns share one handful of geometries and the textured leaf materials, so a
   // hundred trees stay cheap and fuse into the baked world. Every fourth seed is a tall oval crown (a poplar) for a change of line.
+  // Four crowns, not six: from any path in the park the extra two blobs only added triangles.
   function pkTree(x, z, s, parent, seed) {
     var M = pkMats(); s = s || 1; seed = seed === undefined ? Math.abs(Math.round(x * 13 + z * 7)) : seed;
     var g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = seed * 0.9; parentOf(parent).add(g);
     var C = pkCrownGeos(), tall = seed % 4 === 0, th = (tall ? 3.3 : 2.7) * s;
     var v = Math.abs(Math.round(seed)), leaves = M.treeLeaves[v % M.treeLeaves.length];
     pkRoundCyl(0.17 * s, th, M.treeBark, 0, th / 2, 0, g, 8);
-    if (!tall) {
-      pkRod(0, 2.1 * s, 0, 0.9 * s, 3.3 * s, 0.3 * s, 0.07 * s, M.treeBark, g, 6);
-      pkRod(0, 2.4 * s, 0, -0.7 * s, 3.6 * s, -0.4 * s, 0.06 * s, M.treeBark, g, 6);
-    }
+    if (!tall) pkRod(0, 2.1 * s, 0, 0.9 * s, 3.3 * s, 0.3 * s, 0.07 * s, M.treeBark, g, 6);
     var blobs = tall
-      ? [[0, 3.7, 0, 1.05], [0.15, 4.7, 0.1, 0.95], [-0.15, 5.6, 0, 0.75], [0.35, 4.0, -0.3, 0.8], [-0.4, 4.4, 0.3, 0.8]]
-      : [[0, 4.0, 0, 1.45], [0.95, 3.5, 0.3, 1.05], [-0.9, 3.7, -0.4, 1.1], [0.2, 4.8, 0.25, 1.0], [-0.3, 3.4, 0.8, 0.9], [0.5, 3.5, -0.85, 0.85]];
+      ? [[0, 3.7, 0, 1.05], [0.15, 4.7, 0.1, 0.95], [-0.15, 5.6, 0, 0.75], [0.35, 4.0, -0.3, 0.8]]
+      : [[0, 4.0, 0, 1.45], [0.95, 3.5, 0.3, 1.05], [-0.9, 3.7, -0.4, 1.1], [0.2, 4.8, 0.25, 1.0]];
     blobs.forEach(function (b, i) {
       var m = new THREE.Mesh(C[(seed + i) % 4], leaves[(v + i) % leaves.length]), r = b[3] * s * 2;
       m.scale.set(r, r * (tall ? 1.3 : 0.92), r); m.position.set(b[0] * s, b[1] * s, b[2] * s); m.rotation.y = (seed + i) * 1.3;
@@ -428,8 +426,8 @@
     var g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = seed * 0.7; parentOf(parent).add(g);
     var cones = M.conifer[Math.abs(Math.round(seed)) % M.conifer.length];
     pkRoundCyl(0.14 * s, 1.6 * s, M.treeBark, 0, 0.8 * s, 0, g, 8);
-    [[1.0, 2.2, 1.9], [1.65, 1.9, 1.6], [2.3, 1.6, 1.35], [2.95, 1.25, 1.1], [3.55, 0.85, 0.9]].forEach(function (t, i) {
-      var m = new THREE.Mesh(new THREE.ConeGeometry(t[1] * s, t[2] * s, 10), cones[i % cones.length]);
+    [[1.0, 2.2, 1.9], [1.65, 1.9, 1.6], [2.3, 1.6, 1.35], [2.95, 1.25, 1.1]].forEach(function (t, i) {
+      var m = new THREE.Mesh(new THREE.ConeGeometry(t[1] * s, t[2] * s, 9), cones[i % cones.length]);
       m.position.set(0, (t[0] + t[2] / 2) * s, 0); m.castShadow = true; m.receiveShadow = true; g.add(m);
     });
     return g;

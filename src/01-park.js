@@ -385,12 +385,15 @@
       }
     });
     // trees: a seeded scatter over the park, skipping the rides, the routes and the midway.
-    // broadleafs with a conifer mixed in, each seeded so it keeps its shape - and the park keeps its trees from one load to the next
+    // broadleafs with a conifer mixed in, each seeded so it keeps its shape - and the park keeps its trees from one load to the next.
+    // The park was over-planted: the woods held more triangles than every building together. The scatters below are thinned
+    // (about half of what stood), and CO.pkTreeDensity thins them further on medium and low quality.
+    var TD = (CO.pkTreeDensity ? CO.pkTreeDensity() : 1);
     var rng = pkRng(20260418);
     for (var tx = -68; tx <= 68; tx += 9) {
       for (var tz = -92; tz <= 26; tz += 9) {
         var px = tx + (rng() - 0.5) * 6, pz = tz + (rng() - 0.5) * 6, keep = rng(), ps = 0.85 + rng() * 0.8;
-        if (keep < 0.42 || !pkTreeOK(px, pz)) continue;
+        if (keep < 0.28 * TD || !pkTreeOK(px, pz)) continue;
         var seed = Math.abs(Math.round(px * 13 + pz * 7));
         if (seed % 5 === 0) pkConifer(px, pz, ps, null, seed); else pkTree(px, pz, ps, null, seed);
       }
@@ -400,7 +403,7 @@
     for (tx = 76; tx <= 120; tx += 8) {
       for (tz = -114; tz <= 26; tz += 8) {
         px = tx + (rng4() - 0.5) * 5; pz = tz + (rng4() - 0.5) * 5; keep = rng4(); ps = 0.85 + rng4() * 0.8;
-        if (keep < 0.35 || !pkTreeOK(px, pz)) continue;
+        if (keep < 0.24 * TD || !pkTreeOK(px, pz)) continue;
         seed = Math.abs(Math.round(px * 13 + pz * 7));
         if (seed % 5 === 0) pkConifer(px, pz, ps, null, seed); else pkTree(px, pz, ps, null, seed);
       }
@@ -410,7 +413,7 @@
     for (tx = -68; tx <= 68; tx += 9) {
       for (tz = -113; tz <= -104; tz += 9) {
         px = tx + (rng3() - 0.5) * 6; pz = tz + (rng3() - 0.5) * 5; keep = rng3(); ps = 0.85 + rng3() * 0.8;
-        if (keep < 0.42 || !pkTreeOK(px, pz)) continue;
+        if (keep < 0.28 * TD || !pkTreeOK(px, pz)) continue;
         seed = Math.abs(Math.round(px * 13 + pz * 7));
         if (seed % 5 === 0) pkConifer(px, pz, ps, null, seed); else pkTree(px, pz, ps, null, seed);
       }
@@ -422,7 +425,7 @@
         if (fx > PK_PARK.x0 - 3 && fx < PK_PARK.x1 + 3 && fz > PK_PARK.z0 - 3 && fz < 71) continue;   // the park and a breathing margin
         if (fz >= 72 && fz <= 80) continue;                         // the road runs along z 76
         var jx = (rng2() - 0.5) * 4, jz = (rng2() - 0.5) * 4, thin = rng2(), sc = 0.95 + rng2() * 1.2;
-        if (thin < 0.28) continue;                                  // thin the ring a little
+        if (thin < 0.45 + (1 - TD) * 0.4) continue;                 // thin the ring, harder on the lower quality levels
         var qx = fx + jx, qz = fz + jz, qseed = Math.abs(Math.round(qx * 13 + qz * 7));
         if (typeof pkXpClear === 'function' && pkXpClear(qx, qz)) continue;   // part 46: felled for the expansion site and the viaduct
         if (qseed % 4 === 0) pkConifer(qx, qz, sc, null, qseed); else pkTree(qx, qz, sc, null, qseed);
@@ -439,7 +442,7 @@
         var ojx = (rng5() - 0.5) * 6, ojz = (rng5() - 0.5) * 6, othin = rng5(), osc = 0.95 + rng5() * 1.2;
         if (ox > -92 && ox < 140 && oz > -131 && oz < 92) continue;                // the park and the ring above
         if (oz > 66 && oz < 98 && ox > -126 && ox < 106) continue;                  // the road, its pavement and what stands along it
-        if (othin < 0.3) continue;                                                  // thin it a little, as the ring is
+        if (othin < 0.5 + (1 - TD) * 0.4) continue;                                 // thinner still: nobody walks out here
         var ofx = ox + ojx, ofz = oz + ojz, oseed = Math.abs(Math.round(ofx * 13 + ofz * 7));
         if (typeof pkThemeKeepClear === 'function' && pkThemeKeepClear(ofx, ofz)) continue;
         if (ofx > 4 && ofx < 136 && ofz > -176 && ofz < -118) continue;          // the railway's depot, its yard and TOW-1's bay (parts 41, 47)
@@ -709,8 +712,9 @@
     scene.fog.near = Math.max(10, PK_FOG.near - ov * PK_FOG.near * 0.29);
     scene.fog.far = Math.max(24, PK_FOG.far - ov * PK_FOG.far * 0.37);
     // nothing past the fog's far edge is visible, so cull it: the camera no longer draws (or shadow-tests) fully fogged geometry.
-    // Keep 210 m as the floor so the sun and moon (held 200 m out) are never frustum-culled.
-    var far = Math.max(scene.fog.far, 210);
+    // The floor is 175 m: the sky dome is 150 m out (part 98 pulls it in), so it is always inside the far plane, and the
+    // old 210 m floor both clipped the dome (the hard circle people saw in the sky) and drew 100 m of fogged-out park.
+    var far = Math.max(scene.fog.far + 60, 175);
     if (camera.far !== far) { camera.far = far; camera.updateProjectionMatrix(); }
   }
   hook('lighting', function (day, dawn, overcast, power) {
