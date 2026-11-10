@@ -23,14 +23,13 @@ or `node_modules/co-engine` by hand.
 
 ## Still open
 
-- [ ] Quality levels: verify high / medium / low on a real GPU and tune the cull distances (the three now differ in
-      draw distance and tree density, but the frame is draw-call bound, so the gap is smaller than it should be).
-- [ ] Pathing: the heap finder still gives up on some long routes (it falls back to the engine's). Find out why and
-      raise `NAV.steps`.
-- [ ] The moving-group merge (part 98, `PK_MERGE_DYNAMIC`) is off: merging a group's own meshes welded the parts the
+- [ ] Trains: the carriages of the Lindenburg Railway are still built from hundreds of meshes each. `pkMergeShell` could
+      be applied to them with the doors and the clock hands kept out; that is the biggest single draw saving left.
+- [ ] The moving-group merge (part 98, `pkMergeDynamic`) stays off: merging a group's own meshes welded the parts the
       game animates inside it (levers, keys, gates, doors, lap bars). Re-enable only with a way to know what a group's
       animation touches.
-- [ ] The trains' carriages are still built from hundreds of meshes each; `pkMergeShell` could be applied to them with
-      the doors kept out.
+- [ ] Check the quality levels on the player's GPU: the dev box is draw-bound, so high/medium/low read 21/25/29 fps
+      there. The draw counts (3,068 / 2,350 / 1,916 from the gate) are the honest measure of the work.
 - [ ] Re-check in game: the flume's station house from the queue side; the Baron's gatehouse sightlines from the
       station; the Wild Hunt's gate canopies at night.
+- [ ] The visual suite's shots are not in git; run `npm run visual` after a change to look at them.
