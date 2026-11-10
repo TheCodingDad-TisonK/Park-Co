@@ -428,16 +428,23 @@
   // A dive coaster in the south-east: a long straight station, the near-vertical lift, a slow turn at the top, a straight
   // vertical drop into a tunnel mouth in the rockery, a loop along the east fence (clear of the lift), then round the corner,
   // back along the fence over a camelback and up the west side into the station.
+  // ── Baron's Drop ─────────────────────────────────────────────────
+  // The remodel: the vertical loop is gone. The Baron is a double-dive now. Out of the station the near-vertical lift
+  // takes the car to 21 m, the top turn lines it up, and the first drop falls straight into the tunnel mouth in the
+  // rockery. Out of the tunnel it climbs the south-east corner and drops a second time, shallower but steeper, into a
+  // splash basin beside the fence; then the long banked run home past the gatehouse.
   var PK_BARON_PTS = [
     [48.4, 0.95, 15.5], [50.8, 0.95, 15.5], [53.2, 0.95, 15.5], [55.6, 0.95, 15.5], [58, 0.95, 15.5], [60.4, 0.95, 15.5],
     [62.8, 0.95, 15.5], [64.6, 2, 16], [65.4, 6, 16.6], [65.8, 11.5, 17.3], [65.6, 16.5, 18.3], [64.4, 20.6, 19.6],
     [61.6, 21.2, 20.8], [60.2, 21.2, 21.1], [57.9, 21.1, 21.9], [56.2, 20.7, 22.5], [56, 19, 22.55], [55.95, 12, 22.55],
     [55.9, 4, 22.55], [55.9, 1.6, 22.5], [56.4, 1.15, 22.1], [57.6, 1.6, 20.8], [59.4, 2.2, 20.2], [61.8, 2.6, 20.6],
-    [64.2, 3.4, 21.4], [65.6, 4.4, 22.6], [65.8, 5, 23.6], [65.97, 5.4, 25.34], [66.14, 6.51, 26.73], [66.31, 8.11, 27.5],
-    [66.49, 9.89, 27.5], [66.66, 11.49, 26.73], [66.83, 12.6, 25.34], [67, 13, 23.6], [67.17, 12.6, 21.86], [67.34, 11.49, 20.47],
-    [67.51, 9.89, 19.7], [67.69, 8.11, 19.7], [67.86, 6.51, 20.47], [68.03, 5.4, 21.86], [68.2, 5, 23.6], [68.6, 4.6, 25.8],
-    [67.4, 4.2, 28.1], [64.4, 3.6, 28.7], [61.2, 4.6, 28.7], [58.2, 6, 28.7], [55.2, 3, 28.7], [51.6, 2, 28.5],
-    [48.2, 1.8, 27.6], [46.6, 1.4, 25.4], [46.4, 1.05, 22.6], [46.4, 0.95, 19.8], [46.7, 0.95, 17.4], [47.4, 0.95, 16]
+    [64.2, 3.4, 21.4], [65.6, 4.6, 22.6],                                   // out of the tunnel, into the climb
+    [67.0, 6.4, 24.2], [67.9, 8.6, 26.0], [68.1, 10.4, 27.6],               // the second climb
+    [67.6, 6.0, 29.4], [66.4, 2.2, 30.2],                                   // the second, steeper drop
+    [64.0, 1.6, 30.2], [61.0, 1.4, 30.0],                                   // the splash run
+    [58.0, 4.2, 29.8], [55.0, 6.6, 29.6], [52.0, 4.0, 29.4],                // the banked camelback
+    [49.0, 2.2, 28.6], [47.0, 1.4, 27.0], [46.4, 1.05, 24.6],               // the west turn
+    [46.4, 0.95, 21.8], [46.5, 0.95, 19.0], [46.8, 0.95, 16.8], [47.4, 0.95, 16]
   ];
   function pkBuildBaron(p) {
     var th = PK_THEME.baron, i;
@@ -466,6 +473,15 @@
     pkCoBrace(g, 54.6, 22.55, 18.4, 55.7, 18.2, 22.55, supMat);
     pkCoBrace(g, 57.3, 22.55, 18.4, 56.1, 18.2, 22.55, supMat);
     pkCoPlan(E);
+    // the splash basin under the second drop: a stone rim, the water, and rocks along the fence side
+    var splash = { x: 62.4, z: 30.0, u: pkCoUAt(curve, 62.4, 30.0) };
+    [[62.4, 28.4, 9.4, 0.5], [62.4, 31.6, 9.4, 0.5], [57.9, 30.0, 0.5, 3.2], [66.9, 30.0, 0.5, 3.2]].forEach(function (w) {
+      box(w[2], 0.75, w[3], pkMatStone(), w[0], 0.37, w[1], g);
+    });
+    var bwater = new THREE.Mesh(new THREE.PlaneGeometry(8.8, 3.0), pkMats().water);
+    bwater.rotation.x = -Math.PI / 2; bwater.position.set(splash.x, 0.5, splash.z); g.add(bwater);
+    for (var sb = 0; sb < 7; sb++) pkBoulder(58.4 + sb * 1.25, 31.9 + randf(-0.2, 0.2), randf(0.6, 1.05), g);
+    E.splash = splash;
     // the tunnel mouth: a stone ring round the track, a dark bore, and the rockery heaped over it
     var uT = pkCoUAt(curve, 56.9, 21.6);
     var pT = curve.getPointAt(uT), tT = curve.getTangentAt(uT).normalize();
@@ -523,7 +539,17 @@
       id: 'baron', name: "Baron's Drop", x: p.x, z: p.z,
       qx: p.q[0], qz: p.q[1], qdx: -1, g: g, seats: seats,
       board: 10, run: E.run, unload: 6, exit: [52.4, 17.4],
-      extra: E, tickRun: function (at) { pkCoRun(at); }
+      extra: E, tickRun: function (at) {
+        pkCoRun(at);
+        // a sheet of spray where the car crosses the basin: the second drop lands in it
+        var X = at.extra, M = X.uOfF ? X.uOfF.length - 1 : 0;
+        if (M < 1) return;
+        var f = at.state === 'running' ? clamp(at.t / at.run, 0, 1) * M : 0;
+        var k = Math.min(M - 1, Math.floor(f)), rr = f - k;
+        var u = (X.u0 + X.uOfF[k] + (X.uOfF[k + 1] - X.uOfF[k]) * rr) % 1;
+        if (X._pu !== undefined && X._pu < splash.u && u >= splash.u) burst(splash.x, 1.3, splash.z, 0xbfe6ff, 46, 'up');
+        X._pu = u;
+      }
     });
     var C = pkCtl(a);
     E.a = a;

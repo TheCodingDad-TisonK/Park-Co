@@ -33,10 +33,13 @@ The park's frame rate, the north end and the guests, in one pass.
 ## Rides
 - **The Wild Hunt** takes the place of Nocturne, The Wreck and Moonwood: one big outdoor coaster on the north strip,
   167 m of track, a 26 m crest, 65 km/h, six cars and twelve seats, with its own station, queue, booth and breaker.
-- **The Log Flume** is a timber mill now: a boarded station house with a slate roof, a name board, lanterns and a bench,
-  a working water wheel in the race beside the splash pool, a rock gorge over the drop and reeds round the water.
-- **Baron's Drop** has a gatehouse: a stone tower with a cone roof, banner and lantern, a battlemented wall behind the
-  platform, braziers at the boarding edge and the Baron's crest over the canopy.
+- **The Log Flume** is a double-drop chute now: the chain lifts the log eleven metres, the long chute throws it into a
+  rock gorge and its pool, the channel turns east through a boulder tunnel, climbs a second, shorter lift and drops
+  again into a second basin beside the mill race, then runs home round the north end of the station. The station is a
+  timber mill house with a slate roof, name board, lanterns and a bench, and the water wheel turns in the race.
+- **Baron's Drop** is a double dive now: the vertical loop is gone, replaced by a second climb in the south-east corner
+  and a steeper second drop into a splash basin under the fence, with the long banked run home past the gatehouse tower,
+  battlements and braziers.
 
 ## 1.7.6 (2026-11-08): Security Update
 

@@ -551,7 +551,7 @@
       },
       "bandstand": {
         "x": 2,
-        "z": -66
+        "z": -52
       },
       "coasterCountry": {
         "x": 40,

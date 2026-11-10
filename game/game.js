@@ -4471,7 +4471,7 @@
       },
       "bandstand": {
         "x": 2,
-        "z": -66
+        "z": -52
       },
       "coasterCountry": {
         "x": 40,
@@ -8820,10 +8820,20 @@
     return a;
   }
   // ── The log flume ────────────────────────────────────────────────
-  // One closed course: a dock, a lift, a run along the top, a drop into the splash pool, a turn and a long return to the dock.
-  // The boats go round once per ride, so every boat is back at the dock when it stops.
-  var PK_FLUME_PTS = [[0, 0.25, 10], [0, 0.25, 2], [0, 7.5, -5], [0, 7.5, -10], [0, 0.35, -17.5], [0, 0.25, -23], [1.3, 0.25, -25.6], [3.6, 0.25, -26.6], [5.9, 0.25, -25.6], [7.2, 0.25, -23],
-    [7.2, 0.25, 8.6], [6.3, 0.25, 11.8], [3.6, 0.25, 13.2], [0.9, 0.25, 12.2]];
+  // A double-drop chute now: out of the dock the chain lifts the log eleven metres up the west of the course, over the
+  // crest and down the long chute into the first splash pool; the channel turns east, climbs a second, shorter lift and
+  // drops again beside a mill race, then runs home along the east side and round the north end of the station.
+  // The order round the lap is the order of this list; the boats ride it as one closed loop.
+  var PK_FLUME_PTS = [
+    [0, 0.25, 10.5], [0, 0.25, 6], [0, 0.3, 1.5],                                              // the dock
+    [0, 1.2, -1.2], [0, 4.6, -4.2], [0, 8.2, -7.2], [0, 10.8, -10.4],                          // the chain lift
+    [0, 11.2, -13.4],                                                                          // the crest
+    [0, 9.6, -15.6], [0, 5.2, -17.6], [0, 1.2, -19.0],                                         // the long chute
+    [0.8, 0.5, -21.6], [2.8, 0.35, -23.6], [5.2, 0.35, -24.8], [6.9, 0.6, -22.6],               // the turn out of the pool
+    [7.2, 1.6, -18.8], [7.2, 3.4, -14.8], [7.1, 3.8, -11.2],                                   // the second lift (through the tunnel)
+    [7.0, 2.6, -8.6], [6.9, 0.7, -6.4],                                                        // the second drop
+    [6.6, 0.35, -3.4], [6.2, 0.3, 1.0], [5.6, 0.28, 5.6], [4.2, 0.26, 9.6], [2.4, 0.25, 12.0], [1.4, 0.25, 12.6]   // home round the house
+  ];
   function pkBuildFlume(p, open) {
     var M = pkMats(), g = new THREE.Group(); g.position.set(p.x, 0, p.z); scene.add(g);
     var PTS = PK_FLUME_PTS, N = PTS.length, lens = [], total = 0;
@@ -8846,17 +8856,33 @@
       }
       if (Math.max(A2[1], B2[1]) < 1.4) solid(p.x + Math.min(A2[0], B2[0]) - 1.35, p.x + Math.max(A2[0], B2[0]) + 1.35, p.z + Math.min(A2[2], B2[2]) - 1.35, p.z + Math.max(A2[2], B2[2]) + 1.35, 0, 1.2);
     }
-    // the lift: a chain up the middle of the climb, and the plant room at the top
-    box(2.8, 2.4, 2.6, pkPaint(0x8a6a4a, 0.85, 0), 2.3, 8.7, -7.5, g);
-    pkHipRoof(3.3, 3.1, 1.0, M.slate, 2.3, 9.9, -7.5, g);
-    // the splash pool: a stone basin round the foot of the drop, the water, and rocks
-    [[0, -14.2, 11.0, 0.5], [0, -24.0, 11.0, 0.5], [-5.3, -19.1, 0.5, 10.2], [5.3, -19.1, 0.5, 10.2]].forEach(function (w) { box(w[2], 0.7, w[3], M.stoneDark, w[0], 0.35, w[1], g); });
-    var pool = new THREE.Mesh(new THREE.PlaneGeometry(10.1, 9.3), M.water); pool.rotation.x = -Math.PI / 2; pool.position.set(0, 0.42, -19.1); g.add(pool); waters.push(pool);
-    for (var rk = 0; rk < 20; rk++) {
-      var rs = randf(0.45, 1.05), side = rk % 2 ? 1 : -1;
-      if (rk > 12) pkBoulder(randf(-3, 9), randf(-30, -27.5), rs, g);
-      else pkBoulder(side * randf(2.6, 4.6), randf(-23, -15), rs, g);
+    // the lift: a chain up the middle of the climb, and the plant room at the crest
+    box(2.8, 2.4, 2.6, pkPaint(0x8a6a4a, 0.85, 0), 1.6, 12.0, -14.6, g);
+    pkHipRoof(3.3, 3.1, 1.0, M.slate, 1.6, 13.2, -14.6, g);
+    // ── The two splash pools ────────────────────────────────────────
+    // Each chute throws the log into a stone basin. The first is the big one under the eleven-metre drop; the second,
+    // smaller, sits under the short chute by the mill race.
+    var pools = [{ x: 0, z: -20.4, w: 8.6, d: 6.6 }, { x: 6.8, z: -5.2, w: 5.6, d: 4.6 }];
+    pools.forEach(function (P) {
+      [[P.x, P.z - P.d / 2, P.w, 0.5], [P.x, P.z + P.d / 2, P.w, 0.5], [P.x - P.w / 2, P.z, 0.5, P.d], [P.x + P.w / 2, P.z, 0.5, P.d]].forEach(function (w) {
+        box(w[2], 0.7, w[3], M.stoneDark, w[0], 0.35, w[1], g);
+      });
+      var pl = new THREE.Mesh(new THREE.PlaneGeometry(P.w - 0.5, P.d - 0.5), M.water);
+      pl.rotation.x = -Math.PI / 2; pl.position.set(P.x, 0.42, P.z); g.add(pl); waters.push(pl);
+    });
+    // the rock gorge round the first pool, and the mouth of the tunnel over the second lift
+    for (var rk = 0; rk < 18; rk++) {
+      var rs = randf(0.5, 1.15), side = rk % 2 ? 1 : -1;
+      pkBoulder(pools[0].x + side * randf(4.2, 5.8), pools[0].z + randf(-3.4, 3.4), rs, g);
     }
+    for (var rk2 = 0; rk2 < 6; rk2++) pkBoulder(pools[0].x + randf(-3.6, 3.6), pools[0].z - 4.2 - randf(0, 0.8), randf(0.7, 1.3), g);
+    // a boulder tunnel over the second lift: a rock mound with the chute running through a bore in it
+    for (var tb = 0; tb < 16; tb++) {
+      var tz = -17.6 + (tb % 8) * 0.55, sgn = tb < 8 ? -1 : 1;
+      pkBoulder(7.2 + sgn * randf(1.5, 2.6), tz, randf(0.9, 1.6), g);
+    }
+    var bore = new THREE.Mesh(new THREE.CylinderGeometry(1.55, 1.55, 5.2, 14, 1, true), std({ color: 0x2a2a26, roughness: 1, side: THREE.DoubleSide }));
+    bore.rotation.x = Math.PI / 2; bore.position.set(7.2, 3.2, -15.0); g.add(bore);
     // the station deck along the dock; the mill house in the remodel below is its walls and roof now
     var lane = p.x < 0 ? 1 : -1;
     box(5.0, 0.12, 10.5, MAT.wood, lane * 3.95, 0.06, 7.0, g);
@@ -8889,7 +8915,10 @@
     var dockX = lane * 1.5, gw = 1.8, berths = boats.map(function (bt) { return clamp(bt.g.position.z, 2.8, 11.2); }).sort(function (q1, q2) { return q1 - q2; });
     var railFrom = 1.8;
     berths.concat([12.2 + gw / 2 + 0.06]).forEach(function (gzz) { var z1 = gzz - gw / 2 - 0.06; if (z1 - railFrom > 0.3) pkRailRun(p.x + dockX, p.z + railFrom, p.x + dockX, p.z + z1, { solid: true }); railFrom = gzz + gw / 2 + 0.06; });
-    var dropU = (lens[0] + lens[1] + lens[2] + lens[3] * 0.98) / total;
+    // where each chute meets its pool, as a fraction of the lap: the boats throw up a splash when they cross one
+    var cum = [0], splashes = [];
+    for (var c = 0; c < N; c++) cum.push(cum[c] + lens[c]);
+    [10, 19].forEach(function (vi) { splashes.push({ u: cum[vi] / total, x: p.x + PTS[vi][0], z: p.z + PTS[vi][2] }); });
     var a = pkAttr({ id: 'flume', name: 'Log flume', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats, board: 10, run: 30, unload: 5,
       tickRun: function (at, dt) {
         M.waterTex.offset.y -= dt * 0.35;
@@ -8900,7 +8929,10 @@
           bt.u = bt.u0 + f;
           placeBoat(bt, bt.u);
           var pu = ((prev % 1) + 1) % 1, nu = ((bt.u % 1) + 1) % 1;
-          if (pu < dropU + 0.04 && nu >= dropU + 0.04) burst(p.x, 0.8, p.z - 17.5, 0x9fd8ff, 34, 'up');
+          for (var sp = 0; sp < splashes.length; sp++) {
+            var S = splashes[sp];
+            if (pu < S.u + 0.03 && nu >= S.u + 0.03) burst(S.x, 0.8, S.z, 0x9fd8ff, sp ? 22 : 38, 'up');
+          }
         }
       } });
     a.extra.boats = boats;
@@ -8935,8 +8967,8 @@
     // a paved apron from the queue to the house
     for (var apz = 2.4; apz < 12.0; apz += 2.0) pkPavedDisc(1.7, M.paversWarm, p.x + WX + lane * 1.6, 0.045, p.z + apz, null, 1.0);
     // the wheel: a stone head-race under it, a timber axle, twelve paddles, turning in the water. It stands on the west
-    // side of the pool, clear of the return trough on the east.
-    var wheelX = -6.6, wheelZ = -19.1;
+    // side of the big pool, where the long chute comes down.
+    var wheelX = -6.4, wheelZ = -20.4;
     box(1.2, 1.3, 4.4, M.stone, wheelX - 0.9, 0.65, wheelZ, g);
     box(1.0, 0.5, 4.4, M.stoneDark, wheelX - 0.9, 1.35, wheelZ, g);
     var wheel = new THREE.Group(); wheel.position.set(wheelX, 2.1, wheelZ); g.add(wheel);
@@ -8952,15 +8984,11 @@
     animate(function (dt) { if (wheel) wheel.rotation.x += dt * 0.5; });
     // the tail race: a sheet of water from the wheel back into the pool
     var race = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 3.2), M.water); race.rotation.x = -Math.PI / 2; race.position.set(wheelX + 1.0, 0.44, wheelZ); g.add(race); waters.push(race);
-    // a rock arch over the drop, so the splash comes out of a gorge rather than over a bare lip
-    [[-5.9, -16.2, 1.5], [-5.7, -18.6, 1.7], [5.9, -16.4, 1.5], [5.7, -18.8, 1.6], [-2.2, -24.9, 1.3], [2.4, -25.1, 1.35]].forEach(function (rk) {
-      for (var q = 0; q < 3; q++) pkBoulder(rk[0] + randf(-0.5, 0.5), rk[1] + randf(-0.6, 0.6), rk[2] * (1 - q * 0.22), g);
-    });
-    // reeds and a couple of water lilies round the pool
-    for (var rl = 0; rl < 16; rl++) {
-      var ra = randf(0, Math.PI * 2), rr = randf(3.4, 4.9);
+    // reeds round both pools
+    for (var rl = 0; rl < 26; rl++) {
+      var pool = pools[rl % 3 === 0 ? 1 : 0], ra = randf(0, Math.PI * 2), rr = randf(1.6, 2.4) + (rl % 3 === 0 ? 0.4 : 1.6);
       var reed = new THREE.Mesh(new THREE.ConeGeometry(0.05, randf(0.6, 1.1), 5), std({ color: 0x4d6b32, roughness: 0.95 }));
-      reed.position.set(Math.cos(ra) * rr, 0.75, -19.1 + Math.sin(ra) * rr * 0.8); g.add(reed);
+      reed.position.set(pool.x + Math.cos(ra) * rr * 0.9, 0.75, pool.z + Math.sin(ra) * rr * 0.8); g.add(reed);
     }
     return a;
   }
@@ -12916,7 +12944,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       sig: { label: 'WARN HORN', sfx: 'pkDropHorn', words: 'the warning horn blares', col: 'amber' },
       ann: [['voice', 'WARN\nHORN', '#ffdf6a'], ['fall', 'FREE\nFALL', '#ff6b5e']],
       tele: function (a, C, T) { return ['H ' + T.h.toFixed(1) + ' M  V ' + (T.vy * 3.6).toFixed(0) + ' KM/H', 'G ' + T.g.toFixed(1) + '  ' + T.phase]; } },
-    flume: { style: 'timber', title: 'The Log Flume', model: 'LOG CHUTE 3 · 7.5 M DROP · 3 PUMPS', kind: 'track', seatCol: 0x7fd0ff,
+    flume: { style: 'timber', title: 'The Log Flume', model: 'DOUBLE CHUTE LC-2 · 11 M DROP · 3 PUMPS', kind: 'track', seatCol: 0x7fd0ff,
       blocks: ['DOCK', 'LIFT', 'CHANNEL', 'SPLASH'],
       g2: { unit: 'flow m3/h', min: 0, max: 2000, ticks: 4, red: 0.9, get: function (T) { return T.flow / 2000; } },
       sig: { label: 'DOCK BELL', sfx: 'pkFlumeBell', words: 'the dock bell rings', col: 'teal' },
@@ -12952,7 +12980,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       tele: function (a, C, T) { return ['CHUFF ' + (T.v * 3.6).toFixed(1) + ' KM/H', 'HAPPY RIDERS ' + a.riders + '  ' + T.block]; } },
     serpent: { style: 'scales', title: 'The Serpent', model: 'TERRAIN COASTER SST-5 · LIFT AND LAP', kind: 'track', coaster: true,
       sig: { label: 'THE HISS', sfx: 'pkHiss', words: 'the Serpent hisses', col: 'jade' } },
-    baron: { style: 'heraldic', title: "Baron's Drop", model: 'DIVE MACHINE BD-1 · 90 DEGREE DROP', kind: 'track', coaster: true,
+    baron: { style: 'heraldic', title: "Baron's Drop", model: 'DIVE MACHINE BD-2 · DOUBLE DROP · SPLASHDOWN', kind: 'track', coaster: true,
       sig: { label: 'FANFARE', sfx: 'pkBaronFanfare', words: 'the Baron is announced', col: 'brass' } },
     wildhunt: { style: 'forest', title: 'The Wild Hunt', model: 'TERRAIN LAUNCH WH-6 · THE NORTH RUN', kind: 'track', coaster: true,
       sig: { label: 'THE HORN', sfx: 'pkHiss', words: 'the hunt rides out', col: 'gold' } },
@@ -14204,16 +14232,23 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // A dive coaster in the south-east: a long straight station, the near-vertical lift, a slow turn at the top, a straight
   // vertical drop into a tunnel mouth in the rockery, a loop along the east fence (clear of the lift), then round the corner,
   // back along the fence over a camelback and up the west side into the station.
+  // ── Baron's Drop ─────────────────────────────────────────────────
+  // The remodel: the vertical loop is gone. The Baron is a double-dive now. Out of the station the near-vertical lift
+  // takes the car to 21 m, the top turn lines it up, and the first drop falls straight into the tunnel mouth in the
+  // rockery. Out of the tunnel it climbs the south-east corner and drops a second time, shallower but steeper, into a
+  // splash basin beside the fence; then the long banked run home past the gatehouse.
   var PK_BARON_PTS = [
     [48.4, 0.95, 15.5], [50.8, 0.95, 15.5], [53.2, 0.95, 15.5], [55.6, 0.95, 15.5], [58, 0.95, 15.5], [60.4, 0.95, 15.5],
     [62.8, 0.95, 15.5], [64.6, 2, 16], [65.4, 6, 16.6], [65.8, 11.5, 17.3], [65.6, 16.5, 18.3], [64.4, 20.6, 19.6],
     [61.6, 21.2, 20.8], [60.2, 21.2, 21.1], [57.9, 21.1, 21.9], [56.2, 20.7, 22.5], [56, 19, 22.55], [55.95, 12, 22.55],
     [55.9, 4, 22.55], [55.9, 1.6, 22.5], [56.4, 1.15, 22.1], [57.6, 1.6, 20.8], [59.4, 2.2, 20.2], [61.8, 2.6, 20.6],
-    [64.2, 3.4, 21.4], [65.6, 4.4, 22.6], [65.8, 5, 23.6], [65.97, 5.4, 25.34], [66.14, 6.51, 26.73], [66.31, 8.11, 27.5],
-    [66.49, 9.89, 27.5], [66.66, 11.49, 26.73], [66.83, 12.6, 25.34], [67, 13, 23.6], [67.17, 12.6, 21.86], [67.34, 11.49, 20.47],
-    [67.51, 9.89, 19.7], [67.69, 8.11, 19.7], [67.86, 6.51, 20.47], [68.03, 5.4, 21.86], [68.2, 5, 23.6], [68.6, 4.6, 25.8],
-    [67.4, 4.2, 28.1], [64.4, 3.6, 28.7], [61.2, 4.6, 28.7], [58.2, 6, 28.7], [55.2, 3, 28.7], [51.6, 2, 28.5],
-    [48.2, 1.8, 27.6], [46.6, 1.4, 25.4], [46.4, 1.05, 22.6], [46.4, 0.95, 19.8], [46.7, 0.95, 17.4], [47.4, 0.95, 16]
+    [64.2, 3.4, 21.4], [65.6, 4.6, 22.6],                                   // out of the tunnel, into the climb
+    [67.0, 6.4, 24.2], [67.9, 8.6, 26.0], [68.1, 10.4, 27.6],               // the second climb
+    [67.6, 6.0, 29.4], [66.4, 2.2, 30.2],                                   // the second, steeper drop
+    [64.0, 1.6, 30.2], [61.0, 1.4, 30.0],                                   // the splash run
+    [58.0, 4.2, 29.8], [55.0, 6.6, 29.6], [52.0, 4.0, 29.4],                // the banked camelback
+    [49.0, 2.2, 28.6], [47.0, 1.4, 27.0], [46.4, 1.05, 24.6],               // the west turn
+    [46.4, 0.95, 21.8], [46.5, 0.95, 19.0], [46.8, 0.95, 16.8], [47.4, 0.95, 16]
   ];
   function pkBuildBaron(p) {
     var th = PK_THEME.baron, i;
@@ -14242,6 +14277,15 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     pkCoBrace(g, 54.6, 22.55, 18.4, 55.7, 18.2, 22.55, supMat);
     pkCoBrace(g, 57.3, 22.55, 18.4, 56.1, 18.2, 22.55, supMat);
     pkCoPlan(E);
+    // the splash basin under the second drop: a stone rim, the water, and rocks along the fence side
+    var splash = { x: 62.4, z: 30.0, u: pkCoUAt(curve, 62.4, 30.0) };
+    [[62.4, 28.4, 9.4, 0.5], [62.4, 31.6, 9.4, 0.5], [57.9, 30.0, 0.5, 3.2], [66.9, 30.0, 0.5, 3.2]].forEach(function (w) {
+      box(w[2], 0.75, w[3], pkMatStone(), w[0], 0.37, w[1], g);
+    });
+    var bwater = new THREE.Mesh(new THREE.PlaneGeometry(8.8, 3.0), pkMats().water);
+    bwater.rotation.x = -Math.PI / 2; bwater.position.set(splash.x, 0.5, splash.z); g.add(bwater);
+    for (var sb = 0; sb < 7; sb++) pkBoulder(58.4 + sb * 1.25, 31.9 + randf(-0.2, 0.2), randf(0.6, 1.05), g);
+    E.splash = splash;
     // the tunnel mouth: a stone ring round the track, a dark bore, and the rockery heaped over it
     var uT = pkCoUAt(curve, 56.9, 21.6);
     var pT = curve.getPointAt(uT), tT = curve.getTangentAt(uT).normalize();
@@ -14299,7 +14343,17 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       id: 'baron', name: "Baron's Drop", x: p.x, z: p.z,
       qx: p.q[0], qz: p.q[1], qdx: -1, g: g, seats: seats,
       board: 10, run: E.run, unload: 6, exit: [52.4, 17.4],
-      extra: E, tickRun: function (at) { pkCoRun(at); }
+      extra: E, tickRun: function (at) {
+        pkCoRun(at);
+        // a sheet of spray where the car crosses the basin: the second drop lands in it
+        var X = at.extra, M = X.uOfF ? X.uOfF.length - 1 : 0;
+        if (M < 1) return;
+        var f = at.state === 'running' ? clamp(at.t / at.run, 0, 1) * M : 0;
+        var k = Math.min(M - 1, Math.floor(f)), rr = f - k;
+        var u = (X.u0 + X.uOfF[k] + (X.uOfF[k + 1] - X.uOfF[k]) * rr) % 1;
+        if (X._pu !== undefined && X._pu < splash.u && u >= splash.u) burst(splash.x, 1.3, splash.z, 0xbfe6ff, 46, 'up');
+        X._pu = u;
+      }
     });
     var C = pkCtl(a);
     E.a = a;
