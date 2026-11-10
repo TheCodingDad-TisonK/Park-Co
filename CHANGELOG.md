@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.7.7 (2026-11-10): The North Run
+
+The park's frame rate, the north end and the guests, in one pass.
+
+## Performance
+- **A much lighter frame.** The static bake used to hide the 60,000 meshes it had merged instead of taking them out of the
+  scene, and every frame still walked all 81,000 of them. They are removed from the graph now, the painted props merge
+  by colour into vertex-coloured batches, and a car's shell merges into a few draws while its lap bar stays its own part.
+  In a view from the gate this is 6,446 draw calls down to about 3,500.
+- **Quality levels that mean something.** The three sets used to differ only in resolution and shadow map, and changing
+  them recompiled every material in the park (a freeze), so all three ran at the same rate. High, medium and low now
+  differ in how far the scenery is drawn and how dense the woods are, without a recompile.
+- **Booth cameras** render four frames a second instead of one full pass every frame, which was the whole frame again.
+- **Fewer trees**, and four crowns a tree instead of six.
+
+## Fixed
+- **The circle in the sky.** The sky dome was built 230 m out while the camera's far plane sat at 210 m, so the dome was
+  never drawn: the "sky" was a flat background, and whenever the dome lagged the camera its near cap poked through as a
+  hard-edged circle. The dome is pulled inside the far plane and follows the eye, so the sky is a real gradient again.
+- **The flower clock and the hedge maze are gone** from the north gardens, as asked. The bandstand moved south to make
+  room for the new ride's forecourt.
+- **Guests arrive spread across the drive and the forecourt** instead of in one strip, and a spawn of twenty is put on a
+  short queue rather than built, dressed and routed in a single frame.
+- **Guest looks**: coordinated outfits from a palette instead of random primaries, with hats, glasses and a little
+  variation in height.
+- **The walk across the park** uses a heap and an octile guess, with the engine's finder kept as the fallback.
+
+## Rides
+- **The Wild Hunt** takes the place of Nocturne, The Wreck and Moonwood: one big outdoor coaster on the north strip,
+  167 m of track, a 26 m crest, 65 km/h, six cars and twelve seats, with its own station, queue, booth and breaker.
+- **The Log Flume** is a timber mill now: a boarded station house with a slate roof, a name board, lanterns and a bench,
+  a working water wheel in the race beside the splash pool, a rock gorge over the drop and reeds round the water.
+- **Baron's Drop** has a gatehouse: a stone tower with a cone roof, banner and lantern, a battlemented wall behind the
+  platform, braziers at the boarding edge and the Baron's crest over the canopy.
+
 ## 1.7.6 (2026-11-08): Security Update
 
 - Real CAM feed of several points accros the park

@@ -225,7 +225,7 @@
     // Off for now: merging inside a moving group welds shut every part the game animates *within* it (a lever's arm,
     // a door leaf, a key that turns, the restraint bar on a car). Those parts carry no dynamic flag of their own, so the
     // merge cannot tell them from the shell. Re-enable only with a way to know what a group's animation touches.
-    var PK_MERGE_DYNAMIC = true;
+    var PK_MERGE_DYNAMIC = false;
     hook('boot', function () { pkCollectStatic(); pkCullStatic(0, true); if (PK_MERGE_DYNAMIC) pkMergeDynamic(); });
     CO.pkRecollectStatic = pkCollectStatic;
 

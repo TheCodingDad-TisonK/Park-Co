@@ -3,11 +3,41 @@
   // A guest arrives from the car park, joins the shorter ticket line, buys a ticket, passes a turnstile, queues for the
   // coaster, boards when the gates open, rides, and goes home. The whole thing is a small state machine on a walk record.
   var PK_POOL = [], PK_GUEST_MAX = 200;
+  // ── Who walks in ─────────────────────────────────────────────────
+  // The engine's figure picks a shirt, a pair of trousers, a skin and a hair at random, which is how a crowd ended up in
+  // clashing primaries. Guests get a coordinated outfit instead: a palette of tops and bottoms that go together, a hat,
+  // glasses or a beard on some of them, and a little variation in height. The face and the hair are the engine's.
+  var PK_GUEST_LOOKS = [
+    { top: 0xd94f4f, bot: 0x2f3440, cap: 0xf4f1e6 }, { top: 0x4f8fd9, bot: 0x6b5a44, cap: 0x2f3440 },
+    { top: 0xf0c04a, bot: 0x3a3f48, cap: 0xd94f4f }, { top: 0x5fa86a, bot: 0x4a3b2a, cap: 0xf0c04a },
+    { top: 0xe08fc0, bot: 0x2b2b33, cap: 0xf4f1e6 }, { top: 0xf4f1e6, bot: 0x2f5d8a, cap: 0x8a3b2c },
+    { top: 0x8f7bd6, bot: 0x3a3f48, cap: 0xd8dde3 }, { top: 0x2f8f6f, bot: 0x5a4a36, cap: 0xf0c04a },
+    { top: 0xe8a23c, bot: 0x2f3440, cap: 0x2a3a5a }, { top: 0x9fb4cc, bot: 0x3a2f24, cap: 0xd94f4f }
+  ];
+  var PK_GUEST_SKIN = [0xf2d2b6, 0xe8c49b, 0xd8a97c, 0xc99266, 0xa9714a, 0x8a5a3a];
+  var PK_GUEST_HAIR = [0x2a2a2a, 0x4a3524, 0x6b4a2a, 0x8a6a3a, 0xb8b8b8, 0xd8c9a8, 0x1b1b1b];
+  var PK_GUEST_STYLE = ['short', 'short', 'short', 'long', 'long', 'bun', 'bald', 'cap'];
+  function pkGuestLook() {
+    var L = PK_GUEST_LOOKS[(Math.random() * PK_GUEST_LOOKS.length) | 0];
+    return {
+      skin: PK_GUEST_SKIN[(Math.random() * PK_GUEST_SKIN.length) | 0],
+      hair: PK_GUEST_HAIR[(Math.random() * PK_GUEST_HAIR.length) | 0],
+      style: PK_GUEST_STYLE[(Math.random() * PK_GUEST_STYLE.length) | 0],
+      shirt: std({ map: TEX.cloth, color: L.top, roughness: 0.92 }),
+      pants: std({ map: TEX.cloth, color: L.bot, roughness: 0.95 }),
+      capMat: std({ color: L.cap, roughness: 0.8 }),
+      glasses: Math.random() < 0.24,
+      rolled: Math.random() < 0.4,
+      mood: 'neutral'
+    };
+  }
   function pkTakeHuman() {
     if (PK_POOL.length) { var g = PK_POOL.pop(); g.visible = true; scene.add(g); return g; }
     // makeHuman builds the figure but does not put it in the world: without this every new guest walked, queued and rode
     // unseen, and only the odd one back from the pool showed
-    var h = makeHuman({}); scene.add(h); return h;
+    var h = makeHuman(pkGuestLook());
+    h.scale.setScalar(0.95 + Math.random() * 0.1);   // a crowd is not one height
+    scene.add(h); return h;
   }
   function pkParkHuman(g) {
     scene.remove(g);

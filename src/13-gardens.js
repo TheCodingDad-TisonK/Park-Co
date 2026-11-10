@@ -6,10 +6,10 @@
   // A park is more than its rides. These are the places to stop: somewhere to eat where the streets cross, and a garden quarter at the
   // north end where the west and east spines meet. They are scenery - nothing here is staffed or sold - but they are solid, lit and lived in.
   var PK_PLAZAS = [{ x: -31, z: 3, r: 5.6 }, { x: 35, z: 3, r: 5.6 }, { x: 2, z: -44, r: 5.6 }];   // the two crossroads, and the Garden Walk's middle
-  var PK_GARDEN = { band: { x: 2, z: -73.5 }, mill: { x: 14, z: -70 } };
+  var PK_GARDEN = { band: { x: 2, z: -52 }, mill: { x: 14, z: -70 } };   // the bandstand moved south out of the new ride's forecourt
   var PK_SAILS = null;
   PK_PLAZAS.forEach(function (p) { PK_KEEP.push([p.x, p.z, p.r + 1.5]); });
-  PK_KEEP.push([2, -73.5, 8.5], [14, -70, 7], [2, -69, 5]);
+  PK_KEEP.push([2, -52, 7], [14, -70, 7]);
 
   function pkFace(x, z, tx, tz) { return Math.atan2(tx - x, tz - z); }
 
@@ -55,7 +55,7 @@
   // ── The bandstand ────────────────────────────────────────────────
   function pkBandstand() {
     var B = PK_GARDEN.band, x = B.x, z = B.z, M = pkMats(), g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
-    pkPavedDisc(8.2, M.stoneDark, x, 0.040, z, null, 1.6); pkPavedDisc(7.8, M.paversWarm, x, 0.041, z, null, 1.4);
+    pkPavedDisc(5.6, M.stoneDark, x, 0.040, z, null, 1.6); pkPavedDisc(5.2, M.paversWarm, x, 0.041, z, null, 1.4);
     var plat = new THREE.Mesh(new THREE.CylinderGeometry(4.4, 4.6, 0.7, 8), M.stone); plat.position.y = 0.35; plat.castShadow = true; plat.receiveShadow = true; g.add(plat);
     var floor = new THREE.Mesh(new THREE.CylinderGeometry(4.1, 4.1, 0.06, 8), pkMatWoodRich()); floor.position.y = 0.72; floor.receiveShadow = true; g.add(floor);
     for (var i = 0; i < 8; i++) {

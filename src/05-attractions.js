@@ -1,4 +1,44 @@
 //@ Park Co, part 05: the rides - the attraction system and the seven rides that stand either side of the midway
+  // ── One draw for a rigid shell ───────────────────────────────────
+  // A ride car is built from twenty-odd little boxes, rings and pads, and every one of them is a draw call while the car
+  // is in view; a train of six cars is a hundred and twenty. The car moves as one rigid body, so its shell can be one
+  // mesh per material: the parts are merged in the group's own space and the group still turns, tilts and travels as
+  // before. Only parts that the ride animates *inside* the car (the lap bar) are kept out, by name.
+  function pkMergeShell(g, keep) {
+    var byMat = {};
+    g.children.slice().forEach(function (c) {
+      if (!c.isMesh || c.isInstancedMesh || !c.visible || !c.geometry || !c.material || Array.isArray(c.material)) return;
+      if (keep && keep.indexOf(c) >= 0) return;
+      if (c.userData.it || c.userData.noBake || c.userData.dynamic) return;
+      var m = c.material;
+      if (m.transparent || (m.userData && (m.userData.noBake || m.userData.glow))) return;
+      (byMat[m.uuid] = byMat[m.uuid] || { mat: m, items: [] }).items.push(c);
+    });
+    Object.keys(byMat).forEach(function (k) {
+      var grp = byMat[k];
+      if (grp.items.length < 2) return;
+      var pos = [], nor = [], uv = [], hasUv = true, _m = new THREE.Matrix4();
+      grp.items.forEach(function (o) {
+        var geo = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+        o.updateMatrix();
+        geo.applyMatrix4(o.matrix);
+        var pa = geo.attributes.position.array, na = geo.attributes.normal ? geo.attributes.normal.array : null, ua = geo.attributes.uv ? geo.attributes.uv.array : null;
+        for (var i = 0; i < pa.length; i++) pos.push(pa[i]);
+        if (na) for (var j = 0; j < na.length; j++) nor.push(na[j]); else for (var j2 = 0; j2 < pa.length; j2++) nor.push(0);
+        if (ua) for (var u = 0; u < ua.length; u++) uv.push(ua[u]); else hasUv = false;
+        geo.dispose();
+      });
+      var merged = new THREE.BufferGeometry();
+      merged.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      merged.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+      if (hasUv && uv.length === pos.length / 3 * 2) merged.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      merged.computeBoundingSphere();
+      var mesh = new THREE.Mesh(merged, grp.mat);
+      mesh.castShadow = grp.items[0].castShadow; mesh.receiveShadow = grp.items[0].receiveShadow;
+      g.add(mesh);
+      grp.items.forEach(function (o) { g.remove(o); });
+    });
+  }
   // ── The attraction system ────────────────────────────────────────
   // Every ride is the same shape: a queue lane, a set of seats parented to whatever moves, and five states.
   // idle -> boarding -> ready -> running -> unloading -> idle. A guest is attached to a seat for the ride and let go after it.
@@ -766,14 +806,11 @@
       if (rk > 12) pkBoulder(randf(-3, 9), randf(-30, -27.5), rs, g);
       else pkBoulder(side * randf(2.6, 4.6), randf(-23, -15), rs, g);
     }
-    // the station: a timber deck along the dock on the lane side, under a pitched roof
+    // the station deck along the dock; the mill house in the remodel below is its walls and roof now
     var lane = p.x < 0 ? 1 : -1;
     box(5.0, 0.12, 10.5, MAT.wood, lane * 3.95, 0.06, 7.0, g);
     pkRailRun(p.x + lane * 6.45, p.z + 1.8, p.x + lane * 6.45, p.z + 6.3, { solid: true });
     pkRailRun(p.x + lane * 6.45, p.z + 9.8, p.x + lane * 6.45, p.z + 12.2, { solid: true });
-    [[1.6, 1.8], [1.6, 12.2], [6.4, 1.8], [6.4, 12.2]].forEach(function (c) { cyl(0.12, 3.4, MAT.wood, lane * c[0], 1.7, c[1], g, 8); });
-    var roofG = new THREE.Group(); roofG.position.set(lane * 4.0, 3.4, 7.0); roofG.rotation.y = Math.PI / 2; g.add(roofG);
-    pkGableRoof(11.0, 5.6, 1.4, M.slateGreen, MAT.wood, 0, 0, 0, roofG, 0.3);
     // the boats: hollowed logs with two seats and a lap bar
     var bark2 = std({ map: M.bark.map, roughness: 1, side: THREE.DoubleSide });
     var boats = [], seats = [];
@@ -818,6 +855,62 @@
     a.extra.boats = boats;
     pkCtl(a).barObjs.push(function (bv) { for (var s = 0; s < boats.length; s++) boats[s].bar.rotation.x = -1.3 * (1 - bv); });
     berths.forEach(function (gzz) { pkStationGatePair(g, dockX, gzz, -lane, 0, gw, pkCtl(a), 0x2f6b4a); });   // swinging toward the boats
+    // ── The mill ────────────────────────────────────────────────────
+    // The dock is a timber mill house now, not a canopy over a deck: boarded walls with two windows on the queue side, a
+    // hipped slate roof with a ridge vent, a painted name board over the way in, lanterns at the corners, a bench and a
+    // paved apron outside. The wheel turns in the race beside the splash pool, where the drop actually puts the water.
+    var millWall = pkPaint(0x8a6a4a, 0.92, 0), millTrim = std({ color: 0x4a3826, roughness: 0.85 }), millRoof = M.slateGreen;
+    var WX = lane * 6.4;                                  // the house's back wall, on the side away from the water
+    // the back wall, with a window either side of the door
+    box(0.18, 2.7, 10.2, millWall, WX, 1.41, 7.0, g);
+    [3.4, 10.0].forEach(function (wz) {
+      box(0.22, 0.95, 1.5, std({ color: 0xbcd8e2, roughness: 0.25, metalness: 0.1 }), WX + lane * 0.02, 1.7, wz, g);
+      box(0.26, 0.1, 1.7, millTrim, WX, 1.2, wz, g); box(0.26, 0.1, 1.7, millTrim, WX, 2.2, wz, g);
+      box(0.26, 1.0, 0.1, millTrim, WX, 1.7, wz - 0.8, g); box(0.26, 1.0, 0.1, millTrim, WX, 1.7, wz + 0.8, g);
+    });
+    // the two ends, open toward the platform and the water
+    box(5.0, 2.7, 0.18, millWall, lane * 3.95, 1.41, 12.1, g);
+    box(5.0, 2.7, 0.18, millWall, lane * 3.95, 1.41, 1.9, g);
+    // the roof: hipped, with a ridge vent and a weathervane
+    pkHipRoof(5.8, 11.6, 1.9, millRoof, lane * 3.95, 2.76, 7.0, g);
+    box(0.9, 0.5, 2.4, millTrim, lane * 3.95, 4.5, 7.0, g);
+    pkRod(lane * 3.95, 4.75, 7.0, lane * 3.95, 5.6, 7.0, 0.035, MAT.iron, g, 6);
+    box(1.1, 0.06, 0.06, MAT.iron, lane * 3.95 + 0.35, 5.55, 7.0, g).rotation.y = 0.6;
+    // the name board, over the door on the queue side
+    pkSign3D(['THE LOG FLUME'], 3.4, 0.5, WX - lane * 0.05, 2.55, 7.0, lane * Math.PI / 2, { bg: '#1b232c', fg: '#f5b53d' }, g);
+    // lanterns at the four corners of the house and a bench on the apron
+    [[WX, 2.2], [WX, 11.8]].forEach(function (c) { pkLamp(p.x + c[0] + lane * 0.5, p.z + c[1], 4.0); });
+    pkBench(p.x + WX + lane * 2.4, p.z + 4.6, lane * Math.PI / 2);
+    // a paved apron from the queue to the house
+    for (var apz = 2.4; apz < 12.0; apz += 2.0) pkPavedDisc(1.7, M.paversWarm, p.x + WX + lane * 1.6, 0.045, p.z + apz, null, 1.0);
+    // the wheel: a stone head-race under it, a timber axle, twelve paddles, turning in the water. It stands on the west
+    // side of the pool, clear of the return trough on the east.
+    var wheelX = -6.6, wheelZ = -19.1;
+    box(1.2, 1.3, 4.4, M.stone, wheelX - 0.9, 0.65, wheelZ, g);
+    box(1.0, 0.5, 4.4, M.stoneDark, wheelX - 0.9, 1.35, wheelZ, g);
+    var wheel = new THREE.Group(); wheel.position.set(wheelX, 2.1, wheelZ); g.add(wheel);
+    wheel.userData.dynamic = true;
+    var rimMat = pkPaint(0x6a4a2a, 0.85, 0), hub = pkRoundCyl(0.26, 0.9, MAT.iron, 0, 0, 0, wheel, 12); hub.rotation.z = Math.PI / 2;
+    for (var wr = 0; wr < 12; wr++) {
+      var wa = wr / 12 * Math.PI * 2;
+      pkRod(0, 0, 0, 0, Math.cos(wa) * 2.15, Math.sin(wa) * 2.15, 0.06, MAT.wood, wheel, 6);
+      var pad = box(0.24, 0.5, 0.09, rimMat, 0, Math.cos(wa) * 2.2, Math.sin(wa) * 2.2, wheel);
+      pad.rotation.x = wa;
+    }
+    [-0.42, 0.42].forEach(function (oz) { var rim = new THREE.Mesh(new THREE.TorusGeometry(2.2, 0.09, 6, 28), rimMat); rim.rotation.y = Math.PI / 2; rim.position.z = oz; rim.castShadow = true; wheel.add(rim); });
+    animate(function (dt) { if (wheel) wheel.rotation.x += dt * 0.5; });
+    // the tail race: a sheet of water from the wheel back into the pool
+    var race = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 3.2), M.water); race.rotation.x = -Math.PI / 2; race.position.set(wheelX + 1.0, 0.44, wheelZ); g.add(race); waters.push(race);
+    // a rock arch over the drop, so the splash comes out of a gorge rather than over a bare lip
+    [[-5.9, -16.2, 1.5], [-5.7, -18.6, 1.7], [5.9, -16.4, 1.5], [5.7, -18.8, 1.6], [-2.2, -24.9, 1.3], [2.4, -25.1, 1.35]].forEach(function (rk) {
+      for (var q = 0; q < 3; q++) pkBoulder(rk[0] + randf(-0.5, 0.5), rk[1] + randf(-0.6, 0.6), rk[2] * (1 - q * 0.22), g);
+    });
+    // reeds and a couple of water lilies round the pool
+    for (var rl = 0; rl < 16; rl++) {
+      var ra = randf(0, Math.PI * 2), rr = randf(3.4, 4.9);
+      var reed = new THREE.Mesh(new THREE.ConeGeometry(0.05, randf(0.6, 1.1), 5), std({ color: 0x4d6b32, roughness: 0.95 }));
+      reed.position.set(Math.cos(ra) * rr, 0.75, -19.1 + Math.sin(ra) * rr * 0.8); g.add(reed);
+    }
     return a;
   }
   // Danse Macabre, on the old manor's plot, is built in part 49

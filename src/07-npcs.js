@@ -66,7 +66,7 @@
         fairCross: { x: -31, z: 3 }, teacups: { x: -40, z: 3 }, kidsLane: { x: -46.8, z: 36 },
         thrillCross: { x: 35, z: 3 }, dodgems: { x: 42, z: 3 }, baron: { x: 57, z: 19 },
         darkWoods: { x: -36, z: -24 }, dropTower: { x: -36, z: -52 }, promWest: { x: -20, z: -60 }, halls: { x: -46.5, z: -70 },
-        gardenWest: { x: -28, z: -44 }, gardenWalk: { x: 2, z: -44 }, bandstand: { x: 2, z: -66 },
+        gardenWest: { x: -28, z: -44 }, gardenWalk: { x: 2, z: -44 }, bandstand: { x: 2, z: -52 },
         coasterCountry: { x: 40, z: -24 }, promEast: { x: 50, z: -60 }, eastWalk: { x: 76, z: -20 },
         lotDrive: { x: 0, z: 74 }
       }

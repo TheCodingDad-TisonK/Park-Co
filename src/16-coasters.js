@@ -158,9 +158,9 @@
     [-0.42, 0.42].forEach(function (sx) {
       pkRod(sx, 0, 0, sx, 0.28, 0.62, 0.04, MAT.steelDark, bar, 6);
     });
+    pkMergeShell(g, [bar]);   // the car's shell in one draw per material: the lap bar stays a part of its own
     return { g: g, bar: bar, seats: [{ x: -0.31, y: -0.06, z: -0.02 }, { x: 0.31, y: -0.06, z: -0.02 }] };
-  }
-  // ── Placing the train ─────────────────────────────────────────────
+  }  // ── Placing the train ─────────────────────────────────────────────
   function pkCoPlace(E, u0) {
     for (var i = 0; i < E.cars.length; i++) {
       var u = (u0 - i * E.gap / E.len + 1) % 1;
@@ -532,6 +532,37 @@
     E.cars.forEach(function (c) {
       C.barObjs.push(function (b) { c.bar.rotation.x = -1.35 * (1 - b); });
     });
+    // ── The Baron's gatehouse ───────────────────────────────────────
+    // The station was a canopy on a platform. It is a gatehouse now: a round stone tower at the west end with a cone roof,
+    // a banner and a lantern, a run of battlemented wall behind the platform, braziers either side of the boarding edge,
+    // and the Baron's crest over the canopy. All of it stands behind (south of) the platform, clear of the track and the line.
+    var stone = pkMatStone(), darkStone = std({ color: 0x6a6258, roughness: 0.95 });
+    var towerX = 47.3, towerZ = 19.4;
+    pkRoundCyl(1.15, 6.4, stone, towerX, 3.2, towerZ, g, 18);
+    pkRoundCyl(1.28, 0.35, darkStone, towerX, 6.5, towerZ, g, 18);
+    for (var tw = 0; tw < 8; tw++) { var ta = tw / 8 * Math.PI * 2; box(0.42, 0.5, 0.42, stone, towerX + Math.cos(ta) * 1.05, 6.85, towerZ + Math.sin(ta) * 1.05, g); }
+    var roof = new THREE.Mesh(new THREE.ConeGeometry(1.45, 3.4, 18), std({ color: 0x4a2a24, roughness: 0.7 })); roof.position.set(towerX, 8.8, towerZ); roof.castShadow = true; g.add(roof);
+    pkRod(towerX, 10.5, towerZ, towerX, 11.6, towerZ, 0.05, MAT.iron, g, 6);
+    pkSign3D(['BARON'], 1.3, 0.34, towerX + 0.02, 4.7, towerZ + 1.12, 0, { bg: th.a, fg: '#f4e2b0' }, g);
+    var flag = box(0.06, 1.5, 2.2, pkStripes('#8a3b2c', '#d8c9a8'), towerX, 12.2, towerZ + 1.15, g); flag.rotation.y = 0.2;
+    pkLamp(towerX + 1.5, towerZ + 1.4, 4.2);
+    // the battlemented wall behind the platform, so the station reads as the Baron's court rather than a shed
+    box(10.6, 1.9, 0.5, stone, 52.9, 0.95, 19.55, g);
+    for (var cw = 0; cw < 9; cw++) box(0.55, 0.5, 0.55, stone, 47.9 + cw * 1.22, 2.15, 19.55, g);
+    solid(47.6, 58.2, 19.3, 19.8, 0, 2.4);
+    // the crest over the canopy: a shield on the boarding side, gilt rim
+    pkSign3D(['\u25BC'], 1.05, 1.05, 53.2, 3.28, 18.44, Math.PI, { bg: th.a, fg: '#e3c26a' }, g);
+    // braziers at each end of the platform edge, out of the walkway
+    [[47.9, 20.2], [57.4, 20.2]].forEach(function (bp) {
+      pkRoundCyl(0.07, 1.05, MAT.iron, bp[0], 0.52, bp[1], g, 6);
+      var bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.2, 0.3, 12, 1, true), std({ color: 0x2a2622, roughness: 0.8, side: THREE.DoubleSide }));
+      bowl.position.set(bp[0], 1.2, bp[1]); g.add(bowl);
+      var flame = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.55, 8), glowMat(0xff9a3c, 1.1));
+      flame.position.set(bp[0], 1.55, bp[1]); g.add(flame);
+      animate(function (dt) { flame.scale.y = 0.85 + Math.sin(worldTime * 7 + bp[0]) * 0.18; });
+    });
+    // a run of boulders along the back of the court, so it sits in the rockery it already had
+    for (var br = 0; br < 7; br++) pkBoulder(48.4 + br * 1.5, 20.3 + randf(-0.3, 0.3), randf(0.8, 1.35), g);
     pkCoPlace(E, E.uPark);
     return a;
   }
@@ -554,6 +585,11 @@
   function pkBuildWildHunt(p) {
     var th = PK_THEME.wildhunt, i;
     var g = new THREE.Group(); scene.add(g);
+    // The apron. It comes down the west side of the bandstand (the old garden bandstand still stands on the promenade,
+    // square in front of the station) and turns east along the queue. The path fence reads the ground meshes to tell
+    // path from lawn, so the walk has to be drawn, not just declared.
+    pkPaved(26.0, 25.0, pkMats().paversWarm, -3.0, 0.043, -72.0, 2.4);
+    pkPaved(26.0, 4.0, pkMats().paversWarm, -3.0, 0.044, -80.6, 2.4);
     var curve = pkCoCurve(PK_HUNT_PTS), len = curve.getLength(), uP = pkCoUAt(curve, 4, -84.5);
     var F = pkCoFrames(curve, 620, pkCoProfile(curve, len, uP), uP);
     var E = { curve: curve, len: len, F: F, gap: 2.35, cars: [], uPark: uP, uOfF: [], run: 30 };
@@ -600,7 +636,7 @@
     { id: 'baron', name: "Baron's Drop", x: 57, z: 19, r: 12, q: [58.6, 19], qdx: 1, level: 13, pad: 0.82, boothAt: [67.4, 9.8] },   // the line runs east from the gate: the train comes home up the west side
     // The Wild Hunt stands where the three indoor halls were: one big outdoor coaster across the north strip, the length of
     // the old halls and then some. It takes the place of Nocturne, The Wreck and Moonwood in one go.
-    { id: 'wildhunt', name: 'The Wild Hunt', x: -8, z: -94, r: 30, q: [-1.0, -80.2], qdx: 1, level: 15, pad: 0.02, boothAt: [-8.6, -78.6] }
+    { id: 'wildhunt', name: 'The Wild Hunt', x: -8, z: -94, r: 30, q: [-1.0, -79.2], qdx: 1, level: 15, pad: 0.02, boothAt: [-8.6, -78.6] }
   );
   // the kids' area on the west lawn
   PK_PLOTS.push(
@@ -618,7 +654,7 @@
   // garden, west of the carousel, past the three little rides' gateways
   PK_ROUTES.push(
     [35, -60, 35, -65, 4.2, 'coaster'], [35, -65, 41, -65, 4.2, 'coaster'],
-    [-38, -60, -20, -60, 5, 'dark'], [-14, -60, -1, -60, 5, 'dark'], [-1, -60, -1, -81.6, 4.6, 'dark'],   // the Wild Hunt's approach and its queue apron
+    [-38, -60, -20, -60, 5, 'dark'], [-14, -60, -8.5, -60, 5, 'dark'], [-8.5, -60, -8.5, -80.0, 6.0, 'dark'], [-8.5, -79.8, 4.0, -79.8, 5.0, 'dark'],   // the Wild Hunt's approach and its queue apron
     [-46.8, 5.4, -46.8, 50, 3.4, 'fair']
   );
   PK_KEEP.push([35.5, -62.5, 5.5], [42.5, -65.5, 5], [-38.5, 42, 6.5]);
