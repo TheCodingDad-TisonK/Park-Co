@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.8 (2026-11-11): World Update
+
+- Fixed issue with FOG
+- Improved FPS by grouping almost every mesh
+- Fixed several small bugs i simply forgot to write down :(
+
 ## 1.7.7 (2026-11-10): The North Run
 
 The park's frame rate, the north end and the guests, in one pass.
