@@ -121,17 +121,7 @@
         if (pkNearRide(pf[0], pf[1], 2) || pkNearRoute(pf[0], pf[1], i, 2.5)) continue;
         pkFlowerBed(pf[0], pf[1], horiz ? 2.6 : 1.3, horiz ? 1.3 : 2.6);
       }
-      // the avenue: a tree each side every 7.5 m, a little off true so it does not look ruled
-      for (var ta = 6, ka = 0; ta < len - 4; ta += 7.5, ka++) {
-        [-1, 1].forEach(function (sd) {
-          var pa = at(ta + (rng() - 0.5) * 2, sd * (w / 2 + 3.3 + rng() * 1.2));
-          if (pkNearRide(pa[0], pa[1], 3) || pkNearRoute(pa[0], pa[1], i, 3.2)) return;
-          if (pkNearTrack(pa[0], pa[1], 4.5)) return;
-          if (typeof pkXpViaNear === 'function' && pkXpViaNear(pa[0], pa[1], 5)) return;   // part 46: felled for the new viaduct
-          var seed = Math.abs(Math.round(pa[0] * 13 + pa[1] * 7)), sc = 0.9 + rng() * 0.5;
-          if (seed % 6 === 0) pkConifer(pa[0], pa[1], sc, null, seed); else pkTree(pa[0], pa[1], sc, null, seed);
-        });
-      }
+      // no avenue trees: the park is kept clear of trees (tison 2026-11-11)
     });
   }
 

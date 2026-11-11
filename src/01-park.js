@@ -384,40 +384,8 @@
         pkHedge(x, z, 0.8, 1.9, 0.85);
       }
     });
-    // trees: a seeded scatter over the park, skipping the rides, the routes and the midway.
-    // broadleafs with a conifer mixed in, each seeded so it keeps its shape - and the park keeps its trees from one load to the next.
-    // The park was over-planted: the woods held more triangles than every building together. The scatters below are thinned
-    // (about half of what stood), and CO.pkTreeDensity thins them further on medium and low quality.
+    // trees: the park itself stays clear of trees (tison 2026-11-11) - the forest wraps it outside the palisade.
     var TD = (CO.pkTreeDensity ? CO.pkTreeDensity() : 1);
-    var rng = pkRng(20260418);
-    for (var tx = -68; tx <= 68; tx += 9) {
-      for (var tz = -92; tz <= 26; tz += 9) {
-        var px = tx + (rng() - 0.5) * 6, pz = tz + (rng() - 0.5) * 6, keep = rng(), ps = 0.85 + rng() * 0.8;
-        if (keep < 0.28 * TD || !pkTreeOK(px, pz)) continue;
-        var seed = Math.abs(Math.round(px * 13 + pz * 7));
-        if (seed % 5 === 0) pkConifer(px, pz, ps, null, seed); else pkTree(px, pz, ps, null, seed);
-      }
-    }
-    // the east strip, between the walk and the yards
-    var rng4 = pkRng(20261022);
-    for (tx = 76; tx <= 120; tx += 8) {
-      for (tz = -114; tz <= 26; tz += 8) {
-        px = tx + (rng4() - 0.5) * 5; pz = tz + (rng4() - 0.5) * 5; keep = rng4(); ps = 0.85 + rng4() * 0.8;
-        if (keep < 0.24 * TD || !pkTreeOK(px, pz)) continue;
-        seed = Math.abs(Math.round(px * 13 + pz * 7));
-        if (seed % 5 === 0) pkConifer(px, pz, ps, null, seed); else pkTree(px, pz, ps, null, seed);
-      }
-    }
-    // the strip the north fence gave up behind the indoor halls, on its own seed so the trees above keep their places
-    var rng3 = pkRng(20261021);
-    for (tx = -68; tx <= 68; tx += 9) {
-      for (tz = -113; tz <= -104; tz += 9) {
-        px = tx + (rng3() - 0.5) * 6; pz = tz + (rng3() - 0.5) * 5; keep = rng3(); ps = 0.85 + rng3() * 0.8;
-        if (keep < 0.28 * TD || !pkTreeOK(px, pz)) continue;
-        seed = Math.abs(Math.round(px * 13 + pz * 7));
-        if (seed % 5 === 0) pkConifer(px, pz, ps, null, seed); else pkTree(px, pz, ps, null, seed);
-      }
-    }
     // a forest wraps the park, so the palisade is the edge of the trees rather than of a bare green field
     var rng2 = pkRng(77123);
     for (var fx = Math.min(-88, PK_PARK.x0 - 16); fx <= PK_PARK.x1 + 16; fx += 7) {
@@ -563,12 +531,14 @@
       return { day: 1, time: 9, bank: 500, level: 1, log: [], ledger: [], stats: { earned: 0, spent: 0 }, layout: {}, custom: [], hdoors: {},
         ticketPrice: 25, snackPrice: 6, icePrice: 4, toyPrice: 5, auto: false, ctlAuto: {}, ctlKey: {}, coasterKey: false, cycles: 0, xp: 0, clerk: true, operator: false, snackOpen: false, iceOpen: false, toyOpen: false, train2: false, lights: false, rideLights: false,   // the starter clerk works day one for free
         wear: 0, rides: {}, featured: null, today: { tickets: 0, snacks: 0, rides: 0, earned: 0, ice: 0, toys: 0 }, gateOpen: true,
-        expansion: { stage: 0, commissioned: 0, opened: [] } };   // part 53: the expansion gate (none commissioned yet)
+        expansion: { stage: 0, commissioned: 0, opened: [] },   // part 53: the expansion gate (none commissioned yet)
+        showFx: { danse: { exitHold: false, house: false, turnOn: true, liftOn: true, mistOn: true }, joris: { fire: false, fog: false, zone: 5 } } };
     },
     // a day one save from before the starter clerk gets one too; later days keep the park they earned
     // a save from before the gate was a switch of its own: open if the old automatic hours say it would have been
     migrate: function (s) { if (s.day === 1 && !s.clerk) s.clerk = true; if (s.gateOpen === undefined) s.gateOpen = s.time >= 9 && s.time < 22; if (s.rideLights === undefined) s.rideLights = !!s.lights;
       if (!s.expansion) s.expansion = { stage: 0, commissioned: 0, opened: [] }; if (!s.expansion.opened) s.expansion.opened = [];   // part 53: an old save gets the expansion state
+      if (!s.showFx) s.showFx = { danse: { exitHold: false, house: false, turnOn: true, liftOn: true, mistOn: true }, joris: { fire: false, fog: false, zone: 5 } };
       return s; },
     buildWorld: function (loaded) {
       pkGround(); pkGate(); pkBooths(); pkOffice(); pkMidway(); pkBuildCoaster(); pkBuildOperatorRoom(); pkBuildSnack(); pkBuildIceCream(); pkBuildToys();

@@ -378,7 +378,7 @@
     // while the train is out, the empty pens are filled from the line and the next batch waits at their rows
     if (at.state === 'running') {
       if (E.held) E.held.forEach(function (h) { if (h.gu.state === 'walkRow' && !h.gu.rec.path.length) h.gu.state = 'rowWait'; });
-      if (C.gates && at.queue.length && !PK.closed) pkJorisFillRows(at);
+      if (at.queue.length && !PK.closed) pkJorisFillRows(at);
     }
     // the queue gate open with the train home: the line comes up to the rows whenever the ride is not already boarding
     if (home && C.gates && at.state === 'idle' && at.queue.length && !PK.closed && C.key && !C.maint && !C.fault) pkAttrBegin(at);
@@ -403,9 +403,9 @@
     var taken = {};
     E.held.forEach(function (h) { taken[h.si] = true; });
     var n = 0;
-    while (at.queue.length && n < at.seats.length) {
-      var gu = at.queue[0];
-      if (gu.state !== 'qwait' && gu.state !== 'qmove') break;
+    for (var q = 0; q < at.queue.length && n < at.seats.length; q++) {
+      var gu = at.queue[q];
+      if (gu.state !== 'qwait' && gu.state !== 'qmove') continue;
       var side = gu.side || (gu.side = Math.random() < 0.5 ? 'water' : 'vuur');
       var si = -1, fall = -1;
       for (var i = 0; i < at.seats.length; i++) {
@@ -415,7 +415,7 @@
       }
       if (si < 0) si = fall;
       if (si < 0) break;
-      at.queue.shift();
+      at.queue.splice(q, 1); q--;
       gu.slot = -1;
       gu.state = 'walkRow';
       gu.rec.path = at.seatPath({ x: gu.rec.x, z: gu.rec.z }, at.parkedRow[si]);
@@ -880,18 +880,19 @@
       label(c, w, h, 'LEVEL', 0.26, 0.52); label(c, w, h, 'TALK', 0.84, 0.52); label(c, w, h, 'CHIME', 0.84, 0.82);
     });
     // the public address: pick a zone (its button stays lit), then TALK to announce there; CHIME rings the chime
-    var FXS = E.fx = E.fx || { fire: false, fog: false, roarT: 0, zone: 5 };
+    var FXJ = (S.showFx && S.showFx.joris) || {};
+    var FXS = E.fx = E.fx || { fire: !!FXJ.fire, fog: !!FXJ.fog, roarT: 0, zone: FXJ.zone === undefined ? 5 : FXJ.zone };
     var SAY = ['Please keep your arms and legs inside the train, and hold on to the bar.', 'Choose your side: Blue or Red. The dragon is waiting!',
       'The Dragon Ride is racing - knights wanted at the Armoury!', 'Thank you for riding. Please mind your step on the way out.',
       'Lift crew, stand clear of the chain.', 'Attention please: the Dragon Ride is racing now!'];
     var ZCOL = ['green', 'blue', 'white', 'white', 'amber', 'red'], zoneBtns = [];
     ZONES.forEach(function (z, i) {
       zoneBtns.push(pkCtlBtn(PA, -0.4 + i * 0.13, -0.05, { r: 0.028, col: ZCOL[i], lampCol: 0xfff0b0, label: z + ' zone', prompt: 'Speak to the ' + z.toLowerCase() + (i === 5 ? '' : ' zone'),
-        act: function () { FXS.zone = i; sfx('click'); zoneBtns.forEach(function (b, k) { b.setLit(k === i); }); } }));
+        act: function () { FXS.zone = i; if (S.showFx) S.showFx.joris.zone = i; sfx('click'); zoneBtns.forEach(function (b, k) { b.setLit(k === i); }); } }));
     });
     zoneBtns[FXS.zone].setLit(true);
     pkCtlBtn(PA, 0.34, 0.045, { r: 0.042, col: 'red', label: 'TALK', prompt: 'Talk on the public address',
-      act: function () { sfx('chime'); toast('PA - ' + ZONES[FXS.zone] + ': "' + SAY[FXS.zone] + '"', ''); } });
+      act: function () { sfx('chime'); toast('PA - ' + ZONES[FXS.zone] + ': "' + SAY[FXS.zone] + '"', ''); PK.guests.forEach(function (gu) { if (gu && gu.rec && Math.hypot(gu.rec.x - a.x, gu.rec.z - a.z) < 45) gu.reactT = 1.3; }); } });
     pkCtlBtn(PA, 0.34, -0.05, { r: 0.03, col: 'white', label: 'CHIME', prompt: 'Ring the chime', act: function () { sfx('chime'); } });
     // the show effects: switches for the dragon's fire, the fog over her swamp, the hall's chandeliers and the work
     // lights; buttons for her roar and the bell; and BANNERS UP, which rolls the winner's banners back into the roof
@@ -903,9 +904,9 @@
     });
     var fxX = function (i) { return -0.35 + (i % 3) * 0.24; }, fxY = function (i) { return i < 3 ? 0.065 : -0.075; };
     var showSet = function (list, on) { (list || []).forEach(function (m) { m.visible = on; }); };
-    pkCtlToggle(FX, fxX(0), fxY(0), { prompt: 'Dragon fire', onName: 'FIRE', offName: 'OFF', act: function (on) { FXS.fire = on; sfx(on ? 'pkDanseThunder' : 'click'); } });
+    pkCtlToggle(FX, fxX(0), fxY(0), { prompt: 'Dragon fire', onName: 'FIRE', offName: 'OFF', act: function (on) { FXS.fire = on; if (S.showFx) S.showFx.joris.fire = on; sfx(on ? 'pkDanseThunder' : 'click'); } });
     pkCtlBtn(FX, fxX(1), fxY(1), { r: 0.03, col: 'red', label: 'ROAR', prompt: 'Make the dragon roar', act: function () { FXS.roarT = 1.8; sfx('pkDanseGrowl'); } });
-    pkCtlToggle(FX, fxX(2), fxY(2), { prompt: 'Swamp fog', onName: 'FOG', offName: 'OFF', act: function (on) { FXS.fog = on; pkJorisFog(E); showSet(E.fogPuffs, on); } });
+    pkCtlToggle(FX, fxX(2), fxY(2), { prompt: 'Swamp fog', onName: 'FOG', offName: 'OFF', act: function (on) { FXS.fog = on; if (S.showFx) S.showFx.joris.fog = on; pkJorisFog(E); showSet(E.fogPuffs, on); } });
     pkCtlToggle(FX, fxX(3), fxY(3), { on: true, prompt: 'Hall lights', act: function (on) { showSet(E.hallLamps, on); } });
     pkCtlToggle(FX, fxX(4), fxY(4), { prompt: 'Work lights', act: function (on) { showSet(E.workLamps, on); } });
     pkCtlBtn(FX, fxX(5), fxY(5), { r: 0.03, col: 'amber', label: 'BELL', prompt: 'Ring the bell', act: function () { sfx('bell'); } });

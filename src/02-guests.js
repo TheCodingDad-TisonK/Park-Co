@@ -223,7 +223,8 @@
   function pkGuestStep(gu, dt) {
     var rec = gu.rec, g = gu.g;
     gu.t += dt;
-    var arrived = rec.path.length ? walkAlong(rec, rec.path, rec.speed, dt) : true;
+    var arrived = (gu.reactT > 0) ? false : (rec.path.length ? walkAlong(rec, rec.path, rec.speed, dt) : true);
+    if (gu.reactT > 0) gu.reactT -= dt;
     // the gate is the only way in. While it is shut nobody still outside gets to start their day - not a guest who bought a
     // ticket just before the shut, and not a party whose car pulled in a moment later. pkCloseGuests handles the moment the
     // gate shuts; this also catches a loaded save and a car that unloads after it.
@@ -471,7 +472,7 @@
   function pkNewDay() {
     var wages = pkWages();
     if (wages) pay(-wages, 'Wages');
-    PK.today = S.today = { tickets: 0, snacks: 0, rides: 0, earned: 0, ice: 0, toys: 0 };
+    PK.today = S.today = { tickets: 0, snacks: 0, rides: 0, earned: 0, ice: 0, toys: 0, fast: 0 };
     S.gateOpen = false; PK.gateWarn = {};   // shut till you open it yourself; the reminders get their day back too
     logEvent('Day ' + S.day + ' begins' + (wages ? ' - wages ' + money(wages) : '') + ' - the gate is shut', '');
     screenDirtyAll(); hudDirty = true;

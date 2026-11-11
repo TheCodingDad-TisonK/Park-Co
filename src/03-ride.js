@@ -316,6 +316,18 @@
     pkBkRadio(scene, 15.9, 0.805, sdz - 0.05, 0);
     pkBevelBox(0.22, 0.03, 0.3, S2({ color: 0x2f4f7a, roughness: 0.7 }), 15.45, 0.82, sdz + 0.05, null, 0.008);
     pkRoundCyl(0.045, 0.1, S2({ color: 0xf2efe6, roughness: 0.5 }), 13.7, 0.85, sdz + 0.12, null, 12);
+    // the lived-in desk: a logbook and pen by the left hand, a desk lamp and a telephone on the right wing
+    pkBevelBox(0.32, 0.025, 0.24, S2({ color: 0xece4d0, roughness: 0.8 }), 13.25, 0.825, sdz + 0.1, null, 0.004);
+    pkBevelBox(0.008, 0.026, 0.24, S2({ color: 0x5a2a1a, roughness: 0.7 }), 13.25, 0.827, sdz + 0.1, null, 0.002);
+    var pen2 = pkBevelBox(0.13, 0.011, 0.011, S2({ color: 0x15171a, roughness: 0.5 }), 13.38, 0.84, sdz + 0.16, null, 0.002); pen2.rotation.y = 0.5;
+    pkRoundCyl(0.07, 0.025, M.brass, 16.35, 0.82, sdz + 0.1, null, 14);
+    pkRod(16.35, 0.82, sdz + 0.1, 16.32, 1.15, sdz + 0.16, 0.012, M.brass, null, 6);
+    pkRod(16.32, 1.15, sdz + 0.16, 16.22, 1.17, sdz + 0.28, 0.012, M.brass, null, 6);
+    var lshade = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.1, 14, 1, true), S2({ color: 0x1f4a3a, roughness: 0.5, side: THREE.DoubleSide })); lshade.position.set(16.22, 1.13, sdz + 0.32); scene.add(lshade);
+    sphere(0.035, glowMat(0xffd88a, 1.6), 16.22, 1.1, sdz + 0.32);
+    pkBevelBox(0.18, 0.06, 0.2, S2({ color: 0x15171a, roughness: 0.5 }), 16.55, 0.83, sdz - 0.08, null, 0.008);
+    var hs2 = pkBevelBox(0.2, 0.04, 0.05, S2({ color: 0x15171a, roughness: 0.5 }), 16.55, 0.88, sdz - 0.08, null, 0.004); hs2.rotation.y = Math.PI / 2;
+    pkRod(16.46, 0.83, sdz - 0.08, 16.3, 0.81, sdz - 0.02, 0.008, S2({ color: 0x15171a, roughness: 0.5 }), null, 4);
     pkBkChair(scene, 14.6, sdz + 0.95, Math.PI, 0);
     // the equipment bay: the lift drive and the PLC rack under the clerestory, the track mimic on the east wall
     pkOpLiftDrive(16.95, Z0 + 0.42);
@@ -359,7 +371,8 @@
           ['GATES', PK.gates[0] && PK.gates[0].open ? 'OPEN' : 'CLOSED', PK.gates[0] && PK.gates[0].open ? '#5fd38d' : '#a0acb8'],
           ['RESTRAINTS', R.barsWant > 0.5 ? 'DOWN' : 'UP', R.barsWant > 0.5 ? '#5fd38d' : '#a0acb8'],
           ['OPERATION', R.fault ? R.fault.toUpperCase() : (S.auto ? 'AUTOMATIC' : 'MANUAL'), R.fault ? '#ff6b5e' : '#f5b53d'],
-          ['TRACK WEAR', Math.round(S.wear || 0) + ' %', (S.wear || 0) > 70 ? '#ff6b5e' : '#eef1f5']
+          ['TRACK WEAR', Math.round(S.wear || 0) + ' %', (S.wear || 0) > 70 ? '#ff6b5e' : '#eef1f5'],
+          ['FASTEST TODAY', (PK.today.fast || 0).toFixed(1) + ' m/s', '#eef1f5']
         ];
         for (var i = 0; i < rows.length; i++) {
           var y = 186 + i * 34;
@@ -579,31 +592,9 @@
   function pkOpMonitors(x, z, ry) {
     var g = new THREE.Group(); g.position.set(x, 1.12, z); g.rotation.y = ry === undefined ? Math.PI / 2 : ry; scene.add(g);
     [-0.27, 0.27].forEach(function (dx) { pkRoundCyl(0.025, 0.2, pkMats().iron, dx, -0.22, -0.08, g, 6); pkBevelBox(0.22, 0.02, 0.16, pkMats().iron, dx, -0.32, -0.06, g, 0.006); });
-    var m1 = pkBkMonitor(g, -0.27, 0, 0, 0.15, -0.05, 'CAM 1 · the coaster queue', function (c, s) {
-      c.fillStyle = '#071108'; c.fillRect(0, 0, s.w, s.h);
-      c.fillStyle = '#8fe0a0'; c.font = 'bold 13px monospace'; c.textAlign = 'left'; c.fillText('CAM 1  QUEUE LANE', 8, 16);
-      c.textAlign = 'right'; c.fillText(fmtTime(S.time), s.w - 8, 16);
-      var n = PK_QUEUE_SLOTS.length, q = pkQueueWaiting(), bw = (s.w - 24) / n;
-      for (var i = 0; i < n; i++) { c.strokeStyle = 'rgba(143,224,160,0.3)'; c.strokeRect(12 + i * bw, 60, bw - 4, 38); if (i < q) { c.fillStyle = '#cfe9d4'; c.beginPath(); c.arc(12 + i * bw + (bw - 4) / 2, 79, Math.min(9, bw / 3), 0, 6.283); c.fill(); } }
-      c.fillStyle = '#8fe0a0'; c.textAlign = 'left'; c.font = '13px monospace'; c.fillText('IN LINE ' + q, 10, 132);
-      if (Math.floor(PK_BK_T) % 2 === 0) { c.fillStyle = '#ff3b30'; c.beginPath(); c.arc(s.w - 14, 150, 5, 0, 6.283); c.fill(); }
-      pkBkScanlines(c, s.w, s.h);
-    });
-    pkPowerScreen(m1, pkCoasterOpen);
-    var m2 = pkBkMonitor(g, 0.27, 0, 0, -0.15, -0.05, 'CAM 2 · the platform', function (c, s) {
-      var R = PK.ride;
-      c.fillStyle = '#070b11'; c.fillRect(0, 0, s.w, s.h);
-      c.fillStyle = '#9fc6ff'; c.font = 'bold 13px monospace'; c.textAlign = 'left'; c.fillText('CAM 2  PLATFORM', 8, 16);
-      for (var cr = 0; cr < 3; cr++) for (var st = 0; st < 4; st++) {
-        var x = 12 + cr * 74 + (st % 2) * 30, y = 36 + Math.floor(st / 2) * 30, seat = PK.seats[cr * 4 + st];
-        c.strokeStyle = 'rgba(159,198,255,0.45)'; c.strokeRect(x, y, 26, 26);
-        if (seat && seat.guest) { c.fillStyle = '#d7e6ff'; c.fillRect(x + 3, y + 3, 20, 20); }
-      }
-      c.fillStyle = R.fault ? '#ff6b5e' : '#9fc6ff'; c.font = 'bold 14px monospace'; c.fillText(pkRideWord().toUpperCase(), 10, 120);
-      c.font = '12px monospace'; c.fillText('BARS ' + (R.bars > 0.5 ? 'LOCKED' : 'OPEN') + '   GATES ' + (PK.gates[0] && PK.gates[0].open ? 'OPEN' : 'SHUT'), 10, 148);
-      pkBkScanlines(c, s.w, s.h);
-    });
-    pkPowerScreen(m2, pkCoasterOpen);
+    // two live CCTV monitors on their stands, turned to the operator: the queue lane and the platform
+    pkCctvFeed(g, -0.27, 0, 0, 0.15, -0.05, [7, 5.5, 11], [7, 0.5, 4], pkCoasterOpen);
+    pkCctvFeed(g, 0.27, 0, 0, -0.15, -0.05, [0, 4.5, 1], [0, 1, -2], pkCoasterOpen);
   }
   // the desk buttons and the AUTO lever are gone: the screen carries every control
   // ── The snack stand ───────────────────────────────────────────────
@@ -993,7 +984,7 @@
     PK.stnForce = null;
     R.state = 'dispatch'; R.beat = 1.2;
     if (empty) { sfx('bell'); logEvent('Test run, empty train', ''); toast('Test run', ''); }
-    else { pkXp(pkOnDutyAt('coaster') ? 3 : 2); sfx('bell'); logEvent('Dispatch with ' + R.riders + ' aboard', 'good'); }
+    else { pkXp(pkOnDutyAt('coaster') ? 3 : 2); sfx('pkCoasterHorn'); logEvent('Dispatch with ' + R.riders + ' aboard', 'good'); }
     hudDirty = true; return true;
   }
   function pkTestRun() {
@@ -1130,6 +1121,7 @@
       R.u = (R.u + R.v * dt / PK.len) % 1;
       if (d2 * PK.len < 0.4) { R.u = PK.stationU; R.v = 0; pkArrive(); }
     }
+    if (R.v > (PK.today.fast || 0)) PK.today.fast = R.v;   // the day's fastest run, shown on the status board
     pkPlaceTrain();
   }
   // ── Staff ─────────────────────────────────────────────────────────

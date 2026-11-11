@@ -18,6 +18,7 @@
       title: 'DREAM FLIGHT', sub: 'DREAM LECTERN  *  DREAM REALM' }
   };
   function pkConMat(c, r, m) { return std({ color: c, roughness: r === undefined ? 0.5 : r, metalness: m === undefined ? 0.2 : m }); }
+  SFX.pkBoothHum = function (t) { sTone('sine', 82, t, 2.2, 0.02, { attack: 0.8 }); sTone('sine', 110, t + 0.2, 2.2, 0.014, { attack: 0.8 }); sTone('sine', 164, t + 0.4, 2.2, 0.008, { attack: 0.8 }); };
   // the face: a gradient in the console's colours, engraved fields and every label, and (the dream desk) a sky of stars
   function pkConFace(id, K, PW, PH) {
     return function (c, W, H) {
@@ -42,14 +43,14 @@
         [['KEY', -0.255], ['SYSTEM', -0.085], ['BARS', 0.085], ['SPACING', 0.255]].forEach(function (l) { txt(l[0], l[1], -0.025, 0.0085, K.dim); });
         txt('INTERLOCK', 0, 0.0, 0.009, K.dim);
         txt('WORK LIGHTS', -0.22, -0.185, 0.01); txt('E-STOP', 0, -0.188, 0.012, '#ff8a7a'); txt('RESET', 0.22, -0.185, 0.011);
-        txt(sig, 0.46, 0.155, 0.011); txt(K.cue.label, 0.58, 0.155, 0.011); txt('NEXT', 0.72, 0.155, 0.011, '#8fe0a0');
+        txt(sig, 0.46, 0.155, 0.011); txt(K.cue.label, 0.58, 0.155, 0.011); txt('SPARKLE', 0.72, 0.155, 0.011);
         txt('START', 0.46, -0.188, 0.012, '#8fe0a0'); txt('STOP', 0.6, -0.188, 0.012, '#f0c04a'); txt('RELEASE', 0.78, -0.188, 0.011); txt('PULL', 0.83, -0.11, 0.009, K.dim);
         return;
       }
       [['GATES', -0.255], ['BARS', -0.085], ['STN GATES', 0.085], ['TEST', 0.255]].forEach(function (l) { txt(l[0], l[1], 0.155, 0.012); });
       txt('INTERLOCK', 0, 0.0, 0.009, K.dim);
       txt('AUTO', -0.22, -0.185, 0.011); txt('E-STOP', 0, -0.188, 0.012, '#ff8a7a'); txt('RESET', 0.22, -0.185, 0.011);
-      txt(sig, 0.48, 0.155, 0.011); txt(K.cue.label, 0.62, 0.155, 0.011);
+      txt(sig, 0.48, 0.155, 0.011); txt(K.cue.label, 0.62, 0.155, 0.011); txt('HYMN', 0.78, 0.155, 0.011);
       txt('READY', 0.48, -0.04, 0.01, '#8fe0a0'); txt('DISPATCH', 0.74, -0.188, 0.012); txt('PULL', 0.80, -0.11, 0.009, K.dim);
     };
   }
@@ -75,7 +76,8 @@
     parts.g2 = pkCtlGauge(P, -0.5, 0.085, Object.assign({}, gO, { id: 'g2', label: '', unit: 'line m/s', min: 0, max: 1, red: 0.8, ticks: 5, ease: 3, get: function () { var v = 0, n = 0; E.gons.forEach(function (g) { if (g.s >= D.sStationIn) { v += g.v; n++; } }); return n ? v / n : 0; } }));
     parts.sig = pkCtlBtn(P, 0.46, 0.09, { id: 'sig', label: sh.sig.label, col: 'sky', r: 0.026, collar: trim, lampCol: 0x9fd0ff, prompt: 'Press ' + sh.sig.label, act: function () { pkPnVoiceNow(a, sh, true); } });
     parts.cue = pkCtlBtn(P, 0.58, 0.09, { id: 'cue', label: K.cue.label, col: K.cue.col, r: 0.026, collar: trim, lampCol: 0x9fd0ff, prompt: K.cue.prompt, act: function () { if (pkCtlDead(P)) return; K.cue.act(a); } });
-    parts.ready = pkPnLed(P, 0.72, 0.09, { col: 0x5fd38d, r: 0.015 });
+    parts.sparkle = pkCtlBtn(P, 0.72, 0.09, { id: 'sparkle', label: 'SPARKLE', col: 'sky', r: 0.026, collar: trim, lampCol: 0xc9a0ff, prompt: 'Sparkle the dream', act: function () { if (pkCtlDead(P)) return; sfx('pkDroomChime'); } });
+    parts.ready = pkPnLed(P, 0.72, 0.0, { col: 0x5fd38d, r: 0.015 });
     parts.start = pkCtlBtn(P, 0.46, -0.1, { id: 'start', label: 'START', col: 'green', r: 0.036, collar: trim, lampCol: 0x9fef6a, prompt: 'Start the system', act: function () { pkDvStart(a); } });
     parts.halt = pkCtlBtn(P, 0.6, -0.1, { id: 'halt', label: 'STOP', col: 'amber', r: 0.036, collar: trim, lampCol: 0xf0c04a, prompt: 'Stop: bring every gondola home and park', act: function () { pkDvStop(a); } });
     parts.lever = pkCtlLever(P, 0.78, -0.06, { id: 'release', len: 0.13, col: 'purple', prompt: 'Pull the release: the next gondola goes', act: function () { if (refuse()) return; if (E.sys !== 'running') return pkBoothRefuse(a.name + ' is not running - press START'); E.release = true; sfx('click'); } });
@@ -86,8 +88,8 @@
     parts.readout = pkCtlReadout(HB, 0.5, -0.025, 0.5, 0.12);
     parts.tele = pkCtlReadout(HB, 0.5, 0.11, 0.5, 0.06, { col: '#c8d8ff', bg: '#050505' });
     var moon = new THREE.Mesh(new THREE.RingGeometry(0.05, 0.085, 20, 1, 0.5, 3.8), pkMats().gold); moon.position.set(0, 0.24, -0.01); HB.add(moon);
-    for (var st = 0; st < 6; st++) sphere(0.012, pkMats().gold, -0.7 + st * 0.28, 0.19 + (st % 2) * 0.03, -0.01, HB);
-    var near = false, nearT = 0, PV = new THREE.Vector3(), lastOut = null;
+    var dvStars = []; for (var st = 0; st < 6; st++) dvStars.push(sphere(0.012, pkMats().gold, -0.7 + st * 0.28, 0.19 + (st % 2) * 0.03, -0.01, HB));
+    var near = false, nearT = 0, wasNear = false, PV = new THREE.Vector3(), lastOut = null;
     pkCtlLive({ tick: function (dt) {
       var power = !!a.open, A = parts.ann, live = power && !C.fault && !!C.key, run = E.sys === 'running';
       if (parts.key.on !== !!C.key) parts.key.set(!!C.key);
@@ -106,11 +108,13 @@
       parts.chain.forEach(function (l, k) { l.on = power ? (links[k] ? true : 'dim') : false; l.mat.emissive.setHex(links[k] ? 0x5fd38d : 0xff6b5e); });
       var ready = live && run && !!front && links[2] && links[3];
       parts.ready.on = ready ? (C.auto ? true : 'flash') : false;
-      parts.sig.setLit(live && pkPnVoice(a.id) && run); parts.cue.setLit(live);
+      parts.sig.setLit(live && pkPnVoice(a.id) && run); parts.cue.setLit(live); parts.sparkle.setLit(live);
       // the music box as each gondola leaves the station
       if (E.last !== lastOut) { if (E.last && power && pkPnVoice(a.id) && near) pkPnVoiceNow(a, sh, false); lastOut = E.last; }
       nearT -= dt;
       if (nearT <= 0) { nearT = 0.5; P.getWorldPosition(PV); near = typeof player !== 'undefined' && player && (PV.x - player.x) * (PV.x - player.x) + (PV.z - player.z) * (PV.z - player.z) < 40 * 40; }
+      if (near && !wasNear && power) sfx('pkBoothHum'); wasNear = near;
+      var tw = performance.now() / 1000; for (var st2 = 0; st2 < dvStars.length; st2++) dvStars[st2].scale.setScalar(0.7 + 0.5 * (0.5 + 0.5 * Math.sin(tw * 2.2 + st2 * 1.7)));
       parts.readout.setPower(power); parts.tele.setPower(power);
       if (!power) { parts.readout.set(['NO POWER', 'BREAKER OFF']); parts.tele.set(['NO POWER', '']); return; }
       parts.readout.set(['QUEUE ' + ('  ' + pkAttrWaiting(a)).slice(-3) + '  RIDE ' + a.riders + '/' + a.seats.length,
@@ -177,6 +181,7 @@
     parts.g2 = pkCtlGauge(P, -0.5, 0.085, Object.assign({}, gO, { id: 'g2', label: '', unit: K.g2.unit, min: K.g2.min, max: K.g2.max, red: K.g2.red, ticks: K.g2.ticks, ease: 4, get: function () { return clamp(K.g2.get(a), 0, 1); } }));
     parts.sig = pkCtlBtn(P, 0.48, 0.09, { id: 'sig', label: sh.sig.label, col: id === 'danse' ? 'purple' : 'sky', r: 0.028, collar: trim, lampCol: 0xc9a0ff, prompt: 'Press ' + sh.sig.label, act: function () { pkPnVoiceNow(a, sh, true); } });
     parts.cue = pkCtlBtn(P, 0.62, 0.09, { id: 'cue', label: K.cue.label, col: K.cue.col, r: 0.028, collar: trim, lampCol: 0x9fd0ff, prompt: K.cue.prompt, act: function () { if (pkCtlDead(P)) return; K.cue.act(a); } });
+    parts.hymn = pkCtlBtn(P, 0.78, 0.09, { id: 'hymn', label: 'HYMN', col: 'amber', r: 0.028, collar: trim, lampCol: 0xf0c04a, prompt: 'Play the organ hymn', act: function () { if (pkCtlDead(P)) return; sfx('pkDanseOrgan'); } });
     parts.ready = pkPnLed(P, 0.48, 0.0, { col: 0x5fd38d, r: 0.015 });
     parts.lever = pkCtlLever(P, 0.74, -0.06, { id: 'dispatchLever', len: 0.13, col: id === 'danse' ? 'black' : 'purple', prompt: 'Pull the dispatch lever', act: function () { pkBoothDispatch(a); } });
     // the bank over the face: the six windows, the ride's two, the counts; crowned the ride's way
@@ -197,7 +202,7 @@
       for (var st = 0; st < 6; st++) sphere(0.012, M.gold, -0.7 + st * 0.28, 0.19 + (st % 2) * 0.03, -0.01, HB);
     }
     // ── live ──
-    var near = false, nearT = 0, wasRun = false, PV = new THREE.Vector3();
+    var near = false, nearT = 0, wasRun = false, wasNear = false, PV = new THREE.Vector3();
     pkCtlLive({ tick: function (dt) {
       var power = !!a.open, A = parts.ann, live = power && !C.fault && !!C.key;
       if (parts.key.on !== !!C.key) parts.key.set(!!C.key);
@@ -219,9 +224,10 @@
       var ready = live && !C.maint && loading && links[0] && links[1] && links[2] && links[3];
       parts.chain.forEach(function (l, k) { l.on = power ? (links[k] ? true : 'dim') : false; l.mat.emissive.setHex(links[k] ? 0x5fd38d : 0xff6b5e); });
       parts.ready.on = ready ? (C.auto ? true : 'flash') : false;
-      parts.sig.setLit(live && pkPnVoice(id) && a.state === 'running'); parts.cue.setLit(live);
+      parts.sig.setLit(live && pkPnVoice(id) && a.state === 'running'); parts.cue.setLit(live); parts.hymn.setLit(live);
       nearT -= dt;
       if (nearT <= 0) { nearT = 0.5; P.getWorldPosition(PV); near = typeof player !== 'undefined' && player && (PV.x - player.x) * (PV.x - player.x) + (PV.z - player.z) * (PV.z - player.z) < 40 * 40; }
+      if (near && !wasNear && power) sfx('pkBoothHum'); wasNear = near;
       var run = a.state === 'running';
       if (run && !wasRun && power && pkPnVoice(id) && near) pkPnVoiceNow(a, sh, false);
       wasRun = run;

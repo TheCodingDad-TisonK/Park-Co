@@ -64,6 +64,10 @@
       var H = PK_TH_HALL, G = PK_THG, X0 = PK_TH.CX, Z0 = PK_TH.CZ, sm = (G.x + 0.3 + H.sx1) / 2;
       sp.pre = [{ x: X0 + sm, z: Z0 + H.s0 - 0.5 }, { x: X0 + sm, z: Z0 + H.s1 + 0.4 }, { x: X0 + G.x + 0.9, z: Z0 + 19.7 }, { x: X0 + G.x - 0.6, z: Z0 + 19.7 }];
     }
+    if (a.id === 'joris' && typeof PK_JORIS_LINE !== 'undefined' && PK_JORIS_LINE.length) {
+      var jx = PK_JORIS_LINE[0][0] + 1.6;   // the foot of the operator's stair (pkjorisStair), then up it onto the gallery
+      sp.pre = [{ x: jx, z: -4.4 }, { x: jx, z: -9.0 }];
+    }
     return (a.opSpots = sp);
   }
   // a ride that runs itself (Droomvlucht's line never stops, the Arena's show runs to its cues): the operator keeps it on

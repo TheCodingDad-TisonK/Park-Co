@@ -932,6 +932,7 @@
         scText(ctx, 16, 122, 'GATES  ' + (C.gates ? 'OPEN' : 'CLOSED'), C.gates ? '#5fd38d' : '#a0acb8');
         scText(ctx, 16, 152, 'RESTRAINTS  ' + (C.barsWant > 0.5 ? 'DOWN' : 'UP'), C.barsWant > 0.5 ? '#5fd38d' : '#a0acb8');
         scText(ctx, 16, 182, 'AUTO  ' + (C.auto ? 'ON' : 'OFF'), C.auto ? '#5fd38d' : '#a0acb8');
+        if (o.status) { o.status(ctx, sc, a, C); return; }
         scText(ctx, 16, 212, 'CYCLE  ' + a.run.toFixed(1) + 's', '#eef1f5');
         scText(ctx, 16, 242, 'CONTROL ROOM  ' + (C.fault ? 'RESET' : (C.maint ? 'MAINT' : 'READY')), C.fault || C.maint ? '#ff6b5e' : '#8f98a4');
         scText(ctx, 16, 272, 'WAIT  ' + pkBkWait(a) + ' MIN', '#eef1f5');
@@ -975,8 +976,32 @@
     [-56.3, -53.1].forEach(function (x) { pkRod(x, 2.2, z0 + 0.05, x, 2.2, z0 + 0.3, 0.02, X.iron, g, 4); cyl(0.05, 0.12, X.iron, x, 2.25, z0 + 0.3, g, 8); sphere(0.05, X.flame, x, 2.36, z0 + 0.3, g).scale.set(0.8, 1.6, 0.8); });
     var tp = tex(128, 192, function (c, w, h) { c.fillStyle = '#3a0f18'; c.fillRect(0, 0, w, h); c.strokeStyle = '#c9a050'; c.lineWidth = 4; c.strokeRect(6, 6, w - 12, h - 12); c.fillStyle = '#d8d0b8'; for (var k = 0; k < 3; k++) { var x = 30 + k * 34, y = 120 - (k % 2) * 16; c.beginPath(); c.arc(x, y - 30, 7, 0, 6.3); c.fill(); c.fillRect(x - 3, y - 22, 6, 26); c.fillRect(x - 12, y - 18 + k * 4, 24, 3); } c.fillStyle = '#0c0c0f'; c.beginPath(); c.arc(64, 160, 9, 0, 6.3); c.fill(); }, 1, 1);
     var tap = box(0.02, 1.4, 0.95, std({ map: tp, roughness: 0.9 }), x0 + 0.06, 2.1, -16.8, g);
-    pkRoomKit(g, a, { x: cx, z: cz, y: 0, ry: 0, W: x1 - x0, D: z1 - z0, H: H, cab: -1, sw: [(x1 - x0) / 2 - 0.08, 0.85, -Math.PI / 2], mon: [-1.55, 2.0, -1.25, 0.55], stack: false, console: 'danse' });
+    // lived-in props: a plainchant book on its stand, an unlit candlestick and a small crucifix
+    pkRoundCyl(0.04, 0.5, X.iron, -55.4, 0.25, -16.4, g, 6);
+    pkBevelBox(0.32, 0.04, 0.24, X.oakDark, -55.4, 0.56, -16.4, g, 0.01).rotation.x = 0.3;
+    pkBevelBox(0.3, 0.02, 0.22, X.oak, -55.4, 0.58, -16.4, g, 0.005).rotation.x = 0.3;
+    pkRoundCyl(0.035, 0.42, X.iron, -55.0, 0.21, -16.3, g, 8);
+    pkRoundCyl(0.045, 0.05, X.gold, -55.0, 0.44, -16.3, g, 8);
+    pkBevelBox(0.03, 0.2, 0.03, X.oakDark, -57.14, 1.75, -17.3, g, 0.005);
+    pkBevelBox(0.13, 0.03, 0.03, X.oakDark, -57.14, 1.84, -17.3, g, 0.005);
+    pkRoomKit(g, a, { x: cx, z: cz, y: 0, ry: 0, W: x1 - x0, D: z1 - z0, H: H, cab: -1, sw: [(x1 - x0) / 2 - 0.08, 0.85, -Math.PI / 2], mon: [-1.55, 2.0, -1.25, 0.55], stack: false, console: 'danse',
+      status: function (ctx, sc, a, C) {
+        var E = a.extra, beat = E.show && E.show.beat != null ? PK_DM_BEAT_NAMES[Math.max(0, E.show.beat)] : 'AT REST';
+        scText(ctx, 16, 212, 'SHOW  ' + (a.state === 'running' ? beat : 'AT REST'), a.state === 'running' ? '#f5b53d' : '#a0acb8');
+        scText(ctx, 16, 242, 'FLOOR  H ' + E.h.toFixed(1) + ' M  ·  TILT ' + (E.tiltA * 180 / Math.PI).toFixed(0) + ' DEG', '#a0acb8');
+        scText(ctx, 16, 272, 'CONTROL ROOM  ' + (C.fault ? 'RESET' : (C.maint ? 'MAINT' : 'READY')), C.fault || C.maint ? '#ff6b5e' : '#8f98a4');
+      } });
     if (PK_DM.secret) a.boothDoor = PK_DM.secret;
+    // four live feeds hung from the ceiling in the corners: the hall and the stage on the left, the queue and the
+    // front doors on the right, so the operator can watch the whole ride from the chair
+    var feed = function (x, y, z, ry, camPos, lookAt) {
+      pkRod(x, 3.25, z, x, y + 0.18, z, 0.02, X.iron, g, 6);
+      pkCctvFeed(g, x, y, z, ry, 0.12, camPos, lookAt, function () { return !!a.open; });
+    };
+    feed(-55.6, 2.5, -19.85, 0, [-49, 4.3, -17], [-48.5, 1.4, -23]);      // the entrance hall
+    feed(-55.0, 2.5, -19.85, 0, [-50, 9, -24], [-54.6, 2, -28]);          // the stage
+    feed(-54.4, 2.5, -19.85, 0, [-40, 5, -32], [-42, 1.5, -27]);          // the graveyard queue
+    feed(-53.8, 2.5, -19.85, 0, [-38, 5, -18], [-46, 2, -20]);            // the front doors
   }
 
   // ── The cabin's extras ───────────────────────────────────────────
@@ -990,7 +1015,7 @@
     sign(['SHOW SWITCHES'], 0.56, 0.07, 0, 0.19, 0.002, 0, { bg: 'transparent', fg: '#d8b45a' }, p);
     [['EXIT DOORS', 'exitHold', 'HELD OPEN', 'AUTO'], ['HOUSE LIGHTS', 'house', 'UP', 'SHOW'], ['TURNTABLES', 'turnOn', 'ON', 'OFF'], ['LIFT', 'liftOn', 'ON', 'OFF'], ['MIST', 'mistOn', 'ON', 'OFF']].forEach(function (d, i) {
       var x = -0.3 + i * 0.15;
-      pkCtlToggle(p, x, 0.02, { id: 'dm-' + d[1], on: !!E[d[1]], prompt: d[0], onName: d[2], offName: d[3], act: function (want) { E[d[1]] = want; sfx('click'); return true; } });
+      pkCtlToggle(p, x, 0.02, { id: 'dm-' + d[1], on: !!E[d[1]], prompt: d[0], onName: d[2], offName: d[3], act: function (want) { E[d[1]] = want; if (S.showFx) S.showFx.danse[d[1]] = want; sfx('click'); return true; } });
       sign([d[0]], 0.145, 0.045, x, -0.11, 0.002, 0, { bg: 'transparent', fg: '#e8e0cc' }, p);
     });
   }
@@ -1065,7 +1090,8 @@
   // ── Build ────────────────────────────────────────────────────────
   function pkBuildDanse(p, open) {
     var D = PK_DM, X = pkDmM(), g = new THREE.Group(); scene.add(g); D.g = g;
-    var CX = D.CX, CZ = D.CZ, E = { show: { h: 1.3, tilt: 0, beat: -1 }, mist: [], cues: {}, bar: -1, clock: 0, shake: 0, h: 0, tiltA: 0, spinW: 0, room: 0.9, organ: 0, jo: 0, orch: 0, choir: 0, eyes: 0.5, candleK: 1, stallW: 0, stallA: 0, exitHold: false, house: false, turnOn: true, liftOn: true, mistOn: true };
+    var FXD = (S.showFx && S.showFx.danse) || {};
+    var CX = D.CX, CZ = D.CZ, E = { show: { h: 1.3, tilt: 0, beat: -1 }, mist: [], cues: {}, bar: -1, clock: 0, shake: 0, h: 0, tiltA: 0, spinW: 0, room: 0.9, organ: 0, jo: 0, orch: 0, choir: 0, eyes: 0.5, candleK: 1, stallW: 0, stallA: 0, exitHold: !!FXD.exitHold, house: !!FXD.house, turnOn: FXD.turnOn !== false, liftOn: FXD.liftOn !== false, mistOn: FXD.mistOn !== false };
     // the chapel: ten faces, each with its job inside
     var faces = [];
     for (var k = 0; k < 10; k++) faces.push(pkDmFace(k));
@@ -1088,6 +1114,15 @@
     pkRod(1.75, 3.3, 0.0, 1.75, 3.3, 0.5, 0.025, X.iron, faces[9].g, 4); pkRod(1.75, 3.3, 0.5, 1.75, 3.0, 0.5, 0.01, X.iron, faces[9].g, 4);
     box(0.2, 0.3, 0.2, X.candle, 1.75, 2.82, 0.5, faces[9].g); pkHipRoof(0.26, 0.26, 0.18, X.iron, 1.75, 2.97, 0.5, faces[9].g);
     [-1, 1].forEach(function (s) { var dr = box(0.5, 3.4, 0.25, X.velvet, s * 1.05, 1.75, -PK_DM.T - 0.3, faces[1].g); dr.rotation.y = s * 0.2; });
+    // the way-in curtain: a heavy velvet drape that draws across the arch when the station gates shut (the STN GATES
+    // button), so the stage stays hidden until the riders come in
+    var wayCurtains = [];
+    [-1, 1].forEach(function (s) {
+      var cg = pkMover(faces[1].g, s * 1.05, 0, -PK_DM.T - 0.3);
+      box(1.1, 3.5, 0.26, X.velvet, 0, 1.8, 0, cg);
+      for (var fc = -1; fc <= 1; fc++) box(0.05, 3.4, 0.28, X.velvet, fc * 0.38, 1.75, 0, cg);
+      wayCurtains.push({ g: cg, s: s });
+    });
     // the exit doors: oak on iron straps under a fixed lunette in the arch. Shut through the show, they swing out to the
     // graveyard when the riders get off (or while the cabin's EXIT DOORS switch holds them), and only ever outward
     var lun = new THREE.Mesh(pkExtrudeGeo(pkDmArch(2.2, 0, 1.3), 0.08, 0), X.oakDark); lun.position.set(0, 2.7, -0.16); faces[9].g.add(lun);
@@ -1187,6 +1222,7 @@
     a.boardMin = 12;
     var C = pkCtl(a);
     C.gateObjs.push(function (t) { doors.forEach(function (d) { d.h.rotation.y = d.s * 1.4 * t; }); });
+    C.stationGateObjs.push(function (t) { wayCurtains.forEach(function (w) { w.g.position.x = w.s * (0.55 + 0.5 * t); }); });
     C.barObjs.push(function (b) { bars.forEach(function (bb) { bb.rotation.x = -1.5 * (1 - b); }); });
     // the riders' way: in at the doors, across the hall, through the chapel door to their stall; out by the east door and
     // through the graveyard to the street

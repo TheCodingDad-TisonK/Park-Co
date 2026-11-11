@@ -443,7 +443,19 @@
     box(0.06, 2.05, 0.93, navy, 0, 1.03, 0.47, hinge); var dg = box(0.07, 0.7, 0.6, glass, 0, 1.5, 0.47, hinge); dg.userData.noBake = true;
     sphere(0.035, X.gold, 0.06, 1.0, 0.82, hinge);
     pkRoomDoor(hinge, 0.95, 2.05, -Math.PI / 2 * 0.95, 'the booth door', a);
-    pkRoomKit(g, a, { x: (x0 + x1) / 2, z: (z0 + z1) / 2, y: 0, ry: Math.PI, W: x1 - x0, D: z1 - z0, H: Hb, cabBack: true, cabAt: [-1.5, 1.15], key: [-0.78, 1.9], clock: [0, 2.42], tc: [0.95, 1.3], sw: [(x1 - x0) / 2 - 0.35, (z1 - z0) / 2 - 0.06, Math.PI, 1.25], mon: [0, 2.15, -(z1 - z0) / 2 + 0.6, 0], chair: 1.5, console: 'droom' });
+    pkRoomKit(g, a, { x: (x0 + x1) / 2, z: (z0 + z1) / 2, y: 0, ry: Math.PI, W: x1 - x0, D: z1 - z0, H: Hb, cabBack: true, cabAt: [-1.5, 1.15], key: [-0.78, 1.9], clock: [0, 2.42], tc: [0.95, 1.3], sw: [(x1 - x0) / 2 - 0.35, (z1 - z0) / 2 - 0.06, Math.PI, 1.25], mon: [0, 2.15, -(z1 - z0) / 2 + 0.6, 0], chair: 1.5, console: 'droom',
+      status: function (ctx, sc, a, C) {
+        var E = a.extra, D = PK_DV, out = 0;
+        E.gons.forEach(function (g) { if (g.s < D.sStationIn) out++; });
+        scText(ctx, 16, 212, E.sys === 'running' ? 'SYSTEM RUNNING' : (E.sys === 'parked' ? 'PARKED' : 'STOPPING'), E.sys === 'running' ? '#5fd38d' : '#f5b53d');
+        scText(ctx, 16, 242, 'GONDOLAS  OUT ' + out + '  HOME ' + (E.gons.length - out), '#a0acb8');
+        scText(ctx, 16, 272, 'WALKWAY  ' + ['SLOW', 'NORMAL', 'FAST'][E.walkPos || 1], '#a0acb8');
+      } });
+    var dvWood = std({ color: 0x6a4a30, roughness: 0.6 }), dvBrass = std({ color: 0xc9a050, roughness: 0.3, metalness: 0.8 });
+    box(0.3, 0.03, 0.22, dvWood, -89.6, 0.78, -23.4, g);
+    box(0.28, 0.015, 0.2, std({ color: 0xece4d0, roughness: 0.8 }), -89.6, 0.8, -23.4, g);
+    pkRoundCyl(0.04, 0.55, dvBrass, -89.25, 1.05, -23.3, g, 8).rotation.x = 0.5;
+    pkRoundCyl(0.06, 0.35, dvBrass, -89.25, 1.18, -23.3, g, 10).rotation.x = 0.5;
   }
   // the rail: an I-beam along the whole course, hung from the roof on rods (or from the swamp tree on arms in the spiral)
   function pkDvRail(g) {

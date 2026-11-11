@@ -342,6 +342,26 @@
       box(2.6, 6.2, 0.3, glowMat(0x9fd8ff, 0.55), p.x, 4.1, p.z - 15.6, g);
       box(3.0, 2.4, 2.6, std({ color: 0x8a6a4a, roughness: 0.95 }), p.x + p.r + 2.8, 1.2, p.z + 4.0, g);
       sign(['LOGS'], 1.6, 0.5, p.x + p.r + 2.8, 2.6, p.z + 5.32, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
+    } else if (a.id === 'kround') {
+      // the kids' quarter: balloons, soft play blocks and a parent's bench under a shade sail, on the west
+      // side away from the queue and clear of the station fence and the booth
+      pkBalloonCluster(-66.4, 16.6, g);
+      pkPlayBlocks(-67.6, 23.2, g);
+      pkShadeBench(-66.0, 24.6, g, th);
+    } else if (a.id === 'kpots') {
+      // the tea-party corner: giant spoons, sugar-cube blocks and a teapot fountain on the west edge
+      pkGiantSpoon(-66.5, 26.6, 0.5, g);
+      pkGiantSpoon(-66.0, 33.4, -0.4, g);
+      pkSugarCubes(-65.8, 29.8, g);
+      pkTeapotFountain(-67.0, 31.6, 0.3, g);
+    } else if (a.id === 'kpuffin') {
+      // the arctic corner: a pale ice patch with rocks and puffins, and a fishing boat by the platform
+      pkIcePatch(-66.5, 36.6, g);
+      pkBoulder(-66.5, 36.6, 0.75, g);
+      pkBoulder(-65.0, 35.8, 0.6, g);
+      pkPuffin(-66.5, 36.6, 0.85, -0.3, g);
+      pkPuffin(-65.0, 35.8, 0.7, 0.6, g);
+      pkBoatProp(-64.5, 46.5, 0.5, g);
     }
   }
   // ── Free pieces ──────────────────────────────────────────────────
@@ -440,4 +460,92 @@
     var tube = pkRoundCyl(0.09, 0.7, M.brass, x + 1.4, 1.5, z, parent, 10);
     tube.rotation.z = Math.PI / 2 - 0.35; tube.rotation.y = 0.4;
     sphere(0.08, M.gold, x + 1.4, 1.5, z, parent);
+  }
+  // ── The kids' quarter pieces ──────────────────────────────────────
+  // Small decorative pieces for the three kids' rides on the west lawn. Like the other signature pieces they
+  // carry no solids, so they never block a guest or a lane.
+  function pkBalloonCluster(x, z, parent) {
+    var M = pkMats();
+    pkRoundCyl(0.04, 1.1, M.iron, x, 0.55, z, parent, 6);
+    var cols = [0xd94f4f, 0xf0c04a, 0x4f8fd9, 0xe08fc0, 0x5fd38d];
+    for (var i = 0; i < 6; i++) {
+      var a = i / 6 * Math.PI * 2, r = 0.14 + (i % 3) * 0.07;
+      var by = 1.5 + (i % 3) * 0.18, bx = x + Math.cos(a) * r, bz = z + Math.sin(a) * r;
+      var b = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), std({ color: cols[i % 5], roughness: 0.3 }));
+      b.scale.y = 1.25; b.position.set(bx, by, bz); b.castShadow = true; parent.add(b);
+      pkRod(x, 1.1, z, bx, by - 0.24, bz, 0.004, M.iron, parent, 3);
+    }
+  }
+  function pkPlayBlocks(x, z, parent) {
+    var cols = [0xf0c04a, 0x4f8fd9, 0xe0563f, 0x5fd38d];
+    box(0.6, 0.6, 0.6, std({ color: cols[0], roughness: 0.6 }), x, 0.3, z, parent);
+    cyl(0.3, 0.7, std({ color: cols[1], roughness: 0.6 }), x + 0.85, 0.35, z + 0.2, parent, 12);
+    var cone = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.85, 8), std({ color: cols[2], roughness: 0.6 })); cone.position.set(x + 0.2, 0.42, z + 0.95); cone.castShadow = true; parent.add(cone);
+    var top = box(0.5, 0.5, 0.5, std({ color: cols[3], roughness: 0.6 }), x - 0.75, 0.25, z + 0.35, parent); top.rotation.y = 0.35;
+  }
+  function pkShadeBench(x, z, parent, th) {
+    var M = pkMats();
+    // the bench, facing the ride (east)
+    pkBevelBox(1.5, 0.1, 0.46, MAT.wood, x, 0.4, z, parent, 0.03);
+    pkBevelBox(1.5, 0.5, 0.07, MAT.wood, x, 0.65, z - 0.2, parent, 0.02);
+    [[-0.65, 0.15], [0.65, 0.15], [-0.65, -0.15], [0.65, -0.15]].forEach(function (q) { pkRoundCyl(0.04, 0.4, M.iron, x + q[0], 0.2, z + q[1], parent, 6); });
+    // the shade sail: two posts behind the bench, a tilted coloured panel
+    pkRoundCyl(0.06, 2.5, M.iron, x - 0.8, 1.25, z - 0.4, parent, 8);
+    pkRoundCyl(0.06, 2.5, M.iron, x + 0.8, 1.25, z - 0.4, parent, 8);
+    var sail = box(2.0, 0.03, 1.3, std({ color: th.a, roughness: 0.85, side: THREE.DoubleSide }), x, 2.45, z + 0.1, parent);
+    sail.rotation.x = -0.3;
+    sphere(0.07, M.gold, x - 0.8, 2.55, z - 0.4, parent);
+    sphere(0.07, M.gold, x + 0.8, 2.55, z - 0.4, parent);
+  }
+  function pkGiantSpoon(x, z, ry, parent) {
+    var g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; parent.add(g);
+    var steel = std({ color: 0xe6ebee, roughness: 0.16, metalness: 0.85 });
+    var bowl = new THREE.Mesh(new THREE.SphereGeometry(0.42, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.6), steel);
+    bowl.position.set(0, 0.55, 0); bowl.rotation.x = 0.55; bowl.castShadow = true; g.add(bowl);
+    pkRod(0, 0.4, 0.16, 0, 0.03, 1.9, 0.05, steel, g, 8);
+  }
+  function pkSugarCubes(x, z, parent) {
+    var w = std({ color: 0xf4f4f0, roughness: 0.65 });
+    box(0.5, 0.5, 0.5, w, x, 0.25, z, parent);
+    box(0.5, 0.5, 0.5, w, x + 0.5, 0.25, z + 0.1, parent);
+    box(0.5, 0.5, 0.5, w, x + 0.22, 0.75, z - 0.18, parent);
+    var top = box(0.5, 0.5, 0.5, w, x + 0.22, 1.25, z - 0.18, parent); top.rotation.y = 0.4;
+  }
+  function pkTeapotFountain(x, z, ry, parent) {
+    var g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; parent.add(g);
+    var M = pkMats(), teal = std({ color: 0x2f7f8f, roughness: 0.45 }), cream = std({ color: 0xf4f1e6, roughness: 0.55 });
+    pkRoundCyl(1.0, 0.16, M.stone, 0, 0.08, 0, g, 20);
+    sphere(0.4, teal, 0, 0.62, 0, g);
+    sphere(0.13, cream, 0, 1.05, 0, g);
+    var spout = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.34, 10), teal); spout.rotation.x = -Math.PI / 2; spout.position.set(0.5, 0.7, 0); spout.castShadow = true; g.add(spout);
+    var handle = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.045, 6, 12), teal); handle.position.set(-0.38, 0.72, 0); handle.rotation.y = Math.PI / 2; g.add(handle);
+    pkRod(0.66, 0.72, 0, 0.66, 0.22, 0.28, 0.028, glowMat(0x9fd8ff, 0.8), g, 6);
+  }
+  function pkPuffin(x, z, y, ry, parent) {
+    var g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; parent.add(g);
+    var black = std({ color: 0x1c1c20, roughness: 0.7 }), white = std({ color: 0xf4f4f0, roughness: 0.7 }), orange = std({ color: 0xf0a030, roughness: 0.55 });
+    var body = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), black); body.scale.set(1, 1.4, 0.9); body.position.y = 0.3; body.castShadow = true; g.add(body);
+    var belly = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), white); belly.scale.set(1, 1.35, 0.9); belly.position.set(0, 0.28, 0.09); g.add(belly);
+    var head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), black); head.position.set(0, 0.62, 0.05); g.add(head);
+    var cheek = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 6), white); cheek.position.set(0, 0.61, 0.14); g.add(cheek);
+    var beak = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.16, 8), orange); beak.rotation.x = Math.PI / 2; beak.position.set(0, 0.62, 0.2); g.add(beak);
+    sphere(0.022, std({ color: 0x0a0a0c, roughness: 0.4 }), 0.01, 0.66, 0.13, g);
+    [[-0.07, 0], [0.07, 0]].forEach(function (q) { box(0.05, 0.02, 0.1, orange, q[0], 0.02, 0.02, g); });
+  }
+  function pkIcePatch(x, z, parent) {
+    var m = new THREE.Mesh(new THREE.CircleGeometry(1.7, 24), std({ color: 0xbfe3ef, roughness: 0.85 }));
+    m.rotation.x = -Math.PI / 2; m.position.set(x, 0.012, z); m.receiveShadow = true; parent.add(m);
+  }
+  function pkBoatProp(x, z, ry, parent) {
+    var g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; parent.add(g);
+    var wood = std({ color: 0x8a5a3a, roughness: 0.85 });
+    var hull = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 1.9, 10), wood);
+    hull.rotation.x = Math.PI / 2; hull.position.y = 0.28; hull.castShadow = true; g.add(hull);
+    [[0, -1], [0, 1]].forEach(function (e) {
+      var bow = new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.7, 10), wood);
+      bow.rotation.x = e[1] * Math.PI / 2; bow.position.set(0, 0.28, e[1] * 1.3); bow.castShadow = true; g.add(bow);
+    });
+    pkBevelBox(0.9, 0.05, 0.3, MAT.wood, 0, 0.42, 0, g, 0.02);
+    pkRoundCyl(0.04, 1.3, MAT.wood, 0, 0.95, -0.2, g, 6);
+    box(0.35, 0.22, 0.02, std({ color: 0xf0c04a, roughness: 0.7, side: THREE.DoubleSide }), 0.2, 1.35, -0.2, g);
   }

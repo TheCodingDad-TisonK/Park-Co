@@ -509,6 +509,10 @@ SFX.pkCallBell = function (t) {
   for (var i = 0; i < ring.length; i++) SFX.bell(t + ring[i]);
 };
 SFX.pkCallBell.ringSeconds = 2.6;
+// the coaster's departure horn: a two-tone double beep, sounded as the train leaves the station
+SFX.pkCoasterHorn = function (t) {
+  [0, 0.38].forEach(function (d) { sTone('square', 440, t + d, 0.26, 0.05, { lp: 1700 }); sTone('square', 554, t + d, 0.26, 0.04, { lp: 1700 }); sTone('sine', 880, t + d, 0.2, 0.015, { lp: 2400 }); });
+};
 function pkBuildCoasterConsole(at) {
   pkCtlStart();
   var C = pkCtlState();

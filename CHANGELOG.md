@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.8.0 (2026-11-11): World Update
+
+## Fixed
+- Terrain disappearing in places (committed as v1.7.9).
+- Dragon queue: guests now line up on the platform rows properly during a run.
+- Dragon operator now climbs the stair into the overhead booth (was standing on the ground).
+## Added
+- Coaster: departure horn, fastest-lap readout, live CCTV (replaced the old drawn CAM 1/2), lived-in desk props.
+- Danse Ride: playable organ (HYMN), status screen showing the show's beat, the STN GATES curtain, 4 live CCTV feeds on the front wall, sacristy props, show-effect switches (exit doors / house lights / turntables / lift / mist).
+- Dragon Ride:  PA announcements guests actually react to, dragon-fire / swamp-fog switches.
+- Dream Flight: a SPARKLE button, its own status readout, lived-in booth props.
+- Kids' rides (Roundabout, Pots, Puffin Line); signature dressing pieces.
+- Booth ambience hum when you walk up, and console "faces" that react (twinkling stars, etc.).
+- Show-effect switches now persist across save/load.
+## Improved
+- Removed all trees inside the park (kept the forest ring + outer woods).
+- (Per your request, dropped the glitching Dream Chart and the extra Dream Flight / Joris CCTV screens.)
+
 ## 1.7.9 (2026-11-11): World Update
 
 - After last release terrain dissapeared. Fixed in this build
