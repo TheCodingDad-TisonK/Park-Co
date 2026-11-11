@@ -197,6 +197,8 @@
     var PK_STATIC = [], PK_STATIC_T = 0;
     function pkCollectStatic() {
       PK_STATIC = [];
+      scene.updateMatrixWorld(true);
+      var _box = new THREE.Box3(), _sp = new THREE.Sphere();
       scene.traverse(function (o) {
         if (!o.isMesh || !o.visible || o.userData.baked || o.userData.it) return;
         if (!o.geometry || !o.geometry.attributes.position) return;
@@ -204,6 +206,12 @@
         if (!m || Array.isArray(m) || (m.userData && (m.userData.noBake || m.userData.glow))) return;
         for (var p = o; p; p = p.parent) if (p.userData && p.userData.dynamic) return;
         o.userData.pkStatic = true;
+        // a wide object (the ground plane, the outer lawn) reaches far past its own centre: remember how
+        // far it stretches, so the cull below hides it only when the player is truly outside it, never
+        // because its centre drifted past the fog edge.
+        _box.setFromObject(o);
+        _box.getBoundingSphere(_sp);
+        o.userData.pkStaticR = _sp.radius;
         PK_STATIC.push(o);
       });
     }
@@ -218,8 +226,9 @@
       for (var i = 0; i < PK_STATIC.length; i++) {
         var o = PK_STATIC[i];
         o.getWorldPosition(_v);
-        var dx = _v.x - cx, dz = _v.z - cz, d2 = dx * dx + dz * dz;
-        var show = !(d2 > reach * reach);
+        var dx = _v.x - cx, dz = _v.z - cz;
+        var d = Math.sqrt(dx * dx + dz * dz) - (o.userData.pkStaticR || 0);
+        var show = !(d > reach);
         if (o.visible !== show) o.visible = show;
       }
     }

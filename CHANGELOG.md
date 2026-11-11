@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.9 (2026-11-11): World Update
+
+- After last release terrain dissapeared. Fixed in this build
+
 ## 1.7.8 (2026-11-11): World Update
 
 - Fixed issue with FOG
