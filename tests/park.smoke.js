@@ -346,7 +346,7 @@ module.exports = `
     T.player.y = py; ok(bad.length === 0, 'every flat ride stands in its own station: fence, entrance porch and a separate exit' + (bad.length ? ': ' + bad.join(', ') : '')); }
   // every ride can be walked to from Station Square. When the pathfinder finds no way it falls back to one straight leg to
   // the slot - through whatever fence is in the way - so a long walk that comes back as a single leg is a ride nobody can reach
-  { const blocked = [];
+  { const blocked = [], xp0 = S.expansion.opened.slice(); S.expansion.opened = [1];   // the Skyline takes a line only once stage 1 is open
     T.PK.attractions.forEach((a) => {
       const g = T.pkSpawnGuest(), q0 = a.queue.slice(); g.rec.x = 0; g.rec.z = 4; g.rec.path = []; a.queue.length = 0;
       T.pkAttrQueueJoin(g, a);
@@ -354,6 +354,7 @@ module.exports = `
       if (!P.length || (P.length === 1 && far > 12)) blocked.push(a.id + ' (' + P.length + ' leg, ' + far.toFixed(0) + ' m)');
       T.pkAttrQueueLeave(g, a); g.state = 'leave'; g.attr = null; a.queue.length = 0; q0.forEach((q) => a.queue.push(q));
     });
+    S.expansion.opened = xp0;
     ok(blocked.length === 0, 'every ride is reached on foot from Station Square' + (blocked.length ? ': blocked ' + blocked.join(', ') : '')); }
   // Joris en de Draak: the line forks, a guest picks Water or Vuur at the front, and each boards a seat on that track
   { const a = T.PK.attrById.joris;
@@ -470,7 +471,7 @@ module.exports = `
   // the level ladder and the prices
   ok(T.PK_LEVELS.length === 34 && T.PK_LEVELS[0].name === 'The gate' && T.PK_LEVELS[6].unlock === 'lights' && T.PK_LEVELS[25].name === 'The Skyline' && T.PK_LEVELS[33].name === 'The East Fair', 'the level ladder runs from the gate to the park lights and on to the five expansion stages');
   ok(T.pkPrice(5) === 30 && T.pkPrice(-100) === 5 && T.pkPrice(1000) === 200, 'the ticket price clamps 5 to 200');
-  ok(T.pkOpenCount() === 19, 'every ride is open from the first day (' + T.pkOpenCount() + ')');
+  ok(T.pkOpenCount() === 18 && T.pkOpenCount() === T.pkRideTotal(), 'every ride that can run is open from the first day (' + T.pkOpenCount() + ' of ' + T.pkRideTotal() + '; the Skyline waits for stage 1)');
   { const x0 = T.PK.xp; T.pkXp(60); ok(T.PK.xp === x0 + 60 && T.PK.level >= 2 && T.PK.snackOpen === true && S.snackOpen === true, 'xp opens the snack stand at level 2'); }
   ok(T.pkSnackPrice(1) === 7 && T.pkSnackPrice(-100) === 1, 'the snack price clamps 1 to 40');
   // the snack stand
@@ -704,6 +705,26 @@ module.exports = `
     T.pkSecRotate(0, 0.4, 0.25);
     ok(Math.abs(cam.pan - 0.4) < 1e-9 && Math.abs(cam.tilt - 0.25) < 1e-9 && S.secCams && Math.abs(S.secCams[0][0] - 0.4) < 1e-9, 'a camera pans and tilts, and the aim is saved');
     T.pkSecRotate(0, -cam.pan, -cam.tilt); ok(Math.abs(cam.pan) < 1e-9 && Math.abs(cam.tilt) < 1e-9, 'and it returns to level'); }
+  ok(/^[0-9]+[.][0-9]+[.][0-9]+$/.test(String(T.CO.gameVersion)) && T.CO.gameVersion === window.PARK_VERSION, 'the game reports the version stamp from package.json: ' + T.CO.gameVersion);
+  ok(!/seven rides/.test(document.getElementById('dc-start-stats').textContent) && !/seven rides/.test(T.pkGuide()), 'the start screen and the guide no longer say seven rides');
+  { const sky = T.PK.attrById.skyline, fake = { id: -7, rec: { x: 0, z: 0, path: [] }, state: 'off' }, was = S.expansion.opened.slice();
+    sky.open = true; S.expansion.opened = [];
+    const refused = T.pkAttrQueueJoin(fake, sky) === false && sky.queue.indexOf(fake) < 0 && T.pkRideTotal() === T.PK.attractions.length;
+    S.expansion.opened = [1]; const taken = T.pkAttrQueueJoin(fake, sky) === true;
+    T.pkAttrQueueLeave(fake, sky); S.expansion.opened = was;
+    ok(refused && taken, 'the Skyline takes no queue and is not counted until stage 1 is open, then it does'); }
+  // guests: a walk onto the spot you stand on ends at once, a snack sells whatever the park's bank holds, and a toy is bought once
+  { const r = { x: 1, z: 1, yaw: 0 }, p = [{ x: 1, z: 1 }], done = T.CO.pkWalk(r, p, 1.5, 0.1);
+    ok(done === true && p.length === 0, 'a walk to the spot the guest already stands on arrives at once'); }
+  { const bank0 = S.bank, snack0 = T.PK.snackOpen, toy0 = T.PK.toyOpen, closed0 = T.PK.closed;
+    S.bank = 0; T.PK.snackOpen = true; T.PK.toyOpen = true; T.PK.closed = false;
+    const g = T.pkSpawnGuest(); g.state = 'toSnack'; g.rec.path = []; const n0 = T.PK.today.snacks;
+    T.pkGuestTick(0.1);
+    ok(T.PK.today.snacks === n0 + 1 && S.bank > 0 && g.state === 'off', 'a snack sells with an empty bank, and the guest moves on');
+    g.state = 'toToy'; g.rec.path = []; T.pkGuestTick(0.1); const t1 = T.PK.today.toys;
+    g.state = 'toToy'; g.rec.path = []; T.pkGuestTick(0.1);
+    ok(g.toy === true && T.PK.today.toys === t1, 'a guest buys one toy, not a second');
+    T.PK.snackOpen = snack0; T.PK.toyOpen = toy0; T.PK.closed = closed0; S.bank = bank0; }
   // the pure layer
   ok(T.fmtTime(25.5) === '01:30' && T.money(-1234) === '-$1,234', 'time and money helpers');
   ok(T.bevelGeo(1, 1, 1) === T.bevelGeo(1, 1, 1) && T.propSeed('a', 1) !== T.propSeed('b', 1), 'the geometry cache and the prop seed');

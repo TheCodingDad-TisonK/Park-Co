@@ -78,7 +78,7 @@
     var body = '';
     if (tab === 'park') {
       body = '<p>Day ' + S.day + ' - ' + fmtTime(S.time) + (PK.closed ? ' (closed)' : '') + '</p>' +
-        '<p>Bank ' + money(S.bank) + '<br>Guests in the park ' + PK.guests.length + '<br>Rides open ' + pkOpenCount() + ' of ' + (PK.attractions.length + 1) + '</p>' +
+        '<p>Bank ' + money(S.bank) + '<br>Guests in the park ' + PK.guests.length + '<br>Rides open ' + pkOpenCount() + ' of ' + pkRideTotal() + '</p>' +
         '<p>Today: ' + PK.today.tickets + ' tickets, ' + PK.today.snacks + ' snacks, ' + PK.today.rides + ' rides, ' + money(PK.today.earned) + '</p>' +
         '<p>Ticket ' + money(S.ticketPrice) + ' - snack ' + money(S.snackPrice) + '</p>' +
         btn('ticket5', '', 'Ticket +' + money(5), '') + btn('ticket-5', '', 'Ticket -' + money(5), '') +
@@ -107,23 +107,23 @@
     var body = '';
     if (tab === 'park') {
       body = '<p>Day ' + S.day + ' - ' + fmtTime(S.time) + (PK.closed ? ' (closed)' : '') + '</p>' +
-        '<p>Guests in the park: ' + PK.guests.length + '<br>In the coaster queue: ' + pkQueueWaiting() + '<br>Rides open: ' + pkOpenCount() + ' of ' + (PK.attractions.length + 1) + '</p>' +
+        '<p>Guests in the park: ' + PK.guests.length + '<br>In the coaster queue: ' + pkQueueWaiting() + '<br>Rides open: ' + pkOpenCount() + ' of ' + pkRideTotal() + '</p>' +
         '<p>Tickets today: ' + PK.today.tickets + ' (' + money(PK.today.earned) + ')<br>Snacks today: ' + PK.today.snacks + '<br>Rides today: ' + PK.today.rides + '</p>' +
         '<p>Level ' + PK.level + ' - ' + esc(PK_LEVELS[PK.level - 1].name) + ' (' + PK.xp + ' xp)</p>' +
         btn('ticket5', '', 'Ticket +' + money(5), '') + btn('ticket-5', '', 'Ticket -' + money(5), '');
     } else if (tab === 'rides') {
-      body = '<p>' + pkOpenCount() + ' of ' + (PK.attractions.length + 1) + ' rides open. Guests pick the shortest line.</p>';
+      body = '<p>' + pkOpenCount() + ' of ' + pkRideTotal() + ' rides open. Guests prefer short lines and the featured ride.</p>';
       PK.attractions.forEach(function (a) {
-        var st = !a.open ? 'opens at level ' + a.level
+        var st = !a.open ? 'breaker off'
           : a.state === 'running' ? 'running'
           : a.state === 'boarding' ? 'boarding'
           : a.state === 'unloading' ? 'unloading'
           : a.state + ', ' + pkAttrWaiting(a) + ' waiting';
-        body += '<p>' + esc(a.name) + ': ' + esc(st) + (a.open ? ' - ' + a.cycles + ' cycles, ' + a.riders + ' aboard' : '') + '</p>';
+        body += '<p>' + esc(a.name) + ': ' + esc(st) + (a.open ? ' - ' + (a.continuous ? '' : a.cycles + ' cycles, ') + a.riders + ' aboard' : '') + '</p>';
       });
     } else if (tab === 'ride') {
       body = '<p>The coaster: ' + pkRideWord() + (pkCoasterAuto() ? ' (auto)' : ' (manual)') + (PK.ride.fault ? ' - ' + esc(PK.ride.fault) : '') + '</p>' +
-        '<p>Cycles today: ' + (S.cycles || 0) + '<br>Rides today: ' + PK.today.rides + '<br>Aboard now: ' + PK.ride.riders + ' of ' + PK.seats.length + '</p>' +
+        '<p>Cycles: ' + (S.cycles || 0) + '<br>Rides today: ' + PK.today.rides + '<br>Aboard now: ' + PK.ride.riders + ' of ' + PK.seats.length + '</p>' +
         btn('gates', '', 'Gates', '') + btn('bars', '', 'Restraints', '') + btn('dispatch', '', 'Dispatch', 'primary') +
         btn('stop', '', 'E-stop', '') + btn('auto', '', pkCoasterAuto() ? 'AUTO on' : 'AUTO off', '');
     } else if (tab === 'staff') {
@@ -157,13 +157,15 @@
   }
   function pkGuide() {
     return '<p><b>Park Co</b> - a small park that grows.</p>' +
-      '<p>Guests arrive from the car park. They queue at a ticket window, buy a ticket, pass a turnstile and then pick a ride: the coaster, or any of the seven rides.</p>' +
+      '<p>Guests arrive from the car park. They queue at a ticket window, buy a ticket, pass a turnstile and then pick a ride: the coaster, or any other ride in the park.</p>' +
       '<p><b>The window.</b> Your clerk sells tickets to the line on their own; stand at a window and use it (E or left-click, your choice in Settings) to keep up with a rush (the screen on the counter sells too). The clerk costs ' + money(40) + ' a day from day 2.</p>' +
       '<p><b>The coaster.</b> In the operator room, east of the platform: <b>Gates</b> lifts the platform gates and the queue walks in one seat at a time, <b>Restraints</b> pulls the bars down over the riders, <b>Dispatch</b> sends the train. In the wrong order the screen refuses. An empty train can be sent as a test run. <b>E-stop</b> stops the ride; press it again to reset.</p>' +
       '<p><b>AUTO.</b> Switch AUTO on - on the screen in the operator room, or on any booth screen - and the coaster runs itself: gates, restraints, dispatch, round and round.</p>' +
-      '<p><b>The other rides.</b> The carousel, teacups, ferris wheel, dodgems, drop tower, log flume, Dance Macabre and Dream Flight run automatically when AUTO is on. Each has an operator booth beside it - walk in and work its desk: gates, restraints, dispatch, E-stop, test-run and AUTO. On MANUAL nothing happens on its own: you open the gates, bring the bars down, dispatch, and after the ride raise the bars to let the riders off. Hired operators work the booths in shifts and leave each ride on AUTO when they go. Guests need a ticket before riding.</p>' +
-      '<p><b>Levels.</b> Tickets, rides and snacks earn xp. Each level opens a service: the snack stand, a hire or the park lights.</p>' +
+      '<p><b>The other rides.</b> Every other ride in the park (the flat rides, the coasters, the children rides, the dark rides) runs automatically when AUTO is on. Each has an operator booth beside it - walk in and work its desk: gates, restraints, dispatch, E-stop, test-run and AUTO. On MANUAL nothing happens on its own: you open the gates, bring the bars down, dispatch, and after the ride raise the bars to let the riders off. Hired operators work the booths in shifts and leave each ride on AUTO when they go. Guests need a ticket before riding.</p>' +
+      '<p><b>Levels.</b> Tickets, rides and snacks earn xp. Each level opens a service: the snack stand, a hire or the park lights, and from level 26 the expansion stages.</p>' +
       '<p><b>The Lindenburg Arena.</b> West of the Dark Woods. Work the show from the control room at the top of the grandstand: turn the key, open the gate, let them sit, shut the gate, close the curtain and START. On MANUAL the stage cues are yours: a cue lamp on the STAGE console blinks slowly on standby and fast on GO. TEST SHOW plays it to an empty house; BOW with no show running calls the cast out for a curtain call.</p>' +
+      '<p><b>The Lindenburg Railway.</b> A narrow-gauge steam train loops round the park. Each station has a train control panel: work it to bring the train in, load it and send it on, and mind the level crossings.</p>' +
+      '<p><b>Also.</b> Tab opens your tablet, with the park pages from anywhere. C switches to third person. A golf cart waits at the HQ forecourt, and the bed in the office skips the night to 07:00. A game controller works too.</p>' +
       '<p><b>Fly mode.</b> F3 lifts you off the ground: W A S D along the look, Space up, C down, Shift fast. F3 again to land. Shift+F3 shows the frame rate.</p>' +
       '<p><b>Dev menu.</b> F4 opens it: money and xp, teleport to any ride, spawn or send home guests, the weather, the time of day, and a few tools.</p>';
   }

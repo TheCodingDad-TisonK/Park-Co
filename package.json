@@ -14,6 +14,7 @@
     "build": "node node_modules/co-engine/tools/vendor-three.js && node node_modules/co-engine/tools/build-game.js && node node_modules/co-engine/tools/sync-version.js",
     "check": "node node_modules/co-engine/tools/build-game.js --check && node node_modules/co-engine/tools/sync-version.js && node node_modules/co-engine/tools/lint-gate.js game && node node_modules/co-engine/tools/check-syntax.js",
     "test": "npm run check && electron tests/smoke.js",
+    "soak": "npm run check && electron tests/soak.js",
     "visual": "electron tests/visual.js",
     "brand": "electron node_modules/co-engine/tools/render-brand.js",
     "installer": "npm run check && npm run brand && node node_modules/co-engine/tools/verify-icon.js && electron-builder --win nsis --x64 --publish never"

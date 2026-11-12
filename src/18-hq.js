@@ -180,7 +180,7 @@
       draw: function (c, s) {
         scBg(c, s.w, s.h); scHead(c, s.w, 'PARK CO TODAY', fmtTime(S.time));
         scText(c, 16, 76, 'Guests in the park', '#a0acb8'); scText(c, 250, 76, String(PK.guests.length), '#eef1f5', 20);
-        scText(c, 16, 108, 'Rides open', '#a0acb8'); scText(c, 250, 108, pkOpenCount() + ' / ' + (PK.attractions.length + 1), '#5fd38d', 20);
+        scText(c, 16, 108, 'Rides open', '#a0acb8'); scText(c, 250, 108, pkOpenCount() + ' / ' + pkRideTotal(), '#5fd38d', 20);
         scText(c, 16, 140, 'Tickets sold', '#a0acb8'); scText(c, 250, 140, String(PK.today.tickets), '#eef1f5', 20);
         scText(c, 16, 172, PK.closed ? 'THE PARK IS CLOSED' : 'OPEN 09:00 - 22:00', PK.closed ? '#ff6b5e' : '#f5b53d', 14);
       } });

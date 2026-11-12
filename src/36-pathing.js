@@ -15,7 +15,9 @@
         if (ax * ax + az * az > look * look) break;
         path.shift();
       }
-      var p = path[0], dx = p.x - rec.x, dz = p.z - rec.z, d = Math.sqrt(dx * dx + dz * dz) || 1;
+      var p = path[0], dx = p.x - rec.x, dz = p.z - rec.z, d0 = Math.sqrt(dx * dx + dz * dz), d = d0 || 1;
+      // already standing on the waypoint (a walk to the spot the guest is on): it is reached, not a step of length 1 away
+      if (d0 < 0.001) { if (path.length === 1) { path.length = 0; return true; } path.shift(); return path.length === 0; }
       var move = Math.min(step, d);
       rec.x += dx / d * move; rec.z += dz / d * move;
       rec.yaw = easeYaw(rec.yaw || 0, Math.atan2(dx, dz), Math.min(1, dt * 9));

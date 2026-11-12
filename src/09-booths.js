@@ -128,7 +128,7 @@ function pkBoothGates(a) {
     C.gates = !C.gates;
     if (C.gates) {
       if (a.state === 'idle') { a.state = 'boarding'; a.t = 0; a.boarding = 0; a.manualStart = true; }
-      pkAttrReslot(a);
+      pkAttrQueueReslot(a, true);
       if (a.state === 'boarding' || a.state === 'ready') pkAttrFill(a);
     } else {
       a.manualStart = false;   // shut by hand: the ride must not auto-open the gate for the next batch (it was re-opening as riders left)
@@ -151,7 +151,7 @@ function pkBoothGates(a) {
   if (PK.closed && !a.riders) return pkBoothRefuse('The park is closed');
   if (a.state === 'idle' || a.state === 'unloading' || a.state === 'ready') { a.state = 'boarding'; a.t = 0; a.boarding = 0; a.manualStart = true; }
   C.gates = true; pkAttrBarsUp(a, C);
-  pkAttrReslot(a); pkAttrFill(a);
+  pkAttrQueueReslot(a, true); pkAttrFill(a);
   sfx('ok'); toast(a.name + ': gates open', 'good');
   screenDirtyAll();
   return true;

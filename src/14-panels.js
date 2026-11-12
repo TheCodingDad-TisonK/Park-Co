@@ -17,7 +17,7 @@
   }
   // a lamp that is the panel's own: its own material, written every frame, so the park's light switches (part 01, which
   // collect the glowing lenses once) can never leave a desk lamp stuck dark or lit
-  function pkPnGlow(col) { var m = std({ color: 0x0b0b0b, emissive: col, emissiveIntensity: 0.05, roughness: 0.35 }); m.userData.pkPanelLamp = true; return m; }
+  function pkPnGlow(col) { var m = std({ color: 0x0b0b0b, emissive: col, emissiveIntensity: 0.05, roughness: 0.35 }); m.userData.pkPanelLamp = true; m.userData.noBake = true; return m; }   // noBake: the lens must stay its own mesh, or the static bake folds it away and the lamp never shows
   function pkPnDome() { return PK_PN.geo || (PK_PN.geo = new THREE.SphereGeometry(1, 12, 8)); }
   // an indicator on the plate: a bezel and a domed lens. api.on: true (lit), 'dim' (a glow), 'flash', false
   function pkPnLed(P, x, y, o) {
@@ -254,23 +254,6 @@
       c.fillStyle = S.zone2 || '#4a1414'; c.beginPath(); c.moveTo(x - r * 0.42, y + r * 0.25); c.lineTo(x, y - r * 0.12); c.lineTo(x + r * 0.42, y + r * 0.25); c.lineTo(x + r * 0.42, y + r * 0.42); c.lineTo(x, y + r * 0.05); c.lineTo(x - r * 0.42, y + r * 0.42); c.closePath(); c.fill();
       c.fillStyle = S.acc; c.beginPath(); c.moveTo(x - r * 0.4, y - r * 0.45); c.lineTo(x - r * 0.4, y - r * 0.8); c.lineTo(x - r * 0.2, y - r * 0.6); c.lineTo(x, y - r * 0.85); c.lineTo(x + r * 0.2, y - r * 0.6); c.lineTo(x + r * 0.4, y - r * 0.8); c.lineTo(x + r * 0.4, y - r * 0.45); c.closePath(); c.fill();
     },
-    nocturne: function (c, x, y, r, S) {
-      c.fillStyle = S.acc; c.beginPath(); c.arc(x - r * 0.08, y, r * 0.55, 0, 6.28); c.fill();
-      c.fillStyle = S.zone2 || '#1d1a33'; c.beginPath(); c.arc(x + r * 0.14, y - r * 0.12, r * 0.48, 0, 6.28); c.fill();
-      c.fillStyle = S.ink; [[0.45, -0.5, 0.07], [0.62, 0.1, 0.05], [0.3, 0.45, 0.04], [0.65, -0.18, 0.03]].forEach(function (s) { c.beginPath(); c.arc(x + s[0] * r, y + s[1] * r, s[2] * r, 0, 6.28); c.fill(); });
-    },
-    wreck: function (c, x, y, r, S) {
-      c.strokeStyle = S.acc; c.lineWidth = r * 0.1; c.lineCap = 'round';
-      c.beginPath(); c.arc(x, y - r * 0.62, r * 0.13, 0, 6.28); c.moveTo(x, y - r * 0.5); c.lineTo(x, y + r * 0.62); c.moveTo(x - r * 0.32, y - r * 0.3); c.lineTo(x + r * 0.32, y - r * 0.3); c.stroke();
-      c.beginPath(); c.arc(x, y + r * 0.1, r * 0.55, 0.25, Math.PI - 0.25); c.stroke();
-      c.fillStyle = S.acc; [-1, 1].forEach(function (s) { c.beginPath(); c.moveTo(x + s * r * 0.6, y + r * 0.25); c.lineTo(x + s * r * 0.42, y + r * 0.1); c.lineTo(x + s * r * 0.4, y + r * 0.34); c.fill(); });
-    },
-    moonwood: function (c, x, y, r, S) {
-      c.fillStyle = S.ink; c.beginPath(); c.arc(x + r * 0.42, y - r * 0.5, r * 0.18, 0, 6.28); c.fill();
-      c.fillStyle = S.acc; c.fillRect(x - r * 0.07, y - r * 0.05, r * 0.14, r * 0.8);
-      [[0, -0.35, 0.42], [-0.32, -0.12, 0.3], [0.3, -0.1, 0.3], [0, -0.62, 0.25]].forEach(function (b) { c.beginPath(); c.arc(x + b[0] * r, y + b[1] * r, b[2] * r, 0, 6.28); c.fill(); });
-      c.strokeStyle = S.acc; c.lineWidth = r * 0.06; c.beginPath(); c.moveTo(x, y + r * 0.75); c.lineTo(x - r * 0.35, y + r * 0.82); c.moveTo(x, y + r * 0.75); c.lineTo(x + r * 0.35, y + r * 0.82); c.stroke();
-    },
     coaster: function (c, x, y, r, S) {
       c.strokeStyle = S.ink; c.lineWidth = r * 0.12; c.lineCap = 'round'; c.lineJoin = 'round';
       c.beginPath(); c.moveTo(x - r * 0.85, y + r * 0.55); c.lineTo(x - r * 0.45, y - r * 0.65); c.quadraticCurveTo(x - r * 0.3, y - r * 0.8, x - r * 0.15, y - r * 0.55); c.lineTo(x + r * 0.05, y + r * 0.2);
@@ -393,7 +376,7 @@
       g2: { unit: 'rpm', min: 0, max: 2, ticks: 4, red: 0.8, get: function (T) { return T.rpm / 2; } },
       sig: { label: 'CHIMES', sfx: 'pkWheelChime', words: 'the wheel chimes ring', col: 'sky' },
       ann: [['voice', 'CHIMES', '#9fd0ff'], ['wind', 'WIND\nOK', '#5fd38d']],
-      tele: function (a, C, T) { return ['WHEEL ' + T.rpm.toFixed(2) + ' RPM  WIND ' + T.wind.toFixed(1) + ' M/S', 'CABIN ' + (T.deck + 1) + ' AT DECK  TOP 19.4 M']; } },
+      tele: function (a, C, T) { return ['WHEEL ' + T.rpm.toFixed(2) + ' RPM  WIND ' + T.wind.toFixed(1) + ' M/S', 'CABIN ' + (T.deck + 1) + ' AT DECK  TOP 20.0 M']; } },
     dodgems: { style: 'tread', title: 'The Dodgem Arena', model: 'AUTOSCOOTER 12 · CEILING GRID 96 V DC', kind: 'arena', seatCol: 0xff6b5e,
       caps: { test: 'red' },
       g2: { unit: 'volts DC', min: 0, max: 120, ticks: 6, red: 0.9, get: function (T) { return T.volts / 120; } },
@@ -412,7 +395,7 @@
       sig: { label: 'DOCK BELL', sfx: 'pkFlumeBell', words: 'the dock bell rings', col: 'teal' },
       ann: [['voice', 'DOCK\nBELL', '#7fd0ff'], ['pumps', 'PUMPS\nRUNNING', '#5fd38d']],
       tele: function (a, C, T) { return ['FLOW ' + T.flow.toFixed(0) + ' M3/H  LVL ' + T.level.toFixed(0) + '%', 'LOGS ' + T.n + '  ' + T.block + '  ' + (T.v * 3.6).toFixed(0) + ' KM/H']; } },
-    danse: { style: 'gothic', title: 'Dance Macabre', model: 'DYNAMIC MOTION STAGE 6 · 36 SEATS · 3 M DROP', kind: 'stage', seatCol: 0xff8a3d,
+    danse: { style: 'gothic', title: 'Dance Ride', model: 'DYNAMIC MOTION STAGE 6 · 36 SEATS · 3 M DROP', kind: 'stage', seatCol: 0xff8a3d,
       caps: { test: 'purple', station: 'cream' },
       g2: { unit: 'deg', min: 0, max: 14, ticks: 7, red: 0.86, get: function (T) { return (T.tilt || 0) / 14; } },
       sig: { label: 'ORGAN', sfx: 'pkDanseOrgan', words: 'the organ strikes up the dance', col: 'purple' },

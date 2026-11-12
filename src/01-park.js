@@ -5,7 +5,7 @@
   // for the coaster and ride it. The player works the window and the ride.
   var PK_GATE_Z = 30, PK_PLATFORM_Y = 0.6, PK_STATION_Z = -4.6, PK_KIDS_Z = 56;   // PK_KIDS_Z: the south fence of the kids' garden
   // the park is a long rectangle: the gate at the south, the coaster across the north, and rides either side of the midway
-  var PK_PARK = { x0: -72, x1: 123, z0: -118, z1: 70 };   // z0 was -95: the north fence moved back for the bigger indoor halls; x1 was 72, out east for The Dragon and The Firebird
+  var PK_PARK = { x0: -72, x1: 123, z0: -118, z1: 70 };   // z0 was -95: the north fence moved back for the bigger halls
   // walkable rectangles laid by other parts outside the palisade: the railway stations' platforms, ramps and footpaths (part 41)
   var PK_WALK_EXTRA = [];
   // the draw distance: how far the eye (and the renderer) sees. The fog's far edge also cuts the camera's far plane, so
@@ -26,7 +26,7 @@
     { id: 'dodgems',   name: 'Dodgems',      x: 56,  z: 3,  r: 8.2,  q: [44, 3],    level: 8 },
     { id: 'droptower', name: 'Drop tower',   x: -54, z: -52, r: 6.5, q: [-44, -52], level: 9 },
     { id: 'flume',     name: 'Log flume',    x: 54,  z: -32, r: 9.0, q: [46.4, -24], level: 10 },
-    { id: 'danse',     name: 'Dance Macabre',  x: -58, z: -24, r: 12,  q: [-44, -24],  level: 11, qside: -1, pad: 0.02 }   // part 49: the boarding row at the abbey's doors; the abbey lays its own ground
+    { id: 'danse',     name: 'Dance Ride',  x: -58, z: -24, r: 12,  q: [-44, -24],  level: 11, qside: -1, pad: 0.02 }   // part 49: the boarding row at the abbey's doors; the abbey lays its own ground
   ];
   // the ladder: what the park earns its way to. Every ride is open from the first day; the levels open the services.
   var PK_LEVELS = [
@@ -364,7 +364,6 @@
     if (Math.abs(z - 20) < 5 && Math.abs(x) < 32) return false;   // the carousel and ferris paths
     if (Math.abs(z - 3) < 5 && Math.abs(x) < 32) return false;    // the teacup and dodgem paths
     if (z > 27) return false;
-    if (typeof PK_INDOOR !== 'undefined') for (var k in PK_INDOOR) { var hb = PK_INDOOR[k].box; if (x > hb[0] - 3 && x < hb[1] + 3 && z > hb[2] - 3 && z < hb[3] + 3) return false; }
     if (typeof pkThemeKeepClear === 'function' && pkThemeKeepClear(x, z)) return false;
     return true;
   }
@@ -505,7 +504,7 @@
   }
   // ── The game ──────────────────────────────────────────────────────
   var GAME = {
-    handle: 'PARK_CO', version: '0.2.1', editMode: false,
+    handle: 'PARK_CO', versionGlobal: 'PARK_VERSION', editMode: false,
     floorY: function (x, z, y) { return pkFloor(x, z, y); },
     insideWalk: function (x, z) { return pkInsidePark(x, z); },
     // the coaster's control room (part 03, PK_OP): indoors, under its roof, inside its four walls
@@ -558,8 +557,8 @@
     onEnter: function (loaded) { pkLog('The gate opens. Day ' + S.day + '.'); if (!loaded && S.clerk) toast('Your clerk works the ticket window - wages from day 2', 'good'); },
     tick: function (dt) { pkTick(dt); },
     startStats: function (loaded) {
-      return loaded ? ['Day ' + S.day, money(S.bank), 'level ' + PK.level, pkOpenCount() + ' of ' + (PK.attractions.length + 1) + ' rides open']
-        : ['A small park', money(500), 'one coaster', 'seven rides to open'];
+      return loaded ? ['Day ' + S.day, money(S.bank), 'level ' + PK.level, pkOpenCount() + ' of ' + pkRideTotal() + ' rides open']
+        : ['A small park', money(500), 'one coaster', (PK.attractions && PK.attractions.length ? PK.attractions.length : 'many') + ' more rides to run'];
     },
     startNote: function (loaded) { return loaded ? 'Slot ' + CO.save.slot + ' · last saved ' + (S.savedAt ? new Date(S.savedAt).toLocaleString() : 'never') : 'Slot ' + CO.save.slot + ' · a new park'; },
     hud: function () {
@@ -569,7 +568,7 @@
       var r = $('h-ride');
       if (r) {
         var pr = PK.playerRide, on = pr ? (pr.kind === 'coaster' ? 'the coaster' : pr.a && pr.a.name) : '';
-        r.textContent = (PK.duty ? 'On duty at ' + PK.duty.name + ' · ' : '') + (on ? 'Riding ' + on + ' · ' : '') + 'Coaster: ' + pkRideWord() + (pkCoasterAuto() ? ' (auto)' : '') + ' · ' + pkOpenCount() + ' of ' + (PK.attractions.length + 1) + ' rides open';
+        r.textContent = (PK.duty ? 'On duty at ' + PK.duty.name + ' · ' : '') + (on ? 'Riding ' + on + ' · ' : '') + 'Coaster: ' + pkRideWord() + (pkCoasterAuto() ? ' (auto)' : '') + ' · ' + pkOpenCount() + ' of ' + pkRideTotal() + ' rides open';
       }
     },
     panel: function (kind, tab) { return pkPanel(kind, tab); },
@@ -584,7 +583,7 @@
       spawn: function (n) { var k = clamp(+n || 1, 1, 20); pkSpawnLater(k); return k + ' guests on their way'; },
       auto: function () { var on = pkSetAuto(!pkCoasterAuto()); return 'coaster auto ' + (on ? 'on' : 'off'); },
       dispatch: function () { return pkDispatch() ? 'dispatched' : 'the ride will not go: ' + PK.ride.fault; },
-      rides: function () { return pkOpenCount() + ' of ' + (PK.attractions.length + 1) + ' open: ' + pkRideList(); },
+      rides: function () { return pkOpenCount() + ' of ' + pkRideTotal() + ' open: ' + pkRideList(); },
       open: function (id) { return pkOpenRide(String(id || '')) ? 'opened ' + id : 'no ride called ' + id; },
       // ── a fuller dev console: money, the clock, the park, the rides, the guests and the weather ──
       bank: function () { return 'bank ' + money(S.bank); },
@@ -592,7 +591,7 @@
       day: function (d) { if (typeof d === 'number') { S.day = Math.max(1, Math.round(d)); hudDirty = true; screenDirtyAll(); } return 'day ' + S.day; },
       night: function () { S.time = 21; hudDirty = true; return 'night: ' + fmtTime(S.time); },
       dawn: function () { S.time = 7; hudDirty = true; return 'dawn: ' + fmtTime(S.time); },
-      status: function () { return 'day ' + S.day + ' · ' + fmtTime(S.time) + ' · bank ' + money(S.bank) + ' · ' + PK.guests.length + ' guests · ' + pkOpenCount() + '/' + (PK.attractions.length + 1) + ' rides open · weather ' + (S.weather && S.weather.kind || 'clear'); },
+      status: function () { return 'day ' + S.day + ' · ' + fmtTime(S.time) + ' · bank ' + money(S.bank) + ' · ' + PK.guests.length + ' guests · ' + pkOpenCount() + '/' + pkRideTotal() + ' rides open · weather ' + (S.weather && S.weather.kind || 'clear'); },
       where: function () { return player ? ('player at ' + Math.round(player.x * 10) / 10 + ', ' + Math.round(player.z * 10) / 10 + (player.y ? ', y ' + Math.round(player.y * 10) / 10 : '')) : 'no player'; },
       spawnhere: function (n) { var k = clamp(+n || 1, 1, 30); for (var i = 0; i < k; i++) { var g = pkSpawnGuest(); if (player && g && g.rec) { g.rec.x = player.x + randf(-2, 2); g.rec.z = player.z + randf(-2, 2); g.rec.path = []; } } return k + ' guests appear by the player'; },
       kick: function () { var n = 0; PK.guests.forEach(function (g) { if (g && g.state !== 'gone' && g.state !== 'leave' && g.state !== 'trainRide' && g.state !== 'trainAlight') { n++; } }); if (typeof pkCloseGuests === 'function') pkCloseGuests(); if (typeof TR !== 'undefined' && TR.guestQueue) TR.guestQueue.length = 0; return n + ' guests sent home'; },
@@ -623,7 +622,7 @@
         pkCoasterAuto: pkCoasterAuto,
         pkSeats: function () { return PK.seats; }, pkCounts: function () { return { guests: PK.guests.length, queue: PK.queue.length, seats: PK.seats.length, cars: PK.cars.length, track: PK.len }; },
         pkBuildCoaster: pkBuildCoaster, pkBuildOperatorRoom: pkBuildOperatorRoom, pkBuildSnack: pkBuildSnack, pkBuildIceCream: pkBuildIceCream, pkBuildToys: pkBuildToys,
-        pkBuildAttractions: pkBuildAttractions, pkOpenRide: pkOpenRide, pkOpenCount: pkOpenCount, pkRideList: pkRideList,
+        pkBuildAttractions: pkBuildAttractions, pkOpenRide: pkOpenRide, pkOpenCount: pkOpenCount, pkRideTotal: pkRideTotal, pkRideList: pkRideList,
         pkSetRideOpen: pkSetRideOpen, pkCoasterOpen: pkCoasterOpen,
         pkOffice: pkOffice, pkService: pkService, pkFire: pkFire, pkAdminPanel: pkAdminPanel,
         pkAttractions: function () { return PK.attractions; }, pkAttraction: function (id) { return PK.attrById[id]; },

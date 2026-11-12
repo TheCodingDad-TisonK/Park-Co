@@ -19,7 +19,7 @@ or `node_modules/co-engine` by hand.
 - The Log Flume is a timber mill (station house, water wheel, rock gorge); Baron's Drop has a gatehouse tower.
 - Guests: coordinated outfit palettes, hats/glasses, slight height variation; arrivals spread over the forecourt and
   queued instead of built twenty at a time.
-- The walk across the park: heap + octile A* with the engine's finder as the fallback; the Wild Hunt forecourt is paved.
+- The walk across the park: the engine's path finder, with a walk-along that stays on the paving (a heap A* was tried and dropped, it left the paving); the Wild Hunt forecourt is paved.
 
 ## Still open
 

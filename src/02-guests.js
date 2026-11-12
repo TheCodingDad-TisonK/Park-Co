@@ -124,6 +124,7 @@
   // A locked coaster (key OFF) still takes a line: the guests stand and wait for it to open, and give up in time (pkGuestBored).
   function pkQueueJoin(gu) {
     if (gu.gaveUp && gu.gaveUp.coaster) return false;
+    if ((S.wear || 0) >= 90) return false;   // out of service until it is serviced: the line does not refill
     if (gu.state === 'walkQueue' || gu.state === 'queue' || gu.state === 'board' || gu.state === 'seated') return false;
     if (!PK.queue || PK.queue.indexOf(gu) >= 0) return false;
     if (!PK_QUEUE_SLOTS || PK.queue.length >= PK_QUEUE_SLOTS.length) return false;
@@ -139,6 +140,7 @@
   // prevents arrivals from racing for the same queue position while in flight.
   function pkAttrQueueJoin(gu, a) {
     if (!a || !a.open || !a.queue || a.queue.indexOf(gu) >= 0) return false;
+    if (a.canQueue && !a.canQueue()) return false;   // a ride that cannot run yet takes no line (the Skyline before stage 1)
     if (!a.seats || a.queue.length >= a.seats.length * 2) return false;
     gu.attr = a.id;
     gu.lockWait = 0;
@@ -154,11 +156,11 @@
     if (i >= 0) { a.queue.splice(i, 1); if (typeof pkAttrQueueReslot === 'function') pkAttrQueueReslot(a); screenDirtyAll(); }
     gu.attr = null; gu.slot = -1;
   }
-  function pkAttrQueueReslot(a) {
+  function pkAttrQueueReslot(a, reroute) {   // reroute: a guest still walking up to the line is sent to the new slot too
     if (!a || !a.queue) return;
     for (var i = 0; i < a.queue.length; i++) {
       var gu = a.queue[i];
-      if (gu.slot === i) continue;
+      if (gu.slot === i && !(reroute && gu.state === 'walkAttr')) continue;
       var was = gu.slot;
       gu.slot = i;
       if (gu.state === 'walkAttr' || gu.state === 'qwait' || gu.state === 'qmove') {
@@ -185,15 +187,17 @@
     for (var i = 0; i < PK.queue.length; i++) if (PK.queue[i].state === 'queue') n++;
     return n;
   }
-  // Waiting in a line for a ride that is locked (its operator key OFF) wears out: past the guest's patience they leave the
-  // line, say so, and go and find something else. A ride that is open keeps its line; it is the lock nobody waits out.
+  // Waiting in a line for a ride that is locked (its operator key OFF, a fault, MAINT, or MANUAL with nobody at the desk) wears out: past the guest's patience they leave the
+  // line, say so, and go and find something else. A ride that is running keeps its line.
   function pkGuestBored(gu, dt) {
     var coaster = gu.state === 'queue' || gu.state === 'walkQueue', at = coaster ? null : (PK.attrById ? PK.attrById[gu.attr] : null);
-    var locked = coaster ? !S.coasterKey : !!(at && at.ctl && !at.ctl.key);
-    if (!locked) return;
+    var locked = coaster ? (!S.coasterKey || !!(PK.ride && PK.ride.fault)) : !!(at && at.ctl && (!at.ctl.key || at.ctl.fault || at.ctl.maint));
+    // MANUAL with nobody on duty or clocked in at the ride: nothing will move, but they wait longer than for a lock
+    var unstaffed = !locked && !coaster && !!(at && at.ctl && !at.ctl.auto && !(PK.duty && PK.duty.id === at.id) && !(typeof pkOpAt === 'function' && pkOpAt(at.id)));
+    if (!locked && !unstaffed) { gu.lockWait = 0; return; }
     gu.lockWait = (gu.lockWait || 0) + dt;
     if (!gu.patience) gu.patience = randf(70, 160);
-    if (gu.lockWait < gu.patience) return;
+    if (gu.lockWait < gu.patience * (unstaffed ? 1.7 : 1)) return;
     gu.gaveUp = gu.gaveUp || {};
     if (coaster) {
       gu.gaveUp.coaster = true;
@@ -297,27 +301,27 @@
       // nothing to do but enjoy it
     } else if (gu.state === 'toSnack') {
       if (arrived) {
-        if (!PK.closed && PK.snackOpen && S.bank >= S.snackPrice) {
+        if (!PK.closed && PK.snackOpen) {
           pay(S.snackPrice, 'Snack'); PK.today.snacks++; PK.today.earned += S.snackPrice; pkXp(1);
           gu.ate = true; gu.trash = true; gu.mood = 'happy'; gu.carryItem = 'fries'; pkGuestItemEnsure(gu, 'fries'); sfx('cash'); say(g, 'Thanks!'); screenDirtyAll(); hudDirty = true;
         }
-        if (PK.closed || S.bank < S.snackPrice) pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
+        if (PK.closed) pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
         else gu.state = 'off';
       }
     } else if (gu.state === 'toIce') {
       if (arrived) {
-        if (!PK.closed && PK.iceOpen && S.bank >= S.icePrice) {
+        if (!PK.closed && PK.iceOpen) {
           pay(S.icePrice, 'Ice cream'); PK.today.ice = (PK.today.ice || 0) + 1; PK.today.earned += S.icePrice; pkXp(1);
           gu.ate = true; gu.trash = true; gu.mood = 'happy'; gu.carryItem = 'ice'; pkGuestItemEnsure(gu, 'ice'); sfx('cash'); say(g, 'Thanks!'); screenDirtyAll(); hudDirty = true;
         }
-        if (PK.closed || S.bank < S.icePrice) pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
+        if (PK.closed) pkGo(gu, randf(-14, 14), randf(40, 56), 'leave');
         else gu.state = 'off';
       }
     } else if (gu.state === 'toToy') {
       if (arrived) {
-        if (!PK.closed && PK.toyOpen && S.bank >= S.toyPrice) {
+        if (!PK.closed && PK.toyOpen && !gu.toy) {
           pay(S.toyPrice, 'Toy'); PK.today.toys = (PK.today.toys || 0) + 1; PK.today.earned += S.toyPrice; pkXp(1);
-          gu.mood = 'happy'; gu.carryItem = 'toy'; pkGuestItemEnsure(gu, 'toy'); sfx('cash'); say(g, 'Thanks!'); screenDirtyAll(); hudDirty = true;
+          gu.toy = true; gu.mood = 'happy'; gu.carryItem = 'toy'; pkGuestItemEnsure(gu, 'toy'); sfx('cash'); say(g, 'Thanks!'); screenDirtyAll(); hudDirty = true;
         }
         gu.state = 'off';
       }
@@ -328,9 +332,9 @@
       if (!rec.path.length && performance.now() - PK_THINK_T0 < PK_THINK_MS) {
         if (PK.closed || gu.goHome) { gu.goHome = false; pkGo(gu, randf(-14, 14), randf(40, 56), 'leave'); }
         else if (gu.trash && pkGuestBinGo(gu)) { /* off to the nearest bin */ }
-        else if (PK.snackOpen && !gu.ate && gu.hunger > 60 && S.bank >= S.snackPrice) pkGo(gu, -13, 10.4, 'toSnack');
-        else if (PK.iceOpen && !gu.ate && gu.hunger > 50 && S.bank >= S.icePrice) pkGo(gu, -8, 10.4, 'toIce');
-        else if (PK.toyOpen && Math.random() < 0.15) pkGo(gu, -18, 10.4, 'toToy');
+        else if (PK.snackOpen && !gu.ate && gu.hunger > 60) pkGo(gu, -13 + randf(-0.8, 0.8), 10.4 + randf(0, 0.6), 'toSnack');
+        else if (PK.iceOpen && !gu.ate && gu.hunger > 50) pkGo(gu, -8 + randf(-0.8, 0.8), 10.4 + randf(0, 0.6), 'toIce');
+        else if (PK.toyOpen && !gu.toy && Math.random() < 0.15) pkGo(gu, -18 + randf(-0.8, 0.8), 10.4 + randf(0, 0.6), 'toToy');
         else if (!gu.trash && randf(0, 1) < 0.22 && pkGuestLifeStart(gu)) { /* a bench, a phone call, a smoke, a chat */ }
         else if ((gu.rides || 0) < 5 && randf(0, 1) < 0.10 && typeof trGuestQueueJoin === 'function' && TR.st && TR.st.length && trGuestQueueJoin(gu)) { gu.trainAt = undefined; /* off to the Lindenburg Railway */ }
         else if ((gu.rides || 0) < 4 && randf(0, 1) < 0.8 && (pkQueueJoin(gu) || pkAttrPick(gu))) { /* off to another ride */ }

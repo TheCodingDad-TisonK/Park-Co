@@ -736,7 +736,7 @@
         if (best) {
           a.queue.shift(); gu.seat = best.st; best.st.guest = gu; gu.slot = -1; gu.state = 'walkSeat';
           var w = pkAttrSeatWorld(best.st); gu.rec.path = route({ x: gu.rec.x, z: gu.rec.z }, { x: w.x, z: w.z });
-          pkAttrReslot(a); screenDirtyAll(); E.loadT = 0.6;
+          pkAttrQueueReslot(a, true); screenDirtyAll(); E.loadT = 0.6;
         }
       }
     }

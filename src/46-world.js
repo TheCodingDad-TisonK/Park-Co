@@ -604,7 +604,7 @@
         else { spanTruss[P2.length - 1] = 1; PK_XP.log = (PK_XP.log || []); PK_XP.log.push('skyline: the ' + gapL.toFixed(0) + ' m span has no clear spot, so it is a truss span'); }
       }
       piers = P2;
-      if (window.console) { PK_XP.log.forEach(function (t) { window.console.log(t); }); }
+      if (window.console && CO.editor && CO.editor.on) { PK_XP.log.forEach(function (t) { window.console.log(t); }); }
       PK_XP.skyline = { spans: spanTruss, piers: piers.length };
     }
     // the finished line's own materials (stage 1): painted steel, a stone cornice, Park Co green railings

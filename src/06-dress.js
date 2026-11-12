@@ -9,7 +9,7 @@
     dodgems:   { a: 0xe0563f, b: 0xf0c04a, ground: 0x8a8f96, name: 'The Dodgem Arena' },
     droptower: { a: 0x3a3f48, b: 0xf0c04a, ground: 0x9a938a, name: 'The Drop' },
     flume:     { a: 0x3f7fa8, b: 0x8a6a4a, ground: 0x8a9a7a, name: 'The Log Flume' },
-    danse:     { a: 0x4a4a55, b: 0xff8a3d, ground: 0x6e6a60, name: 'Dance Macabre' }
+    danse:     { a: 0x4a4a55, b: 0xff8a3d, ground: 0x6e6a60, name: 'Dance Ride' }
   };
   // the pavers, tinted toward the ride's own colour so each plot reads as a place of its own
   var PK_PADS = {};
@@ -332,15 +332,21 @@
       box(0.1, 0.1, 10, glowMat(0xff5f8a, 1.1), p.x - 7.05, 3.55, p.z, g);
       box(0.1, 0.1, 10, glowMat(0xff5f8a, 1.1), p.x + 7.05, 3.55, p.z, g);
     } else if (a.id === 'droptower') {
-      for (var h = 0; h < 5; h++) cyl(0.64, 0.5, std({ color: 0xf0c04a, roughness: 0.6 }), p.x, 5 + h * 5.2, p.z, g, 12);
       box(5.0, 0.3, 3.0, MAT.steelDark, p.x, 3.2, p.z - 6.5, g);
       box(0.2, 3.0, 0.2, MAT.steel, p.x - 2.4, 1.5, p.z - 6.5, g);
       box(0.2, 3.0, 0.2, MAT.steel, p.x + 2.4, 1.5, p.z - 6.5, g);
     } else if (a.id === 'flume') {
       // boulders along the channel: lumpy flat-shaded granite at varied scales, half sunk into the ground
       for (var r = 0; r < 18; r++) pkBoulder(p.x + randf(-4.6, 4.6), p.z + randf(-23, 11), randf(0.55, 1.25), g);
-      box(2.6, 6.2, 0.3, glowMat(0x9fd8ff, 0.55), p.x, 4.1, p.z - 15.6, g);
-      box(3.0, 2.4, 2.6, std({ color: 0x8a6a4a, roughness: 0.95 }), p.x + p.r + 2.8, 1.2, p.z + 4.0, g);
+      // the log store: a stack of sawn logs under a lean-to, with the board on its post
+      var lgx = p.x + p.r + 2.8, lgz = p.z + 4.0, barkM = pkMats().bark, endM = std({ color: 0xc79a62, roughness: 0.8 });
+      [[-0.9, 0.4], [0, 0.4], [0.9, 0.4], [-0.45, 1.15], [0.45, 1.15], [0, 1.9]].forEach(function (q) {
+        var lg = cyl(0.42, 2.6, barkM, lgx + q[0], q[1], lgz, g, 14); lg.rotation.x = Math.PI / 2;
+        [-1.31, 1.31].forEach(function (ez) { var en = new THREE.Mesh(new THREE.CircleGeometry(0.4, 14), endM); en.position.set(lgx + q[0], q[1], lgz + ez); if (ez < 0) en.rotation.y = Math.PI; g.add(en); });
+      });
+      [[-1.5, -1.2], [1.5, -1.2], [-1.5, 1.2], [1.5, 1.2]].forEach(function (q) { box(0.16, 2.9, 0.16, std({ color: 0x5c4630, roughness: 0.9 }), lgx + q[0], 1.45, lgz + q[1], g); });
+      var lt = box(3.6, 0.1, 3.2, pkMats().slate, lgx, 2.95, lgz, g); lt.rotation.z = 0.12;
+      solid(lgx - 1.5, lgx + 1.5, lgz - 1.3, lgz + 1.3, 0, 2.4);
       sign(['LOGS'], 1.6, 0.5, p.x + p.r + 2.8, 2.6, p.z + 5.32, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
     } else if (a.id === 'kround') {
       // the kids' quarter: balloons, soft play blocks and a parent's bench under a shade sail, on the west

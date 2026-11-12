@@ -197,7 +197,7 @@
     var tw = (W - 30) / 4;
     pkPCTile(c, X, Y, tw, 78, 'Bank', money(S.bank), '#f5b53d', 'earned today ' + money(PK.today.earned || 0));
     pkPCTile(c, X + (tw + 10), Y, tw, 78, 'Guests', String(PK.guests.length), '#8fc3ff', 'in the park now');
-    pkPCTile(c, X + (tw + 10) * 2, Y, tw, 78, 'Rides open', pkOpenCount() + ' / ' + (PK.attractions.length + 1), '#5fd38d', S.coasterKey ? 'coaster key on' : 'coaster key off');
+    pkPCTile(c, X + (tw + 10) * 2, Y, tw, 78, 'Rides open', pkOpenCount() + ' / ' + pkRideTotal(), '#5fd38d', S.coasterKey ? 'coaster key on' : 'coaster key off');
     pkPCTile(c, X + (tw + 10) * 3, Y, tw, 78, 'Tickets', String(PK.today.tickets), '#eef1f5', 'rides ridden ' + PK.today.rides);
     // the gate: yours to open and shut, not the clock
     var gy = Y + 90;

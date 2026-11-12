@@ -259,7 +259,7 @@
     pkSignpost(-28.4, 0.4, [['TEACUPS & KIDS <', Math.PI], ['DARK WOODS ^', Math.PI / 2], ['STATION SQUARE >', 0]]);
     pkSignpost(37.4, 0.4, [['DODGEMS & BARON >', 0], ['COASTER COUNTRY ^', Math.PI / 2], ['< STATION SQUARE', Math.PI]]);
     // where the streets cross the Garden Walk
-    pkSignpost(-28.4, -41.4, [['GARDEN WALK >', 0], ['DROP TOWER ^', Math.PI / 2], ['DANCE MACABRE v', -Math.PI / 2]]);
+    pkSignpost(-28.4, -41.4, [['GARDEN WALK >', 0], ['DROP TOWER ^', Math.PI / 2], ['DANCE RIDE v', -Math.PI / 2]]);
     pkSignpost(37.4, -41.4, [['< GARDEN WALK', Math.PI], ['WILD HUNT ^', Math.PI / 2], ['LOG FLUME v', -Math.PI / 2]]);
     // and where the streets meet the North Promenade
     pkSignpost(-28.4, -57.4, [['DROP TOWER <', Math.PI], ['NORTH GARDENS >', 0], ['STATION SQUARE v', -Math.PI / 2]]);

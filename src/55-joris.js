@@ -424,7 +424,7 @@
       taken[si] = true;
       n++;
     }
-    if (n) { pkAttrReslot(at); screenDirtyAll(); }
+    if (n) { pkAttrQueueReslot(at, true); screenDirtyAll(); }
   }
   function pkJorisLane(a, parent) {
     var M0 = pkMats(), C = pkCtl(a), P = PK_JORIS_LINE;

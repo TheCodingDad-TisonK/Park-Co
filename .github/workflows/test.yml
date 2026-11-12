@@ -1,11 +1,12 @@
 name: Tests
 
-# Every push to main and every pull request: the repo checks (the parts build the game file exactly, the version
-# stamp, the lint gate, syntax), then the game's test suite in a hidden Electron window with software WebGL.
+# Every push to main, development and a feature branch, and every pull request: the repo checks (the parts build the game
+# file exactly, the version stamp, the lint gate, syntax), then the game's test suite in a hidden Electron window with
+# software WebGL. A second job runs the soak (hours of simulated play, looking for guests frozen in a state).
 
 on:
   push:
-    branches: [main]
+    branches: [main, development, 'feat/**', 'fix/**']
   pull_request:
   workflow_dispatch:
 
@@ -19,19 +20,35 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - name: Read access to the private engine repo
+      - name: Read access to the engine repo (public)
         shell: bash
-        env:
-          CO_ENGINE_TOKEN: ${{ secrets.CO_ENGINE_TOKEN }}
         run: |
-          if [ -z "$CO_ENGINE_TOKEN" ]; then echo "::error::The CO_ENGINE_TOKEN secret is missing. Co Engine is a private repo, so npm cannot fetch it without a read-only token (see the repo's Settings, Secrets and variables, Actions)."; exit 1; fi
-          git config --local --unset-all http.https://github.com/.extraheader || true   # the checkout token would be sent instead of ours, and it cannot see Co-Engine
-          base="https://x-access-token:${CO_ENGINE_TOKEN}@github.com/TheCodingDad-TisonK/Co-Engine"
-          git config --global url."$base".insteadOf "ssh://git@github.com/TheCodingDad-TisonK/Co-Engine"
-          git config --global --add url."$base".insteadOf "git@github.com:TheCodingDad-TisonK/Co-Engine"
-          git config --global --add url."$base".insteadOf "https://github.com/TheCodingDad-TisonK/Co-Engine"
+          git config --local --unset-all http.https://github.com/.extraheader || true   # the checkout token would be sent instead, and it cannot see Co-Engine
+          git config --global url."https://github.com/TheCodingDad-TisonK/Co-Engine".insteadOf "ssh://git@github.com/TheCodingDad-TisonK/Co-Engine"
+          git config --global --add url."https://github.com/TheCodingDad-TisonK/Co-Engine".insteadOf "git@github.com:TheCodingDad-TisonK/Co-Engine"
       - run: npm ci
       - run: npm run check
       - run: npm test
         env:
           CI: 'true'
+
+  soak:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Read access to the engine repo (public)
+        shell: bash
+        run: |
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          git config --global url."https://github.com/TheCodingDad-TisonK/Co-Engine".insteadOf "ssh://git@github.com/TheCodingDad-TisonK/Co-Engine"
+          git config --global --add url."https://github.com/TheCodingDad-TisonK/Co-Engine".insteadOf "git@github.com:TheCodingDad-TisonK/Co-Engine"
+      - run: npm ci
+      - run: npm run soak
+        env:
+          CI: 'true'
+          SOAK_HOURS: '7'

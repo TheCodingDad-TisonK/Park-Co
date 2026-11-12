@@ -11,7 +11,7 @@
     danse: { body: 0x2e1c10, trim: 0xc9a050, face: ['#3a2416', '#1f130b'], ink: '#e8cf8a', dim: '#a88a5a', font: 'Georgia, serif',
       btnCol: 'white', collar: 'brass', g2: { unit: 'tilt deg', min: 0, max: 14, red: 0.86, ticks: 7, get: function (a) { return a.extra.tiltA * 180 / Math.PI / 14; } },
       cue: { label: 'LIGHTNING', col: 'blue', prompt: 'Strike the lightning', act: function (a) { a.extra.mflash = 0.45; if (typeof pkDmNear === 'function' && pkDmNear()) sfx('pkDanseThunder'); } },
-      title: 'DANCE MACABRE', sub: 'ORGAN CONSOLE  *  HUYVERWOUD ABBEY' },
+      title: 'DANCE RIDE', sub: 'ORGAN CONSOLE  *  HUYVERWOUD ABBEY' },
     droom: { body: 0x18213a, trim: 0xd8b45a, face: ['#141c38', '#0a0f22'], ink: '#f0dcae', dim: '#9aa6d0', font: 'Georgia, serif',
       btnCol: 'purple', collar: 'gold', g2: { unit: 'height m', min: 0, max: 14, red: 0, ticks: 7, get: function (a) { var g0 = a.extra.gons && a.extra.gons[0]; return g0 ? g0.g.position.y / 14 : 0; } },
       cue: { label: 'FOG', col: 'sky', prompt: 'Fog the wall', act: function (a) { a.extra.fogBoost = 5; sfx('click'); } },

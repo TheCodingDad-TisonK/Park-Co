@@ -1145,6 +1145,8 @@
       tickRun: function (at, dt) { pkSkyPlace(PK_SKY.s); }
     });
     a.skyline = true;
+    // until stage 1 is commissioned and built the shuttle never runs (pkSkylineTick), so nobody may join its line
+    a.canQueue = function () { return typeof pkExpansionOpen !== 'function' || pkExpansionOpen(1) === true; };
     a.level = p.level; a.plot = p; a.open = pkRideSavedOpen(p.id);
     if (S.rides) S.rides[p.id] = a.open;
     a.seatPath = pkSkySeatPath;

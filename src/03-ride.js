@@ -1098,11 +1098,18 @@
         // and a train readied with nobody aboard is put back to boarding once, not flapped
         var walking = pkStillBoarding();
         if (R.state === 'unload' && (R.riders > 0 || R.barsWant > 0.5)) R.barsWant = 0;
-        else if (R.state === 'idle' || R.state === 'unload') { if (!PK.closed) { pkOpenGates(); R.loadT = 0; } }
+        else if (R.state === 'idle' || R.state === 'unload') { if (!PK.closed && (S.wear || 0) < 90) { pkOpenGates(); R.loadT = 0; } }
         else if (R.state === 'loading') { R.loadT += 1.4; if (R.riders > 0 && !walking && (pkSeatsFull() || R.loadT > 8)) pkBarsDown(); }
         else if (R.state === 'ready') {
           if (R.riders === 0) { pkBarsUp(); R.loadT = 0; }
-          else if ((S.wear || 0) >= 90) { R.wearT = (R.wearT || 0) - 1.4; if (R.wearT <= 0) { R.wearT = 20; sfx('bad'); toast('The coaster needs a service - press MAINT on the desk', 'bad'); } }
+          else if ((S.wear || 0) >= 90) {
+            // out of service: the riders get off rather than sit with the bars down, and the line stops refilling (pkQueueJoin)
+            R.barsWant = 0; R.bars = 0;
+            PK.gates.forEach(function (gt) { gt.open = true; });
+            PK.seats.forEach(function (s) { if (s.guest) pkUnseatGuest(s.guest); });
+            R.riders = 0; R.state = 'unload';
+            logEvent('The coaster is out of service until it is serviced', 'bad'); sfx('bad'); toast('The coaster needs a service - press MAINT on the desk', 'bad');
+          }
           else if (!walking) pkDispatch();
         }
       }
@@ -1125,7 +1132,7 @@
     pkPlaceTrain();
   }
   // ── Staff ─────────────────────────────────────────────────────────
-  // one clerk; up to ten ride operators, who work the rides in shifts (part 26). S.operator stays true while any is hired
+  // one clerk; up to fifteen ride operators, who work the rides in shifts (part 26). S.operator stays true while any is hired
   var PK_OPS_MAX = 15;
   function pkOpCount() { return typeof S.operators === 'number' ? S.operators : (S.operator ? 1 : 0); }
   function pkWages() { return (S.clerk ? 40 : 0) + 60 * pkOpCount(); }

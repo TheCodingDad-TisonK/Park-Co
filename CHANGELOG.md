@@ -71,15 +71,15 @@ The park's frame rate, the north end and the guests, in one pass.
 
 ## 1.7.6 (2026-11-08): Security Update
 
-- Real CAM feed of several points accros the park
-- When focussed on a feed you can use the arrow keys to change the camera position
+- Real CAM feed of several points across the park
+- When focused on a feed you can use the arrow keys to change the camera position
 
 ## 1.7.5 (2026-11-08): Bug Fixes
 
-- Fixed a issue where the tablet was showing a grey barcode looking screen on top of the tablet
-- Fixed a issue where the player character was standing instead of sitting in 3rd person
+- Fixed an issue where the tablet was showing a grey barcode looking screen on top of the tablet
+- Fixed an issue where the player character was standing instead of sitting in 3rd person
 - Several small bug fixes after previous update regarding guests
-- Dragon ride it gates wont open anymore after a guests leaves the platform/ride
+- Dragon ride its gates will not open anymore after a guests leaves the platform/ride
 - Marketing app added in the tablet (rides can be set as "Featured")
 
 ## 1.7.4 (2026-11-08): Controller Support
@@ -356,7 +356,7 @@ Other train changes
 - Rotated train station benches to face the tracks
 - Fixed platform walk up for "the coaster"
 - Robustness & crash guards fixes for the guests
-- Fixed a issue when a guest isn't found in the queue
+- Fixed an issue when a guest isn't found in the queue
 - Guests now track a "mood" that reflects their experience
 - Guests now hold bought items
 - Items show while walking/idle and hide when seated/bench

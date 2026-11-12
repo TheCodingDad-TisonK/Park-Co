@@ -45,7 +45,7 @@
     var best = null, bd = maxD * maxD;
     (PK.benches || []).forEach(function (b) {
       var d = dist2(x, z, b.x, b.z); if (d >= bd) return;
-      for (var i = 0; i < b.seats.length; i++) if (!b.seats[i].taken) { bd = d; best = { seat: b.seats[i], x: b.seats[i].x, z: b.seats[i].z, ry: b.ry }; break; }
+      for (var i = 0; i < b.seats.length; i++) if (!b.seats[i].taken && dist2(x, z, b.seats[i].x, b.seats[i].z) > 0.25) { bd = d; best = { seat: b.seats[i], x: b.seats[i].x, z: b.seats[i].z, ry: b.ry }; break; }
     });
     return best;
   }

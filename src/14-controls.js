@@ -907,7 +907,7 @@ function pkCtlHood(parent, x, y, z, w, h, lean) {
 // the office wall, with a supply dial, a load dial, a lamp per circuit and a breaker per ride.
 var PK_CAB_RIDES = [
   ['coaster', 'THE COASTER'], ['carousel', 'CAROUSEL'], ['teacups', 'TEACUPS'], ['ferris', 'FERRIS WHEEL'],
-  ['dodgems', 'DODGEMS'], ['droptower', 'DROP TOWER'], ['flume', 'LOG FLUME'], ['danse', 'DANCE MACABRE'],
+  ['dodgems', 'DODGEMS'], ['droptower', 'DROP TOWER'], ['flume', 'LOG FLUME'], ['danse', 'DANCE RIDE'],
   ['kround', 'LITTLE ROUNDABOUT'], ['kpots', 'WOBBLY POTS'], ['kpuffin', 'PUFFIN LINE'],
   ['serpent', 'THE SERPENT'], ['baron', "BARON'S DROP"], ['wildhunt', 'THE WILD HUNT'],
   ['mountain', 'THE MOUNTAIN KING'],

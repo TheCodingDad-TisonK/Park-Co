@@ -23,7 +23,6 @@
   <a href="#-features">Features</a> •
   <a href="#-controls">Controls</a> •
   <a href="#%EF%B8%8F-operations-guide">Operations Guide</a> •
-  <a href="#-screenshots">Screenshots</a> •
   <a href="#-download">Download</a> •
   <a href="#-other-projects">Other Projects</a>
 </p>
@@ -57,9 +56,9 @@ From selling tickets at the gate to dispatching coasters, running the railway, a
 <details open>
 <summary><strong>🎡 Attractions & Transportation</strong></summary>
 
-- **20 Unique Rides** - A diverse collection of attractions to entertain your guests
+- **19 Rides and Attractions** - Coasters, flat rides, children rides, dark rides and the Lindenburg Arena show, from the Wild Hunt and Mountain King to Joris en de Draak, the Dance Ride and Droomvlucht
 - **Lindenburg Railway** - A lovingly crafted narrow-gauge steam train that loops around the entire park
-- **5 Stations & 3 Level Crossings** - Fully operational railway infrastructure
+- **4 Stations & Level Crossings** - Fully operational railway infrastructure, with a depot
 - **Manual or Automatic** - Run rides on autopilot, or take the reins for a more hands-on experience
 
 </details>
@@ -69,8 +68,8 @@ From selling tickets at the gate to dispatching coasters, running the railway, a
 
 - **Gate Control** - Open and close your park on your own schedule
 - **Economy System** - Set ticket prices, earn revenue, and manage your park's finances
-- **Workforce Management** - Hire and fire up to 10 workers to help keep your park running
-- **Power Management** - Full circuit breaker control with individual switches for all 20 rides
+- **Workforce Management** - Hire and fire up to 15 ride operators and a ticket clerk to help keep your park running
+- **Power Management** - Full circuit breaker control with individual switches for every ride
 - **Lighting Control** - Toggle park lights and ride lights independently
 
 </details>
@@ -82,7 +81,7 @@ From selling tickets at the gate to dispatching coasters, running the railway, a
 - **Train Operations** - Dedicated train control panels at every railway station
 - **Office & Tablet** - Manage your park from the HQ office PC, or use your portable tablet (`TAB`) anywhere in the park
 - **Living Park** - Dynamic guests that wander, socialize on benches, and unfortunately litter (thankfully, sweepers are on duty!)
-- **Beautiful Grounds** - Stroll through gardens featuring a flower clock, bandstand, windmill, and hedge maze
+- **Beautiful Grounds** - Stroll through gardens, a bandstand and a windmill
 - **Extra Amenities** - Lindenburg Arena for shows, golf cart at HQ forecourt, and a bed in the office to skip time to 07:00
 
 </details>
@@ -93,7 +92,8 @@ From selling tickets at the gate to dispatching coasters, running the railway, a
 - **Third-Person Camera** (`C`) - Get a better view of your park
 - **Fly Mode** (`F3`) - Soar through the sky for easy navigation and park overview
 - **Dev Menu** (`F4`) - Debug and development tools
-- **Level Progression** - Earn XP and level up to unlock new content
+- **Level Progression** - Earn XP and level up to unlock services and, from level 26, the expansion stages (the Skyline)
+- **Controller Support** - Play with a gamepad as well as keyboard and mouse
 
 </details>
 
@@ -119,7 +119,7 @@ From selling tickets at the gate to dispatching coasters, running the railway, a
 Located throughout the park, the main park controls allow you to:
 
 - `[GATE]` Open / Close the park entrance
-- `[POWER]` Circuit breaker with individual switches for all 20 rides
+- `[POWER]` Circuit breaker with individual switches for every ride
 - `[LIGHTING]` Control Park Lights & Ride Lights
 - `[MANAGEMENT]` Set ticket prices, hire/fire staff, service the coaster
 
@@ -142,17 +142,7 @@ Every attraction comes equipped with its own fully-featured operator booth:
 > `Gates Open` → `Guests Board` → `Gates Close` → `Restraints Down` → `Dispatch`
 
 ### 🚂 Train Control (Lindenburg Railway)
-The narrow-gauge steam train running the Lindenburg loop can be controlled from dedicated **Train Control** panels at each of the 5 stations. Coordinate train movements with the 3 level crossings for safe operation!
-
----
-
-## 📸 Screenshots
-
-| | | |
-| :--: | :--: | :--: |
-| ![Park approach](shots/01-approach.jpg) | ![Entrance](shots/02-entrance.jpg) | ![Ticket window](shots/03-ticket-window.jpg) |
-| ![Midway](shots/04-midway.jpg) | ![Station](shots/05-station.jpg) | ![The coaster](shots/06-coaster.jpg) |
-| ![Operator room](shots/08-operator-room.jpg) | ![Overview](shots/10-overview.jpg) | |
+The narrow-gauge steam train running the Lindenburg loop can be controlled from dedicated **Train Control** panels at each of the 4 stations. Coordinate train movements with the level crossings for safe operation!
 
 ---
 
@@ -160,7 +150,7 @@ The narrow-gauge steam train running the Lindenburg loop can be controlled from 
 
 Get the latest version of Park Co from the [**Releases Page**](https://github.com/TheCodingDad-TisonK/Park-Co/releases).
 
-1. Download `Park-Co-Setup-1.0.16.exe` from the latest release
+1. Download the latest `Park-Co-Setup-x.y.z.exe` from the releases page
 2. Run the installer
 3. Launch Park Co and start building your dream park!
 

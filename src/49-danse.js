@@ -77,7 +77,7 @@
       for (var s = 0; s <= 20; s++) { var sa = s / 20 * Math.PI * 2 - Math.PI / 2, sr = (s % 2 ? 0.12 : 0.28) * R; c[s ? 'lineTo' : 'moveTo'](cx + Math.cos(sa) * sr, cy + Math.sin(sa) * sr); }
       c.closePath(); c.fillStyle = '#8a6a2a'; c.fill(); c.strokeStyle = '#e0bf6a'; c.lineWidth = 4; c.stroke();
       // the motto round the middle ring
-      var txt = 'DANCE MACABRE  *  HUYVERWOUD ABBEY  *  FRIDAY THE THIRTEENTH  *  MDCCCLXXVI  *  ';
+      var txt = 'DANCE RIDE  *  HUYVERWOUD ABBEY  *  FRIDAY THE THIRTEENTH  *  MDCCCLXXVI  *  ';
       c.fillStyle = '#d8b45a'; c.font = 'bold 34px serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
       for (var i = 0; i < txt.length; i++) { var ta = i / txt.length * Math.PI * 2; c.save(); c.translate(cx + Math.cos(ta) * R * 0.685, cy + Math.sin(ta) * R * 0.685); c.rotate(ta + Math.PI / 2); c.fillText(txt[i], 0, 0); c.restore(); }
     }, 1, 1);
@@ -406,7 +406,7 @@
     var jo = pkDmFigure(X.ghostJ, { tails: true, hair: true }); jo.g.position.set(0, 0.1, -0.32); jo.g.rotation.y = Math.PI; mid.add(jo.g);
     jo.armR.rotation.x = -2.2; jo.armL.rotation.x = -1.4; jo.armL.rotation.z = 0.4;
     pkRod(0, -0.58, 0, 0, -0.98, 0.1, 0.012, X.bone, jo.armR, 4);
-    pkSign3D(['DANCE MACABRE'], 2.2, 0.36, 0, 9.7, 1.05, 0, { bg: '#1b1410', fg: '#d8b45a' }, og);
+    pkSign3D(['DANCE RIDE'], 2.2, 0.36, 0, 9.7, 1.05, 0, { bg: '#1b1410', fg: '#d8b45a' }, og);
     return { mid: mid, arm: jo.armR, armL: jo.armL };
   }
   // the operator's spyhole through the south face (the cabin stands behind the wall): from the chapel an old barred window
@@ -560,7 +560,7 @@
     var tre = new THREE.Mesh(pkExtrudeGeo(pkDmArch(1.3, 0.5, 1.4), 0.1, 0), X.carveDark); tre.rotation.y = Math.PI / 2; tre.position.set(FX + 0.6, 5.5, DZ); g.add(tre);
     for (var ck = 1; ck < 6; ck++) [-1, 1].forEach(function (s) { sphere(0.11, X.carve, FX + 0.55, 5.0 + ck * 0.5, DZ + s * (2.5 - ck * 0.42), g); });
     box(0.3, 0.6, 0.3, X.carve, FX + 0.5, 8.2, DZ, g); sphere(0.18, X.carve, FX + 0.5, 8.6, DZ, g);
-    pkSign3D(['DANCE MACABRE'], 5.2, 0.8, FX + 0.12, 9.3, zc + 0.2, Math.PI / 2, { bg: '#1b232c', fg: '#ff8a3d' }, g);
+    pkSign3D(['DANCE RIDE'], 5.2, 0.8, FX + 0.12, 9.3, zc + 0.2, Math.PI / 2, { bg: '#1b232c', fg: '#ff8a3d' }, g);
     // the windows: a lancet each side of the portal, the rose in the gable
     pkDmLancet(g, FX + 0.02, 4.2, -24.6, Math.PI / 2, 1.3, 4.8, X.glass, X.carve);
     pkDmLancet(g, FX + 0.02, 4.2, -16.8, Math.PI / 2, 1.0, 4.4, X.glass, X.carve);
@@ -777,8 +777,8 @@
     var arc = pkDmArchCurve(2.5, 0, 1.4, 3.6).map(function (p) { return [x, p[1], -27.3 + p[0]]; });
     pkTube(arc, 0.05, X.iron, g, false, 30, 6);
     pkTube(pkDmArchCurve(2.2, 0, 1.15, 3.6).map(function (p) { return [x, p[1], -27.3 + p[0]]; }), 0.03, X.iron, g, false, 30, 6);
-    sign(['DANCE MACABRE'], 2.0, 0.4, x + 0.06, 4.3, -27.3, Math.PI / 2, { bg: '#1b232c', fg: '#ff8a3d' }, g);
-    sign(['DANCE MACABRE'], 2.0, 0.4, x - 0.06, 4.3, -27.3, -Math.PI / 2, { bg: '#1b232c', fg: '#ff8a3d' }, g);
+    sign(['DANCE RIDE'], 2.0, 0.4, x + 0.06, 4.3, -27.3, Math.PI / 2, { bg: '#1b232c', fg: '#ff8a3d' }, g);
+    sign(['DANCE RIDE'], 2.0, 0.4, x - 0.06, 4.3, -27.3, -Math.PI / 2, { bg: '#1b232c', fg: '#ff8a3d' }, g);
   }
 
   // ── Sounds ───────────────────────────────────────────────────────
@@ -1214,7 +1214,7 @@
     E.lift = lift; E.tilt = tilt; E.spin = spin; E.stalls = stalls; E.exitDoors = exitDoors; E.crypt = crypt; E.organMid = organ.mid; E.jArm = organ.arm;
     E.roomLight = roomLight; E.flash = flash; E.organLight = organLight; E.ghostLight = ghostLight;
     var a = pkAttr({
-      id: 'danse', name: 'Dance Macabre', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats,
+      id: 'danse', name: 'Dance Ride', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats,
       board: 22, run: 60, unload: 8, exit: [-35.5, -31.0], extra: E,
       start: function (at) { at.extra.cues = {}; at.extra.bar = -1; },
       tickRun: pkDmTick
