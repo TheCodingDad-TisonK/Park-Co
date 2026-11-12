@@ -607,6 +607,7 @@
       if (window.console && CO.editor && CO.editor.on) { PK_XP.log.forEach(function (t) { window.console.log(t); }); }
       PK_XP.skyline = { spans: spanTruss, piers: piers.length };
     }
+    PK_XP.pierPts = piers.map(function (P) { return [P.p.x, P.p.z]; });   // part 54 measures the rides against these
     // the finished line's own materials (stage 1): painted steel, a stone cornice, Park Co green railings
     var green = XM({ color: 0x1d5b3b, roughness: 0.45, metalness: 0.35 }), stoneC = XM({ map: TEX.plaster, color: 0xd9d2c2, roughness: 0.9 });
     var ballast = XM({ color: 0x5a5750, roughness: 1 }), sleeperM = XM({ color: 0x4b3a2a, roughness: 0.95 }), trough = XM({ color: 0x6d6c68, roughness: 0.9 });

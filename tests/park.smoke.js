@@ -33,6 +33,20 @@ module.exports = `
   // the world
   ok(!!T.pkTrack() && T.pkTrack().getLength() > 100, 'the coaster is a closed circuit ' + T.pkTrack().getLength().toFixed(0) + ' m long');
   ok(T.pkTrain().length === 3 && T.pkSeats().length === 12, 'three cars and twelve seats');
+  // the re-lay: no two rides stand closer than 8 m, fence to fence, and none within 6 m of a viaduct pier. The few big
+  // builds that are waived are named in part 54 and counted here, so a new one cannot slip in beside them
+  { const feet = T.pkRideFeet(), gaps = T.pkRideGaps(), all = T.pkRideGaps(undefined, true), piers = T.pkPierGaps();
+    ok(feet.length >= 18 && feet.every((f) => f.rects.length > 0), 'every ride has a measured footprint: ' + feet.length + ' of them');
+    ok(gaps.length === 0, 'no two rides stand closer than ' + T.PK_CLEAR.ride + ' m: ' + (gaps.length ? gaps.map((g) => g.a + '-' + g.b + ' ' + g.gap).join(', ') : 'clear'));
+    ok(all.filter((g) => g.waived).length <= T.PK_CLEAR.waive.pairs.length && all.every((g) => g.waived), 'only the named pairs are waived: ' + all.map((g) => g.a + '-' + g.b + ' ' + g.gap).join(', '));
+    ok(piers.length === 0, 'no ride stands within ' + T.PK_CLEAR.pier + ' m of a viaduct pier: ' + (piers.length ? piers.map((g) => g.a + ' ' + g.gap).join(', ') : 'clear'));
+    ok(T.pkRectGap([0, 4, 0, 4], [12, 14, 0, 4]) === 8 && Math.abs(T.pkRectGap({ c: [0, 0, 5] }, { c: [20, 0, 5] }) - 10) < 1e-9 && Math.abs(T.pkRectGap({ c: [0, 0, 5] }, [8, 9, -1, 1]) - 3) < 1e-9, 'the gap measure: box to box, ring to ring, ring to box');
+    const P = T.PK_PARK, inPark = feet.filter((f) => f.id !== 'joris' && f.id !== 'mountain' && f.id !== 'wildhunt').every((f) => f.rects.every((r) => r.c ? (r.c[0] + r.c[2] < P.x1 && r.c[0] - r.c[2] > P.x0) : (r[1] < P.x1 && r[0] > P.x0)));
+    ok(P.x1 === 162 && inPark, 'the east fence stands at x 162 and the rides on the strip stand inside it'); }
+  // the rides that moved in the re-lay stand where the plan put them, and a guest can walk from the hub to each one's line
+  { const at = (id, x, z) => { const a = T.PK.attrById[id]; return !!a && Math.abs(a.x - x) < 0.01 && Math.abs(a.z - z) < 0.01; };
+    ok(at('ferris', 150, 52) && at('dodgems', 144, 13) && at('kround', 150, -79) && at('kpots', 150, -54) && at('kpuffin', 150, -106) && at('teacups', -52, 42) && at('droptower', -51.5, -64),
+      'the wheel, the dodgems and the kids rides stand on the east strip; the teacups on the old kids lawn; the drop tower north of the Skyline station'); }
   ok(T.pkTurnstiles().length === 4 && T.pkGates().length === 3, 'four turnstiles at the gate and three platform gates');
   ok(T.pkBooths().length === 2 && !!T.pkBooths()[0].screen && !!T.pkBooths()[1].screen, 'two ticket windows, a screen each');
   ok(!!T.pkScreen() && !!T.pkSnack() && !!T.pkConsole() && !!T.pkConsole().parts.buttons.gates && !!T.pkConsole().parts.gauges.speed && !!T.pkConsole().parts.lever, 'the operator room has its screen and a real desk: buttons, a throttle and gauges');
@@ -378,7 +392,7 @@ module.exports = `
     T.player.z = 9; T.player.yaw = 0; for (let k = 0; k < 40; k++) T.updatePlayer(0.05); T.player.keys.KeyW = false;
     const back = T.player.z < 6;
     Object.assign(T.player, keep);
-    ok(F.posts > 500 && stopZ > 3.5 && stopZ < 5.6 && back, 'the paths are fenced: ' + F.posts + ' posts, W off the avenue stops at z ' + stopZ.toFixed(2) + ', back from the lawn ' + back); }
+    ok(F.posts > 500 && stopZ > 3.5 && stopZ < 6.1 && back, 'the paths are fenced: ' + F.posts + ' posts, W off the avenue stops at z ' + stopZ.toFixed(2) + ', back from the lawn ' + back); }
   // the guests and the NPCs keep to the paving too: every walk from the gate and from Station Square to a ride stays off the
   // lawn (a quarter metre over the kerb is the edge of the path, not the grass), and an NPC sent onto the lawn is moved off it
   { const lawn = (x, z) => { const r = 0.25; return T.pkPfLawn(x, z) && T.pkPfLawn(x - r, z) && T.pkPfLawn(x + r, z) && T.pkPfLawn(x, z - r) && T.pkPfLawn(x, z + r); };

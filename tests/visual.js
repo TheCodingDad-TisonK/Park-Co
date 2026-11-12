@@ -15,24 +15,24 @@ const SHOTS = [
   { name: '02b-ticket-booth', pos: [-9, 40.2],  look: [-9, 1.7, 36] },
   { name: '03-midway',        pos: [0, 24],     look: [0, 2, -10] },
   { name: '04-carousel',      pos: [-22, 24],   look: [-34, 2, 20] },
-  { name: '05-teacups',       pos: [-22, 5],    look: [-34, 1.5, 3] },
+  { name: '05-teacups', pos: [-34.6, 34], look: [-52, 1.5, 42] },
   { name: '06-danse',         pos: [-36, -16],  look: [-58, 4.5, -24] },
-  { name: '07-ferris',        pos: [22, 24],    look: [34, 5, 20] },
-  { name: '08-dodgems',       pos: [22, 5],     look: [34, 2, 3] },
+  { name: '07-ferris', pos: [128, 44], look: [150, 8, 52] },
+  { name: '08-dodgems', pos: [128, 10], look: [144, 2, 13] },
   { name: '09-coaster',       pos: [14, 16],    look: [0, 3, -14] },
   { name: '10-coaster-train', pos: [5, 2],      look: [0, 1.2, -4.6] },
   { name: '11-queue',         pos: [10.5, 8],   look: [7, 1.2, 2] },
   { name: '12-midway-shops',  pos: [3, 16],     look: [3, 1.5, 7] },
-  { name: '13-droptower',     pos: [-44, -28],  look: [-54, 9, -34] },
-  { name: '14-flume',         pos: [44, -26],   look: [54, 3, -32] },
+  { name: '13-droptower', pos: [-34, -58], look: [-51.5, 9, -64] },
+  { name: '14-flume', pos: [44, -22], look: [54, 3, -28] },
   { name: '15-night-lights',  pos: [0, 24],     look: [0, 3, -10], night: true },
   { name: '16-operator-room', pos: [14.3, 1.1], look: [14.1, 1.1, -3.4] },
   { name: '17-control-desk',  pos: [14.6, -2.1],look: [14.1, 1.05, -3.35] },
   { name: '18-booth-outside', pos: [-19.7, 22.3], look: [-21.7, 1.4, 24.7] },
   { name: '18b-booth-desk',  pos: [-21.25, 25.95], look: [-22.75, 1.35, 25.2] },
-  { name: '18c-booth-ferris', pos: [19.6, 22.2], look: [21.9, 1.5, 25.1] },
-  { name: '18d-booth-flume',  pos: [43.4, -21.0], look: [46.4, 1.6, -18.4] },
-  { name: '18e-booth-dodgems-desk', pos: [43.5, 8.9], look: [44.75, 1.35, 8.25] },
+  { name: '18c-booth-ferris', pos: [137, 56], look: [141.5, 1.5, 58.6] },
+  { name: '18d-booth-flume', pos: [43.4, -17], look: [46.4, 1.6, -14.4] },
+  { name: '18e-booth-dodgems-desk', pos: [136.5, 27], look: [138.9, 1.35, 28.6] },
   { name: '19-office-switchboard', pos: [-20.3, 43.55], look: [-22.8, 1.5, 43.55] },
   { name: '20-lever-pulled',  pos: [14.85, -2.35], look: [14.5, 1.34, -3.4], act: 'T.pkConsole().parts.lever.pull()' },
   { name: '21-office-pc',     pos: [-20.0, 42.85], look: [-20.08, 1.22, 41.5] },
@@ -49,12 +49,12 @@ const SHOTS = [
   { name: '32-baron-drop', pos: [41.5, 27.5], look: [56, 7, 20.5] },
   { name: '33-baron-station', pos: [44, 23.5], look: [52, 2, 17] },
   { name: '34-wild-hunt-station', pos: [0, -70], look: [0, 4, -95] },
-  { name: '35-flume-queue-side', pos: [45, -19], look: [54, 3, -32] },
+  { name: '35-flume-queue-side', pos: [45, -15], look: [54, 3, -28] },
   { name: '36-joris-dragon', pos: [80, -8], look: [95, 4, -30] },
   { name: '37-north-wide', pos: [-6, -61], look: [-14, 5, -86] },
   { name: '38-dance-ride-entrance', pos: [-40, -24], look: [-58, 4, -24] },
-  { name: '39-kids-area', pos: [-30, 30], look: [-56, 3, 31] },
-  { name: '40-puffin-line', pos: [-49, 37], look: [-60, 2, 41] },
+  { name: '39-kids-area', pos: [128, -66], look: [150, 3, -70] },
+  { name: '40-puffin-line', pos: [130, -100], look: [150, 2, -105] },
   { name: '41-arena-approach', pos: [-80, -40], look: [-110, 6, -40] },
   { name: '42-queue-entrance', pos: [6.6, 14.6], look: [7, 1.4, 9.4] },
   { name: '43-carousel-inside', pos: [-24, 21.2], look: [-34, 3.5, 19.6] },
@@ -63,7 +63,15 @@ const SHOTS = [
   { name: '46-baron-rockery-nw', pos: [67, 21], look: [56.7, 2.8, 21.7] },
   { name: '47-plaza-balloons', pos: [1.6, 25.3], look: [0, 1.2, 22.5] },
   { name: '48-pave-close', pos: [26, 8], look: [29, 0.15, 4] },
-  { name: '49-snack-stand', pos: [-16, 2], look: [-10.25, 1.8, 13.6] }
+  { name: '49-snack-stand', pos: [-16, 2], look: [-10.25, 1.8, 13.6] },
+  { name: '50-east-parade-north', pos: [127, -2], look: [128, 2, -60] },
+  { name: '51-east-parade-south', pos: [127, 0], look: [136, 3, 40] },
+  { name: '52-playhouse', pos: [130, -29], look: [147, 2, -29] },
+  { name: '53-thrills-avenue-east', pos: [40, 3], look: [72, 2, 3] },
+  { name: '54-dragon-gate', pos: [135, -2], look: [156, 2, -2] },
+  { name: '55-old-ferris-plot', pos: [14, 20], look: [40, 2, 20] },
+  { name: '56-serpent-ramp', pos: [50, -62], look: [53, 0.6, -66] },
+  { name: '57-wild-hunt-ramp', pos: [10, -76], look: [4, 0.6, -81] }
 ];
 
 async function main() {
@@ -86,6 +94,7 @@ async function main() {
     say.push(T.devCommand('weather', 'clear'));
     say.push(T.devCommand('cash', 50000));
     say.push(T.devCommand('xp', 6000)); T.hideCards();
+    if (T.PK_WELCOME && T.PK_WELCOME.open) T.pkWelcomeClose();   // the first-day card dims the whole view while it is up
     say.push(T.pkHire('clerk')); say.push(T.pkHire('operator'));
     ['carousel', 'teacups', 'ferris', 'dodgems', 'droptower', 'flume', 'danse', 'droom'].forEach((id) => say.push(T.devCommand('open', id)));
     say.push(T.devCommand('auto'));

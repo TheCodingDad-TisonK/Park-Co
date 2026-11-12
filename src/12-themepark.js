@@ -12,21 +12,50 @@
     thrill:  { name: 'THRILLS',         a: 0x2f6fb3, b: 0xf0c04a, pave: 0xa9b8c8, sign: '#9fd0ff' },
     dark:    { name: 'THE DARK WOODS',  a: 0x4a4a55, b: 0xff8a3d, pave: 0x8f8778, sign: '#ff9a52' },
     coaster: { name: 'COASTER COUNTRY', a: 0x2f8f6f, b: 0xf0c04a, pave: 0xc2ad86, sign: '#8fe0b0' },
-    garden:  { name: 'THE GARDENS',     a: 0x4d7a3a, b: 0xf4f1e6, pave: 0, sign: '#f5e9c2' }
+    garden:  { name: 'THE GARDENS',     a: 0x4d7a3a, b: 0xf4f1e6, pave: 0, sign: '#f5e9c2' },
+    kids:    { name: 'THE LITTLE MEADOW', a: 0xe58a2f, b: 0x2f9fb0, pave: 0xd8c9a0, sign: '#ffd27a' }
   };
-  // the routes, as [x0, z0, x1, z1, width, land]. The avenues carry the spurs out to the flanks; a street runs north from each
-  // crossroads, with a side street to each far ride's queue; the North Promenade closes the ring and the Garden Walk crosses it.
+  // the routes, as [x0, z0, x1, z1, width, land]. This is every street in the park, in one table (they used to be pushed in
+  // from eight parts, each laying its own slab over whatever was there). The network, from the gate out:
+  //   the midway and Station Square are plazas (pkPaveCore, below); everything else hangs off them:
+  //   - the Avenue crosses the square east to west, from the Fairground lane to the East Walk;
+  //   - West Street and East Street run north off it to the North Promenade, which closes the ring; the Garden Walk
+  //     crosses the middle;
+  //   - the East Walk runs the length of the old east side, and one footbridge walk leads off it over the Dragon Ride's
+  //     line to the East Parade, the spine of the east strip;
+  //   - a spur runs from the nearest street to each ride's line, square to the street, and nothing else.
+  // No two routes run side by side and none is laid over another except where they join. The land a route belongs to names
+  // it on the map and picks its arch; the paving is the same warm paver everywhere, so a joint is never a change of colour.
   var PK_ROUTES = [
-    [-22, 3, -46, 3, 4, 'fair'],                                                                                   // the Fairground avenue: teacups, the kids' lane
-    [-31, 3, -31, -60, 3.6, 'dark'], [-31, -24, -45.5, -24, 3.8, 'dark'], [-31, -52, -45.5, -52, 3.8, 'dark'],      // the Dark Woods: Danse Macabre, drop tower
-    [22, 3, 46, 3, 4, 'thrill'],                                                                                   // the Thrills avenue: dodgems
-    [35, 3, 35, -60, 3.6, 'coaster'], [35, -24, 47.5, -24, 3.8, 'coaster'],                                         // Coaster Country: log flume
-    [-31, -60, 35, -60, 5, 'garden'],                                                                               // the North Promenade
-    [-31, -44, 35, -44, 4.4, 'garden'], [2, -44, 2, -66, 4, 'garden'],                                              // the Garden Walk and its spine to the bandstand
-    [14, -60, 14, -66.6, 3, 'garden']                                                                               // the windmill's spur
+    // the Avenue
+    [-46.8, 3, -16, 3, 5, 'fair'], [20, 3, 74, 3, 5, 'thrill'],
+    // the ring: West Street, East Street, the North Promenade; and the Garden Walk with its spine
+    [-31, 3, -31, -60, 4, 'dark'], [35, 3, 35, -60, 4, 'coaster'], [-38.5, -60, 74, -60, 5, 'garden'],
+    [-31, -44, 35, -44, 4, 'garden'], [2, -44, 2, -60, 4, 'garden'],
+    // the Fairground lane: south off the Avenue past the carousel's west side, then east and south to the teacups' line
+    [-46.8, 3, -46.8, 31.5, 3.6, 'fair'], [-46.8, 31.5, -34.6, 31.5, 3.6, 'fair'], [-34.6, 31.5, -34.6, 44.5, 3.6, 'fair'],
+    // the Dark Woods: the abbey's spur, the Arena path, the drop tower's apron, the Wild Hunt's forecourt walk
+    [-31, -24, -45.5, -24, 4, 'dark'], [-31, -40, -74, -40, 4, 'dark'], [-36.5, -60, -36.5, -64.6, 4, 'dark'], [-8.5, -62, -8.5, -80, 6, 'dark'],
+    // Marerijk's promenade: south off the Arena path, along the palace front
+    [-74, -40, -74, 12, 4, 'marerijk'],
+    // the gardens: the windmill's spur
+    [14, -60, 14, -66.6, 3, 'garden'],
+    // Coaster Country: The Serpent's spur, the flume's spur
+    [35, -60, 35, -65, 4, 'coaster'], [35, -65, 41, -65, 4, 'coaster'], [35, -20, 47.5, -20, 4, 'coaster'],
+    // Thrills: Baron's Drop
+    [56, 3, 56, 10.5, 4, 'thrill'],
+    // the East Walk, one straight street from the Promenade to The Mountain King's line (it was two streets with a jog),
+    // and off it: the Dragon Ride's line, the King's line, the footbridge walk
+    [74, -60, 74, 64.6, 4, 'coaster'], [74, 1.5, 86.8, 1.5, 3.2, 'coaster'], [74, 64.6, 76.4, 64.6, 3.2, 'coaster'],
+    [74, -3.3, 82, -3.3, 2.6, 'coaster'], [117, -3.3, 127, -3.3, 2.6, 'coaster'],
+    // the east strip: the East Parade past Joris and The Mountain King, The Little Meadow (the kids' rides) north of Dragon
+    // Gate's walk and the Thrills south of it, a spur east to each ride's line, and the walk out to Dragon Gate
+    [127, -108, 127, -6, 4, 'kids'], [127, -6, 127, 60, 4, 'thrill'], [127, -2, 155, -2, 4.4, 'coaster'],
+    [127, -101.5, 139, -101.5, 3.6, 'kids'], [127, -79, 139, -79, 4, 'kids'], [127, -54, 139, -54, 4, 'kids'], [127, -29, 141, -29, 3, 'kids'],
+    [127, 22, 136, 22, 4.4, 'thrill'], [127, 52, 138, 52, 4.4, 'thrill']
   ];
   // the arches over the streets where each land begins: [x, z, the way the street runs ('x' or 'z'), land]
-  var PK_ARCHES = [[-17.5, 3, 'x', 'fair'], [23.5, 3, 'x', 'thrill'], [-31, -6.5, 'z', 'dark'], [35, -6.5, 'z', 'coaster']];
+  var PK_ARCHES = [[-17.5, 3, 'x', 'fair'], [23.5, 3, 'x', 'thrill'], [-31, -6.5, 'z', 'dark'], [35, -6.5, 'z', 'coaster'], [127, -10, 'z', 'kids'], [127, 4.5, 'z', 'thrill']];
   var PK_KEEP = [];   // [x, z, r] circles other parts ask the planting to leave alone (part 13 adds its own)
   var PK_THEME_T = 0, PK_FOUNTAIN = { jet: null };
 
@@ -79,15 +108,98 @@
   // ── The routes ───────────────────────────────────────────────────
   // pavers on a stone edge, tinted to the land the street belongs to, so the ground tells you where you are. Every segment
   // sits a hair above the last, so where two meet there is no flicker.
-  function pkBuildRoutes() {
-    var M = pkMats();
-    PK_ROUTES.forEach(function (r, i) {
-      var dx = r[2] - r[0], dz = r[3] - r[1], len = Math.sqrt(dx * dx + dz * dz), w = r[4], ry = Math.atan2(dx, dz);
-      var cx = (r[0] + r[2]) / 2, cz = (r[1] + r[3]) / 2, y = 0.022 + i * 0.002, land = PK_LANDS[r[5]];
-      pkPaved(w + 0.7, len + w + 0.7, M.kerb, cx, y - 0.001, cz, 2.4, null, ry);
-      pkPaved(w, len + w, land && land.pave ? pkPadMat(land.pave) : M.paversWarm, cx, y, cz, 2.4, null, ry);
-    });
+  // ── The paving: one surface ──────────────────────────────────────
+  // Every piece of paving in the park is a shape in one list: a street (a route), a plaza, a ride's pad, a forecourt. They
+  // are drawn in two layers and nothing else: every shape grown by a kerb's width, in kerb stone, and above that every shape
+  // itself, in pavers. A kerb can therefore only ever show round the outside of the paving as a whole: where two shapes
+  // meet or cross there is no edge, no lip and no second slab, because the paving of one covers the kerb of the other.
+  // The pavers are laid on the world's own grid (the texture is placed by where a point is, not by which shape it is in),
+  // so the courses run straight through a joint. A ride's pad is tinted to its theme and lies just under the streets, so
+  // a street carries on across it unbroken.
+  var PK_PAVE = { shapes: [], meshes: [], dirty: false, built: false, KERB: 0.35, Y_KERB: 0.012, Y_PAD: 0.0135, Y_PAVE: 0.0165, tris: 0, mats: {} };
+  // the layers lie millimetres apart, which a depth buffer cannot tell from high up (fly mode, the Skyline, the wheel): the
+  // kerb showed through the pavers in pale strips. The kerb and the pads are drawn a few depth steps further away than they
+  // lie, so the pavers always win over them; the pavers themselves are left alone, so whatever is inlaid on them (the
+  // fountain's rings, a plaza's round) still lies on top as it always did
+  function pkPaveMat(key, base, step) {
+    var m = PK_PAVE.mats[key];
+    if (!m) { m = PK_PAVE.mats[key] = base.clone(); m.polygonOffset = true; m.polygonOffsetFactor = step; m.polygonOffsetUnits = 3 * step; }
+    return m;
   }
+  function pkPaveSeg(x0, z0, x1, z1, w, tint) { PK_PAVE.shapes.push({ k: 'seg', x0: x0, z0: z0, x1: x1, z1: z1, w: w, tint: tint || 0 }); PK_PAVE.dirty = true; }
+  function pkPaveRect(x0, x1, z0, z1, tint) { PK_PAVE.shapes.push({ k: 'rect', x0: x0, x1: x1, z0: z0, z1: z1, tint: tint || 0 }); PK_PAVE.dirty = true; }
+  function pkPaveDisc(x, z, r, tint) { PK_PAVE.shapes.push({ k: 'disc', x: x, z: z, r: r, tint: tint || 0 }); PK_PAVE.dirty = true; }
+  // a shape as triangles on the ground, grown by g: [[ax, az, bx, bz, cx, cz], ...]
+  function pkPaveTris(s, g) {
+    var out = [], i;
+    if (s.k === 'disc') {
+      var n = 48, r = s.r + g;
+      for (i = 0; i < n; i++) { var a0 = i / n * Math.PI * 2, a1 = (i + 1) / n * Math.PI * 2; out.push([s.x, s.z, s.x + Math.cos(a0) * r, s.z + Math.sin(a0) * r, s.x + Math.cos(a1) * r, s.z + Math.sin(a1) * r]); }
+      return out;
+    }
+    var P;
+    if (s.k === 'rect') P = [[s.x0 - g, s.z0 - g], [s.x1 + g, s.z0 - g], [s.x1 + g, s.z1 + g], [s.x0 - g, s.z1 + g]];
+    else {
+      // a street: its centre line, squared off half a width past each end so two streets meeting at a corner fill it
+      var dx = s.x1 - s.x0, dz = s.z1 - s.z0, len = Math.sqrt(dx * dx + dz * dz) || 1, ux = dx / len, uz = dz / len, hw = s.w / 2 + g, e = s.w / 2 + g;
+      var ax = s.x0 - ux * e, az = s.z0 - uz * e, bx = s.x1 + ux * e, bz = s.z1 + uz * e, nx = -uz * hw, nz = ux * hw;
+      P = [[ax + nx, az + nz], [bx + nx, bz + nz], [bx - nx, bz - nz], [ax - nx, az - nz]];
+    }
+    out.push([P[0][0], P[0][1], P[1][0], P[1][1], P[2][0], P[2][1]], [P[0][0], P[0][1], P[2][0], P[2][1], P[3][0], P[3][1]]);
+    return out;
+  }
+  // the plazas that are not streets: the forecourt, the gate, the midway, Station Square and the aprons off them
+  function pkPaveCore() {
+    pkPaveRect(-17, 17, 35, 53);            // the forecourt, where the guests arrive
+    pkPaveRect(-14, 14, 28, 38);            // the plaza under the gate
+    pkPaveRect(-19.6, -16.4, 40, 45);       // out of the HQ's door onto the forecourt
+    pkPaveRect(-7, 7, -4, 28);              // the midway
+    pkPaveRect(-16, 20, -6.5, 5.5);         // Station Square, up to the coaster's yard fence, and the strip along the platform
+    pkPaveRect(-20.1, -11.1, 9.7, 16.7);    // the snack stand's apron
+    pkPaveRect(-23, -7, 17, 23);            // out to the carousel
+    pkPaveRect(-16, 10, -84.5, -62.5);      // the Wild Hunt's forecourt, off the Promenade
+  }
+  function pkPaveBuild() {
+    var P = PK_PAVE, M = pkMats(), i;
+    P.meshes.forEach(function (m) { if (m.parent) m.parent.remove(m); m.geometry.dispose(); });
+    P.meshes = []; P.tris = 0;
+    // each ride's own pad, from its plot and its theme (a big coaster sets its own ground and has no pad)
+    var shapes = P.shapes.slice(), tints = [];
+    PK_PLOTS.forEach(function (p) { var th = PK_THEME[p.id], r = p.r * (p.pad || 1.25); if (th && r >= 2) shapes.push({ k: 'disc', x: p.x, z: p.z, r: r, tint: th.ground }); });
+    shapes.forEach(function (s) { if (s.tint && tints.indexOf(s.tint) < 0) tints.push(s.tint); });
+    var layer = function (mat, y, pick, grow) {
+      var pos = [], uv = [], nor = [];
+      shapes.forEach(function (s) {
+        if (!pick(s)) return;
+        pkPaveTris(s, grow).forEach(function (t) {
+          // wound to face up
+          var up = (t[3] - t[1]) * (t[4] - t[0]) - (t[2] - t[0]) * (t[5] - t[1]) > 0, q = up ? t : [t[0], t[1], t[4], t[5], t[2], t[3]];
+          for (var k = 0; k < 6; k += 2) { pos.push(q[k], y, q[k + 1]); uv.push(q[k] / 2.4, -q[k + 1] / 2.4); nor.push(0, 1, 0); }
+        });
+      });
+      if (!pos.length) return;
+      var geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+      var m = new THREE.Mesh(geo, mat); m.receiveShadow = true; m.userData.noBake = true; m.userData.pkPave = true; scene.add(m);
+      P.meshes.push(m); P.tris += pos.length / 9;
+    };
+    layer(pkPaveMat('kerb', M.kerb, 2), P.Y_KERB, function () { return true; }, P.KERB);
+    for (i = 0; i < tints.length; i++) (function (c, n) { layer(pkPaveMat('pad' + c, pkPadMat(c), 1), P.Y_PAD + n * 0.0002, function (s) { return s.tint === c; }, 0); })(tints[i], i);
+    layer(M.paversWarm, P.Y_PAVE, function (s) { return !s.tint; }, 0);
+    P.dirty = false; P.built = true;
+    if (typeof PK_PF !== 'undefined' && PK_PF.m) PK_PF.dirty = 0.2;   // the path rail follows the paving: have it look again
+  }
+  function pkBuildRoutes() {
+    pkPaveCore();
+    PK_ROUTES.forEach(function (r) { pkPaveSeg(r[0], r[1], r[2], r[3], r[4]); });
+    pkPaveBuild();
+  }
+  // a part that lays paving after the theme is built (the Skyline's forecourt, a land that opens) only adds its shapes: the
+  // surface is laid again once, at boot or on the next frame
+  hook('boot', function () { if (PK_PAVE.built && PK_PAVE.dirty) pkPaveBuild(); });
+  hook('frame', function () { if (PK_PAVE.built && PK_PAVE.dirty) pkPaveBuild(); });
   // lamps, benches, flower beds and an avenue of trees along every route
   function pkBuildRouteFurniture() {
     var rng = pkRng(9001), lamps = [];
@@ -256,14 +368,16 @@
     pkSignpost(-4.7, 7.0, [['FAIRGROUND <', Math.PI], ['THRILLS >', 0], ['COASTER ^', Math.PI / 2]]);
     pkSignpost(-4.7, 4.2, [['DARK WOODS <', Math.PI], ['COASTER COUNTRY >', 0]]);
     // at each crossroads plaza, tucked into the corner of the junction
-    pkSignpost(-28.4, 0.4, [['TEACUPS & KIDS <', Math.PI], ['DARK WOODS ^', Math.PI / 2], ['STATION SQUARE >', 0]]);
-    pkSignpost(37.4, 0.4, [['DODGEMS & BARON >', 0], ['COASTER COUNTRY ^', Math.PI / 2], ['< STATION SQUARE', Math.PI]]);
+    pkSignpost(-28.4, 0.4, [['TEACUPS <', Math.PI], ['DARK WOODS ^', Math.PI / 2], ['STATION SQUARE >', 0]]);
+    pkSignpost(37.4, 0.4, [["BARON'S DROP >", 0], ['COASTER COUNTRY ^', Math.PI / 2], ['< STATION SQUARE', Math.PI]]);
     // where the streets cross the Garden Walk
     pkSignpost(-28.4, -41.4, [['GARDEN WALK >', 0], ['DROP TOWER ^', Math.PI / 2], ['DANCE RIDE v', -Math.PI / 2]]);
     pkSignpost(37.4, -41.4, [['< GARDEN WALK', Math.PI], ['WILD HUNT ^', Math.PI / 2], ['LOG FLUME v', -Math.PI / 2]]);
     // and where the streets meet the North Promenade
     pkSignpost(-28.4, -57.4, [['DROP TOWER <', Math.PI], ['NORTH GARDENS >', 0], ['STATION SQUARE v', -Math.PI / 2]]);
     pkSignpost(37.4, -57.4, [['NORTH GARDENS <', Math.PI], ['STATION SQUARE v', -Math.PI / 2]]);
+    // on the East Parade, where Dragon Gate's walk crosses it
+    pkSignpost(124.2, -6.4, [['LITTLE MEADOW ^', Math.PI / 2], ['DODGEMS & WHEEL v', -Math.PI / 2], ['< DRAGON RIDE', Math.PI]]);
   }
 
   // ── Life: the fountain breathes and the water moves ──────────────

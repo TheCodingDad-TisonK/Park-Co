@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.8.1 (2026-11-12): World Update
+
+## Fixed
+- Guests no longer freeze at the toy stand. A walk to the spot a guest already stood on never finished.
+- A guest buys one toy, not the same toy again and again.
+- Snacks and ice cream sell even when the park's bank is empty.
+- Guests leaving a bench no longer sit down on the same seat again.
+- The Skyline no longer takes a queue before stage 1 is open, and it is left out of the "N of M rides open" counts until then.
+- Guests give up on a line that cannot move: a ride in a fault, in MAINT, or on MANUAL with nobody at the desk. They go and find something else.
+- The main coaster no longer strands its riders when track wear reaches 90 percent. The bars lift, the riders get off, and the line stops refilling until the coaster is serviced.
+- The game reports its real version (it said 0.2.1).
+- The Rides tab says "breaker off" for a shut ride, "Cycles" instead of "Cycles today", and Droomvlucht no longer shows "0 cycles".
+
+## Changed
+- The Dance Macabre ride is now called the Dance Ride on its signs, panels and console.
+- The start screen no longer says "seven rides". The pause guide lists every kind of ride and has new lines for the railway, the tablet, third person, the golf cart, the bed and the controller.
+- Guests prefer short lines and the featured ride (the Rides tab text is now accurate).
+
+## Under the hood
+- About 380 lines of the old indoor coaster halls (Nocturne, The Wreck, Moonwood) are gone, together with their panel emblems and an unused hoarding. The game file is 32 KB smaller.
+- The two copies of the queue reslot code are now one.
+- New soak test (`npm run soak`) plays hours of simulated park time and fails on frozen guests, rides that never run, or a tick that throws. CI runs it as a second job and now also runs on feature branches. The release workflow runs the tests before building the installer.
+- Seven new regression checks in the smoke suite (235 in total).
+- README and CHANGELOG corrected (ride count, stations, workers, removed gardens, download name, typos).
+
 ## 1.8.0 (2026-11-11): World Update
 
 ## Fixed

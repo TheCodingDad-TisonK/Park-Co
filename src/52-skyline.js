@@ -735,11 +735,8 @@
   // the little forecourt at the foot of the Woods Halt tower, off the Dark Woods street: the way to the queue
   function pkSkyForecourt() {
     var M = pkSkyM();
-    pkPaved(11.0, 7.6, M.pavers, -54.6, 0.0185, -45.2, 2.4);
-    pkPaved(3.2, 3.0, M.pavers, -61.0, 0.0186, -40.6, 2.4);
-    pkPavedDisc(6.4, M.pavers, -55.5, 0.0187, -45.0, null, 2.4);
-    var kerb = pkMats().kerb;
-    if (kerb) { box(11.2, 0.07, 0.16, kerb, -54.6, 0.035, -48.95); box(0.16, 0.07, 7.6, kerb, -49.15, 0.035, -45.2); }
+    // laid with the rest of the park's paving, as one surface (part 12)
+    pkPaveRect(-60.1, -49.1, -49.0, -41.4); pkPaveRect(-62.6, -59.4, -42.1, -39.1); pkPaveDisc(-55.5, -45.0, 6.4);
   }
   // put the three vehicles on the line at a front-car distance s; a vehicle faces the way the line runs
   // Each car hangs between its two bogies, 1.7 m in from its ends: its middle is midway between them and it points from

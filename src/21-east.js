@@ -5,5 +5,5 @@
   // ride (part 55) registers its own plot, yard and station; the strip's two streets below stay, because the new ride's
   // queue and the walks to the east reach the strip down them.
   (function () {
-    PK_ROUTES.push([35, -60, 76, -60, 5, 'coaster'], [76, -110, 76, -6, 4.2, 'coaster']);   // the Promenade on east; the East Walk
+    // (the Promenade's east end and the East Walk are in the one table of routes, part 12)
   })();

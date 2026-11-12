@@ -12,7 +12,7 @@
   var PK_TH = { CX: -97, CZ: -68 };
   PK_PARK.x0 = Math.min(PK_PARK.x0, -132);   // a whole number of route cells (0.6 m) west of -72: the grid keeps its lattice
   PK_PLOTS.push({ id: 'theater', name: 'The Lindenburg Arena', x: PK_TH.CX, z: PK_TH.CZ, r: 30, q: [PK_TH.CX + 21.4, PK_TH.CZ + 18.1], level: 24 });
-  PK_ROUTES.push([-31, -40, PK_TH.CX + 23, -40, 4.2, 'dark']);
+  // (the Arena path, west off West Street along z -40 to CX + 23, is in the one table of routes, part 12)
   PK_KEEP.push([PK_TH.CX - 1, PK_TH.CZ, 44]);
   PK_CAB_RIDES.push(['theater', 'LINDENBURG ARENA']);
 
@@ -1299,6 +1299,7 @@
       start: pkTheaterShowBegin, tickRun: pkTheaterTickRun   // doors open two minutes: the walk from the gate is about 95 s
     });
     pkTheaterBuild(a);
+    a.foot = [[PK_TH.CX - 28, PK_TH.CX + 30.6, PK_TH.CZ - 30.5, PK_TH.CZ + 30.5]];   // the stand, the arena and the city, for part 54's clearances (the Arena is not one group)
     var C = pkCtl(a); C.barsWant = 1; C.bars = 1;   // the curtain starts closed
     a.curtain = true;
     a.boardMin = 30;   // on AUTO the house closes once the line is in and seated, after half a minute at least

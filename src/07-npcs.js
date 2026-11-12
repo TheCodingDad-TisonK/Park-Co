@@ -63,11 +63,11 @@
       spots: {
         plaza: { x: 0, z: 26 }, gate: { x: 0, z: 28 }, midway: { x: 0, z: 14 }, station: { x: 0, z: 4 }, coaster: { x: 0, z: -2 },
         snack: { x: -11, z: 9 }, carousel: { x: -14, z: 19 }, ferris: { x: 13, z: 19 },
-        fairCross: { x: -31, z: 3 }, teacups: { x: -40, z: 3 }, kidsLane: { x: -46.8, z: 36 },
-        thrillCross: { x: 35, z: 3 }, dodgems: { x: 42, z: 3 }, baron: { x: 57, z: 19 },
-        darkWoods: { x: -36, z: -24 }, dropTower: { x: -36, z: -52 }, promWest: { x: -20, z: -60 }, halls: { x: -46.5, z: -70 },
+        fairCross: { x: -31, z: 3 }, teacups: { x: -34.6, z: 38 }, kidsLane: { x: -46.8, z: 24 },
+        thrillCross: { x: 35, z: 3 }, dodgems: { x: 127, z: 22 }, baron: { x: 57, z: 19 },
+        darkWoods: { x: -36, z: -24 }, dropTower: { x: -36.5, z: -62 }, promWest: { x: -20, z: -60 }, halls: { x: -46.5, z: -70 },
         gardenWest: { x: -28, z: -44 }, gardenWalk: { x: 2, z: -44 }, bandstand: { x: 2, z: -52 },
-        coasterCountry: { x: 40, z: -24 }, promEast: { x: 50, z: -60 }, eastWalk: { x: 76, z: -20 },
+        coasterCountry: { x: 40, z: -24 }, promEast: { x: 50, z: -60 }, eastWalk: { x: 74, z: -20 },
         lotDrive: { x: 0, z: 74 }
       }
     });

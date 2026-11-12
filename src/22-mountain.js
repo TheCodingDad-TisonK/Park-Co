@@ -55,7 +55,7 @@
   (function () {
     PK_PLOTS.push({ id: 'mountain', name: 'The Mountain King', x: 103, z: 54, r: 17, q: [83.2, 64.6], qdx: -1, level: 21, pad: 0.02 });
     PK_THEME.mountain = { a: 0x4a5a86, b: 0xd8b04a, ground: 0x8a8a96, name: 'The Mountain King', noBunting: true, noDecor: true, portal: function (p, side, g) { pkMkPortal(p, side, g); } };
-    PK_ROUTES.push([76, -6, 72.5, -6, 3.2, 'coaster'], [72.5, -6, 72.5, 64.6, 3.2, 'coaster'], [72.5, 64.6, 76.4, 64.6, 3.2, 'coaster']);
+    // (the walk to its line is the East Walk, in the one table of routes, part 12)
   })();
 
   // ── The hall ─────────────────────────────────────────────────────

@@ -359,29 +359,21 @@
   function pkHQMap(x, y, z, ry, w, h) {
     var g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; scene.add(g);
     pkBevelBox(w + 0.1, h + 0.1, 0.05, pkMatWoodRich(), 0, 0, -0.02, g, 0.015);
-    var cv = tex(512, Math.round(512 * h / w), function (c, W2, H2) {
-      c.fillStyle = '#e8e2cc'; c.fillRect(0, 0, W2, H2);
-      var P = PK_PARK, k = Math.min(W2 / (P.x1 - P.x0 + 8), H2 / (P.z1 - P.z0 + 8)), ox = W2 / 2 - (P.x0 + P.x1) / 2 * k, oz = H2 / 2 - (P.z0 + P.z1) / 2 * k;
-      function X(v) { return ox + v * k; } function Z(v) { return oz + v * k; }
-      c.fillStyle = '#9cbb7a'; c.fillRect(X(P.x0), Z(P.z0), (P.x1 - P.x0) * k, (30 - P.z0) * k);
-      c.strokeStyle = '#c9a77a'; c.lineCap = 'round';
-      PK_ROUTES.forEach(function (r) { c.lineWidth = Math.max(2, r[4] * k); c.beginPath(); c.moveTo(X(r[0]), Z(r[1])); c.lineTo(X(r[2]), Z(r[3])); c.stroke(); });
-      c.lineWidth = 14 * k; c.beginPath(); c.moveTo(X(0), Z(30)); c.lineTo(X(0), Z(-2)); c.stroke();
-      c.strokeStyle = '#2f5d8a'; c.lineWidth = 2; c.beginPath(); PK_TRACK_PTS.forEach(function (p, i) { if (i) c.lineTo(X(p[0]), Z(p[2])); else c.moveTo(X(p[0]), Z(p[2])); }); c.closePath(); c.stroke();
-      PK_PLOTS.forEach(function (p) { c.fillStyle = '#c94f4f'; c.beginPath(); c.arc(X(p.x), Z(p.z), Math.max(3, p.r * k * 0.6), 0, 6.283); c.fill(); });
-      c.fillStyle = '#1b232c'; c.font = 'bold 18px sans-serif'; c.textAlign = 'center'; c.fillText('PARK CO', W2 / 2, 22);
-      c.fillStyle = '#f5b53d'; c.beginPath(); c.arc(X(PK_HQ.x0 + 6), Z(PK_HQ.z0 + 5), 5, 0, 6.283); c.fill();
-      c.fillStyle = '#1b232c'; c.font = '11px sans-serif'; c.fillText('YOU ARE HERE', X(PK_HQ.x0 + 6), Z(PK_HQ.z0 + 5) - 9);
-    }, 1, 1);
-    var mp = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: cv, roughness: 0.8 })); mp.position.z = 0.01; g.add(mp);
+    // the same map the boards out in the park carry (part 56), drawn from the park's own tables, so it is never out of date;
+    // fitted to the frame, with this wall's own YOU ARE HERE
+    var asp = PK_MAP.W / PK_MAP.H, mw = Math.min(w, h * asp), mh = mw / asp;
+    var mp = new THREE.Mesh(new THREE.PlaneGeometry(mw, mh), new THREE.MeshStandardMaterial({ map: pkMapTex(), roughness: 0.8 })); mp.position.z = 0.01; g.add(mp);
+    var hu = (pkMapX(PK_HQ.x0 + 6) / PK_MAP.W - 0.5) * mw, hv = (0.5 - pkMapZ(PK_HQ.z0 + 5) / PK_MAP.H) * mh;
+    var hr = new THREE.Mesh(new THREE.CircleGeometry(0.03, 16), std({ color: 0xffffff, roughness: 0.5 })); hr.position.set(hu, hv, 0.012); g.add(hr);
+    var hs = new THREE.Mesh(new THREE.CircleGeometry(0.02, 16), std({ color: 0xd8231c, emissive: 0xd8231c, emissiveIntensity: 0.45, roughness: 0.4 })); hs.position.set(hu, hv, 0.014); g.add(hs);
     return g;
   }
   // the security room's monitor wall: one screen for each land and one for the coaster, every ride with its state and queue
   function pkHQMonitorWall(x, y, z) {
     var g = new THREE.Group(); g.position.set(x, y, z); scene.add(g);
     pkBevelBox(3.5, 1.4, 0.1, MAT.steelDark, 0, 0, -0.04, g, 0.02);
-    var LANDS = [['THE FAIRGROUND', ['carousel', 'teacups', 'kround', 'kpots', 'kpuffin']], ['THRILLS', ['ferris', 'dodgems', 'baron']], ['THE DARK WOODS', ['danse', 'droptower', 'wildhunt']],
-      ['COASTER COUNTRY', ['flume', 'serpent']], ['DREAM REALM', ['droom']], ['THE COASTER', []], ['THE GATE', null]];
+    var LANDS = [['THE FAIRGROUND', ['carousel', 'teacups']], ['THE EAST STRIP', ['ferris', 'dodgems', 'kround', 'kpots', 'kpuffin']], ['THE DARK WOODS', ['danse', 'droptower', 'wildhunt']],
+      ['COASTER COUNTRY', ['flume', 'serpent', 'baron']], ['DREAM REALM', ['droom']], ['THE COASTER', []], ['THE GATE', null]];
     LANDS.forEach(function (L, i) {
       var cx = -1.15 + (i % 3) * 1.15, cy = 0.33 - Math.floor(i / 3) * 0.66;
       var sc = touchScreen({ w: 300, h: 180, pw: 1.08, ph: 0.6, x: cx, y: cy, z: 0.02, parent: g, title: 'Security: ' + L[0].toLowerCase(),

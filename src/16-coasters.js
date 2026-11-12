@@ -349,8 +349,11 @@
     });
     if (lift > 0.02) {
       var rampLen = Math.max(2, lift * 2);
-      var ramp = box(x1 - x0, 0.1, rampLen, pkMats().kerb, (x0 + x1) / 2, lift / 2, zS + rampLen / 2, g);
-      ramp.rotation.x = -Math.atan2(lift, rampLen);
+      // the ramp runs from the deck's south edge (at the deck's own height) down to the ground rampLen further south. A
+      // positive turn about x drops the south end; it was turned the other way, so the ramp rose away from the platform
+      // and dipped under the deck where it should have met it
+      var ramp = box(x1 - x0, 0.1, Math.sqrt(rampLen * rampLen + surf * surf), pkMats().kerb, (x0 + x1) / 2, surf / 2 - 0.05, zS + rampLen / 2, g);
+      ramp.rotation.x = Math.atan2(surf, rampLen);
       PK_FLOOR_RECTS.push({ axis: 'z', x0: x0, x1: x1, z0: zN, z1: zS, y: surf, ramp: rampLen });
     }
   }
@@ -654,8 +657,7 @@
     // The apron. It comes down the west side of the bandstand (the old garden bandstand still stands on the promenade,
     // square in front of the station) and turns east along the queue. The path fence reads the ground meshes to tell
     // path from lawn, so the walk has to be drawn, not just declared.
-    pkPaved(26.0, 25.0, pkMats().paversWarm, -3.0, 0.043, -72.0, 2.4);
-    pkPaved(26.0, 4.0, pkMats().paversWarm, -3.0, 0.044, -80.6, 2.4);
+    // (part 12 lays it with the rest of the paving: pkPaveCore)
     var curve = pkCoCurve(PK_HUNT_PTS), len = curve.getLength(), uP = pkCoUAt(curve, 4, -84.5);
     var P0 = pkCoProfile(curve, len, uP);
     var F = pkCoFrames(curve, 760, P0, uP);
@@ -773,12 +775,15 @@
     // the old halls and then some. It takes the place of Nocturne, The Wreck and Moonwood in one go.
     { id: 'wildhunt', name: 'The Wild Hunt', x: -8, z: -94, r: 30, q: [-1.0, -79.2], qdx: 1, level: 15, pad: 0.02, boothAt: [-8.6, -78.6] }
   );
-  // the kids' area on the west lawn
+  // the kids' area: The Little Meadow, on the north half of the east strip (it stood on the west lawn, each ride against
+  // the next). From the north: the Puffin Line, the Little Roundabout, Wobbly Pots and the acorn playhouse, each a good
+  // ten metres from the next, their lines running west to the East Parade
   PK_PLOTS.push(
-    { id: 'kround', name: 'Little Roundabout', x: -60, z: 20, r: 6, q: [-49, 20], level: 17, pad: 1.1 },
-    { id: 'kpots', name: 'Wobbly Pots', x: -60, z: 30, r: 5.5, q: [-49, 30], level: 18, pad: 1.1 },
-    { id: 'kpuffin', name: 'Puffin Line', x: -60, z: 40, r: 7.5, q: [-52.5, 44.5], level: 19, pad: 1.05 }
+    { id: 'kround', name: 'Little Roundabout', x: 150, z: -79, r: 6, q: [139, -79], level: 17, pad: 1.1 },
+    { id: 'kpots', name: 'Wobbly Pots', x: 150, z: -54, r: 5.5, q: [139, -54], level: 18, pad: 1.1 },
+    { id: 'kpuffin', name: 'Puffin Line', x: 150, z: -106, r: 7.5, q: [142.5, -101.5], level: 19, pad: 1.05 }
   );
+  var PK_PLAYHOUSE = { x: 147, z: -29 };
   PK_THEME.kround = { a: 0xb8452f, b: 0xf4f1e6, ground: 0x8fae6a, name: 'Little Roundabout' };
   PK_THEME.kpots = { a: 0x2f7f8f, b: 0xf0c04a, ground: 0x8fae6a, name: 'Wobbly Pots' };
   PK_THEME.kpuffin = { a: 0x8a6a4a, b: 0xf0c04a, ground: 0x9ab07a, name: 'Puffin Line' };
@@ -787,12 +792,8 @@
   PK_THEME.wildhunt = { a: 0x3a2a4a, b: 0xc9a227, ground: 0x5a5548, name: 'The Wild Hunt', noBunting: true, noDecor: true };
   // the spurs from the North Promenade up to the queues, and the kids' lane from the Fairground avenue down into the kids'
   // garden, west of the carousel, past the three little rides' gateways
-  PK_ROUTES.push(
-    [35, -60, 35, -65, 4.2, 'coaster'], [35, -65, 41, -65, 4.2, 'coaster'],
-    [-38, -60, -20, -60, 5, 'dark'], [-14, -60, -8.5, -60, 5, 'dark'], [-8.5, -60, -8.5, -80.0, 6.0, 'dark'], [-8.5, -79.8, 4.0, -79.8, 5.0, 'dark'],   // the Wild Hunt's approach and its queue apron
-    [-46.8, 5.4, -46.8, 50, 3.4, 'fair']
-  );
-  PK_KEEP.push([35.5, -62.5, 5.5], [42.5, -65.5, 5], [-38.5, 42, 6.5]);
+  // (their streets are in the one table of routes, part 12)
+  PK_KEEP.push([35.5, -62.5, 5.5], [42.5, -65.5, 5], [PK_PLAYHOUSE.x, PK_PLAYHOUSE.z, 6.5]);
 
   function pkCoastersBuild() {
     var makers = {
@@ -1010,14 +1011,17 @@
   function pkBuildPuffin(p) {
     var th = PK_THEME[p.id], i, s;
     var g = new THREE.Group(); scene.add(g);
+    // the line was drawn on the west lawn round (-60, 40) with its platform's line end to the east. It is laid from those
+    // same numbers, carried to the plot and flipped east-west, so the line end faces the Parade
+    var MX = function (x) { return p.x - (x + 60); }, MZ = function (z) { return p.z + (z - 40); };
     // a straight station along the platform, round the west end, a wiggle and a little hill along the north side, round the
     // east end home: longer than the old oval, and clear of Wobbly Pots' booth and its own
     var pts = [
       [-54.8, 0.4, 43.6], [-57, 0.4, 43.6], [-59.2, 0.4, 43.6], [-61.4, 0.4, 43.6], [-63.6, 0.4, 43.6], [-65.8, 0.4, 43.6],
       [-67.9, 0.4, 43], [-69.3, 0.42, 41.4], [-69.2, 0.5, 39.8], [-67.6, 0.62, 38.9], [-65, 0.85, 38.6], [-62.4, 1, 39.3],
       [-59.8, 0.85, 39], [-57.4, 0.6, 38.9], [-55.2, 0.45, 39.1], [-53.5, 0.4, 40.4], [-53.2, 0.4, 42.2]
-    ];
-    var curve = pkCoCurve(pts), len = curve.getLength(), uP = pkCoUAt(curve, -61.2, 43.6);
+    ].map(function (q) { return [MX(q[0]), q[1], MZ(q[2])]; });
+    var curve = pkCoCurve(pts), len = curve.getLength(), uP = pkCoUAt(curve, MX(-61.2), MZ(43.6));
     var F = pkCoFrames(curve, 300, pkCoProfile(curve, len, uP, { pedal: 1.8 }), uP);
     var E = { curve: curve, len: len, F: F, gap: 2.2, cars: [], uPark: uP, uOfF: [], run: 34 };
     pkCoLevel(F, curve, E.uPark, 2.2 + 1.2, 1.2);
@@ -1041,11 +1045,12 @@
       var q = curve.getPointAt(s / len);
       pkRoundCyl(0.055, q.y, std({ color: 0x4a443c, roughness: 0.8 }), q.x, q.y / 2, q.z, g, 6);
     }
-    pkCoPlatform(g, -63.5, -56.5, 43.9, 45.3, th, 0.4);
+    pkCoPlatform(g, MX(-56.5), MX(-63.5), MZ(43.9), MZ(45.3), th, 0.4);
     // a row of planted rocks down the middle of the loop, clear of the track all round
-    [-66.0, -63.5, -61.0, -58.5, -56.2].forEach(function (rx) {
-      pkRoundCyl(0.34, 0.42, std({ color: 0x7a6a52, roughness: 0.85 }), rx, 0.21, 41.2, g, 12);
-      sphere(0.3, std({ color: 0x4d7a3a, roughness: 0.95 }), rx, 0.5, 41.2, g);
+    [-66.0, -63.5, -61.0, -58.5, -56.2].forEach(function (rx0) {
+      var rx = MX(rx0), rz = MZ(41.2);
+      pkRoundCyl(0.34, 0.42, std({ color: 0x7a6a52, roughness: 0.85 }), rx, 0.21, rz, g, 12);
+      sphere(0.3, std({ color: 0x4d7a3a, roughness: 0.95 }), rx, 0.5, rz, g);
     });
     var a = pkAttr({
       id: p.id, name: p.name, x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats,
@@ -1053,14 +1058,15 @@
     });
     var C = pkCtl(a);
     E.a = a;
-    pkCoGates(g, [-61.2, -59.0], 43.95, C);
+    pkCoGates(g, [MX(-59.0), MX(-61.2)], MZ(43.95), C);
     E.cars.forEach(function (c) { C.barObjs.push(function (bb) { c.bar.rotation.x = -1.35 * (1 - bb); }); });
     pkCoPlace(E, E.uPark);
     return a;
   }
   // the acorn playhouse: a sandpit, a little tower and a slide, for the ones too small to queue
   function pkBuildPlayhouse() {
-    var g = new THREE.Group(); g.position.set(-38.5, 0, 42); scene.add(g);
+    var g = new THREE.Group(); g.position.set(PK_PLAYHOUSE.x, 0, PK_PLAYHOUSE.z); scene.add(g);
+    if (typeof PK_PLAY !== 'undefined') PK_PLAY.g = g;   // part 54 measures its distance to the rides
     var wood = std({ color: 0x8a6a4a, roughness: 0.85 }), leaf = std({ color: 0x4d7a3a, roughness: 0.9 });
     pkRoundCyl(4.6, 0.12, std({ color: 0xd8c49a, roughness: 0.98 }), 0, 0.06, 0, g, 32);
     pkRing(4.7, 0.15, wood, 0, 0.12, 0, g, 32);

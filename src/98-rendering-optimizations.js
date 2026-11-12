@@ -244,6 +244,11 @@
       scene.updateMatrixWorld(true);
       scene.traverse(function (o) {
         if (!o.userData || !o.userData.dynamic || !o.parent) return;
+        // the path rail (part 24) is one instanced group for the whole park, standing at the origin. A box round an instanced
+        // mesh is the box of one post, so the rail was taken for a small part at the hub and hidden whenever the eye was a
+        // fog's length from there: no rail at all on the far streets. Nothing instanced is small in this sense
+        if (o.userData.pkPathFence) return;
+        var inst = false; o.traverse(function (c) { if (c.isInstancedMesh) inst = true; }); if (inst) return;
         for (var p = o.parent; p; p = p.parent) if (p.userData && p.userData.dynamic) return;   // part of a bigger moving thing
         var box = new THREE.Box3().setFromObject(o), size = box.getSize(new THREE.Vector3());
         if (Math.max(size.x, size.y, size.z) > 6) return;   // a carriage, a train, a gondola: never dropped

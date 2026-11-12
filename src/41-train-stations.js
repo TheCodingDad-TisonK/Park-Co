@@ -8,7 +8,7 @@
   var TR_STATIONS = [
     { id: 'central', name: 'CENTRAL STATION', x: -128, z: 34, walk: [[-117.4, 34], [-117.4, 62], [-30, 62]], roof: 'slateRed' },
     { id: 'windmill', name: 'WINDMILL HALT', x: -62, z: -134, walk: [[-62, -123.4], [-17, -123.4], [-17, -160]], guest: false, roof: 'slateRed' },
-    { id: 'dragon', name: 'DRAGON GATE', x: 170, z: -2, walk: [[159.4, -2], [121, -2]], guest: false, roof: 'slateGreen' },
+    { id: 'dragon', name: 'DRAGON GATE', x: 170, z: -2, walk: [[159.4, -2], [154, -2]], guest: false, roof: 'slateGreen' },
     { id: 'lake', name: 'LAKESIDE HALT', x: 95, z: 112, walk: [[95, 102.2], [72.5, 102.2], [72.5, 64.6]], roof: 'slateRed' }
   ];
   // wagon centres along a stopped train, in a station's local x (the front buffer stops 28 m ahead of the middle of the platform)

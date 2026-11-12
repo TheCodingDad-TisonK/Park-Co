@@ -4426,20 +4426,20 @@
         "z": 3
       },
       "teacups": {
-        "x": -40,
-        "z": 3
+        "x": -34.6,
+        "z": 38
       },
       "kidsLane": {
         "x": -46.8,
-        "z": 36
+        "z": 24
       },
       "thrillCross": {
         "x": 35,
         "z": 3
       },
       "dodgems": {
-        "x": 42,
-        "z": 3
+        "x": 127,
+        "z": 22
       },
       "baron": {
         "x": 57,
@@ -4450,8 +4450,8 @@
         "z": -24
       },
       "dropTower": {
-        "x": -36,
-        "z": -52
+        "x": -36.5,
+        "z": -62
       },
       "promWest": {
         "x": -20,
@@ -4482,7 +4482,7 @@
         "z": -60
       },
       "eastWalk": {
-        "x": 76,
+        "x": 74,
         "z": -20
       },
       "lotDrive": {
@@ -5536,7 +5536,11 @@
   // for the coaster and ride it. The player works the window and the ride.
   var PK_GATE_Z = 30, PK_PLATFORM_Y = 0.6, PK_STATION_Z = -4.6, PK_KIDS_Z = 56;   // PK_KIDS_Z: the south fence of the kids' garden
   // the park is a long rectangle: the gate at the south, the coaster across the north, and rides either side of the midway
-  var PK_PARK = { x0: -72, x1: 123, z0: -118, z1: 70 };   // z0 was -95: the north fence moved back for the bigger halls
+  var PK_PARK = { x0: -72, x1: 162, z0: -118, z1: 70 };   // z0 was -95: the north fence moved back for the bigger halls; x1 was 123: the east fence moved out to 8 m short of the railway (the re-lay of 2026-11)
+  // the east fence steps in round Dragon Gate station: its platform and ramp (x 157.1 to 168.7, z -34.4 to 30.4) stay outside the park
+  var PK_EAST_BAY = { x: 155, z0: -37, z1: 33 };
+  // the old east fence line: Joris and The Mountain King stand along it, the East Parade runs just past it
+  var PK_EAST_OLD = 123;
   // walkable rectangles laid by other parts outside the palisade: the railway stations' platforms, ramps and footpaths (part 41)
   var PK_WALK_EXTRA = [];
   // the draw distance: how far the eye (and the renderer) sees. The fog's far edge also cuts the camera's far plane, so
@@ -5552,11 +5556,11 @@
   // the plots: every ride the park can open. level is the level that opens it, q the point the queue stands at
   var PK_PLOTS = [
     { id: 'carousel',  name: 'Carousel',     x: -34, z: 20, r: 8.5,  q: [-22, 20],  level: 2 },
-    { id: 'teacups',   name: 'Teacups',      x: -56, z: 3,  r: 7.2,  q: [-44, 3],   level: 4, boothSide: -1 },   // the south side is the kids' lane
-    { id: 'ferris',    name: 'Ferris wheel', x: 34,  z: 20, r: 9.5,  q: [22, 20],   level: 6, pad: 1.15 },   // the pad stops short of Baron's Drop
-    { id: 'dodgems',   name: 'Dodgems',      x: 56,  z: 3,  r: 8.2,  q: [44, 3],    level: 8 },
-    { id: 'droptower', name: 'Drop tower',   x: -54, z: -52, r: 6.5, q: [-44, -52], level: 9 },
-    { id: 'flume',     name: 'Log flume',    x: 54,  z: -32, r: 9.0, q: [46.4, -24], level: 10 },
+    { id: 'teacups',   name: 'Teacups',      x: -52, z: 42, r: 7.2,  q: [-40, 42],  level: 4 },   // on the lawn the kids' rides left (it stood at -56, 3, four metres from the abbey)
+    { id: 'ferris',    name: 'Ferris wheel', x: 150, z: 52, r: 9.5,  q: [138, 52],  level: 6, pad: 1.15 },   // on the east strip, south end (it stood at 34, 20, against Baron's Drop)
+    { id: 'dodgems',   name: 'Dodgems',      x: 144, z: 13, r: 8.2,  q: [136, 22],  level: 8 },   // on the east strip (it stood at 56, 3); the line comes in at the south-west, so the hall clears the station bay
+    { id: 'droptower', name: 'Drop tower',   x: -51.5, z: -64, r: 6.5, q: [-41.5, -64], level: 9 },   // north of the Skyline's station (it stood at -54, -52, between the abbey and a pier)
+    { id: 'flume',     name: 'Log flume',    x: 54,  z: -28, r: 9.0, q: [46.4, -20], level: 10 },   // four metres south, clear of The Serpent's line
     { id: 'danse',     name: 'Dance Ride',  x: -58, z: -24, r: 12,  q: [-44, -24],  level: 11, qside: -1, pad: 0.02 }   // part 49: the boarding row at the abbey's doors; the abbey lays its own ground
   ];
   // the ladder: what the park earns its way to. Every ride is open from the first day; the levels open the services.
@@ -5740,8 +5744,9 @@
     return pkBkFloorAt(x, z);            // up the steps into a ride's booth (part 17)
   }
   function pkOnPlatform(x, z) { return x > -10 && x < 10 && z > -3.6 && z < -0.6; }
+  function pkInStationBay(x, z) { return x > PK_EAST_BAY.x && z > PK_EAST_BAY.z0 && z < PK_EAST_BAY.z1; }   // outside the fence: Dragon Gate's platform
   function pkInsidePark(x, z) {
-    if (x > PK_PARK.x0 && x < PK_PARK.x1 && z > PK_PARK.z0 && z < PK_PARK.z1) return true;
+    if (x > PK_PARK.x0 && x < PK_PARK.x1 && z > PK_PARK.z0 && z < PK_PARK.z1 && !pkInStationBay(x, z)) return true;
     for (var i = 0; i < PK_WALK_EXTRA.length; i++) { var r = PK_WALK_EXTRA[i]; if (x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1) return true; }
     return false;
   }
@@ -5780,21 +5785,13 @@
     var lawnMat = MAT.grass.clone();
     lawnMat.map = lawnMap;
     plane(1240, 1240, lawnMat, 0, -0.03, 0, -Math.PI / 2);
-    pkSlab(34, 18, 0, 44, 0.012, M.paversWarm);      // the forecourt, where the guests arrive
-    pkSlab(28, 10, 0, 33, 0.014, M.paversWarm);      // the plaza under the gate
-    pkSlab(3.2, 5.0, -18.0, 42.5, 0.013, M.paversWarm);   // out of the HQ's door onto the forecourt
-    pkSlab(14, 32, 0, 12, 0.016);      // the midway
-    pkSlab(36, 12, 2, -0.5, 0.018);    // the station apron: Station Square up to the coaster's yard fence, and the strip along the platform
+    // the forecourt, the gate's plaza, the midway and Station Square are laid by part 12 with every other piece of paving,
+    // as one surface (pkPaveCore)
     pkSlab(9.4, 6.8, 15.5, -0.8, 0.02);   // the coaster control room's floor
-    pkSlab(9, 7, -15.6, 13.2, 0.02, M.paversWarm);   // the snack stand's apron, where the stand stands
     pkSlab(62, 18, 0, 62, 0.01, pkAsphalt());       // the car park: two ranks of bays off a wide aisle
     // the entrance drive up from the road
     pkSlab(11, 5, 0, 73.5, 0.011, pkAsphalt());
     // each ride's own paved pad is laid by the dressing (part 06), tinted to its theme
-    pkSlab(18, 6, -14, 20, 0.017);   // out to the carousel
-    pkSlab(18, 6, -14, 3, 0.017);    // the start of the street out to the teacups (part 12 carries it on)
-    pkSlab(18, 6, 14, 20, 0.017);    // out to the ferris wheel
-    pkSlab(18, 6, 14, 3, 0.017);     // the start of the street out to the dodgems
     // the routes out to the lands, the hub, the Garden Walk and the planting are laid in part 12
     // the car park markings: 22 bays a side, two removed for the walk through to the gate
     var bayW = 2.75, bayN = 22, bayX0 = -bayW * bayN / 2 + bayW / 2;
@@ -5864,7 +5861,12 @@
     // playhouse are inside the park and reached from the Fairground, not stranded beyond the palisade.
     pkPalisade(PK_PARK.x0, PK_KIDS_Z, PK_PARK.x0, PK_PARK.z0);
     pkPalisade(PK_PARK.x0, PK_KIDS_Z, -32.5, PK_KIDS_Z);
-    pkPalisade(PK_PARK.x1, 71, PK_PARK.x1, PK_PARK.z0);
+    // the east fence, with its bay round Dragon Gate station
+    pkPalisade(PK_PARK.x1, 71, PK_PARK.x1, PK_EAST_BAY.z1);
+    pkPalisade(PK_EAST_BAY.x, PK_EAST_BAY.z1, PK_PARK.x1, PK_EAST_BAY.z1);
+    pkPalisade(PK_EAST_BAY.x, PK_EAST_BAY.z0, PK_EAST_BAY.x, PK_EAST_BAY.z1);
+    pkPalisade(PK_EAST_BAY.x, PK_EAST_BAY.z0, PK_PARK.x1, PK_EAST_BAY.z0);
+    pkPalisade(PK_PARK.x1, PK_EAST_BAY.z0, PK_PARK.x1, PK_PARK.z0);
     pkPalisade(PK_PARK.x0, PK_PARK.z0, PK_PARK.x1, PK_PARK.z0);
     // the boundary round the forecourt and the car park, with the drive in at the south
     pkPalisade(-32.5, PK_GATE_Z, -32.5, 72);
@@ -5938,7 +5940,7 @@
       for (var oz = -PK_WOODS_EDGE; oz <= PK_WOODS_EDGE; oz += PK_WOODS_STEP) {
         // draw all four numbers first, so skipping a spot never shifts the trees after it
         var ojx = (rng5() - 0.5) * 6, ojz = (rng5() - 0.5) * 6, othin = rng5(), osc = 0.95 + rng5() * 1.2;
-        if (ox > -92 && ox < 140 && oz > -131 && oz < 92) continue;                // the park and the ring above
+        if (ox > -92 && ox < PK_PARK.x1 + 17 && oz > -131 && oz < 92) continue;    // the park and the ring above (the ring reaches 16 m past the east fence)
         if (oz > 66 && oz < 98 && ox > -126 && ox < 106) continue;                  // the road, its pavement and what stands along it
         if (othin < 0.5 + (1 - TD) * 0.4) continue;                                 // thinner still: nobody walks out here
         var ofx = ox + ojx, ofz = oz + ojz, oseed = Math.abs(Math.round(ofx * 13 + ofz * 7));
@@ -9286,8 +9288,7 @@
       var dg = new THREE.Group(); dg.visible = !!a.open; scene.add(dg); a.dress = dg;
       // the plot's own paving (a big coaster plot sets its own pad, so it does not pave over its neighbours)
       var padR = p.r * (p.pad || 1.25), padY = 0.0195 + PK_PLOTS.indexOf(p) * 0.0025;
-      pkPavedDisc(padR, pkPadMat(th.ground), p.x, padY, p.z, dg, 2.4);
-      pkPavedDisc(padR + 0.55, pkMats().kerb, p.x, padY - 0.001, p.z, dg, 2.4);   // a stone lip round the pad
+      // (the pad itself is laid by part 12 with the rest of the paving, as one surface: pkPaveBuild)
       // bunting along the three sides away from the midway (a big coaster plot hangs its own)
       if (!th.noBunting) {
         pkDressItem('bunting', function (g) { pkBunting(p.x - p.r - 1.2, p.z - p.r - 1.2, p.x + p.r + 1.2, p.z - p.r - 1.2, th, g); });
@@ -9557,6 +9558,10 @@
   // the one thing each ride is known for
   function pkSignature(a, p, th, parent) {
     var g = parent;
+    // a piece's place, from where it stood when its ride was at (ox, oz): carried with the plot, and flipped east-west when
+    // the ride has changed sides of the park (its line then runs the other way, and so does everything set out round it)
+    var at = function (ox, oz, x, z) { var flip = (ox < 0) !== (p.x < 0) ? -1 : 1; return [p.x + flip * (x - ox), p.z + (z - oz)]; };
+    var P;
     if (a.id === 'carousel') {
       var band = new THREE.Mesh(new THREE.TorusGeometry(7.2, 0.1, 6, 44), std({ color: 0xf0c04a, roughness: 0.35, metalness: 0.45 }));
       band.rotation.x = Math.PI / 2; band.position.set(p.x, 4.0, p.z); parent.add(band);
@@ -9564,27 +9569,27 @@
       for (var i = 0; i < 5; i++) cyl(0.07, 1.0 - i * 0.13, std({ color: 0xf0c04a, roughness: 0.4 }), p.x - p.r - 3.1 + i * 0.25, 2.2, p.z + 2.4, g, 8);
       // the fairground quarter: brass lamps on the rim, a souvenir kiosk facing the avenue,
       // flower beds flanking the west lamp (inside the kids' lane) and a bench on the north rim
-      [[-41.6, 12.5], [-41.6, 27.5], [-43.0, 20]].forEach(function (q) { pkLandLamp(q[0], q[1], g, th); });
-      parent.add(pkStall(-36.5, 8.2, Math.PI, th.a, th.b, 'SOUVENIRS'));
-      pkFlowerBed(-43.4, 17.3, 1.8, 1.1, null, true);   // in the world, so the editor can move them
-      pkFlowerBed(-43.4, 25.2, 1.8, 1.1, null, true);
+      [[-41.6, 12.5], [-41.6, 27.5], [-43.0, 20]].forEach(function (q) { P = at(-34, 20, q[0], q[1]); pkLandLamp(P[0], P[1], g, th); });
+      P = at(-34, 20, -36.5, 8.2); parent.add(pkStall(P[0], P[1], Math.PI, th.a, th.b, 'SOUVENIRS'));
+      P = at(-34, 20, -43.4, 17.3); pkFlowerBed(P[0], P[1], 1.8, 1.1, null, true);   // in the world, so the editor can move them
+      P = at(-34, 20, -43.4, 25.2); pkFlowerBed(P[0], P[1], 1.8, 1.1, null, true);
     } else if (a.id === 'teacups') {
       // the tea garden: clipped hedges and topiary balls on the far sides, a table set
       // on the south-west pad, cup lamps flanking the approach and a trellis arch over
       // the walk in from the midway
-      pkHedgeRun(-65.6, -3.4, -65.6, 9.4, g, 1.05);
-      pkHedgeRun(-63.6, 12.6, -49.2, 12.6, g, 1.05);
-      [[-63.4, -4.4], [-63.4, 10.4], [-49.4, 10.4]].forEach(function (q) { pkTopiary(q[0], q[1], g, 1); });
-      pkTeaTable(-58.5, -5.2, g);   // on the pad's north-west, clear of the booth
-      [[-49.4, 6.0], [-47.6, 0.4]].forEach(function (q) { pkCupLamp(q[0], q[1], g); });   // the south one stands clear of the kids' lane
-      pkTrellis(-40.8, 3, g);
+      // (the hedge that ran along the south rim is gone: the booth stands there now, and the trellis with it: the walk in
+      // comes down the Fairground lane, not along an avenue)
+      pkHedgeRun(p.x - 9.6, p.z - 6.4, p.x - 9.6, p.z + 6.4, g, 1.05);
+      [[-9.4, -7.4], [-9.4, 7.4]].forEach(function (q) { pkTopiary(p.x + q[0], p.z + q[1], g, 1); });
+      pkTeaTable(p.x - 2.5, p.z - 8.6, g);   // on the pad's north rim, clear of the booth
+      [[6.6, 3.6], [8.4, -3.2]].forEach(function (q) { pkCupLamp(p.x + q[0], p.z + q[1], g); });
     } else if (a.id === 'ferris') {
       // the sky quarter: three flag poles with festoon strung between them on the north
       // rim, a viewing deck with a brass telescope on the south rim, globe lamps and benches
-      pkFlagPole(27, 30.1, g, th, 5.6); pkFlagPole(34, 29.9, g, th, 6.5); pkFlagPole(41, 30.1, g, th, 5.6);
-      pkFestoon(27, 30.1, 34, 29.9, g, th, 4.4, 5.1); pkFestoon(34, 29.9, 41, 30.1, g, th, 5.1, 4.4);
-      pkViewDeck(32.6, 9.4, g);
-      pkLandLamp(29.2, 10.2, g, th, 'globe'); pkLandLamp(40.0, 10.2, g, th, 'globe');
+      pkFlagPole(p.x - 7, p.z + 10.1, g, th, 5.6); pkFlagPole(p.x, p.z + 9.9, g, th, 6.5); pkFlagPole(p.x + 7, p.z + 10.1, g, th, 5.6);
+      pkFestoon(p.x - 7, p.z + 10.1, p.x, p.z + 9.9, g, th, 4.4, 5.1); pkFestoon(p.x, p.z + 9.9, p.x + 7, p.z + 10.1, g, th, 5.1, 4.4);
+      pkViewDeck(p.x - 1.4, p.z - 10.6, g);
+      pkLandLamp(p.x - 4.8, p.z - 9.8, g, th, 'globe'); pkLandLamp(p.x + 6.0, p.z - 9.8, g, th, 'globe');
     } else if (a.id === 'dodgems') {
       for (var n = 0; n < 4; n++) box(14, 0.1, 0.1, glowMat(0x5fd3ff, 1.1), p.x, 3.55, p.z - 5 + n * 0.06, g);
       box(0.1, 0.1, 10, glowMat(0xff5f8a, 1.1), p.x - 7.05, 3.55, p.z, g);
@@ -9609,23 +9614,20 @@
     } else if (a.id === 'kround') {
       // the kids' quarter: balloons, soft play blocks and a parent's bench under a shade sail, on the west
       // side away from the queue and clear of the station fence and the booth
-      pkBalloonCluster(-66.4, 16.6, g);
-      pkPlayBlocks(-67.6, 23.2, g);
-      pkShadeBench(-66.0, 24.6, g, th);
+      P = at(-60, 20, -66.4, 16.6); pkBalloonCluster(P[0], P[1], g);
+      P = at(-60, 20, -67.6, 23.2); pkPlayBlocks(P[0], P[1], g);
+      P = at(-60, 20, -66.0, 24.6); pkShadeBench(P[0], P[1], g, th);
     } else if (a.id === 'kpots') {
       // the tea-party corner: giant spoons, sugar-cube blocks and a teapot fountain on the west edge
-      pkGiantSpoon(-66.5, 26.6, 0.5, g);
-      pkGiantSpoon(-66.0, 33.4, -0.4, g);
-      pkSugarCubes(-65.8, 29.8, g);
-      pkTeapotFountain(-67.0, 31.6, 0.3, g);
+      P = at(-60, 30, -66.5, 26.6); pkGiantSpoon(P[0], P[1], 0.5, g);
+      P = at(-60, 30, -66.0, 33.4); pkGiantSpoon(P[0], P[1], -0.4, g);
+      P = at(-60, 30, -65.8, 29.8); pkSugarCubes(P[0], P[1], g);
+      P = at(-60, 30, -67.0, 31.6); pkTeapotFountain(P[0], P[1], 0.3, g);
     } else if (a.id === 'kpuffin') {
       // the arctic corner: a pale ice patch with rocks and puffins, and a fishing boat by the platform
-      pkIcePatch(-66.5, 36.6, g);
-      pkBoulder(-66.5, 36.6, 0.75, g);
-      pkBoulder(-65.0, 35.8, 0.6, g);
-      pkPuffin(-66.5, 36.6, 0.85, -0.3, g);
-      pkPuffin(-65.0, 35.8, 0.7, 0.6, g);
-      pkBoatProp(-64.5, 46.5, 0.5, g);
+      P = at(-60, 40, -66.5, 36.6); pkIcePatch(P[0], P[1], g); pkBoulder(P[0], P[1], 0.75, g); pkPuffin(P[0], P[1], 0.85, -0.3, g);
+      P = at(-60, 40, -65.0, 35.8); pkBoulder(P[0], P[1], 0.6, g); pkPuffin(P[0], P[1], 0.7, 0.6, g);
+      P = at(-60, 40, -64.5, 46.5); pkBoatProp(P[0], P[1], 0.5, g);
     }
   }
   // ── Free pieces ──────────────────────────────────────────────────
@@ -9877,11 +9879,11 @@
       spots: {
         plaza: { x: 0, z: 26 }, gate: { x: 0, z: 28 }, midway: { x: 0, z: 14 }, station: { x: 0, z: 4 }, coaster: { x: 0, z: -2 },
         snack: { x: -11, z: 9 }, carousel: { x: -14, z: 19 }, ferris: { x: 13, z: 19 },
-        fairCross: { x: -31, z: 3 }, teacups: { x: -40, z: 3 }, kidsLane: { x: -46.8, z: 36 },
-        thrillCross: { x: 35, z: 3 }, dodgems: { x: 42, z: 3 }, baron: { x: 57, z: 19 },
-        darkWoods: { x: -36, z: -24 }, dropTower: { x: -36, z: -52 }, promWest: { x: -20, z: -60 }, halls: { x: -46.5, z: -70 },
+        fairCross: { x: -31, z: 3 }, teacups: { x: -34.6, z: 38 }, kidsLane: { x: -46.8, z: 24 },
+        thrillCross: { x: 35, z: 3 }, dodgems: { x: 127, z: 22 }, baron: { x: 57, z: 19 },
+        darkWoods: { x: -36, z: -24 }, dropTower: { x: -36.5, z: -62 }, promWest: { x: -20, z: -60 }, halls: { x: -46.5, z: -70 },
         gardenWest: { x: -28, z: -44 }, gardenWalk: { x: 2, z: -44 }, bandstand: { x: 2, z: -52 },
-        coasterCountry: { x: 40, z: -24 }, promEast: { x: 50, z: -60 }, eastWalk: { x: 76, z: -20 },
+        coasterCountry: { x: 40, z: -24 }, promEast: { x: 50, z: -60 }, eastWalk: { x: 74, z: -20 },
         lotDrive: { x: 0, z: 74 }
       }
     });
@@ -11457,21 +11459,50 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
     thrill:  { name: 'THRILLS',         a: 0x2f6fb3, b: 0xf0c04a, pave: 0xa9b8c8, sign: '#9fd0ff' },
     dark:    { name: 'THE DARK WOODS',  a: 0x4a4a55, b: 0xff8a3d, pave: 0x8f8778, sign: '#ff9a52' },
     coaster: { name: 'COASTER COUNTRY', a: 0x2f8f6f, b: 0xf0c04a, pave: 0xc2ad86, sign: '#8fe0b0' },
-    garden:  { name: 'THE GARDENS',     a: 0x4d7a3a, b: 0xf4f1e6, pave: 0, sign: '#f5e9c2' }
+    garden:  { name: 'THE GARDENS',     a: 0x4d7a3a, b: 0xf4f1e6, pave: 0, sign: '#f5e9c2' },
+    kids:    { name: 'THE LITTLE MEADOW', a: 0xe58a2f, b: 0x2f9fb0, pave: 0xd8c9a0, sign: '#ffd27a' }
   };
-  // the routes, as [x0, z0, x1, z1, width, land]. The avenues carry the spurs out to the flanks; a street runs north from each
-  // crossroads, with a side street to each far ride's queue; the North Promenade closes the ring and the Garden Walk crosses it.
+  // the routes, as [x0, z0, x1, z1, width, land]. This is every street in the park, in one table (they used to be pushed in
+  // from eight parts, each laying its own slab over whatever was there). The network, from the gate out:
+  //   the midway and Station Square are plazas (pkPaveCore, below); everything else hangs off them:
+  //   - the Avenue crosses the square east to west, from the Fairground lane to the East Walk;
+  //   - West Street and East Street run north off it to the North Promenade, which closes the ring; the Garden Walk
+  //     crosses the middle;
+  //   - the East Walk runs the length of the old east side, and one footbridge walk leads off it over the Dragon Ride's
+  //     line to the East Parade, the spine of the east strip;
+  //   - a spur runs from the nearest street to each ride's line, square to the street, and nothing else.
+  // No two routes run side by side and none is laid over another except where they join. The land a route belongs to names
+  // it on the map and picks its arch; the paving is the same warm paver everywhere, so a joint is never a change of colour.
   var PK_ROUTES = [
-    [-22, 3, -46, 3, 4, 'fair'],                                                                                   // the Fairground avenue: teacups, the kids' lane
-    [-31, 3, -31, -60, 3.6, 'dark'], [-31, -24, -45.5, -24, 3.8, 'dark'], [-31, -52, -45.5, -52, 3.8, 'dark'],      // the Dark Woods: Danse Macabre, drop tower
-    [22, 3, 46, 3, 4, 'thrill'],                                                                                   // the Thrills avenue: dodgems
-    [35, 3, 35, -60, 3.6, 'coaster'], [35, -24, 47.5, -24, 3.8, 'coaster'],                                         // Coaster Country: log flume
-    [-31, -60, 35, -60, 5, 'garden'],                                                                               // the North Promenade
-    [-31, -44, 35, -44, 4.4, 'garden'], [2, -44, 2, -66, 4, 'garden'],                                              // the Garden Walk and its spine to the bandstand
-    [14, -60, 14, -66.6, 3, 'garden']                                                                               // the windmill's spur
+    // the Avenue
+    [-46.8, 3, -16, 3, 5, 'fair'], [20, 3, 74, 3, 5, 'thrill'],
+    // the ring: West Street, East Street, the North Promenade; and the Garden Walk with its spine
+    [-31, 3, -31, -60, 4, 'dark'], [35, 3, 35, -60, 4, 'coaster'], [-38.5, -60, 74, -60, 5, 'garden'],
+    [-31, -44, 35, -44, 4, 'garden'], [2, -44, 2, -60, 4, 'garden'],
+    // the Fairground lane: south off the Avenue past the carousel's west side, then east and south to the teacups' line
+    [-46.8, 3, -46.8, 31.5, 3.6, 'fair'], [-46.8, 31.5, -34.6, 31.5, 3.6, 'fair'], [-34.6, 31.5, -34.6, 44.5, 3.6, 'fair'],
+    // the Dark Woods: the abbey's spur, the Arena path, the drop tower's apron, the Wild Hunt's forecourt walk
+    [-31, -24, -45.5, -24, 4, 'dark'], [-31, -40, -74, -40, 4, 'dark'], [-36.5, -60, -36.5, -64.6, 4, 'dark'], [-8.5, -62, -8.5, -80, 6, 'dark'],
+    // Marerijk's promenade: south off the Arena path, along the palace front
+    [-74, -40, -74, 12, 4, 'marerijk'],
+    // the gardens: the windmill's spur
+    [14, -60, 14, -66.6, 3, 'garden'],
+    // Coaster Country: The Serpent's spur, the flume's spur
+    [35, -60, 35, -65, 4, 'coaster'], [35, -65, 41, -65, 4, 'coaster'], [35, -20, 47.5, -20, 4, 'coaster'],
+    // Thrills: Baron's Drop
+    [56, 3, 56, 10.5, 4, 'thrill'],
+    // the East Walk, one straight street from the Promenade to The Mountain King's line (it was two streets with a jog),
+    // and off it: the Dragon Ride's line, the King's line, the footbridge walk
+    [74, -60, 74, 64.6, 4, 'coaster'], [74, 1.5, 86.8, 1.5, 3.2, 'coaster'], [74, 64.6, 76.4, 64.6, 3.2, 'coaster'],
+    [74, -3.3, 82, -3.3, 2.6, 'coaster'], [117, -3.3, 127, -3.3, 2.6, 'coaster'],
+    // the east strip: the East Parade past Joris and The Mountain King, The Little Meadow (the kids' rides) north of Dragon
+    // Gate's walk and the Thrills south of it, a spur east to each ride's line, and the walk out to Dragon Gate
+    [127, -108, 127, -6, 4, 'kids'], [127, -6, 127, 60, 4, 'thrill'], [127, -2, 155, -2, 4.4, 'coaster'],
+    [127, -101.5, 139, -101.5, 3.6, 'kids'], [127, -79, 139, -79, 4, 'kids'], [127, -54, 139, -54, 4, 'kids'], [127, -29, 141, -29, 3, 'kids'],
+    [127, 22, 136, 22, 4.4, 'thrill'], [127, 52, 138, 52, 4.4, 'thrill']
   ];
   // the arches over the streets where each land begins: [x, z, the way the street runs ('x' or 'z'), land]
-  var PK_ARCHES = [[-17.5, 3, 'x', 'fair'], [23.5, 3, 'x', 'thrill'], [-31, -6.5, 'z', 'dark'], [35, -6.5, 'z', 'coaster']];
+  var PK_ARCHES = [[-17.5, 3, 'x', 'fair'], [23.5, 3, 'x', 'thrill'], [-31, -6.5, 'z', 'dark'], [35, -6.5, 'z', 'coaster'], [127, -10, 'z', 'kids'], [127, 4.5, 'z', 'thrill']];
   var PK_KEEP = [];   // [x, z, r] circles other parts ask the planting to leave alone (part 13 adds its own)
   var PK_THEME_T = 0, PK_FOUNTAIN = { jet: null };
 
@@ -11524,15 +11555,98 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
   // ── The routes ───────────────────────────────────────────────────
   // pavers on a stone edge, tinted to the land the street belongs to, so the ground tells you where you are. Every segment
   // sits a hair above the last, so where two meet there is no flicker.
-  function pkBuildRoutes() {
-    var M = pkMats();
-    PK_ROUTES.forEach(function (r, i) {
-      var dx = r[2] - r[0], dz = r[3] - r[1], len = Math.sqrt(dx * dx + dz * dz), w = r[4], ry = Math.atan2(dx, dz);
-      var cx = (r[0] + r[2]) / 2, cz = (r[1] + r[3]) / 2, y = 0.022 + i * 0.002, land = PK_LANDS[r[5]];
-      pkPaved(w + 0.7, len + w + 0.7, M.kerb, cx, y - 0.001, cz, 2.4, null, ry);
-      pkPaved(w, len + w, land && land.pave ? pkPadMat(land.pave) : M.paversWarm, cx, y, cz, 2.4, null, ry);
-    });
+  // ── The paving: one surface ──────────────────────────────────────
+  // Every piece of paving in the park is a shape in one list: a street (a route), a plaza, a ride's pad, a forecourt. They
+  // are drawn in two layers and nothing else: every shape grown by a kerb's width, in kerb stone, and above that every shape
+  // itself, in pavers. A kerb can therefore only ever show round the outside of the paving as a whole: where two shapes
+  // meet or cross there is no edge, no lip and no second slab, because the paving of one covers the kerb of the other.
+  // The pavers are laid on the world's own grid (the texture is placed by where a point is, not by which shape it is in),
+  // so the courses run straight through a joint. A ride's pad is tinted to its theme and lies just under the streets, so
+  // a street carries on across it unbroken.
+  var PK_PAVE = { shapes: [], meshes: [], dirty: false, built: false, KERB: 0.35, Y_KERB: 0.012, Y_PAD: 0.0135, Y_PAVE: 0.0165, tris: 0, mats: {} };
+  // the layers lie millimetres apart, which a depth buffer cannot tell from high up (fly mode, the Skyline, the wheel): the
+  // kerb showed through the pavers in pale strips. The kerb and the pads are drawn a few depth steps further away than they
+  // lie, so the pavers always win over them; the pavers themselves are left alone, so whatever is inlaid on them (the
+  // fountain's rings, a plaza's round) still lies on top as it always did
+  function pkPaveMat(key, base, step) {
+    var m = PK_PAVE.mats[key];
+    if (!m) { m = PK_PAVE.mats[key] = base.clone(); m.polygonOffset = true; m.polygonOffsetFactor = step; m.polygonOffsetUnits = 3 * step; }
+    return m;
   }
+  function pkPaveSeg(x0, z0, x1, z1, w, tint) { PK_PAVE.shapes.push({ k: 'seg', x0: x0, z0: z0, x1: x1, z1: z1, w: w, tint: tint || 0 }); PK_PAVE.dirty = true; }
+  function pkPaveRect(x0, x1, z0, z1, tint) { PK_PAVE.shapes.push({ k: 'rect', x0: x0, x1: x1, z0: z0, z1: z1, tint: tint || 0 }); PK_PAVE.dirty = true; }
+  function pkPaveDisc(x, z, r, tint) { PK_PAVE.shapes.push({ k: 'disc', x: x, z: z, r: r, tint: tint || 0 }); PK_PAVE.dirty = true; }
+  // a shape as triangles on the ground, grown by g: [[ax, az, bx, bz, cx, cz], ...]
+  function pkPaveTris(s, g) {
+    var out = [], i;
+    if (s.k === 'disc') {
+      var n = 48, r = s.r + g;
+      for (i = 0; i < n; i++) { var a0 = i / n * Math.PI * 2, a1 = (i + 1) / n * Math.PI * 2; out.push([s.x, s.z, s.x + Math.cos(a0) * r, s.z + Math.sin(a0) * r, s.x + Math.cos(a1) * r, s.z + Math.sin(a1) * r]); }
+      return out;
+    }
+    var P;
+    if (s.k === 'rect') P = [[s.x0 - g, s.z0 - g], [s.x1 + g, s.z0 - g], [s.x1 + g, s.z1 + g], [s.x0 - g, s.z1 + g]];
+    else {
+      // a street: its centre line, squared off half a width past each end so two streets meeting at a corner fill it
+      var dx = s.x1 - s.x0, dz = s.z1 - s.z0, len = Math.sqrt(dx * dx + dz * dz) || 1, ux = dx / len, uz = dz / len, hw = s.w / 2 + g, e = s.w / 2 + g;
+      var ax = s.x0 - ux * e, az = s.z0 - uz * e, bx = s.x1 + ux * e, bz = s.z1 + uz * e, nx = -uz * hw, nz = ux * hw;
+      P = [[ax + nx, az + nz], [bx + nx, bz + nz], [bx - nx, bz - nz], [ax - nx, az - nz]];
+    }
+    out.push([P[0][0], P[0][1], P[1][0], P[1][1], P[2][0], P[2][1]], [P[0][0], P[0][1], P[2][0], P[2][1], P[3][0], P[3][1]]);
+    return out;
+  }
+  // the plazas that are not streets: the forecourt, the gate, the midway, Station Square and the aprons off them
+  function pkPaveCore() {
+    pkPaveRect(-17, 17, 35, 53);            // the forecourt, where the guests arrive
+    pkPaveRect(-14, 14, 28, 38);            // the plaza under the gate
+    pkPaveRect(-19.6, -16.4, 40, 45);       // out of the HQ's door onto the forecourt
+    pkPaveRect(-7, 7, -4, 28);              // the midway
+    pkPaveRect(-16, 20, -6.5, 5.5);         // Station Square, up to the coaster's yard fence, and the strip along the platform
+    pkPaveRect(-20.1, -11.1, 9.7, 16.7);    // the snack stand's apron
+    pkPaveRect(-23, -7, 17, 23);            // out to the carousel
+    pkPaveRect(-16, 10, -84.5, -62.5);      // the Wild Hunt's forecourt, off the Promenade
+  }
+  function pkPaveBuild() {
+    var P = PK_PAVE, M = pkMats(), i;
+    P.meshes.forEach(function (m) { if (m.parent) m.parent.remove(m); m.geometry.dispose(); });
+    P.meshes = []; P.tris = 0;
+    // each ride's own pad, from its plot and its theme (a big coaster sets its own ground and has no pad)
+    var shapes = P.shapes.slice(), tints = [];
+    PK_PLOTS.forEach(function (p) { var th = PK_THEME[p.id], r = p.r * (p.pad || 1.25); if (th && r >= 2) shapes.push({ k: 'disc', x: p.x, z: p.z, r: r, tint: th.ground }); });
+    shapes.forEach(function (s) { if (s.tint && tints.indexOf(s.tint) < 0) tints.push(s.tint); });
+    var layer = function (mat, y, pick, grow) {
+      var pos = [], uv = [], nor = [];
+      shapes.forEach(function (s) {
+        if (!pick(s)) return;
+        pkPaveTris(s, grow).forEach(function (t) {
+          // wound to face up
+          var up = (t[3] - t[1]) * (t[4] - t[0]) - (t[2] - t[0]) * (t[5] - t[1]) > 0, q = up ? t : [t[0], t[1], t[4], t[5], t[2], t[3]];
+          for (var k = 0; k < 6; k += 2) { pos.push(q[k], y, q[k + 1]); uv.push(q[k] / 2.4, -q[k + 1] / 2.4); nor.push(0, 1, 0); }
+        });
+      });
+      if (!pos.length) return;
+      var geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+      var m = new THREE.Mesh(geo, mat); m.receiveShadow = true; m.userData.noBake = true; m.userData.pkPave = true; scene.add(m);
+      P.meshes.push(m); P.tris += pos.length / 9;
+    };
+    layer(pkPaveMat('kerb', M.kerb, 2), P.Y_KERB, function () { return true; }, P.KERB);
+    for (i = 0; i < tints.length; i++) (function (c, n) { layer(pkPaveMat('pad' + c, pkPadMat(c), 1), P.Y_PAD + n * 0.0002, function (s) { return s.tint === c; }, 0); })(tints[i], i);
+    layer(M.paversWarm, P.Y_PAVE, function (s) { return !s.tint; }, 0);
+    P.dirty = false; P.built = true;
+    if (typeof PK_PF !== 'undefined' && PK_PF.m) PK_PF.dirty = 0.2;   // the path rail follows the paving: have it look again
+  }
+  function pkBuildRoutes() {
+    pkPaveCore();
+    PK_ROUTES.forEach(function (r) { pkPaveSeg(r[0], r[1], r[2], r[3], r[4]); });
+    pkPaveBuild();
+  }
+  // a part that lays paving after the theme is built (the Skyline's forecourt, a land that opens) only adds its shapes: the
+  // surface is laid again once, at boot or on the next frame
+  hook('boot', function () { if (PK_PAVE.built && PK_PAVE.dirty) pkPaveBuild(); });
+  hook('frame', function () { if (PK_PAVE.built && PK_PAVE.dirty) pkPaveBuild(); });
   // lamps, benches, flower beds and an avenue of trees along every route
   function pkBuildRouteFurniture() {
     var rng = pkRng(9001), lamps = [];
@@ -11701,14 +11815,16 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
     pkSignpost(-4.7, 7.0, [['FAIRGROUND <', Math.PI], ['THRILLS >', 0], ['COASTER ^', Math.PI / 2]]);
     pkSignpost(-4.7, 4.2, [['DARK WOODS <', Math.PI], ['COASTER COUNTRY >', 0]]);
     // at each crossroads plaza, tucked into the corner of the junction
-    pkSignpost(-28.4, 0.4, [['TEACUPS & KIDS <', Math.PI], ['DARK WOODS ^', Math.PI / 2], ['STATION SQUARE >', 0]]);
-    pkSignpost(37.4, 0.4, [['DODGEMS & BARON >', 0], ['COASTER COUNTRY ^', Math.PI / 2], ['< STATION SQUARE', Math.PI]]);
+    pkSignpost(-28.4, 0.4, [['TEACUPS <', Math.PI], ['DARK WOODS ^', Math.PI / 2], ['STATION SQUARE >', 0]]);
+    pkSignpost(37.4, 0.4, [["BARON'S DROP >", 0], ['COASTER COUNTRY ^', Math.PI / 2], ['< STATION SQUARE', Math.PI]]);
     // where the streets cross the Garden Walk
     pkSignpost(-28.4, -41.4, [['GARDEN WALK >', 0], ['DROP TOWER ^', Math.PI / 2], ['DANCE RIDE v', -Math.PI / 2]]);
     pkSignpost(37.4, -41.4, [['< GARDEN WALK', Math.PI], ['WILD HUNT ^', Math.PI / 2], ['LOG FLUME v', -Math.PI / 2]]);
     // and where the streets meet the North Promenade
     pkSignpost(-28.4, -57.4, [['DROP TOWER <', Math.PI], ['NORTH GARDENS >', 0], ['STATION SQUARE v', -Math.PI / 2]]);
     pkSignpost(37.4, -57.4, [['NORTH GARDENS <', Math.PI], ['STATION SQUARE v', -Math.PI / 2]]);
+    // on the East Parade, where Dragon Gate's walk crosses it
+    pkSignpost(124.2, -6.4, [['LITTLE MEADOW ^', Math.PI / 2], ['DODGEMS & WHEEL v', -Math.PI / 2], ['< DRAGON RIDE', Math.PI]]);
   }
 
   // ── Life: the fountain breathes and the water moves ──────────────
@@ -14508,8 +14624,11 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     });
     if (lift > 0.02) {
       var rampLen = Math.max(2, lift * 2);
-      var ramp = box(x1 - x0, 0.1, rampLen, pkMats().kerb, (x0 + x1) / 2, lift / 2, zS + rampLen / 2, g);
-      ramp.rotation.x = -Math.atan2(lift, rampLen);
+      // the ramp runs from the deck's south edge (at the deck's own height) down to the ground rampLen further south. A
+      // positive turn about x drops the south end; it was turned the other way, so the ramp rose away from the platform
+      // and dipped under the deck where it should have met it
+      var ramp = box(x1 - x0, 0.1, Math.sqrt(rampLen * rampLen + surf * surf), pkMats().kerb, (x0 + x1) / 2, surf / 2 - 0.05, zS + rampLen / 2, g);
+      ramp.rotation.x = Math.atan2(surf, rampLen);
       PK_FLOOR_RECTS.push({ axis: 'z', x0: x0, x1: x1, z0: zN, z1: zS, y: surf, ramp: rampLen });
     }
   }
@@ -14813,8 +14932,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     // The apron. It comes down the west side of the bandstand (the old garden bandstand still stands on the promenade,
     // square in front of the station) and turns east along the queue. The path fence reads the ground meshes to tell
     // path from lawn, so the walk has to be drawn, not just declared.
-    pkPaved(26.0, 25.0, pkMats().paversWarm, -3.0, 0.043, -72.0, 2.4);
-    pkPaved(26.0, 4.0, pkMats().paversWarm, -3.0, 0.044, -80.6, 2.4);
+    // (part 12 lays it with the rest of the paving: pkPaveCore)
     var curve = pkCoCurve(PK_HUNT_PTS), len = curve.getLength(), uP = pkCoUAt(curve, 4, -84.5);
     var P0 = pkCoProfile(curve, len, uP);
     var F = pkCoFrames(curve, 760, P0, uP);
@@ -14932,12 +15050,15 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     // the old halls and then some. It takes the place of Nocturne, The Wreck and Moonwood in one go.
     { id: 'wildhunt', name: 'The Wild Hunt', x: -8, z: -94, r: 30, q: [-1.0, -79.2], qdx: 1, level: 15, pad: 0.02, boothAt: [-8.6, -78.6] }
   );
-  // the kids' area on the west lawn
+  // the kids' area: The Little Meadow, on the north half of the east strip (it stood on the west lawn, each ride against
+  // the next). From the north: the Puffin Line, the Little Roundabout, Wobbly Pots and the acorn playhouse, each a good
+  // ten metres from the next, their lines running west to the East Parade
   PK_PLOTS.push(
-    { id: 'kround', name: 'Little Roundabout', x: -60, z: 20, r: 6, q: [-49, 20], level: 17, pad: 1.1 },
-    { id: 'kpots', name: 'Wobbly Pots', x: -60, z: 30, r: 5.5, q: [-49, 30], level: 18, pad: 1.1 },
-    { id: 'kpuffin', name: 'Puffin Line', x: -60, z: 40, r: 7.5, q: [-52.5, 44.5], level: 19, pad: 1.05 }
+    { id: 'kround', name: 'Little Roundabout', x: 150, z: -79, r: 6, q: [139, -79], level: 17, pad: 1.1 },
+    { id: 'kpots', name: 'Wobbly Pots', x: 150, z: -54, r: 5.5, q: [139, -54], level: 18, pad: 1.1 },
+    { id: 'kpuffin', name: 'Puffin Line', x: 150, z: -106, r: 7.5, q: [142.5, -101.5], level: 19, pad: 1.05 }
   );
+  var PK_PLAYHOUSE = { x: 147, z: -29 };
   PK_THEME.kround = { a: 0xb8452f, b: 0xf4f1e6, ground: 0x8fae6a, name: 'Little Roundabout' };
   PK_THEME.kpots = { a: 0x2f7f8f, b: 0xf0c04a, ground: 0x8fae6a, name: 'Wobbly Pots' };
   PK_THEME.kpuffin = { a: 0x8a6a4a, b: 0xf0c04a, ground: 0x9ab07a, name: 'Puffin Line' };
@@ -14946,12 +15067,8 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   PK_THEME.wildhunt = { a: 0x3a2a4a, b: 0xc9a227, ground: 0x5a5548, name: 'The Wild Hunt', noBunting: true, noDecor: true };
   // the spurs from the North Promenade up to the queues, and the kids' lane from the Fairground avenue down into the kids'
   // garden, west of the carousel, past the three little rides' gateways
-  PK_ROUTES.push(
-    [35, -60, 35, -65, 4.2, 'coaster'], [35, -65, 41, -65, 4.2, 'coaster'],
-    [-38, -60, -20, -60, 5, 'dark'], [-14, -60, -8.5, -60, 5, 'dark'], [-8.5, -60, -8.5, -80.0, 6.0, 'dark'], [-8.5, -79.8, 4.0, -79.8, 5.0, 'dark'],   // the Wild Hunt's approach and its queue apron
-    [-46.8, 5.4, -46.8, 50, 3.4, 'fair']
-  );
-  PK_KEEP.push([35.5, -62.5, 5.5], [42.5, -65.5, 5], [-38.5, 42, 6.5]);
+  // (their streets are in the one table of routes, part 12)
+  PK_KEEP.push([35.5, -62.5, 5.5], [42.5, -65.5, 5], [PK_PLAYHOUSE.x, PK_PLAYHOUSE.z, 6.5]);
 
   function pkCoastersBuild() {
     var makers = {
@@ -15169,14 +15286,17 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   function pkBuildPuffin(p) {
     var th = PK_THEME[p.id], i, s;
     var g = new THREE.Group(); scene.add(g);
+    // the line was drawn on the west lawn round (-60, 40) with its platform's line end to the east. It is laid from those
+    // same numbers, carried to the plot and flipped east-west, so the line end faces the Parade
+    var MX = function (x) { return p.x - (x + 60); }, MZ = function (z) { return p.z + (z - 40); };
     // a straight station along the platform, round the west end, a wiggle and a little hill along the north side, round the
     // east end home: longer than the old oval, and clear of Wobbly Pots' booth and its own
     var pts = [
       [-54.8, 0.4, 43.6], [-57, 0.4, 43.6], [-59.2, 0.4, 43.6], [-61.4, 0.4, 43.6], [-63.6, 0.4, 43.6], [-65.8, 0.4, 43.6],
       [-67.9, 0.4, 43], [-69.3, 0.42, 41.4], [-69.2, 0.5, 39.8], [-67.6, 0.62, 38.9], [-65, 0.85, 38.6], [-62.4, 1, 39.3],
       [-59.8, 0.85, 39], [-57.4, 0.6, 38.9], [-55.2, 0.45, 39.1], [-53.5, 0.4, 40.4], [-53.2, 0.4, 42.2]
-    ];
-    var curve = pkCoCurve(pts), len = curve.getLength(), uP = pkCoUAt(curve, -61.2, 43.6);
+    ].map(function (q) { return [MX(q[0]), q[1], MZ(q[2])]; });
+    var curve = pkCoCurve(pts), len = curve.getLength(), uP = pkCoUAt(curve, MX(-61.2), MZ(43.6));
     var F = pkCoFrames(curve, 300, pkCoProfile(curve, len, uP, { pedal: 1.8 }), uP);
     var E = { curve: curve, len: len, F: F, gap: 2.2, cars: [], uPark: uP, uOfF: [], run: 34 };
     pkCoLevel(F, curve, E.uPark, 2.2 + 1.2, 1.2);
@@ -15200,11 +15320,12 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       var q = curve.getPointAt(s / len);
       pkRoundCyl(0.055, q.y, std({ color: 0x4a443c, roughness: 0.8 }), q.x, q.y / 2, q.z, g, 6);
     }
-    pkCoPlatform(g, -63.5, -56.5, 43.9, 45.3, th, 0.4);
+    pkCoPlatform(g, MX(-56.5), MX(-63.5), MZ(43.9), MZ(45.3), th, 0.4);
     // a row of planted rocks down the middle of the loop, clear of the track all round
-    [-66.0, -63.5, -61.0, -58.5, -56.2].forEach(function (rx) {
-      pkRoundCyl(0.34, 0.42, std({ color: 0x7a6a52, roughness: 0.85 }), rx, 0.21, 41.2, g, 12);
-      sphere(0.3, std({ color: 0x4d7a3a, roughness: 0.95 }), rx, 0.5, 41.2, g);
+    [-66.0, -63.5, -61.0, -58.5, -56.2].forEach(function (rx0) {
+      var rx = MX(rx0), rz = MZ(41.2);
+      pkRoundCyl(0.34, 0.42, std({ color: 0x7a6a52, roughness: 0.85 }), rx, 0.21, rz, g, 12);
+      sphere(0.3, std({ color: 0x4d7a3a, roughness: 0.95 }), rx, 0.5, rz, g);
     });
     var a = pkAttr({
       id: p.id, name: p.name, x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats,
@@ -15212,14 +15333,15 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     });
     var C = pkCtl(a);
     E.a = a;
-    pkCoGates(g, [-61.2, -59.0], 43.95, C);
+    pkCoGates(g, [MX(-59.0), MX(-61.2)], MZ(43.95), C);
     E.cars.forEach(function (c) { C.barObjs.push(function (bb) { c.bar.rotation.x = -1.35 * (1 - bb); }); });
     pkCoPlace(E, E.uPark);
     return a;
   }
   // the acorn playhouse: a sandpit, a little tower and a slide, for the ones too small to queue
   function pkBuildPlayhouse() {
-    var g = new THREE.Group(); g.position.set(-38.5, 0, 42); scene.add(g);
+    var g = new THREE.Group(); g.position.set(PK_PLAYHOUSE.x, 0, PK_PLAYHOUSE.z); scene.add(g);
+    if (typeof PK_PLAY !== 'undefined') PK_PLAY.g = g;   // part 54 measures its distance to the rides
     var wood = std({ color: 0x8a6a4a, roughness: 0.85 }), leaf = std({ color: 0x4d7a3a, roughness: 0.9 });
     pkRoundCyl(4.6, 0.12, std({ color: 0xd8c49a, roughness: 0.98 }), 0, 0.06, 0, g, 32);
     pkRing(4.7, 0.15, wood, 0, 0.12, 0, g, 32);
@@ -16547,29 +16669,21 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   function pkHQMap(x, y, z, ry, w, h) {
     var g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; scene.add(g);
     pkBevelBox(w + 0.1, h + 0.1, 0.05, pkMatWoodRich(), 0, 0, -0.02, g, 0.015);
-    var cv = tex(512, Math.round(512 * h / w), function (c, W2, H2) {
-      c.fillStyle = '#e8e2cc'; c.fillRect(0, 0, W2, H2);
-      var P = PK_PARK, k = Math.min(W2 / (P.x1 - P.x0 + 8), H2 / (P.z1 - P.z0 + 8)), ox = W2 / 2 - (P.x0 + P.x1) / 2 * k, oz = H2 / 2 - (P.z0 + P.z1) / 2 * k;
-      function X(v) { return ox + v * k; } function Z(v) { return oz + v * k; }
-      c.fillStyle = '#9cbb7a'; c.fillRect(X(P.x0), Z(P.z0), (P.x1 - P.x0) * k, (30 - P.z0) * k);
-      c.strokeStyle = '#c9a77a'; c.lineCap = 'round';
-      PK_ROUTES.forEach(function (r) { c.lineWidth = Math.max(2, r[4] * k); c.beginPath(); c.moveTo(X(r[0]), Z(r[1])); c.lineTo(X(r[2]), Z(r[3])); c.stroke(); });
-      c.lineWidth = 14 * k; c.beginPath(); c.moveTo(X(0), Z(30)); c.lineTo(X(0), Z(-2)); c.stroke();
-      c.strokeStyle = '#2f5d8a'; c.lineWidth = 2; c.beginPath(); PK_TRACK_PTS.forEach(function (p, i) { if (i) c.lineTo(X(p[0]), Z(p[2])); else c.moveTo(X(p[0]), Z(p[2])); }); c.closePath(); c.stroke();
-      PK_PLOTS.forEach(function (p) { c.fillStyle = '#c94f4f'; c.beginPath(); c.arc(X(p.x), Z(p.z), Math.max(3, p.r * k * 0.6), 0, 6.283); c.fill(); });
-      c.fillStyle = '#1b232c'; c.font = 'bold 18px sans-serif'; c.textAlign = 'center'; c.fillText('PARK CO', W2 / 2, 22);
-      c.fillStyle = '#f5b53d'; c.beginPath(); c.arc(X(PK_HQ.x0 + 6), Z(PK_HQ.z0 + 5), 5, 0, 6.283); c.fill();
-      c.fillStyle = '#1b232c'; c.font = '11px sans-serif'; c.fillText('YOU ARE HERE', X(PK_HQ.x0 + 6), Z(PK_HQ.z0 + 5) - 9);
-    }, 1, 1);
-    var mp = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: cv, roughness: 0.8 })); mp.position.z = 0.01; g.add(mp);
+    // the same map the boards out in the park carry (part 56), drawn from the park's own tables, so it is never out of date;
+    // fitted to the frame, with this wall's own YOU ARE HERE
+    var asp = PK_MAP.W / PK_MAP.H, mw = Math.min(w, h * asp), mh = mw / asp;
+    var mp = new THREE.Mesh(new THREE.PlaneGeometry(mw, mh), new THREE.MeshStandardMaterial({ map: pkMapTex(), roughness: 0.8 })); mp.position.z = 0.01; g.add(mp);
+    var hu = (pkMapX(PK_HQ.x0 + 6) / PK_MAP.W - 0.5) * mw, hv = (0.5 - pkMapZ(PK_HQ.z0 + 5) / PK_MAP.H) * mh;
+    var hr = new THREE.Mesh(new THREE.CircleGeometry(0.03, 16), std({ color: 0xffffff, roughness: 0.5 })); hr.position.set(hu, hv, 0.012); g.add(hr);
+    var hs = new THREE.Mesh(new THREE.CircleGeometry(0.02, 16), std({ color: 0xd8231c, emissive: 0xd8231c, emissiveIntensity: 0.45, roughness: 0.4 })); hs.position.set(hu, hv, 0.014); g.add(hs);
     return g;
   }
   // the security room's monitor wall: one screen for each land and one for the coaster, every ride with its state and queue
   function pkHQMonitorWall(x, y, z) {
     var g = new THREE.Group(); g.position.set(x, y, z); scene.add(g);
     pkBevelBox(3.5, 1.4, 0.1, MAT.steelDark, 0, 0, -0.04, g, 0.02);
-    var LANDS = [['THE FAIRGROUND', ['carousel', 'teacups', 'kround', 'kpots', 'kpuffin']], ['THRILLS', ['ferris', 'dodgems', 'baron']], ['THE DARK WOODS', ['danse', 'droptower', 'wildhunt']],
-      ['COASTER COUNTRY', ['flume', 'serpent']], ['DREAM REALM', ['droom']], ['THE COASTER', []], ['THE GATE', null]];
+    var LANDS = [['THE FAIRGROUND', ['carousel', 'teacups']], ['THE EAST STRIP', ['ferris', 'dodgems', 'kround', 'kpots', 'kpuffin']], ['THE DARK WOODS', ['danse', 'droptower', 'wildhunt']],
+      ['COASTER COUNTRY', ['flume', 'serpent', 'baron']], ['DREAM REALM', ['droom']], ['THE COASTER', []], ['THE GATE', null]];
     LANDS.forEach(function (L, i) {
       var cx = -1.15 + (i % 3) * 1.15, cy = 0.33 - Math.floor(i / 3) * 0.66;
       var sc = touchScreen({ w: 300, h: 180, pw: 1.08, ph: 0.6, x: cx, y: cy, z: 0.02, parent: g, title: 'Security: ' + L[0].toLowerCase(),
@@ -16949,7 +17063,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // ride (part 55) registers its own plot, yard and station; the strip's two streets below stay, because the new ride's
   // queue and the walks to the east reach the strip down them.
   (function () {
-    PK_ROUTES.push([35, -60, 76, -60, 5, 'coaster'], [76, -110, 76, -6, 4.2, 'coaster']);   // the Promenade on east; the East Walk
+    // (the Promenade's east end and the East Walk are in the one table of routes, part 12)
   })();
   // ── Why ──────────────────────────────────────────────────────────
   // The park's one indoor/outdoor coaster, in the south-east corner the park takes in for it (the fence along z 30 east of
@@ -17007,7 +17121,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   (function () {
     PK_PLOTS.push({ id: 'mountain', name: 'The Mountain King', x: 103, z: 54, r: 17, q: [83.2, 64.6], qdx: -1, level: 21, pad: 0.02 });
     PK_THEME.mountain = { a: 0x4a5a86, b: 0xd8b04a, ground: 0x8a8a96, name: 'The Mountain King', noBunting: true, noDecor: true, portal: function (p, side, g) { pkMkPortal(p, side, g); } };
-    PK_ROUTES.push([76, -6, 72.5, -6, 3.2, 'coaster'], [72.5, -6, 72.5, 64.6, 3.2, 'coaster'], [72.5, 64.6, 76.4, 64.6, 3.2, 'coaster']);
+    // (the walk to its line is the East Walk, in the one table of routes, part 12)
   })();
 
   // ── The hall ─────────────────────────────────────────────────────
@@ -17385,7 +17499,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     }
   }
   // inside the palisade: the park, the forecourt and the car park. Outside it the grass is nobody's business
-  function pkPfInside(x, z) { return x > PK_PARK.x0 && x < PK_PARK.x1 && z > PK_PARK.z0 && z < 71.5 && !(x < -32.5 && z > PK_KIDS_Z); }
+  function pkPfInside(x, z) { return x > PK_PARK.x0 && x < PK_PARK.x1 && z > PK_PARK.z0 && z < 71.5 && !(x < -32.5 && z > PK_KIDS_Z) && !pkInStationBay(x, z); }
 
   // the lawn cells the player may not stand on, and the ones a rail would only double: a solid already stands there
   function pkPfBlockers() {
@@ -18957,7 +19071,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   var PK_TH = { CX: -97, CZ: -68 };
   PK_PARK.x0 = Math.min(PK_PARK.x0, -132);   // a whole number of route cells (0.6 m) west of -72: the grid keeps its lattice
   PK_PLOTS.push({ id: 'theater', name: 'The Lindenburg Arena', x: PK_TH.CX, z: PK_TH.CZ, r: 30, q: [PK_TH.CX + 21.4, PK_TH.CZ + 18.1], level: 24 });
-  PK_ROUTES.push([-31, -40, PK_TH.CX + 23, -40, 4.2, 'dark']);
+  // (the Arena path, west off West Street along z -40 to CX + 23, is in the one table of routes, part 12)
   PK_KEEP.push([PK_TH.CX - 1, PK_TH.CZ, 44]);
   PK_CAB_RIDES.push(['theater', 'LINDENBURG ARENA']);
 
@@ -20244,6 +20358,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       start: pkTheaterShowBegin, tickRun: pkTheaterTickRun   // doors open two minutes: the walk from the gate is about 95 s
     });
     pkTheaterBuild(a);
+    a.foot = [[PK_TH.CX - 28, PK_TH.CX + 30.6, PK_TH.CZ - 30.5, PK_TH.CZ + 30.5]];   // the stand, the arena and the city, for part 54's clearances (the Arena is not one group)
     var C = pkCtl(a); C.barsWant = 1; C.bars = 1;   // the curtain starts closed
     a.curtain = true;
     a.boardMin = 30;   // on AUTO the house closes once the line is in and seated, after half a minute at least
@@ -21029,7 +21144,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     st: [], xing: [], units: [], len: 56, built: false, t: null, depot: null
   };
   var TR_GAPS = [   // the gates the stations have in the park's palisade: { axis: the run's own axis, x, z, w }
-    { axis: 'z', x: -32.5, z: 62, w: 5 }, { axis: 'z', x: 123, z: -2, w: 5 },   { axis: 'x', x: 72.5, z: 71, w: 5 },
+    { axis: 'z', x: -32.5, z: 62, w: 5 }, { axis: 'z', x: 155, z: -2, w: 5 },   { axis: 'x', x: 72.5, z: 71, w: 5 },
     { axis: 'x', x: -118, z: 56, w: 5 }   // Central Station's footpath through the kids'-garden fence (the theatre pulled the fence west to x -132)
   ];
   // the palisade steps around each gate: the run is cut in two and each half is built (and made solid) on its own
@@ -21242,7 +21357,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   var TR_STATIONS = [
     { id: 'central', name: 'CENTRAL STATION', x: -128, z: 34, walk: [[-117.4, 34], [-117.4, 62], [-30, 62]], roof: 'slateRed' },
     { id: 'windmill', name: 'WINDMILL HALT', x: -62, z: -134, walk: [[-62, -123.4], [-17, -123.4], [-17, -160]], guest: false, roof: 'slateRed' },
-    { id: 'dragon', name: 'DRAGON GATE', x: 170, z: -2, walk: [[159.4, -2], [121, -2]], guest: false, roof: 'slateGreen' },
+    { id: 'dragon', name: 'DRAGON GATE', x: 170, z: -2, walk: [[159.4, -2], [154, -2]], guest: false, roof: 'slateGreen' },
     { id: 'lake', name: 'LAKESIDE HALT', x: 95, z: 112, walk: [[95, 102.2], [72.5, 102.2], [72.5, 64.6]], roof: 'slateRed' }
   ];
   // wagon centres along a stopped train, in a station's local x (the front buffer stops 28 m ahead of the middle of the platform)
@@ -24190,6 +24305,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       if (window.console && CO.editor && CO.editor.on) { PK_XP.log.forEach(function (t) { window.console.log(t); }); }
       PK_XP.skyline = { spans: spanTruss, piers: piers.length };
     }
+    PK_XP.pierPts = piers.map(function (P) { return [P.p.x, P.p.z]; });   // part 54 measures the rides against these
     // the finished line's own materials (stage 1): painted steel, a stone cornice, Park Co green railings
     var green = XM({ color: 0x1d5b3b, roughness: 0.45, metalness: 0.35 }), stoneC = XM({ map: TEX.plaster, color: 0xd9d2c2, roughness: 0.9 });
     var ballast = XM({ color: 0x5a5750, roughness: 1 }), sleeperM = XM({ color: 0x4b3a2a, roughness: 0.95 }), trough = XM({ color: 0x6d6c68, roughness: 0.9 });
@@ -24931,7 +25047,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     SP: { x: -86, z: 4.5, r: 4.2, y0: 12.5, y1: 4.6 },   // the spiral round the swamp tree: top and bottom of its rail
     DOOR: -9, EXIT: -22, HANG: 2.55, N: 12, GAP: 2.7, DGAP: 6 };   // DGAP: how far the last one out has to be before the next goes: the walkway never stops
   PK_LANDS.marerijk = { name: 'DREAM REALM', a: 0x8a5fb3, b: 0xf0c04a, pave: 0xc9b0d9, sign: '#e0c0ff' };
-  PK_ROUTES.push([-74, -40, -74, 12, 4.0, 'marerijk']);   // the promenade: south off the Arena path, along the palace front
+  // (the promenade, south off the Arena path along the palace front at x -74, is in the one table of routes, part 12)
   PK_ARCHES.push([-74, -36.5, 'z', 'marerijk']);
   PK_PLOTS.push({ id: 'droom', name: 'Dream Flight', x: -95, z: -1, r: 16, q: [-88.0, -2.75], level: 22, pad: 0.02 });
   PK_THEME.droom = { a: 0x8a5fb3, b: 0xf0c04a, ground: 0xb9a8c9, name: 'Dream Flight', noBunting: true, noDecor: true, portal: function () {} };
@@ -28159,11 +28275,8 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // the little forecourt at the foot of the Woods Halt tower, off the Dark Woods street: the way to the queue
   function pkSkyForecourt() {
     var M = pkSkyM();
-    pkPaved(11.0, 7.6, M.pavers, -54.6, 0.0185, -45.2, 2.4);
-    pkPaved(3.2, 3.0, M.pavers, -61.0, 0.0186, -40.6, 2.4);
-    pkPavedDisc(6.4, M.pavers, -55.5, 0.0187, -45.0, null, 2.4);
-    var kerb = pkMats().kerb;
-    if (kerb) { box(11.2, 0.07, 0.16, kerb, -54.6, 0.035, -48.95); box(0.16, 0.07, 7.6, kerb, -49.15, 0.035, -45.2); }
+    // laid with the rest of the park's paving, as one surface (part 12)
+    pkPaveRect(-60.1, -49.1, -49.0, -41.4); pkPaveRect(-62.6, -59.4, -42.1, -39.1); pkPaveDisc(-55.5, -45.0, 6.4);
   }
   // put the three vehicles on the line at a front-car distance s; a vehicle faces the way the line runs
   // Each car hangs between its two bogies, 1.7 m in from its ends: its middle is midway between them and it points from
@@ -28863,6 +28976,127 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     return t;
   };
   // ── Why ──────────────────────────────────────────────────────────
+  // The park grew ride by ride, and each new one was fitted into whatever was left: a booth four metres from the abbey's
+  // wall, a queue across another ride's fence. The rule now is simple and it is measured, not promised: between any two
+  // rides there are at least PK_CLEAR.ride metres, fence to fence, and no ride stands within PK_CLEAR.pier metres of a pier
+  // of the Skyline's viaduct. The smoke test asks pkRideGaps and pkPierGaps and fails on anything they return.
+  //
+  // What a ride stands on (its footprint) is read off what was actually built, as boxes on the ground:
+  //   - its own group (everything taller than a kerb: a painted pad or a lawn is not a ride),
+  //   - its station fence (the ring round a flat ride),
+  //   - its queue lane,
+  //   - its operator booth,
+  //   - anything it declares itself (a.foot, for a ride that is not one group: the Arena).
+  // The Skyline is not on the list: she runs on the viaduct, and the rule for her is the pier rule.
+  //
+  // A few things stand closer than the rule and are named here, not hidden: they are the big builds along the west and
+  // east edges that cannot be shifted without being rebuilt, and each waits for its own rework.
+  //   - Dragon Ride and The Mountain King: 5.3 m between the racer's south turns and the King's outdoor run, with the
+  //     racer's line in the gap. The racer also overruns the north fence and the railway; both go with its rebuild.
+  //   - The Dance Ride and the Arena: the abbey's north-west corner and the grandstand's south-east corner (2.8 m).
+  //   - The Dance Ride and the coaster: 7.9 m across the Dark Woods street, a hand short of the rule.
+  //   - Dream Flight and the Arena: 4.7 m between the palace's north wall and the city's south wall.
+  //   - The viaduct was threaded between those two, so its piers stand nearer to them than the pier rule allows.
+  var PK_CLEAR = { ride: 8, pier: 6, feet: null, waive: { pairs: [['joris', 'mountain'], ['danse', 'theater'], ['danse', 'coaster'], ['droom', 'theater']], piers: ['danse', 'theater'] } };
+  var PK_PLAY = { g: null };   // the acorn playhouse (part 16 sets it): not a ride with a queue, but it keeps the same distance
+  function pkFootBox(o) {
+    // the ground box of everything under o that stands taller than a kerb
+    var b = null, v = new THREE.Vector3();
+    o.updateMatrixWorld(true);
+    o.traverse(function (m) {
+      if (!m.isMesh || !m.geometry || m.userData.pkStatic) return;
+      var g = m.geometry; if (!g.boundingBox) g.computeBoundingBox();
+      var bb = g.boundingBox; if (!bb || bb.isEmpty()) return;
+      var pts = [], top = -1e9, i, j, k;
+      for (i = 0; i < 2; i++) for (j = 0; j < 2; j++) for (k = 0; k < 2; k++) {
+        v.set(i ? bb.max.x : bb.min.x, j ? bb.max.y : bb.min.y, k ? bb.max.z : bb.min.z).applyMatrix4(m.matrixWorld);
+        pts.push([v.x, v.z]); if (v.y > top) top = v.y;
+      }
+      if (top < 0.3) return;
+      if (!b) b = [1e9, -1e9, 1e9, -1e9];
+      for (i = 0; i < pts.length; i++) { b[0] = Math.min(b[0], pts[i][0]); b[1] = Math.max(b[1], pts[i][0]); b[2] = Math.min(b[2], pts[i][1]); b[3] = Math.max(b[3], pts[i][1]); }
+    });
+    return b;
+  }
+  // every ride's footprint: [{ id, name, rects: [[x0, x1, z0, z1], ...] }]. Measured once, with the bake lifted (the bake
+  // takes a ride's static meshes out of its group), and kept: nothing here moves after the park is built.
+  function pkRideFeet(again) {
+    if (PK_CLEAR.feet && !again) return PK_CLEAR.feet;
+    var wasBaked = typeof baked !== 'undefined' && baked.meshes && baked.meshes.length;
+    if (wasBaked && typeof unbakeStatic === 'function') unbakeStatic();
+    var out = [];
+    var add = function (id, name, list) { var rects = []; list.forEach(function (r) { if (r) rects.push(r); }); if (rects.length) out.push({ id: id, name: name, rects: rects }); };
+    PK.attractions.forEach(function (a) {
+      if (a.id === 'skyline') return;
+      var list = [];
+      var body = a.g ? pkFootBox(a.g) : null;
+      if (a.station) {
+        // a flat ride inside its ring fence: the ring is the footprint, as the circle it is (a round ride boxed as a square
+        // would claim four corners of ground it does not stand on)
+        var sr = a.station.r;
+        list.push({ c: [a.plot.x, a.plot.z, sr] });
+        if (body && (body[0] < a.plot.x - sr - 0.5 || body[1] > a.plot.x + sr + 0.5 || body[2] < a.plot.z - sr - 0.5 || body[3] > a.plot.z + sr + 0.5)) list.push(body);
+      } else if (body) list.push(body);
+      PK.lanes.forEach(function (l) { if (l.a === a) list.push([l.x0, l.x1, l.zA, l.zB]); });
+      if (a.boothG || a.booth) list.push(pkFootBox(a.boothG || a.booth));
+      if (a.foot) a.foot.forEach(function (r) { list.push(r); });
+      add(a.id, a.name, list);
+    });
+    if (PK.coasterG) add('coaster', 'The coaster', [pkFootBox(PK.coasterG)]);
+    if (PK_PLAY.g) add('playhouse', 'The acorn playhouse', [pkFootBox(PK_PLAY.g)]);
+    if (wasBaked && typeof bakeStatic === 'function') bakeStatic();
+    PK_CLEAR.feet = out;
+    return out;
+  }
+  // the gap between two shapes: a box [x0, x1, z0, z1] or a circle { c: [x, z, r] }
+  function pkRectGap(a, b) {
+    if (a.c && b.c) return Math.max(0, Math.hypot(a.c[0] - b.c[0], a.c[1] - b.c[1]) - a.c[2] - b.c[2]);
+    if (a.c || b.c) {
+      var C = a.c || b.c, R = a.c ? b : a, nx = Math.max(R[0], Math.min(C[0], R[1])), nz = Math.max(R[2], Math.min(C[1], R[3]));
+      return Math.max(0, Math.hypot(C[0] - nx, C[1] - nz) - C[2]);
+    }
+    var dx = Math.max(0, a[0] - b[1], b[0] - a[1]), dz = Math.max(0, a[2] - b[3], b[2] - a[3]);
+    return Math.sqrt(dx * dx + dz * dz);
+  }
+  function pkFootGap(A, B) {
+    var best = 1e9;
+    for (var i = 0; i < A.rects.length; i++) for (var j = 0; j < B.rects.length; j++) best = Math.min(best, pkRectGap(A.rects[i], B.rects[j]));
+    return best;
+  }
+  // every pair of rides that stand closer than min (PK_CLEAR.ride): [{ a, b, gap }]. An empty list is the rule kept.
+  function pkRideGaps(min, all) {   // all: the waived pairs too, marked
+    var F = pkRideFeet(), bad = [], lim = min === undefined ? PK_CLEAR.ride : min;
+    for (var i = 0; i < F.length; i++) for (var j = i + 1; j < F.length; j++) {
+      var g = pkFootGap(F[i], F[j]);
+      if (g >= lim) continue;
+      var w = PK_CLEAR.waive.pairs.some(function (p) { return (p[0] === F[i].id && p[1] === F[j].id) || (p[1] === F[i].id && p[0] === F[j].id); });
+      if (w && !all) continue;
+      bad.push({ a: F[i].id, b: F[j].id, gap: Math.round(g * 10) / 10, waived: w });
+    }
+    return bad;
+  }
+  // every ride that stands closer than min (PK_CLEAR.pier) to a pier of the viaduct: [{ a, pier: [x, z], gap }]
+  function pkPierGaps(min, all) {
+    var F = pkRideFeet(), bad = [], lim = min === undefined ? PK_CLEAR.pier : min;
+    var P = (typeof PK_XP !== 'undefined' && PK_XP.pierPts) || [];
+    P.forEach(function (p) {
+      var box = [p[0] - 1.2, p[0] + 1.2, p[1] - 1.2, p[1] + 1.2];
+      F.forEach(function (f) {
+        var best = 1e9; f.rects.forEach(function (r) { best = Math.min(best, pkRectGap(r, box)); });
+        var w = PK_CLEAR.waive.piers.indexOf(f.id) >= 0;
+        if (best < lim && (all || !w)) bad.push({ waived: w, a: f.id, pier: [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10], gap: Math.round(best * 10) / 10 });
+      });
+    });
+    return bad;
+  }
+  var _pkClrPrevT = GAME.T;
+  GAME.T = function () {
+    var t = _pkClrPrevT();
+    t.PK_CLEAR = PK_CLEAR; t.pkRideFeet = pkRideFeet; t.pkRideGaps = pkRideGaps; t.pkPierGaps = pkPierGaps; t.pkRectGap = pkRectGap;
+    t.PK_PARK = PK_PARK; t.PK_ROUTES = PK_ROUTES; t.PK_PLOTS = PK_PLOTS;
+    return t;
+  };
+  // ── Why ──────────────────────────────────────────────────────────
   // Two wooden tracks (Water, blue, and Vuur, red) run side by side and race, in the spirit of Efteling's Joris en de Draak.
   // Both climb twin lift hills, drop, run a double out-and-back and come home through one shared station hall; the first
   // train home wins. The strip is long and narrow, so the out-and-back runs along world z (north) and the two tracks sit
@@ -28953,7 +29187,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var q = PK_JORIS_Q;
     PK_PLOTS.push({ id: 'joris', name: PK_JORIS.name, x: PK_JORIS.ax + 15, z: q[1], r: 26, q: q, qdx: -1, level: 20, pad: 0.02 });
     PK_THEME.joris = { a: PK_JORIS.a, b: PK_JORIS.b, ground: PK_JORIS.ground, name: PK_JORIS.name, noBunting: true, noDecor: true, portal: function (p, side, g) { pkJorisPortal(p, side, g); } };
-    PK_ROUTES.push([76, q[1], q[0] - 3.2, q[1], 3.2, 'coaster']);   // the spur from the East Walk to the line
+    // (the spur from the East Walk to the line is in the one table of routes, part 12)
     // no trees in Edna's swamp, on the line, in the entrance corridor, or growing out of the lift's timber hill
     PK_KEEP.push([PK_JORIS.ax - 16, PK_JORIS.az - 22, 7.5], [95, -0.5, 6], [100, -6.5, 3.5]);
     [-2.5, 2.5].forEach(function (yd) {   // no trees growing up through either track's timber frame
@@ -28963,7 +29197,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     for (var bx = 78; bx <= 123; bx += 3.5) PK_KEEP.push([bx, -3.3, 2.4]);   // the walk to the train station gate
     // that walk is two park routes (so it is paved, lit and railed like any street, and joins the East Walk properly)
     // with the footbridge between them (pkJorisBridge), whose footprint the path rail leaves open (part 24)
-    PK_ROUTES.push([72.5, -3.3, 82, -3.3, 2.2, 'coaster'], [117, -3.3, 124.5, -3.3, 2.2, 'coaster']);
+    // (both are in the one table of routes, part 12)
     PK_PF_OPEN.push([81.6, 117.4, -4.5, -2.1]);
   })();
   // ── The cars: a timber racing cart on the standard coaster car's chassis, wheels, seats and lap bar (the seat
@@ -29651,6 +29885,22 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // outside the ride's track fence (z -4.6). Joris's own line runs across it into the entrance corridor, so a timber
   // footbridge carries the walk over the line: ramps up from the west and down to the east, a trussed main span over
   // the line, on trestle bents. Its floors are 'overhead' (only the player walks them; guests in the line pass under). ──
+  // Guests take the bridge too, now the east strip lies beyond it (the kids' rides, the dodgems and the wheel): a guest who
+  // comes onto the walk at either foot of the bridge climbs it and crosses over the line. One who is in the Dragon Ride's
+  // own line, or bound for it, stays on the ground and passes under, as before; so does one who steps into the strip
+  // part way along (off the ride's exit), since there is no stair there to climb.
+  var PK_JORIS_BR = { z: -3.3, hw: 1.5, y: 3.1, d0: 96.0, d1: 103.0, rl: 14.0 };
+  var _pkJorisPrevGuestFloor = pkGuestFloor;
+  pkGuestFloor = function (x, z, gu) {
+    var B = PK_JORIS_BR, xw = B.d0 - B.rl, xe = B.d1 + B.rl;
+    if (gu) {
+      var inStrip = x > xw && x < xe && Math.abs(z - B.z) < B.hw;
+      if (!inStrip) gu.onBridge = false;
+      else if (!gu.onBridge && (x < xw + 1.6 || x > xe - 1.6) && !(gu.attr && gu.attr.id === 'joris')) gu.onBridge = true;
+      if (inStrip && gu.onBridge) return x <= B.d0 ? B.y * (x - xw) / B.rl : x >= B.d1 ? B.y * (xe - x) / B.rl : B.y;
+    }
+    return _pkJorisPrevGuestFloor(x, z, gu);
+  };
   function pkJorisBridge(g) {
     var M0 = pkMats();
     var plank = std({ map: M0.clap.map, color: 0x7a5a3a, roughness: 0.85 }), beam = std({ map: M0.bark.map, color: 0x4a3420, roughness: 0.85 });
@@ -30313,6 +30563,194 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     });
     _pkBuildAttractionsJoris();
   };
+  // ── Why ──────────────────────────────────────────────────────────
+  // The park grew to three hundred metres across, with a whole strip of rides beyond the Dragon Ride that cannot be seen
+  // from the gate. A guest (and the player) needs to be able to stop and look: where am I, where is the wheel, how do I get
+  // to the kids' rides. So there are map boards: six metres wide, under a little slate roof with a lamp at each end, at the
+  // gate, on Station Square and at the main junctions. Each is the same map with its own red YOU ARE HERE.
+  //
+  // The map is drawn once, from the park's own tables: the paving is the list part 12 lays (so the map is the streets as
+  // they are, not a sketch of them), the rides are the plots, the railway is the ring, the Skyline is the viaduct's line.
+  // Move a ride or a street and the map follows at the next load.
+  var PK_MAP = { tex: null, boards: [], W: 2048, H: 1408, X0: -137, X1: 167, Z0: -128, Z1: 80, TOP: 104, PW: 6.0, PH: 4.125 };
+  // where the boards stand: [x, z, ry, name]. ry turns the front to face the street; both faces carry the map
+  var PK_MAP_SPOTS = [
+    [10.5, 52.2, Math.PI, 'the forecourt'],
+    [8.15, 15.5, -Math.PI / 2, 'the midway'],
+    [-24, -63.7, 0, 'the Promenade, west'],
+    [26, -63.7, 0, 'the Promenade, east'],
+    [-34.3, -50, Math.PI / 2, 'West Street'],
+    [66, -1.0, 0, 'the Avenue, at the East Walk'],
+    [-40.5, 34.6, Math.PI, 'the Fairground lane'],
+    [134, -5.4, 0, 'the East Parade, at Dragon Gate'],
+    [130.5, -90, -Math.PI / 2, 'The Little Meadow']
+  ];
+  // the big rides as the ground they cover, [x0, x1, z0, z1]: a plot's circle says nothing useful about a coaster
+  var PK_MAP_BOX = {
+    joris: [79, 122, -133, -3], mountain: [82, 121, 5, 69], wildhunt: [-43, 28, -116, -81], serpent: [44, 69, -92, -66],
+    baron: [46, 68, 15, 32], flume: [47, 68, -54, -12], danse: [-63, -32, -39, -11], droom: [-113, -76, -32, 30],
+    theater: [-124, -67, -98, -38]
+  };
+  function pkMapX(x) { var M = PK_MAP; return (x - M.X0) / (M.X1 - M.X0) * M.W; }
+  function pkMapZ(z) { var M = PK_MAP; return M.TOP + (z - M.Z0) / (M.Z1 - M.Z0) * (M.H - M.TOP); }
+  function pkMapHex(c) { return '#' + ('000000' + (c >>> 0).toString(16)).slice(-6); }
+  function pkMapDraw(c, W, H) {
+    var M = PK_MAP, k = W / (M.X1 - M.X0), X = pkMapX, Z = pkMapZ, i;
+    var label = function (t, x, y, size, col, bold) {
+      c.font = (bold === false ? '' : 'bold ') + size + 'px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.lineJoin = 'round'; c.lineWidth = Math.max(4, size * 0.3); c.strokeStyle = 'rgba(250,246,232,0.95)'; c.strokeText(t, x, y);
+      c.fillStyle = col || '#1b232c'; c.fillText(t, x, y);
+    };
+    // the country round the park, and the title band
+    c.fillStyle = '#c9d2b0'; c.fillRect(0, 0, W, H);
+    // the park inside its fence
+    var P = PK_PARK;
+    var lawn = c.createLinearGradient(0, Z(P.z0), 0, Z(71)); lawn.addColorStop(0, '#b4d294'); lawn.addColorStop(1, '#a3c683');
+    c.fillStyle = lawn;
+    c.fillRect(X(P.x0), Z(P.z0), (P.x1 - P.x0) * k, (Z(71) - Z(P.z0)));
+    c.fillStyle = '#c9d2b0';
+    c.fillRect(X(P.x0) - 2, Z(PK_KIDS_Z), (X(-32.5) - X(P.x0)) + 2, Z(71) - Z(PK_KIDS_Z) + 2);                  // south of the west lawn's fence
+    c.fillRect(X(-32.5), Z(PK_GATE_Z), X(32.5) - X(-32.5), Z(71) - Z(PK_GATE_Z) + 2);                             // the forecourt and the car park lie outside
+    c.fillRect(X(PK_EAST_BAY.x), Z(PK_EAST_BAY.z0), X(P.x1) - X(PK_EAST_BAY.x) + 2, Z(PK_EAST_BAY.z1) - Z(PK_EAST_BAY.z0));   // Dragon Gate's bay
+    // the road and the car parks
+    c.fillStyle = '#8f9499'; c.fillRect(X(-137), Z(72), W, Z(80) - Z(72));
+    c.fillRect(X(-31), Z(53), X(31) - X(-31), Z(71) - Z(53));
+    c.fillRect(X(33), Z(33), X(64) - X(33), Z(72) - Z(33));
+    label('P', X(0), Z(62), 44, '#ffffff'); label('P', X(48.5), Z(52), 44, '#ffffff');
+    // the Lindenburg Railway: the ring, sleepered, and its stations
+    var R = TR.R, rw = TR.W, re = TR.E, rn = TR.N, rs = TR.S;
+    var ring = function () {
+      c.beginPath(); c.moveTo(X(rw + R), Z(rn)); c.lineTo(X(re - R), Z(rn)); c.arcTo(X(re), Z(rn), X(re), Z(rn + R), R * k);
+      c.lineTo(X(re), Z(rs - R)); c.arcTo(X(re), Z(rs), X(re - R), Z(rs), R * k); c.lineTo(X(rw + R), Z(rs));
+      c.arcTo(X(rw), Z(rs), X(rw), Z(rs - R), R * k); c.lineTo(X(rw), Z(rn + R)); c.arcTo(X(rw), Z(rn), X(rw + R), Z(rn), R * k); c.closePath();
+    };
+    c.strokeStyle = '#4b3a2a'; c.lineWidth = 9; ring(); c.stroke();
+    c.strokeStyle = '#e8e2cc'; c.lineWidth = 5; c.setLineDash([10, 10]); ring(); c.stroke(); c.setLineDash([]);
+    // the paving: every shape part 12 lays, as it lays it
+    var pave = function (grow, col) {
+      c.fillStyle = col; c.strokeStyle = col;
+      PK_PAVE.shapes.forEach(function (s) {
+        if (s.k === 'disc') { c.beginPath(); c.arc(X(s.x), Z(s.z), (s.r + grow) * k, 0, 6.2832); c.fill(); }
+        else if (s.k === 'rect') c.fillRect(X(s.x0 - grow), Z(s.z0 - grow), (s.x1 - s.x0 + 2 * grow) * k, (s.z1 - s.z0 + 2 * grow) * k);
+        else { c.lineCap = 'square'; c.lineWidth = (s.w + 2 * grow) * k; c.beginPath(); c.moveTo(X(s.x0), Z(s.z0)); c.lineTo(X(s.x1), Z(s.z1)); c.stroke(); }
+      });
+    };
+    pave(0.45, '#8a7a5c'); pave(0, '#ead9b4');
+    // the Skyline: the viaduct's line across the park
+    if (typeof PK_XP_VIA !== 'undefined') {
+      c.strokeStyle = '#108080'; c.lineWidth = 6; c.lineJoin = 'round'; c.beginPath();
+      PK_XP_VIA.forEach(function (p, n) { if (n) c.lineTo(X(p[0]), Z(p[1])); else c.moveTo(X(p[0]), Z(p[1])); });
+      c.stroke();
+    }
+    // the fence
+    c.strokeStyle = '#3a3f36'; c.lineWidth = 3; c.setLineDash([3, 5]);
+    c.strokeRect(X(P.x0), Z(P.z0), (P.x1 - P.x0) * k, Z(71) - Z(P.z0)); c.setLineDash([]);
+    // the lands, named large and faint under the rides
+    var land = function (t, x, z, size, turn) {
+      c.save(); c.translate(X(x), Z(z)); if (turn) c.rotate(-Math.PI / 2);
+      c.font = 'bold ' + size + 'px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = 'rgba(40,70,40,0.5)'; c.fillText(t, 0, 0); c.restore();
+    };
+    land('THE FAIRGROUND', -52, 22, 30); land('THE DARK WOODS', -50, -71, 30); land('THE GARDENS', 2, -52.5, 26);
+    land('COASTER COUNTRY', 55, -3.5, 26); land('DREAM REALM', -118, -1, 30, true);
+    land('THE LITTLE MEADOW', 156, -70, 30, true); land('THRILLS', 156.5, 50, 30, true);
+    // the rides: the ground each covers, in its own colour, numbered; the names are in the list along the bottom
+    var names = [], n = 0;
+    var pin = function (x, z, num) {
+      c.fillStyle = '#1d5b3b'; c.beginPath(); c.arc(x, z, 17, 0, 6.2832); c.fill();
+      c.strokeStyle = '#ffffff'; c.lineWidth = 3; c.stroke();
+      c.font = 'bold 20px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#ffffff'; c.fillText(String(num), x, z + 1);
+    };
+    var rides = [{ id: 'coaster', name: 'The Coaster', x: 3, z: -20, col: 0xb02020, box: [-23, 29, -36, -8] }];
+    PK_PLOTS.forEach(function (p) { var th = PK_THEME[p.id]; rides.push({ id: p.id, name: (th && th.name) || p.name, x: p.x, z: p.z, r: p.r, col: th ? th.a : 0x888888, box: PK_MAP_BOX[p.id] }); });
+    rides.forEach(function (r) {
+      n++; names.push(n + '  ' + r.name);
+      c.fillStyle = pkMapHex(r.col); c.strokeStyle = pkMapHex(r.col); c.lineWidth = 3; c.lineJoin = 'round';
+      var px, pz, fillSoft = function () { c.globalAlpha = 0.34; c.fill(); c.globalAlpha = 0.9; c.stroke(); };
+      if (r.id === 'skyline') { c.globalAlpha = 1; px = X(-67); pz = Z(-43); c.fillStyle = '#108080'; c.fillRect(px - 9, pz - 16, 18, 32); }
+      else if (r.box) { var b = r.box; roundRect(c, X(b[0]), Z(b[2]), (b[1] - b[0]) * k, (b[3] - b[2]) * k, 14); fillSoft(); px = X((b[0] + b[1]) / 2); pz = Z((b[2] + b[3]) / 2); }
+      else { c.beginPath(); c.arc(X(r.x), Z(r.z), Math.max(4, Math.min(r.r, 11)) * k, 0, 6.2832); fillSoft(); px = X(r.x); pz = Z(r.z); }
+      c.globalAlpha = 1;
+      pin(px, pz, n);
+      label(r.name, px, pz + 32, 19, '#1b232c');
+    });
+    // the playhouse, the stations, the gate
+    if (typeof PK_PLAYHOUSE !== 'undefined') label('playhouse', X(PK_PLAYHOUSE.x), Z(PK_PLAYHOUSE.z), 17, '#3a2a1a');
+    if (typeof TR_STATIONS !== 'undefined') TR_STATIONS.forEach(function (s) {
+      c.fillStyle = '#12301f'; c.fillRect(X(s.x) - 9, Z(s.z) - 9, 18, 18); c.strokeStyle = '#f2e6b8'; c.lineWidth = 2; c.strokeRect(X(s.x) - 9, Z(s.z) - 9, 18, 18);
+      var dx = s.x < -100 ? 62 : s.x > 150 ? -8 : 0, dz = s.z < -100 ? -22 : s.z > 100 ? 24 : (s.x > 150 ? -26 : -22);
+      label(s.name, X(s.x) + dx, Z(s.z) + dz, 17, '#12301f');
+    });
+    label('ENTRANCE', X(0), Z(41), 22, '#1b232c'); label('HQ', X(-25), Z(42), 17, '#1b232c');
+    label('LINDENBURG RAILWAY', X(20), Z(TR.S) + 22, 17, '#4b3a2a'); label('THE SKYLINE', X(-67) + 4, Z(-150), 17, '#0c5c5c');
+    // north
+    c.save(); c.translate(X(-128), Z(-112)); c.fillStyle = '#1b232c'; c.beginPath(); c.moveTo(0, -30); c.lineTo(12, 12); c.lineTo(0, 4); c.lineTo(-12, 12); c.closePath(); c.fill();
+    c.font = 'bold 22px sans-serif'; c.textAlign = 'center'; c.fillText('N', 0, 36); c.restore();
+    // the title band, and the list of rides along it
+    c.fillStyle = '#1d5b3b'; c.fillRect(0, 0, W, M.TOP);
+    c.fillStyle = '#f5b53d'; c.fillRect(0, M.TOP - 5, W, 5);
+    c.font = 'bold 54px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillStyle = '#f5e9c2'; c.fillText('PARK CO', 28, 38);
+    c.font = 'bold 22px sans-serif'; c.fillStyle = '#f5b53d'; c.fillText('PARK MAP', 30, 80);
+    c.font = 'bold 19px sans-serif'; c.fillStyle = '#f5e9c2';
+    var cols = Math.ceil(names.length / 4), cw = (W - 330) / cols;
+    names.forEach(function (t, q) { c.fillText(t, 310 + Math.floor(q / 4) * cw, 16 + (q % 4) * 23); });
+  }
+  function pkMapTex() {
+    var M = PK_MAP;
+    if (!M.tex) { M.tex = tex(M.W, M.H, pkMapDraw, 1, 1); if (renderer.capabilities && renderer.capabilities.getMaxAnisotropy) M.tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy()); }
+    return M.tex;
+  }
+  // one board: two oak posts, the framed map on both faces, a slate roof, a lamp at each end and its own red marker
+  function pkMapBoard(x, z, ry, name) {
+    var M = PK_MAP, K = pkMats(), g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; scene.add(g);
+    var oak = pkMatWoodRich(), PW = M.PW, PH = M.PH, Y0 = 0.75, CY = Y0 + PH / 2, HW = PW / 2 + 0.2;
+    var face = new THREE.MeshStandardMaterial({ map: pkMapTex(), roughness: 0.85, emissive: 0xffffff, emissiveMap: pkMapTex(), emissiveIntensity: 0.22 });
+    // posts on stone feet, the frame, the backing
+    [-HW, HW].forEach(function (px) {
+      pkBevelBox(0.5, 0.3, 0.5, K.stone, px, 0.15, 0, g, 0.04);
+      pkBevelBox(0.24, Y0 + PH + 0.5, 0.24, oak, px, (Y0 + PH + 0.5) / 2, 0, g, 0.03);
+    });
+    pkBevelBox(PW + 0.16, PH + 0.16, 0.1, oak, 0, CY, 0, g, 0.02);
+    pkBevelBox(PW + 0.6, 0.14, 0.2, oak, 0, Y0 - 0.12, 0, g, 0.03);
+    [1, -1].forEach(function (s) {
+      var side = new THREE.Group(); side.position.set(0, CY, s * 0.056); side.rotation.y = s > 0 ? 0 : Math.PI; g.add(side);
+      var mp = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), face); side.add(mp);
+      // YOU ARE HERE: a red stud on the map where this board stands, ringed in white, and its plate
+      var u = (pkMapX(x) / M.W - 0.5) * PW, v = (0.5 - pkMapZ(z) / M.H) * PH;
+      var ringM = new THREE.Mesh(new THREE.CircleGeometry(0.105, 24), std({ color: 0xffffff, roughness: 0.5 })); ringM.position.set(u, v, 0.006); side.add(ringM);
+      var stud = new THREE.Mesh(new THREE.CircleGeometry(0.075, 24), std({ color: 0xd8231c, emissive: 0xd8231c, emissiveIntensity: 0.45, roughness: 0.4 })); stud.position.set(u, v, 0.009); stud.userData.pkMapStud = true; side.add(stud);
+      var py = v + (v > PH / 2 - 0.5 ? -0.2 : 0.2), pu = Math.max(-PW / 2 + 0.45, Math.min(PW / 2 - 0.45, u));
+      pkSign3D(['YOU ARE HERE'], 0.72, 0.13, pu, py, 0.012, 0, { bg: '#b8231c', fg: '#ffffff' }, side);
+    });
+    // the roof: a ridge beam and two slate slopes, wider than the board so the map stays dry
+    var RY = Y0 + PH + 0.5;
+    pkBevelBox(PW + 1.2, 0.16, 0.18, oak, 0, RY + 0.42, 0, g, 0.03);
+    [1, -1].forEach(function (s) {
+      var sl = box(PW + 1.4, 0.08, 1.05, K.slate, 0, RY + 0.2, s * 0.45, g); sl.rotation.x = s * 0.5;
+    });
+    // a lamp under the eaves at each end, on both faces: they light with the park's lamps
+    [-1, 1].forEach(function (sx) { [1, -1].forEach(function (s) {
+      box(0.06, 0.06, 0.5, K.iron, sx * (PW / 2 - 0.5), RY - 0.05, s * 0.3, g);
+      pkRoundCyl(0.11, 0.2, glowMat(0xfff2c0, 1.1), sx * (PW / 2 - 0.5), RY - 0.2, s * 0.52, g, 10);
+    }); });
+    // solid: nobody walks through the board
+    var cs = Math.cos(ry), sn = Math.sin(ry), ex = Math.abs(cs) * (HW + 0.25) + Math.abs(sn) * 0.3, ez = Math.abs(sn) * (HW + 0.25) + Math.abs(cs) * 0.3;
+    solid(x - ex, x + ex, z - ez, z + ez, 0, RY + 0.6);
+    PK_KEEP.push([x, z, 3.4]);
+    var b = { g: g, x: x, z: z, ry: ry, name: name };
+    M.boards.push(b);
+    return b;
+  }
+  function pkMapBoards() {
+    // the HQ hangs its map before the streets are laid (part 18 builds first): draw it again now they are
+    if (PK_MAP.tex) { var cv = PK_MAP.tex.image, cx = cv.getContext('2d'); cx.setTransform(1, 0, 0, 1, 0, 0); pkMapDraw(cx, PK_MAP.W, PK_MAP.H); PK_MAP.tex.needsUpdate = true; }
+    PK_MAP_SPOTS.forEach(function (s) { pkMapBoard(s[0], s[1], s[2], s[3]); });
+  }
+  // built with the theme (part 12), once the streets are laid: the map is drawn from them
+  var _pkMapPrevTheme = pkThemeBuild;
+  pkThemeBuild = function () { _pkMapPrevTheme(); pkMapBoards(); };
+
+  var _pkMapPrevT = GAME.T;
+  GAME.T = function () { var t = _pkMapPrevT(); t.PK_MAP = PK_MAP; t.PK_MAP_SPOTS = PK_MAP_SPOTS; t.PK_PAVE = PK_PAVE; t.pkMapX = pkMapX; t.pkMapZ = pkMapZ; return t; };
   (function () {
     var canvasId = 'co-canvas';
     var KEY = 'pk-use-button';            // 'lmb' or 'e'
@@ -30641,6 +31079,11 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       scene.updateMatrixWorld(true);
       scene.traverse(function (o) {
         if (!o.userData || !o.userData.dynamic || !o.parent) return;
+        // the path rail (part 24) is one instanced group for the whole park, standing at the origin. A box round an instanced
+        // mesh is the box of one post, so the rail was taken for a small part at the hub and hidden whenever the eye was a
+        // fog's length from there: no rail at all on the far streets. Nothing instanced is small in this sense
+        if (o.userData.pkPathFence) return;
+        var inst = false; o.traverse(function (c) { if (c.isInstancedMesh) inst = true; }); if (inst) return;
         for (var p = o.parent; p; p = p.parent) if (p.userData && p.userData.dynamic) return;   // part of a bigger moving thing
         var box = new THREE.Box3().setFromObject(o), size = box.getSize(new THREE.Vector3());
         if (Math.max(size.x, size.y, size.z) > 6) return;   // a carriage, a train, a gondola: never dropped

@@ -16,7 +16,7 @@
     SP: { x: -86, z: 4.5, r: 4.2, y0: 12.5, y1: 4.6 },   // the spiral round the swamp tree: top and bottom of its rail
     DOOR: -9, EXIT: -22, HANG: 2.55, N: 12, GAP: 2.7, DGAP: 6 };   // DGAP: how far the last one out has to be before the next goes: the walkway never stops
   PK_LANDS.marerijk = { name: 'DREAM REALM', a: 0x8a5fb3, b: 0xf0c04a, pave: 0xc9b0d9, sign: '#e0c0ff' };
-  PK_ROUTES.push([-74, -40, -74, 12, 4.0, 'marerijk']);   // the promenade: south off the Arena path, along the palace front
+  // (the promenade, south off the Arena path along the palace front at x -74, is in the one table of routes, part 12)
   PK_ARCHES.push([-74, -36.5, 'z', 'marerijk']);
   PK_PLOTS.push({ id: 'droom', name: 'Dream Flight', x: -95, z: -1, r: 16, q: [-88.0, -2.75], level: 22, pad: 0.02 });
   PK_THEME.droom = { a: 0x8a5fb3, b: 0xf0c04a, ground: 0xb9a8c9, name: 'Dream Flight', noBunting: true, noDecor: true, portal: function () {} };

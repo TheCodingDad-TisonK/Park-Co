@@ -5,7 +5,11 @@
   // for the coaster and ride it. The player works the window and the ride.
   var PK_GATE_Z = 30, PK_PLATFORM_Y = 0.6, PK_STATION_Z = -4.6, PK_KIDS_Z = 56;   // PK_KIDS_Z: the south fence of the kids' garden
   // the park is a long rectangle: the gate at the south, the coaster across the north, and rides either side of the midway
-  var PK_PARK = { x0: -72, x1: 123, z0: -118, z1: 70 };   // z0 was -95: the north fence moved back for the bigger halls
+  var PK_PARK = { x0: -72, x1: 162, z0: -118, z1: 70 };   // z0 was -95: the north fence moved back for the bigger halls; x1 was 123: the east fence moved out to 8 m short of the railway (the re-lay of 2026-11)
+  // the east fence steps in round Dragon Gate station: its platform and ramp (x 157.1 to 168.7, z -34.4 to 30.4) stay outside the park
+  var PK_EAST_BAY = { x: 155, z0: -37, z1: 33 };
+  // the old east fence line: Joris and The Mountain King stand along it, the East Parade runs just past it
+  var PK_EAST_OLD = 123;
   // walkable rectangles laid by other parts outside the palisade: the railway stations' platforms, ramps and footpaths (part 41)
   var PK_WALK_EXTRA = [];
   // the draw distance: how far the eye (and the renderer) sees. The fog's far edge also cuts the camera's far plane, so
@@ -21,11 +25,11 @@
   // the plots: every ride the park can open. level is the level that opens it, q the point the queue stands at
   var PK_PLOTS = [
     { id: 'carousel',  name: 'Carousel',     x: -34, z: 20, r: 8.5,  q: [-22, 20],  level: 2 },
-    { id: 'teacups',   name: 'Teacups',      x: -56, z: 3,  r: 7.2,  q: [-44, 3],   level: 4, boothSide: -1 },   // the south side is the kids' lane
-    { id: 'ferris',    name: 'Ferris wheel', x: 34,  z: 20, r: 9.5,  q: [22, 20],   level: 6, pad: 1.15 },   // the pad stops short of Baron's Drop
-    { id: 'dodgems',   name: 'Dodgems',      x: 56,  z: 3,  r: 8.2,  q: [44, 3],    level: 8 },
-    { id: 'droptower', name: 'Drop tower',   x: -54, z: -52, r: 6.5, q: [-44, -52], level: 9 },
-    { id: 'flume',     name: 'Log flume',    x: 54,  z: -32, r: 9.0, q: [46.4, -24], level: 10 },
+    { id: 'teacups',   name: 'Teacups',      x: -52, z: 42, r: 7.2,  q: [-40, 42],  level: 4 },   // on the lawn the kids' rides left (it stood at -56, 3, four metres from the abbey)
+    { id: 'ferris',    name: 'Ferris wheel', x: 150, z: 52, r: 9.5,  q: [138, 52],  level: 6, pad: 1.15 },   // on the east strip, south end (it stood at 34, 20, against Baron's Drop)
+    { id: 'dodgems',   name: 'Dodgems',      x: 144, z: 13, r: 8.2,  q: [136, 22],  level: 8 },   // on the east strip (it stood at 56, 3); the line comes in at the south-west, so the hall clears the station bay
+    { id: 'droptower', name: 'Drop tower',   x: -51.5, z: -64, r: 6.5, q: [-41.5, -64], level: 9 },   // north of the Skyline's station (it stood at -54, -52, between the abbey and a pier)
+    { id: 'flume',     name: 'Log flume',    x: 54,  z: -28, r: 9.0, q: [46.4, -20], level: 10 },   // four metres south, clear of The Serpent's line
     { id: 'danse',     name: 'Dance Ride',  x: -58, z: -24, r: 12,  q: [-44, -24],  level: 11, qside: -1, pad: 0.02 }   // part 49: the boarding row at the abbey's doors; the abbey lays its own ground
   ];
   // the ladder: what the park earns its way to. Every ride is open from the first day; the levels open the services.
@@ -209,8 +213,9 @@
     return pkBkFloorAt(x, z);            // up the steps into a ride's booth (part 17)
   }
   function pkOnPlatform(x, z) { return x > -10 && x < 10 && z > -3.6 && z < -0.6; }
+  function pkInStationBay(x, z) { return x > PK_EAST_BAY.x && z > PK_EAST_BAY.z0 && z < PK_EAST_BAY.z1; }   // outside the fence: Dragon Gate's platform
   function pkInsidePark(x, z) {
-    if (x > PK_PARK.x0 && x < PK_PARK.x1 && z > PK_PARK.z0 && z < PK_PARK.z1) return true;
+    if (x > PK_PARK.x0 && x < PK_PARK.x1 && z > PK_PARK.z0 && z < PK_PARK.z1 && !pkInStationBay(x, z)) return true;
     for (var i = 0; i < PK_WALK_EXTRA.length; i++) { var r = PK_WALK_EXTRA[i]; if (x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1) return true; }
     return false;
   }
@@ -249,21 +254,13 @@
     var lawnMat = MAT.grass.clone();
     lawnMat.map = lawnMap;
     plane(1240, 1240, lawnMat, 0, -0.03, 0, -Math.PI / 2);
-    pkSlab(34, 18, 0, 44, 0.012, M.paversWarm);      // the forecourt, where the guests arrive
-    pkSlab(28, 10, 0, 33, 0.014, M.paversWarm);      // the plaza under the gate
-    pkSlab(3.2, 5.0, -18.0, 42.5, 0.013, M.paversWarm);   // out of the HQ's door onto the forecourt
-    pkSlab(14, 32, 0, 12, 0.016);      // the midway
-    pkSlab(36, 12, 2, -0.5, 0.018);    // the station apron: Station Square up to the coaster's yard fence, and the strip along the platform
+    // the forecourt, the gate's plaza, the midway and Station Square are laid by part 12 with every other piece of paving,
+    // as one surface (pkPaveCore)
     pkSlab(9.4, 6.8, 15.5, -0.8, 0.02);   // the coaster control room's floor
-    pkSlab(9, 7, -15.6, 13.2, 0.02, M.paversWarm);   // the snack stand's apron, where the stand stands
     pkSlab(62, 18, 0, 62, 0.01, pkAsphalt());       // the car park: two ranks of bays off a wide aisle
     // the entrance drive up from the road
     pkSlab(11, 5, 0, 73.5, 0.011, pkAsphalt());
     // each ride's own paved pad is laid by the dressing (part 06), tinted to its theme
-    pkSlab(18, 6, -14, 20, 0.017);   // out to the carousel
-    pkSlab(18, 6, -14, 3, 0.017);    // the start of the street out to the teacups (part 12 carries it on)
-    pkSlab(18, 6, 14, 20, 0.017);    // out to the ferris wheel
-    pkSlab(18, 6, 14, 3, 0.017);     // the start of the street out to the dodgems
     // the routes out to the lands, the hub, the Garden Walk and the planting are laid in part 12
     // the car park markings: 22 bays a side, two removed for the walk through to the gate
     var bayW = 2.75, bayN = 22, bayX0 = -bayW * bayN / 2 + bayW / 2;
@@ -333,7 +330,12 @@
     // playhouse are inside the park and reached from the Fairground, not stranded beyond the palisade.
     pkPalisade(PK_PARK.x0, PK_KIDS_Z, PK_PARK.x0, PK_PARK.z0);
     pkPalisade(PK_PARK.x0, PK_KIDS_Z, -32.5, PK_KIDS_Z);
-    pkPalisade(PK_PARK.x1, 71, PK_PARK.x1, PK_PARK.z0);
+    // the east fence, with its bay round Dragon Gate station
+    pkPalisade(PK_PARK.x1, 71, PK_PARK.x1, PK_EAST_BAY.z1);
+    pkPalisade(PK_EAST_BAY.x, PK_EAST_BAY.z1, PK_PARK.x1, PK_EAST_BAY.z1);
+    pkPalisade(PK_EAST_BAY.x, PK_EAST_BAY.z0, PK_EAST_BAY.x, PK_EAST_BAY.z1);
+    pkPalisade(PK_EAST_BAY.x, PK_EAST_BAY.z0, PK_PARK.x1, PK_EAST_BAY.z0);
+    pkPalisade(PK_PARK.x1, PK_EAST_BAY.z0, PK_PARK.x1, PK_PARK.z0);
     pkPalisade(PK_PARK.x0, PK_PARK.z0, PK_PARK.x1, PK_PARK.z0);
     // the boundary round the forecourt and the car park, with the drive in at the south
     pkPalisade(-32.5, PK_GATE_Z, -32.5, 72);
@@ -407,7 +409,7 @@
       for (var oz = -PK_WOODS_EDGE; oz <= PK_WOODS_EDGE; oz += PK_WOODS_STEP) {
         // draw all four numbers first, so skipping a spot never shifts the trees after it
         var ojx = (rng5() - 0.5) * 6, ojz = (rng5() - 0.5) * 6, othin = rng5(), osc = 0.95 + rng5() * 1.2;
-        if (ox > -92 && ox < 140 && oz > -131 && oz < 92) continue;                // the park and the ring above
+        if (ox > -92 && ox < PK_PARK.x1 + 17 && oz > -131 && oz < 92) continue;    // the park and the ring above (the ring reaches 16 m past the east fence)
         if (oz > 66 && oz < 98 && ox > -126 && ox < 106) continue;                  // the road, its pavement and what stands along it
         if (othin < 0.5 + (1 - TD) * 0.4) continue;                                 // thinner still: nobody walks out here
         var ofx = ox + ojx, ofz = oz + ojz, oseed = Math.abs(Math.round(ofx * 13 + ofz * 7));

@@ -28,8 +28,7 @@
       var dg = new THREE.Group(); dg.visible = !!a.open; scene.add(dg); a.dress = dg;
       // the plot's own paving (a big coaster plot sets its own pad, so it does not pave over its neighbours)
       var padR = p.r * (p.pad || 1.25), padY = 0.0195 + PK_PLOTS.indexOf(p) * 0.0025;
-      pkPavedDisc(padR, pkPadMat(th.ground), p.x, padY, p.z, dg, 2.4);
-      pkPavedDisc(padR + 0.55, pkMats().kerb, p.x, padY - 0.001, p.z, dg, 2.4);   // a stone lip round the pad
+      // (the pad itself is laid by part 12 with the rest of the paving, as one surface: pkPaveBuild)
       // bunting along the three sides away from the midway (a big coaster plot hangs its own)
       if (!th.noBunting) {
         pkDressItem('bunting', function (g) { pkBunting(p.x - p.r - 1.2, p.z - p.r - 1.2, p.x + p.r + 1.2, p.z - p.r - 1.2, th, g); });
@@ -299,6 +298,10 @@
   // the one thing each ride is known for
   function pkSignature(a, p, th, parent) {
     var g = parent;
+    // a piece's place, from where it stood when its ride was at (ox, oz): carried with the plot, and flipped east-west when
+    // the ride has changed sides of the park (its line then runs the other way, and so does everything set out round it)
+    var at = function (ox, oz, x, z) { var flip = (ox < 0) !== (p.x < 0) ? -1 : 1; return [p.x + flip * (x - ox), p.z + (z - oz)]; };
+    var P;
     if (a.id === 'carousel') {
       var band = new THREE.Mesh(new THREE.TorusGeometry(7.2, 0.1, 6, 44), std({ color: 0xf0c04a, roughness: 0.35, metalness: 0.45 }));
       band.rotation.x = Math.PI / 2; band.position.set(p.x, 4.0, p.z); parent.add(band);
@@ -306,27 +309,27 @@
       for (var i = 0; i < 5; i++) cyl(0.07, 1.0 - i * 0.13, std({ color: 0xf0c04a, roughness: 0.4 }), p.x - p.r - 3.1 + i * 0.25, 2.2, p.z + 2.4, g, 8);
       // the fairground quarter: brass lamps on the rim, a souvenir kiosk facing the avenue,
       // flower beds flanking the west lamp (inside the kids' lane) and a bench on the north rim
-      [[-41.6, 12.5], [-41.6, 27.5], [-43.0, 20]].forEach(function (q) { pkLandLamp(q[0], q[1], g, th); });
-      parent.add(pkStall(-36.5, 8.2, Math.PI, th.a, th.b, 'SOUVENIRS'));
-      pkFlowerBed(-43.4, 17.3, 1.8, 1.1, null, true);   // in the world, so the editor can move them
-      pkFlowerBed(-43.4, 25.2, 1.8, 1.1, null, true);
+      [[-41.6, 12.5], [-41.6, 27.5], [-43.0, 20]].forEach(function (q) { P = at(-34, 20, q[0], q[1]); pkLandLamp(P[0], P[1], g, th); });
+      P = at(-34, 20, -36.5, 8.2); parent.add(pkStall(P[0], P[1], Math.PI, th.a, th.b, 'SOUVENIRS'));
+      P = at(-34, 20, -43.4, 17.3); pkFlowerBed(P[0], P[1], 1.8, 1.1, null, true);   // in the world, so the editor can move them
+      P = at(-34, 20, -43.4, 25.2); pkFlowerBed(P[0], P[1], 1.8, 1.1, null, true);
     } else if (a.id === 'teacups') {
       // the tea garden: clipped hedges and topiary balls on the far sides, a table set
       // on the south-west pad, cup lamps flanking the approach and a trellis arch over
       // the walk in from the midway
-      pkHedgeRun(-65.6, -3.4, -65.6, 9.4, g, 1.05);
-      pkHedgeRun(-63.6, 12.6, -49.2, 12.6, g, 1.05);
-      [[-63.4, -4.4], [-63.4, 10.4], [-49.4, 10.4]].forEach(function (q) { pkTopiary(q[0], q[1], g, 1); });
-      pkTeaTable(-58.5, -5.2, g);   // on the pad's north-west, clear of the booth
-      [[-49.4, 6.0], [-47.6, 0.4]].forEach(function (q) { pkCupLamp(q[0], q[1], g); });   // the south one stands clear of the kids' lane
-      pkTrellis(-40.8, 3, g);
+      // (the hedge that ran along the south rim is gone: the booth stands there now, and the trellis with it: the walk in
+      // comes down the Fairground lane, not along an avenue)
+      pkHedgeRun(p.x - 9.6, p.z - 6.4, p.x - 9.6, p.z + 6.4, g, 1.05);
+      [[-9.4, -7.4], [-9.4, 7.4]].forEach(function (q) { pkTopiary(p.x + q[0], p.z + q[1], g, 1); });
+      pkTeaTable(p.x - 2.5, p.z - 8.6, g);   // on the pad's north rim, clear of the booth
+      [[6.6, 3.6], [8.4, -3.2]].forEach(function (q) { pkCupLamp(p.x + q[0], p.z + q[1], g); });
     } else if (a.id === 'ferris') {
       // the sky quarter: three flag poles with festoon strung between them on the north
       // rim, a viewing deck with a brass telescope on the south rim, globe lamps and benches
-      pkFlagPole(27, 30.1, g, th, 5.6); pkFlagPole(34, 29.9, g, th, 6.5); pkFlagPole(41, 30.1, g, th, 5.6);
-      pkFestoon(27, 30.1, 34, 29.9, g, th, 4.4, 5.1); pkFestoon(34, 29.9, 41, 30.1, g, th, 5.1, 4.4);
-      pkViewDeck(32.6, 9.4, g);
-      pkLandLamp(29.2, 10.2, g, th, 'globe'); pkLandLamp(40.0, 10.2, g, th, 'globe');
+      pkFlagPole(p.x - 7, p.z + 10.1, g, th, 5.6); pkFlagPole(p.x, p.z + 9.9, g, th, 6.5); pkFlagPole(p.x + 7, p.z + 10.1, g, th, 5.6);
+      pkFestoon(p.x - 7, p.z + 10.1, p.x, p.z + 9.9, g, th, 4.4, 5.1); pkFestoon(p.x, p.z + 9.9, p.x + 7, p.z + 10.1, g, th, 5.1, 4.4);
+      pkViewDeck(p.x - 1.4, p.z - 10.6, g);
+      pkLandLamp(p.x - 4.8, p.z - 9.8, g, th, 'globe'); pkLandLamp(p.x + 6.0, p.z - 9.8, g, th, 'globe');
     } else if (a.id === 'dodgems') {
       for (var n = 0; n < 4; n++) box(14, 0.1, 0.1, glowMat(0x5fd3ff, 1.1), p.x, 3.55, p.z - 5 + n * 0.06, g);
       box(0.1, 0.1, 10, glowMat(0xff5f8a, 1.1), p.x - 7.05, 3.55, p.z, g);
@@ -351,23 +354,20 @@
     } else if (a.id === 'kround') {
       // the kids' quarter: balloons, soft play blocks and a parent's bench under a shade sail, on the west
       // side away from the queue and clear of the station fence and the booth
-      pkBalloonCluster(-66.4, 16.6, g);
-      pkPlayBlocks(-67.6, 23.2, g);
-      pkShadeBench(-66.0, 24.6, g, th);
+      P = at(-60, 20, -66.4, 16.6); pkBalloonCluster(P[0], P[1], g);
+      P = at(-60, 20, -67.6, 23.2); pkPlayBlocks(P[0], P[1], g);
+      P = at(-60, 20, -66.0, 24.6); pkShadeBench(P[0], P[1], g, th);
     } else if (a.id === 'kpots') {
       // the tea-party corner: giant spoons, sugar-cube blocks and a teapot fountain on the west edge
-      pkGiantSpoon(-66.5, 26.6, 0.5, g);
-      pkGiantSpoon(-66.0, 33.4, -0.4, g);
-      pkSugarCubes(-65.8, 29.8, g);
-      pkTeapotFountain(-67.0, 31.6, 0.3, g);
+      P = at(-60, 30, -66.5, 26.6); pkGiantSpoon(P[0], P[1], 0.5, g);
+      P = at(-60, 30, -66.0, 33.4); pkGiantSpoon(P[0], P[1], -0.4, g);
+      P = at(-60, 30, -65.8, 29.8); pkSugarCubes(P[0], P[1], g);
+      P = at(-60, 30, -67.0, 31.6); pkTeapotFountain(P[0], P[1], 0.3, g);
     } else if (a.id === 'kpuffin') {
       // the arctic corner: a pale ice patch with rocks and puffins, and a fishing boat by the platform
-      pkIcePatch(-66.5, 36.6, g);
-      pkBoulder(-66.5, 36.6, 0.75, g);
-      pkBoulder(-65.0, 35.8, 0.6, g);
-      pkPuffin(-66.5, 36.6, 0.85, -0.3, g);
-      pkPuffin(-65.0, 35.8, 0.7, 0.6, g);
-      pkBoatProp(-64.5, 46.5, 0.5, g);
+      P = at(-60, 40, -66.5, 36.6); pkIcePatch(P[0], P[1], g); pkBoulder(P[0], P[1], 0.75, g); pkPuffin(P[0], P[1], 0.85, -0.3, g);
+      P = at(-60, 40, -65.0, 35.8); pkBoulder(P[0], P[1], 0.6, g); pkPuffin(P[0], P[1], 0.7, 0.6, g);
+      P = at(-60, 40, -64.5, 46.5); pkBoatProp(P[0], P[1], 0.5, g);
     }
   }
   // ── Free pieces ──────────────────────────────────────────────────

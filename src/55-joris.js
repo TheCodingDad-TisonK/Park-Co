@@ -90,7 +90,7 @@
     var q = PK_JORIS_Q;
     PK_PLOTS.push({ id: 'joris', name: PK_JORIS.name, x: PK_JORIS.ax + 15, z: q[1], r: 26, q: q, qdx: -1, level: 20, pad: 0.02 });
     PK_THEME.joris = { a: PK_JORIS.a, b: PK_JORIS.b, ground: PK_JORIS.ground, name: PK_JORIS.name, noBunting: true, noDecor: true, portal: function (p, side, g) { pkJorisPortal(p, side, g); } };
-    PK_ROUTES.push([76, q[1], q[0] - 3.2, q[1], 3.2, 'coaster']);   // the spur from the East Walk to the line
+    // (the spur from the East Walk to the line is in the one table of routes, part 12)
     // no trees in Edna's swamp, on the line, in the entrance corridor, or growing out of the lift's timber hill
     PK_KEEP.push([PK_JORIS.ax - 16, PK_JORIS.az - 22, 7.5], [95, -0.5, 6], [100, -6.5, 3.5]);
     [-2.5, 2.5].forEach(function (yd) {   // no trees growing up through either track's timber frame
@@ -100,7 +100,7 @@
     for (var bx = 78; bx <= 123; bx += 3.5) PK_KEEP.push([bx, -3.3, 2.4]);   // the walk to the train station gate
     // that walk is two park routes (so it is paved, lit and railed like any street, and joins the East Walk properly)
     // with the footbridge between them (pkJorisBridge), whose footprint the path rail leaves open (part 24)
-    PK_ROUTES.push([72.5, -3.3, 82, -3.3, 2.2, 'coaster'], [117, -3.3, 124.5, -3.3, 2.2, 'coaster']);
+    // (both are in the one table of routes, part 12)
     PK_PF_OPEN.push([81.6, 117.4, -4.5, -2.1]);
   })();
   // ── The cars: a timber racing cart on the standard coaster car's chassis, wheels, seats and lap bar (the seat
@@ -788,6 +788,22 @@
   // outside the ride's track fence (z -4.6). Joris's own line runs across it into the entrance corridor, so a timber
   // footbridge carries the walk over the line: ramps up from the west and down to the east, a trussed main span over
   // the line, on trestle bents. Its floors are 'overhead' (only the player walks them; guests in the line pass under). ──
+  // Guests take the bridge too, now the east strip lies beyond it (the kids' rides, the dodgems and the wheel): a guest who
+  // comes onto the walk at either foot of the bridge climbs it and crosses over the line. One who is in the Dragon Ride's
+  // own line, or bound for it, stays on the ground and passes under, as before; so does one who steps into the strip
+  // part way along (off the ride's exit), since there is no stair there to climb.
+  var PK_JORIS_BR = { z: -3.3, hw: 1.5, y: 3.1, d0: 96.0, d1: 103.0, rl: 14.0 };
+  var _pkJorisPrevGuestFloor = pkGuestFloor;
+  pkGuestFloor = function (x, z, gu) {
+    var B = PK_JORIS_BR, xw = B.d0 - B.rl, xe = B.d1 + B.rl;
+    if (gu) {
+      var inStrip = x > xw && x < xe && Math.abs(z - B.z) < B.hw;
+      if (!inStrip) gu.onBridge = false;
+      else if (!gu.onBridge && (x < xw + 1.6 || x > xe - 1.6) && !(gu.attr && gu.attr.id === 'joris')) gu.onBridge = true;
+      if (inStrip && gu.onBridge) return x <= B.d0 ? B.y * (x - xw) / B.rl : x >= B.d1 ? B.y * (xe - x) / B.rl : B.y;
+    }
+    return _pkJorisPrevGuestFloor(x, z, gu);
+  };
   function pkJorisBridge(g) {
     var M0 = pkMats();
     var plank = std({ map: M0.clap.map, color: 0x7a5a3a, roughness: 0.85 }), beam = std({ map: M0.bark.map, color: 0x4a3420, roughness: 0.85 });

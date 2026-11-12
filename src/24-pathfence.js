@@ -96,7 +96,7 @@
     }
   }
   // inside the palisade: the park, the forecourt and the car park. Outside it the grass is nobody's business
-  function pkPfInside(x, z) { return x > PK_PARK.x0 && x < PK_PARK.x1 && z > PK_PARK.z0 && z < 71.5 && !(x < -32.5 && z > PK_KIDS_Z); }
+  function pkPfInside(x, z) { return x > PK_PARK.x0 && x < PK_PARK.x1 && z > PK_PARK.z0 && z < 71.5 && !(x < -32.5 && z > PK_KIDS_Z) && !pkInStationBay(x, z); }
 
   // the lawn cells the player may not stand on, and the ones a rail would only double: a solid already stands there
   function pkPfBlockers() {

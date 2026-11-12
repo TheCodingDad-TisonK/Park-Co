@@ -9,7 +9,7 @@
     st: [], xing: [], units: [], len: 56, built: false, t: null, depot: null
   };
   var TR_GAPS = [   // the gates the stations have in the park's palisade: { axis: the run's own axis, x, z, w }
-    { axis: 'z', x: -32.5, z: 62, w: 5 }, { axis: 'z', x: 123, z: -2, w: 5 },   { axis: 'x', x: 72.5, z: 71, w: 5 },
+    { axis: 'z', x: -32.5, z: 62, w: 5 }, { axis: 'z', x: 155, z: -2, w: 5 },   { axis: 'x', x: 72.5, z: 71, w: 5 },
     { axis: 'x', x: -118, z: 56, w: 5 }   // Central Station's footpath through the kids'-garden fence (the theatre pulled the fence west to x -132)
   ];
   // the palisade steps around each gate: the run is cut in two and each half is built (and made solid) on its own
