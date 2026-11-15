@@ -90,3 +90,5 @@ or `node_modules/co-engine` by hand.
 - [ ] Re-check in game: the flume's station house from the queue side; the Baron's gatehouse sightlines from the
       station; the Wild Hunt's gate canopies at night.
 - [ ] The visual suite's shots are not in git; run `npm run visual` after a change to look at them.
+
+- [ ] Fullscreen on launch: the window shows windowed for a moment first. The cause is the engine shell (node_modules/co-engine/shell/main.js maximizes on ready-to-show while the game page is busy building the world); it is outside src/, so it needs an engine change.

@@ -15813,13 +15813,17 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     if (!pkRidePowered(id)) { sfx('bad'); toast(name + ' has no power - the breaker is off', 'bad'); return false; }
     if (PK.duty && PK.duty.id === id) return pkClockOut();
     if (PK.duty) pkClockOut();
-    PK.duty = { id: id, name: name, since: S.time, day: S.day, cyc0: pkDutyCycles(id) };
-    sfx('ok'); toast('Clocked in at ' + name + ' - ' + fmtTime(S.time), 'good'); logEvent('Clocked in at ' + name, '');
+    // DUO with a hired operator already running the booth: you clock in as the SECOND operator (on the platform) and he stays at the desk
+    var ra = PK.attrById && PK.attrById[id], second = !!(ra && typeof pkDuo === 'function' && pkDuo(ra) && typeof PK_OPS !== 'undefined' && PK_OPS.list.some(function (o) { return o.ride === ra && !o.going; }));
+    PK.duty = { id: id, name: name, since: S.time, day: S.day, cyc0: pkDutyCycles(id), second: second };
+    if (second) { var P2 = pkPlat(ra); if (!P2.crew) { P2.crew = 'player'; P2.who = 'player'; P2.near = 0; } }
+    sfx('ok'); toast('Clocked in at ' + name + (second ? ' as second operator: work the platform box, the operator keeps the desk' : '') + ' - ' + fmtTime(S.time), 'good'); logEvent('Clocked in at ' + name, '');
     hudDirty = true; screenDirtyAll(); return true;
   }
   function pkClockOut() {
     var D = PK.duty; if (!D) return false;
     var hrs = (S.day - D.day) * 24 + S.time - D.since, h = Math.floor(hrs), m = Math.round((hrs - h) * 60), cyc = pkDutyCycles(D.id) - D.cyc0;
+    if (D.second) { var rb = PK.attrById && PK.attrById[D.id]; if (rb && rb.plat && rb.plat.crew === 'player') { rb.plat.crew = null; rb.plat.who = ''; rb.plat.rel = false; } }   // the second operator goes home: the platform is free again
     PK.duty = null;
     sfx('click'); toast('Clocked out of ' + D.name + ' - ' + h + 'h ' + (m < 10 ? '0' : '') + m + 'm, ' + cyc + ' cycles', ''); logEvent('Clocked out of ' + D.name + ' after ' + h + 'h ' + m + 'm', '');
     hudDirty = true; screenDirtyAll(); return true;
@@ -18547,7 +18551,8 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     }
     if (a.id === 'joris' && typeof PK_JORIS_LINE !== 'undefined' && PK_JORIS_LINE.length) {
       var jx = PK_JORIS_LINE[0][0] + 1.6;   // the foot of the operator's stair (pkjorisStair), then up it onto the gallery
-      sp.pre = [{ x: jx, z: -4.4 }, { x: jx, z: -9.0 }];
+      sp.pre = [{ x: jx, z: -4.4 }, { x: jx, z: -9.0 }, { x: jx, z: -9.9 }];   // the third point keeps him straight on the stair until he is on the gallery: turning at the top of the ramp stepped him off it (0.4 m short of the floor) and he dropped to the ground
+      sp.foot = at(-0.9);   // the gallery floor ends 1.1 m outside the door: the old foot (1.5 m out) stood just off it, so the operator dropped to the ground there and could not climb back (tison, 2026-11-15)
     }
     return (a.opSpots = sp);
   }
@@ -18557,7 +18562,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   function pkOpCanWork(a) {
     var C = a.ctl;
     if (!a.open || !(a.boothFrame || pkOpRoomSpots(a)) || !a.boothPanel || !pkOpDoor(a) || !C || C.fault || C.maint) return false;
-    if (PK.duty && PK.duty.id === a.id) return false;                 // the player is on duty there
+    if (PK.duty && PK.duty.id === a.id && !PK.duty.second) return false;   // the player is on duty there (not as the second operator on a DUO ride)
     for (var i = 0; i < PK_OPS.list.length; i++) if (PK_OPS.list[i].ride === a) return false;
     return true;
   }
@@ -18739,7 +18744,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   }
   // a ride stays theirs only while it can still be worked and nobody else got there first
   function pkOpStillFree(op) {
-    var a = op.ride; if (!a || !a.open || !a.ctl || a.ctl.fault || a.ctl.maint || (PK.duty && PK.duty.id === a.id)) return false;
+    var a = op.ride; if (!a || !a.open || !a.ctl || a.ctl.fault || a.ctl.maint || (PK.duty && PK.duty.id === a.id && !PK.duty.second)) return false;
     for (var i = 0; i < PK_OPS.list.length; i++) { var o = PK_OPS.list[i]; if (o !== op && o.ride === a) return false; }
     return true;
   }
@@ -29568,7 +29573,9 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var K = { u0: cx - 3, u1: cx + 3, z0: -14.4, z1: -10.6, door: [-13.2, -12.3] };
     var n0 = g.children.length;
     pkCabinBuild(g, a, { s: 1, AX: 0, K: K, y: 3.5, trim: 0x3e2c1e, band: PK_JORIS.b, name: PK_JORIS.name, sign: PK_JORIS.sign, H: 3.2, desk: pkJorisDesk });
-    pkJorisStripBase(g, n0, cx);                       // the kit's grey concrete plinth under the cabin goes; the timber gallery carries it
+    // the kit's grey concrete plinth under the cabin goes; the timber gallery carries it. The cabin is a world item now (part 16 builds it into its own
+    // group, not into g), so the plinth is looked for there: stripping g left it standing, the grey wall under the gallery (tison, 2026-11-15: concrete wall again)
+    pkJorisStripBase(PK_CABINS[PK_CABINS.length - 1].g, 0, cx);
     // the walkable gallery: a landing across the hall front, at the booth's back, where the operator's stair arrives
     // (pkJorisStair adds its own ramp), and along both cabin sides (the cabin door opens onto the west one)
     // the gallery and its stair are the operator's own (STAFF ONLY), standing over the riders' lower hall: guests walk
@@ -31992,7 +31999,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       'body .dc-btn.primary, body .dc-menu-btns button.primary, body .co-mm button.primary, body #dc-panel-tabs button.on { background: linear-gradient(180deg, rgba(245,181,61,0.26), rgba(245,181,61,0.12)); border-color: rgba(245,181,61,0.6); color: var(--pk-amber-hi); }',
       'body #dc-panel-body button, body #dc-menu-body button { padding: 6px 12px; margin: 2px; }',
       // ── The start screen ──────────────────────────────────────
-      'body #dc-start.co-mm { justify-content: flex-start; padding-left: 8vw; background: linear-gradient(90deg, rgba(4,7,12,0.94) 0%, rgba(4,7,12,0.78) 34%, rgba(4,7,12,0.30) 72%, rgba(4,7,12,0.12) 100%), radial-gradient(120% 90% at 85% 100%, rgba(240,164,85,0.22), transparent 60%); }',
+      'body #dc-start.co-mm { justify-content: flex-start; padding-left: max(32px, 3vw); background: linear-gradient(90deg, rgba(4,7,12,0.94) 0%, rgba(4,7,12,0.78) 34%, rgba(4,7,12,0.30) 72%, rgba(4,7,12,0.12) 100%), radial-gradient(120% 90% at 85% 100%, rgba(240,164,85,0.22), transparent 60%); }',
       'body #dc-start.co-mm .co-mm-card { width: min(430px, 92vw); text-align: left; padding: 22px 28px 20px; border-radius: 20px; background: var(--pk-glass-soft); border: 1px solid var(--pk-edge-hi); box-shadow: var(--pk-shadow); backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2); animation: pk-rise 0.55s var(--pk-ease) both; }',
       'body #dc-start.co-mm .pk-wordmark { display: block; width: min(250px, 78%); height: auto; margin: -4px 0 6px -4px; filter: drop-shadow(0 6px 22px rgba(0,0,0,0.5)); }',
       'body #dc-start.co-mm h1.co-mm-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }',
@@ -32010,7 +32017,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       'body #dc-start.co-mm .co-mm-btns button.primary::after { color: #1b1405; }',
       'body #dc-start.co-mm .co-mm-btns button.primary:hover { filter: brightness(1.06); box-shadow: 0 10px 32px rgba(245,181,61,0.42), 0 1px 0 rgba(255,255,255,0.5) inset; }',
       'body #dc-start.co-mm .co-mm-btns button:last-child:not(.primary):hover { border-color: rgba(255,122,107,0.6); }',
-      'body #dc-start.co-mm::after { content: attr(data-ver); position: absolute; left: 8vw; bottom: 22px; color: rgba(159,176,195,0.75); font-size: 12px; letter-spacing: 0.08em; }',
+      'body #dc-start.co-mm::after { content: attr(data-ver); position: absolute; left: max(32px, 3vw); bottom: 24px; color: rgba(159,176,195,0.75); font-size: 12px; letter-spacing: 0.08em; }',
       '@keyframes pk-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }',
       '@keyframes pk-fade { from { opacity: 0; } to { opacity: 1; } }',
       '@keyframes pk-pop { from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); } to { opacity: 1; transform: translate(-50%, -50%); } }',
@@ -32389,7 +32396,9 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       // a finished ride holding its riders for the bars, with nobody on the platform: after a spell the bars go up
       if (plWaitsBars(a) && !P.crew) { P.holdT = (P.holdT || 0) + dt; if (P.holdT > 8) { P.holdT = 0; plBarsUp(a); toast(a.name + ': nobody on the platform, restraints up', ''); } }
       else if (!plWaitsBars(a)) P.holdT = 0;
-      var booth = !!PK.duty && PK.duty.id === a.id, loaded = plLoaded(a);
+      // the second operator (the player clocked in beside a hired operator): when the operator is gone the player holds the desk, and a platform nobody works falls back to the player
+      if (PK.duty && PK.duty.id === a.id && PK.duty.second && !PK_OPS.list.some(function (o) { return o.ride === a && !o.going; })) { PK.duty.second = false; toast('The operator has gone: you run the desk at ' + a.name, ''); }
+      var booth = !!PK.duty && PK.duty.id === a.id && !PK.duty.second, loaded = plLoaded(a);
       if (loaded && !P.crew) {
         P.waitT = (P.waitT || 0) + dt;
         if (!booth) {
@@ -32621,7 +32630,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     });
   };
   var _pkPlatT = GAME.T;
-  GAME.T = function () { var t = _pkPlatT(); t.PK_PL = PK_PL; t.pkDuo = pkDuo; t.pkSetDuo = pkSetDuo; t.pkPlatPress = pkPlatPress; t.pkPlatAssign = pkPlatAssign; t.pkFreeHand = pkFreeHand; t.pkAskAnswer = pkAskAnswer; t.pkPlatWho = pkPlatWho; t.PK_FLOOR_RECTS = PK_FLOOR_RECTS; t.PK_MAIN = function () { return PK_MAIN; }; t.pkPlatSpot = pkPlatSpot; return t; };
+  GAME.T = function () { var t = _pkPlatT(); t.PK_PL = PK_PL; t.pkDuo = pkDuo; t.pkClockIn = pkClockIn; t.pkClockOut = pkClockOut; t.pkOnDutyAt = pkOnDutyAt; t.pkSetDuo = pkSetDuo; t.pkPlatPress = pkPlatPress; t.pkPlatAssign = pkPlatAssign; t.pkFreeHand = pkFreeHand; t.pkAskAnswer = pkAskAnswer; t.pkPlatWho = pkPlatWho; t.PK_FLOOR_RECTS = PK_FLOOR_RECTS; t.PK_MAIN = function () { return PK_MAIN; }; t.pkPlatSpot = pkPlatSpot; return t; };
   (function () {
     var inner = pkRideBoothBuild;
     function lampMat(hex) { var m = new THREE.MeshStandardMaterial({ color: hex, emissive: hex, emissiveIntensity: 0.05, roughness: 0.4 }); m.userData.glow = true; return m; }   // glow: the static baker leaves it alone, so the lamp can change

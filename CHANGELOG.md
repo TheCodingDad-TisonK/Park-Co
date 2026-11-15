@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.9.2 (2026-11-15): World Update
+
+## NEW
+- You can be the second operator next to a hired worker. On a DUO ride that a hired operator is running, clock in at the booth's time clock: the operator stays at the desk, and you work the platform box. Clock out and the platform is free again.
+- The "Made with Co-Engine" mark is a button now. Click it for the Co-Engine GitHub page, its releases and the engine version.
+
+## IMPROVED
+- The "Made with Co-Engine" mark and the maker badge only show on the main menu now, not on the loading screen.
+- The Co-Engine mark is the same size as the maker badge.
+- The maker badge menu is just the three buttons, with no title.
+- In the editor's game view the badge links copy the link instead (that view cannot open a browser) and tell you so.
+- The main menu, the version label and the two badges share the same margin from the screen edge.
+
+## FIXED
+- The Dragon Ride's operator now walks up the stair into the control cabin instead of dropping to the ground and working from the platform.
+- The grey concrete wall under the Dragon Ride's control cabin is gone again.
+
 ## 1.9.1 (2026-11-15): World/UI Update
 
 ## NEW
@@ -54,6 +71,12 @@
 ## REMOVED
 - The "Ticket sold", "Toy sold" and "N rode" messages.
 - The old loading screen.
+
+## Unreleased: after 1.9.1
+
+- Second operator: on a DUO ride a hired operator runs, clocking in makes you the second operator (platform crew) and the operator stays at the desk; clocking out frees the platform (parts 17, 26, 64).
+- Dragon Ride: the operator now climbs the stair to the cabin (a third waypoint keeps him on the ramp, and the door foot spot sits on the gallery floor), and the grey concrete plinth under the cabin is hidden again (part 55 stripped the wrong group after the cabin became a world item).
+- The Co-Engine mark is a menu button (GitHub, releases, engine version), the same size as the maker badge; both badges only show on the main menu; the profile menu has no title; in the editor view the links are copied; the menu card, version label and badges share a max(32px, 3vw) margin.
 
 ## Unreleased: The Re-lay
 

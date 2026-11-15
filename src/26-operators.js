@@ -66,7 +66,8 @@
     }
     if (a.id === 'joris' && typeof PK_JORIS_LINE !== 'undefined' && PK_JORIS_LINE.length) {
       var jx = PK_JORIS_LINE[0][0] + 1.6;   // the foot of the operator's stair (pkjorisStair), then up it onto the gallery
-      sp.pre = [{ x: jx, z: -4.4 }, { x: jx, z: -9.0 }];
+      sp.pre = [{ x: jx, z: -4.4 }, { x: jx, z: -9.0 }, { x: jx, z: -9.9 }];   // the third point keeps him straight on the stair until he is on the gallery: turning at the top of the ramp stepped him off it (0.4 m short of the floor) and he dropped to the ground
+      sp.foot = at(-0.9);   // the gallery floor ends 1.1 m outside the door: the old foot (1.5 m out) stood just off it, so the operator dropped to the ground there and could not climb back (tison, 2026-11-15)
     }
     return (a.opSpots = sp);
   }
@@ -76,7 +77,7 @@
   function pkOpCanWork(a) {
     var C = a.ctl;
     if (!a.open || !(a.boothFrame || pkOpRoomSpots(a)) || !a.boothPanel || !pkOpDoor(a) || !C || C.fault || C.maint) return false;
-    if (PK.duty && PK.duty.id === a.id) return false;                 // the player is on duty there
+    if (PK.duty && PK.duty.id === a.id && !PK.duty.second) return false;   // the player is on duty there (not as the second operator on a DUO ride)
     for (var i = 0; i < PK_OPS.list.length; i++) if (PK_OPS.list[i].ride === a) return false;
     return true;
   }
@@ -258,7 +259,7 @@
   }
   // a ride stays theirs only while it can still be worked and nobody else got there first
   function pkOpStillFree(op) {
-    var a = op.ride; if (!a || !a.open || !a.ctl || a.ctl.fault || a.ctl.maint || (PK.duty && PK.duty.id === a.id)) return false;
+    var a = op.ride; if (!a || !a.open || !a.ctl || a.ctl.fault || a.ctl.maint || (PK.duty && PK.duty.id === a.id && !PK.duty.second)) return false;
     for (var i = 0; i < PK_OPS.list.length; i++) { var o = PK_OPS.list[i]; if (o !== op && o.ride === a) return false; }
     return true;
   }

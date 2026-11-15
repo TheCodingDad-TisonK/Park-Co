@@ -259,13 +259,17 @@
     if (!pkRidePowered(id)) { sfx('bad'); toast(name + ' has no power - the breaker is off', 'bad'); return false; }
     if (PK.duty && PK.duty.id === id) return pkClockOut();
     if (PK.duty) pkClockOut();
-    PK.duty = { id: id, name: name, since: S.time, day: S.day, cyc0: pkDutyCycles(id) };
-    sfx('ok'); toast('Clocked in at ' + name + ' - ' + fmtTime(S.time), 'good'); logEvent('Clocked in at ' + name, '');
+    // DUO with a hired operator already running the booth: you clock in as the SECOND operator (on the platform) and he stays at the desk
+    var ra = PK.attrById && PK.attrById[id], second = !!(ra && typeof pkDuo === 'function' && pkDuo(ra) && typeof PK_OPS !== 'undefined' && PK_OPS.list.some(function (o) { return o.ride === ra && !o.going; }));
+    PK.duty = { id: id, name: name, since: S.time, day: S.day, cyc0: pkDutyCycles(id), second: second };
+    if (second) { var P2 = pkPlat(ra); if (!P2.crew) { P2.crew = 'player'; P2.who = 'player'; P2.near = 0; } }
+    sfx('ok'); toast('Clocked in at ' + name + (second ? ' as second operator: work the platform box, the operator keeps the desk' : '') + ' - ' + fmtTime(S.time), 'good'); logEvent('Clocked in at ' + name, '');
     hudDirty = true; screenDirtyAll(); return true;
   }
   function pkClockOut() {
     var D = PK.duty; if (!D) return false;
     var hrs = (S.day - D.day) * 24 + S.time - D.since, h = Math.floor(hrs), m = Math.round((hrs - h) * 60), cyc = pkDutyCycles(D.id) - D.cyc0;
+    if (D.second) { var rb = PK.attrById && PK.attrById[D.id]; if (rb && rb.plat && rb.plat.crew === 'player') { rb.plat.crew = null; rb.plat.who = ''; rb.plat.rel = false; } }   // the second operator goes home: the platform is free again
     PK.duty = null;
     sfx('click'); toast('Clocked out of ' + D.name + ' - ' + h + 'h ' + (m < 10 ? '0' : '') + m + 'm, ' + cyc + ' cycles', ''); logEvent('Clocked out of ' + D.name + ' after ' + h + 'h ' + m + 'm', '');
     hudDirty = true; screenDirtyAll(); return true;

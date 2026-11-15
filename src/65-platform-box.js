@@ -169,4 +169,4 @@
     });
   };
   var _pkPlatT = GAME.T;
-  GAME.T = function () { var t = _pkPlatT(); t.PK_PL = PK_PL; t.pkDuo = pkDuo; t.pkSetDuo = pkSetDuo; t.pkPlatPress = pkPlatPress; t.pkPlatAssign = pkPlatAssign; t.pkFreeHand = pkFreeHand; t.pkAskAnswer = pkAskAnswer; t.pkPlatWho = pkPlatWho; t.PK_FLOOR_RECTS = PK_FLOOR_RECTS; t.PK_MAIN = function () { return PK_MAIN; }; t.pkPlatSpot = pkPlatSpot; return t; };
+  GAME.T = function () { var t = _pkPlatT(); t.PK_PL = PK_PL; t.pkDuo = pkDuo; t.pkClockIn = pkClockIn; t.pkClockOut = pkClockOut; t.pkOnDutyAt = pkOnDutyAt; t.pkSetDuo = pkSetDuo; t.pkPlatPress = pkPlatPress; t.pkPlatAssign = pkPlatAssign; t.pkFreeHand = pkFreeHand; t.pkAskAnswer = pkAskAnswer; t.pkPlatWho = pkPlatWho; t.PK_FLOOR_RECTS = PK_FLOOR_RECTS; t.PK_MAIN = function () { return PK_MAIN; }; t.pkPlatSpot = pkPlatSpot; return t; };

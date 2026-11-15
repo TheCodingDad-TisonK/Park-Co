@@ -23,7 +23,7 @@
       'body .dc-btn.primary, body .dc-menu-btns button.primary, body .co-mm button.primary, body #dc-panel-tabs button.on { background: linear-gradient(180deg, rgba(245,181,61,0.26), rgba(245,181,61,0.12)); border-color: rgba(245,181,61,0.6); color: var(--pk-amber-hi); }',
       'body #dc-panel-body button, body #dc-menu-body button { padding: 6px 12px; margin: 2px; }',
       // ── The start screen ──────────────────────────────────────
-      'body #dc-start.co-mm { justify-content: flex-start; padding-left: 8vw; background: linear-gradient(90deg, rgba(4,7,12,0.94) 0%, rgba(4,7,12,0.78) 34%, rgba(4,7,12,0.30) 72%, rgba(4,7,12,0.12) 100%), radial-gradient(120% 90% at 85% 100%, rgba(240,164,85,0.22), transparent 60%); }',
+      'body #dc-start.co-mm { justify-content: flex-start; padding-left: max(32px, 3vw); background: linear-gradient(90deg, rgba(4,7,12,0.94) 0%, rgba(4,7,12,0.78) 34%, rgba(4,7,12,0.30) 72%, rgba(4,7,12,0.12) 100%), radial-gradient(120% 90% at 85% 100%, rgba(240,164,85,0.22), transparent 60%); }',
       'body #dc-start.co-mm .co-mm-card { width: min(430px, 92vw); text-align: left; padding: 22px 28px 20px; border-radius: 20px; background: var(--pk-glass-soft); border: 1px solid var(--pk-edge-hi); box-shadow: var(--pk-shadow); backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2); animation: pk-rise 0.55s var(--pk-ease) both; }',
       'body #dc-start.co-mm .pk-wordmark { display: block; width: min(250px, 78%); height: auto; margin: -4px 0 6px -4px; filter: drop-shadow(0 6px 22px rgba(0,0,0,0.5)); }',
       'body #dc-start.co-mm h1.co-mm-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }',
@@ -41,7 +41,7 @@
       'body #dc-start.co-mm .co-mm-btns button.primary::after { color: #1b1405; }',
       'body #dc-start.co-mm .co-mm-btns button.primary:hover { filter: brightness(1.06); box-shadow: 0 10px 32px rgba(245,181,61,0.42), 0 1px 0 rgba(255,255,255,0.5) inset; }',
       'body #dc-start.co-mm .co-mm-btns button:last-child:not(.primary):hover { border-color: rgba(255,122,107,0.6); }',
-      'body #dc-start.co-mm::after { content: attr(data-ver); position: absolute; left: 8vw; bottom: 22px; color: rgba(159,176,195,0.75); font-size: 12px; letter-spacing: 0.08em; }',
+      'body #dc-start.co-mm::after { content: attr(data-ver); position: absolute; left: max(32px, 3vw); bottom: 24px; color: rgba(159,176,195,0.75); font-size: 12px; letter-spacing: 0.08em; }',
       '@keyframes pk-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }',
       '@keyframes pk-fade { from { opacity: 0; } to { opacity: 1; } }',
       '@keyframes pk-pop { from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); } to { opacity: 1; transform: translate(-50%, -50%); } }',

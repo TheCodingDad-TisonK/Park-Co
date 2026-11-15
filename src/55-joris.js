@@ -248,7 +248,9 @@
     var K = { u0: cx - 3, u1: cx + 3, z0: -14.4, z1: -10.6, door: [-13.2, -12.3] };
     var n0 = g.children.length;
     pkCabinBuild(g, a, { s: 1, AX: 0, K: K, y: 3.5, trim: 0x3e2c1e, band: PK_JORIS.b, name: PK_JORIS.name, sign: PK_JORIS.sign, H: 3.2, desk: pkJorisDesk });
-    pkJorisStripBase(g, n0, cx);                       // the kit's grey concrete plinth under the cabin goes; the timber gallery carries it
+    // the kit's grey concrete plinth under the cabin goes; the timber gallery carries it. The cabin is a world item now (part 16 builds it into its own
+    // group, not into g), so the plinth is looked for there: stripping g left it standing, the grey wall under the gallery (tison, 2026-11-15: concrete wall again)
+    pkJorisStripBase(PK_CABINS[PK_CABINS.length - 1].g, 0, cx);
     // the walkable gallery: a landing across the hall front, at the booth's back, where the operator's stair arrives
     // (pkJorisStair adds its own ramp), and along both cabin sides (the cabin door opens onto the west one)
     // the gallery and its stair are the operator's own (STAFF ONLY), standing over the riders' lower hall: guests walk

@@ -210,7 +210,9 @@
       // a finished ride holding its riders for the bars, with nobody on the platform: after a spell the bars go up
       if (plWaitsBars(a) && !P.crew) { P.holdT = (P.holdT || 0) + dt; if (P.holdT > 8) { P.holdT = 0; plBarsUp(a); toast(a.name + ': nobody on the platform, restraints up', ''); } }
       else if (!plWaitsBars(a)) P.holdT = 0;
-      var booth = !!PK.duty && PK.duty.id === a.id, loaded = plLoaded(a);
+      // the second operator (the player clocked in beside a hired operator): when the operator is gone the player holds the desk, and a platform nobody works falls back to the player
+      if (PK.duty && PK.duty.id === a.id && PK.duty.second && !PK_OPS.list.some(function (o) { return o.ride === a && !o.going; })) { PK.duty.second = false; toast('The operator has gone: you run the desk at ' + a.name, ''); }
+      var booth = !!PK.duty && PK.duty.id === a.id && !PK.duty.second, loaded = plLoaded(a);
       if (loaded && !P.crew) {
         P.waitT = (P.waitT || 0) + dt;
         if (!booth) {
