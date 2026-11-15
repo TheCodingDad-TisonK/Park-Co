@@ -7,7 +7,7 @@
 //@ 'co-splash-end') this part keeps the screen up until the bar has run its full hold and at least half a second more, then fades it
 //@ into the start screen. A click or a key after 2.5 s skips the rest. The three numbers below must match index.html's CSS
 //@ (1900ms delay, 5200ms hold). With no #co-splash on the page (an older engine) it fades at boot, the way it always did.
-  var PK_SPL_HOLD = 5200, PK_SPL_SKIP = 2500, PK_SPL_CO = 1900;
+  var PK_SPL_HOLD = 5200, PK_SPL_SKIP = 2500, PK_SPL_CO = 0;
   var PK_SPL_T0 = Date.now();   // the page's clock for this screen: the bar runs from PK_SPL_T0 + PK_SPL_CO
   var PK_SPL_TIPS = [
     'Work a ride by hand from its booth: the desk has the gates, the bars and dispatch.',
@@ -32,11 +32,10 @@
     var el = document.getElementById('dc-splash'); if (!el) return;
     var done = false, shown = PK_SPL_T0 + PK_SPL_CO;
     var fade = function () { if (done) return; done = true; window.removeEventListener('keydown', skip, true); window.removeEventListener('pointerdown', skip, true); pkSplashFade(); };
-    var skip = function () { if (Date.now() - shown >= PK_SPL_SKIP) fade(); };
+    var skip = function (e) { if (e && e.target && e.target.closest && e.target.closest('#pk-credit')) return; if (Date.now() - shown >= PK_SPL_SKIP) fade(); };   // a click on the maker's badge is not a skip
     var left = Math.max(500, shown + PK_SPL_HOLD - Date.now());
     setTimeout(function () { el.classList.add('skip'); }, Math.max(0, shown + PK_SPL_SKIP - Date.now()));
     window.addEventListener('keydown', skip, true); window.addEventListener('pointerdown', skip, true);
     setTimeout(fade, left);
   }
-  if (document.getElementById('co-splash')) hook('co-splash-end', function () { pkSplashHold(); });
-  else hook('boot', pkSplashFade);
+  hook('boot', pkSplashHold);   // the Co Engine splash is gone (tison, 2026-11-15): the loading screen starts at first paint and carries a small Made with Co-Engine mark in its top left corner

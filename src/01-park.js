@@ -29,7 +29,7 @@
     { id: 'ferris',    name: 'Ferris wheel', x: 150, z: 52, r: 9.5,  q: [138, 52],  level: 6, pad: 1.15 },   // on the east strip, south end (it stood at 34, 20, against Baron's Drop)
     { id: 'dodgems',   name: 'Dodgems',      x: 144, z: 13, r: 8.2,  q: [136, 22],  level: 8 },   // on the east strip (it stood at 56, 3); the line comes in at the south-west, so the hall clears the station bay
     { id: 'droptower', name: 'Drop tower',   x: -51.5, z: -64, r: 6.5, q: [-41.5, -64], level: 9 },   // north of the Skyline's station (it stood at -54, -52, between the abbey and a pier)
-    { id: 'flume',     name: 'Log flume',    x: 54,  z: -28, r: 9.0, q: [46.4, -20], level: 10 },   // four metres south, clear of The Serpent's line
+    { id: 'flume',     name: 'Log flume',    x: 54,  z: -28, r: 9.0, q: [46.4, -20], level: 10, boothAt: [50.8, -4.5], boothLook: [55, -21] },   // four metres south, clear of The Serpent's line
     { id: 'danse',     name: 'Dance Ride',  x: -58, z: -24, r: 12,  q: [-44, -24],  level: 11, qside: -1, pad: 0.02 }   // part 49: the boarding row at the abbey's doors; the abbey lays its own ground
   ];
   // the ladder: what the park earns its way to. Every ride is open from the first day; the levels open the services.

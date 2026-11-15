@@ -159,6 +159,13 @@
     var bar = pkMover(b, 0, 0.3, 0.0);
     pkTube([[-0.6, 0, 0], [-0.6, 0, 0.32], [0.6, 0, 0.32], [0.6, 0, 0]], 0.03, X.iron, bar, false, 14, 6);
     bars.push(bar);
+    // a gilt crest on each flank, lanterns at the corners with a soft glow, piping on the cushions and a footrest
+    [-1, 1].forEach(function (s) {
+      cyl(0.13, 0.02, X.gold, s * 0.725, -0.08, 0.0, b, 16).rotation.z = Math.PI / 2;
+      cyl(0.085, 0.025, paint, s * 0.73, -0.08, 0.0, b, 16).rotation.z = Math.PI / 2;
+      [-1, 1].forEach(function (e) { pkRod(s * 0.66, 0.17, e * 0.56, s * 0.66, 0.4, e * 0.56, 0.015, X.gold, b, 5); sphere(0.045, glowMat(0xffe7a8, 1.5), s * 0.66, 0.43, e * 0.56, b); });
+    });
+    box(1.22, 0.025, 0.06, X.gold, 0, 0.0, -0.4, b); box(0.9, 0.04, 0.16, X.rail, 0, -0.26, 0.45, b, { r: 0.015 });
     pkFuse(gd);
     return { g: gd, i: i, roll: 0, yaw: 0, s: 0, v: 0, seats: mine, bar: bar, barT: 1, hold: 0, unloaded: true };
   }
@@ -713,7 +720,9 @@
       if (inStation && ns >= L - 0.02) {
         var walking = gd.seats.some(function (st) { return st.guest && st.guest.state === 'walkSeat'; });
         var spaced = !E.last || E.last === gd || E.last.s > D.DGAP;
-        var go = E.sys === 'running' && !E.barsHold && gd.barT > 0.95 && !walking && spaced && (C.auto || E.release);
+        var loadedG = gd.seats.some(function (st) { return st.guest || st.player; });
+        var go = E.sys === 'running' && !E.barsHold && gd.barT > 0.95 && !walking && spaced && (C.auto || E.release) && (!pkDuo(a) || !loadedG || (a.plat && a.plat.rel));   // DUO (part 64): a loaded gondola waits for the platform release
+        if (go && loadedG && pkDuo(a)) pkPlatUsed(a);
         if (walking) { gd.hold += dt; if (gd.hold > 10) gd.seats.forEach(function (st) { if (st.guest && st.guest.state === 'walkSeat') pkDvUnseat(a, st); }); }
         if (!go) { ns = L - 0.02; gd.v = 0; }
         else { ns = Math.max(ns, L + 0.001) - L; E.last = gd; E.release = false; gd.hold = 0; gd.unloaded = false; }   // over the line and out (never back behind it)
@@ -728,7 +737,7 @@
     }
     // the riders get on: the front of the line walks to a free seat in a gondola on the U with time left to reach it
     E.loadT -= dt;
-    if (E.loadT <= 0 && C.gates && E.sys === 'running' && live && !C.fault && !PK.closed && a.queue.length) {
+    if (E.loadT <= 0 && C.gates && E.sys === 'running' && live && !C.fault && !PK.closed && a.queue.length && !(pkDuo(a) && a.stationGates === false)) {   // (DUO: no one is let on while the platform operator holds the station gates shut)
       var gu = a.queue[0];
       if (gu.state === 'qwait' || gu.state === 'qmove') {
         var best = null;

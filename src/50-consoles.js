@@ -42,6 +42,7 @@
         txt('SLOW  NORM  FAST', 0.085, 0.045, 0.0075, K.dim); txt('AUTO / MANUAL', 0.255, 0.045, 0.0075, K.dim);
         [['KEY', -0.255], ['SYSTEM', -0.085], ['BARS', 0.085], ['SPACING', 0.255]].forEach(function (l) { txt(l[0], l[1], -0.025, 0.0085, K.dim); });
         txt('INTERLOCK', 0, 0.0, 0.009, K.dim);
+        txt('CREW', -0.62, -0.178, 0.011, K.dim);
         txt('WORK LIGHTS', -0.22, -0.185, 0.01); txt('E-STOP', 0, -0.188, 0.012, '#ff8a7a'); txt('RESET', 0.22, -0.185, 0.011);
         txt(sig, 0.46, 0.155, 0.011); txt(K.cue.label, 0.58, 0.155, 0.011); txt('SPARKLE', 0.72, 0.155, 0.011);
         txt('START', 0.46, -0.188, 0.012, '#8fe0a0'); txt('STOP', 0.6, -0.188, 0.012, '#f0c04a'); txt('RELEASE', 0.78, -0.188, 0.011); txt('PULL', 0.83, -0.11, 0.009, K.dim);
@@ -62,10 +63,11 @@
     parts.buttons.gates = pkCtlBtn(P, BX[0], 0.095, { id: 'gates', label: 'GATES', col: 'green', r: 0.028, collar: trim, lampCol: 0x5fd38d, prompt: 'Open or shut the station gates',
       act: function () { if (refuse()) return; C.gates = !C.gates; sfx('click'); toast(a.name + ': gates ' + (C.gates ? 'open' : 'shut'), ''); screenDirtyAll(); } });
     parts.buttons.bars = pkCtlBtn(P, BX[1], 0.095, { id: 'bars', label: 'BARS HOLD', col: 'amber', r: 0.028, collar: trim, lampCol: 0xf0c04a, prompt: 'Hold the bars open (no gondola leaves)',
-      act: function () { if (!C.key) return pkBoothRefuse(a.name + ' is locked - turn the operator key on'); E.barsHold = !E.barsHold; sfx('click'); toast(a.name + ': bars ' + (E.barsHold ? 'held open - dispatch held' : 'on automatic'), ''); } });
+      act: function () { if (!C.key) return pkBoothRefuse(a.name + ' is locked - turn the operator key on'); if (pkPlatDeskRefuse(a, 'restraints')) return false; E.barsHold = !E.barsHold; sfx('click'); toast(a.name + ': bars ' + (E.barsHold ? 'held open - dispatch held' : 'on automatic'), ''); } });
     parts.walk = pkCtlRotary(P, BX[2], 0.095, { id: 'walk', n: 3, pos: E.walkPos, r: 0.03, prompt: 'Walkway speed', names: ['SLOW', 'NORMAL', 'FAST'], act: function (p) { E.walkPos = p; E.walk = [0.35, 0.5, 0.7][p]; } });
     parts.auto = pkCtlToggle(P, BX[3], 0.095, { id: 'auto', on: C.auto, prompt: 'Dispatch', onName: 'AUTO', offName: 'MANUAL', act: function (on) { C.auto = !!on; if (!S.ctlAuto) S.ctlAuto = {}; S.ctlAuto[a.id] = C.auto; sfx('click'); toast(a.name + ': dispatch ' + (C.auto ? 'AUTO - the gondolas go on their own' : 'MANUAL - pull the release for each'), ''); } });
     parts.chain = BX.map(function (x) { return pkPnLed(P, x, 0.008, { col: 0x5fd38d, r: 0.009 }); });
+    parts.duo = pkCtlToggle(P, -0.62, -0.12, { id: 'duo', on: pkDuo(a), prompt: a.name + ': one operator or two', onName: 'DUO', offName: 'SOLO', act: function (on) { return pkSetDuo(a, !!on); } });   // part 64 (false reverts the switch)
     parts.work = pkCtlToggle(P, -0.22, -0.11, { id: 'work', on: !!E.work, prompt: 'Work lights in the dream', onName: 'ON', offName: 'OFF', act: function (on) { E.work = !!on; sfx('click'); } });
     parts.stop = pkCtlMushroom(P, 0, -0.1, { id: 'stop', r: 0.044, prompt: 'Emergency stop', act: function () { pkBoothStop(a); } });
     parts.reset = pkCtlBtn(P, 0.22, -0.11, { id: 'reset', label: 'RESET', col: 'white', r: 0.026, collar: trim, lampCol: 0xe8e4d8, prompt: 'Reset after a stop', act: function () { if (C.fault) pkBoothStop(a); else { sfx('click'); toast(a.name + ': nothing to reset', ''); } } });

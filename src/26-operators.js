@@ -162,13 +162,14 @@
           var empty = !a.riders && !a.queue.length && !walkers && op.boardT > 10;
           if (loaded || empty) { pkOpPress(op, 'gates'); op.wait = randf(0.9, 1.5); }
         } else if (a.riders > 0 && !walkers) {
-          if (C.barsWant < 0.5) { pkOpPress(op, 'bars'); op.wait = randf(1.2, 1.8); }
+          if (pkDuo(a)) { if (C.barsWant > 0.5 && C.bars > 0.9 && pkPlatDispatchOk(a, false)) { pkOpPress(op, 'dispatch'); if (a.state === 'running') { op.rounds++; op.boardT = 0; } op.wait = randf(1.0, 1.6); } }   // DUO: the platform operator lowers the bars and gives the release
+          else if (C.barsWant < 0.5) { pkOpPress(op, 'bars'); op.wait = randf(1.2, 1.8); }
           else if (C.bars > 0.9) { pkOpPress(op, 'dispatch'); if (a.state === 'running') { op.rounds++; op.boardT = 0; } op.wait = randf(1.0, 1.6); }
         } else if (!a.riders && !a.queue.length) { op.boardT = 0; }
         else if (a.queue.length && !walkers) { pkOpPress(op, 'gates'); op.wait = randf(1.2, 2.0); }   // shut too soon: open again
         break;
       case 'unloading':
-        if (a.awaitBars) { pkOpPress(op, 'bars'); op.wait = randf(1.0, 1.6); }
+        if (a.awaitBars && !pkDuo(a)) { pkOpPress(op, 'bars'); op.wait = randf(1.0, 1.6); }
         else if (done) { op.state = 'finish'; }
         break;
     }
@@ -252,6 +253,7 @@
       case 'home':
         pkOpRemove(op);
         break;
+      default: pkPlatOpState(op, dt);   // the platform crew's states (part 64)
     }
   }
   // a ride stays theirs only while it can still be worked and nobody else got there first

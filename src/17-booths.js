@@ -538,7 +538,9 @@
         R.txt('LAMP TEST', 0.12, -0.175, 0.013, '#aebcc4'); R.txt('HORN', 0.285, -0.175, 0.013, '#aebcc4');
         R.box(0.2, -0.33, 0.36, 0.12, 'rgba(0,0,0,0.22)', 0.004);
         R.txt('CYCLES', 0.2, -0.255, 0.013, '#aebcc4');
-        R.txt('ISOLATE BEFORE OPENING', 0, -0.495, 0.013, '#7d8a96');
+        R.txt('OPERATORS', -0.2, -0.405, 0.0135, '#aebcc4');
+        R.txt('SOLO', -0.285, -0.462, 0.013, '#aebcc4'); R.txt('DUO', -0.115, -0.462, 0.013, '#f0c04a');   // part 64: one operator or two
+        R.txt('ISOLATE BEFORE OPENING', 0, -0.5, 0.0115, '#7d8a96');
       }
     });
     pkCtlSetPower(P, function () { return !!a.open; });
@@ -557,6 +559,12 @@
         sfx('click'); toast(a.name + (C.maint ? ': MAINTENANCE - locked out' : ': key to RUN'), C.maint ? 'bad' : 'good');
         logEvent(a.name + (C.maint ? ' locked out for maintenance' : ' back in service'), C.maint ? 'bad' : '');
         screenDirtyAll(); hudDirty = true;
+      } });
+    // SOLO or DUO (part 64): in DUO a second operator on the platform works the bars and the station gates and gives the release
+    parts.duo = pkCtlRotary(P, -0.2, -0.445, { id: 'duo', n: 2, pos: pkDuo(a) ? 1 : 0, r: 0.03, names: ['SOLO', 'DUO'], prompt: a.name + ' operators: SOLO or DUO',
+      act: function (pos) {
+        if (pos === 1 && !pkPlatRide(a)) { sfx('bad'); toast(a.name + ' has no platform: it always runs SOLO', 'bad'); parts.duo.set(0, true); return; }
+        if (pkSetDuo(a, pos === 1) === false) parts.duo.set(pos === 1 ? 0 : 1, true);
       } });
     var testT = 0;
     parts.test = pkCtlBtn(P, 0.12, -0.12, { id: 'lamptest', label: 'LAMP TEST', col: 'white', r: 0.026, lampCol: 0xe8e4d8, prompt: 'Lamp test',
@@ -676,7 +684,7 @@
     if (dist2(c2x, c2z, plot.x, plot.z) > dist2(c1x, c1z, plot.x, plot.z)) { bx = c2x; bz = c2z; }
     if (plot.boothSide === 1) { bx = c1x; bz = c1z; } else if (plot.boothSide === -1) { bx = c2x; bz = c2z; }
     if (plot.boothAt) { bx = plot.boothAt[0]; bz = plot.boothAt[1]; }   // or put outright, where the ride's track leaves no side free
-    var ry = Math.atan2(plot.x - bx, plot.z - bz);
+    var ry = plot.boothLook ? Math.atan2(plot.boothLook[0] - bx, plot.boothLook[1] - bz) : Math.atan2(plot.x - bx, plot.z - bz);   // boothLook: face a point (the flume's dock) when the plot centre is behind a wall
     var toQ = Math.atan2(q[0] - bx, q[1] - bz);
     var ds = Math.cos(toQ - (ry + Math.PI / 2)) >= 0 ? 1 : -1;          // the door side, in local x
     if (plot.boothDs === 1 || plot.boothDs === -1) ds = plot.boothDs;   // the queue point can stand nowhere near a remote booth (boothAt); say the door side outright
@@ -830,29 +838,7 @@
     var screen = touchScreen({
       w: 420, h: 300, pw: 1.0, ph: 0.72, x: -ds * 0.35, y: F + 1.5, z: bw + 0.02, ry: 0, parent: g, title: a.name,
       draw: function (ctx, s) {
-        scBg(ctx, s.w, s.h);
-        var status = pkBoothStatus(a, C), waiting = pkAttrWaiting(a);
-        var statusCol = C.fault || C.maint ? '#ff6b5e' : (a.state === 'running' ? '#ff9d6b' : (a.state === 'idle' && !waiting ? '#a0acb8' : '#5fd38d'));
-        scHead(ctx, s.w, a.name.toUpperCase(), status);
-        scText(ctx, 16, 66, 'ON RIDE', '#a0acb8');
-        scText(ctx, 16, 92, a.riders + ' / ' + a.seats.length, a.riders ? '#5fd38d' : '#eef1f5', 22);
-        scText(ctx, 160, 66, 'QUEUE', '#a0acb8');
-        scText(ctx, 160, 92, String(waiting), waiting ? '#f0c04a' : '#eef1f5', 22);
-        scText(ctx, 290, 66, 'WAIT', '#a0acb8');
-        scText(ctx, 290, 92, pkBkWait(a) + ' min', '#eef1f5', 22);
-        var pills = [['GATES', C.gates ? 'OPEN' : 'SHUT', C.gates], ['BARS', C.barsWant > 0.5 ? 'DOWN' : 'UP', C.barsWant > 0.5], ['MODE', C.maint ? 'MAINT' : (C.auto ? 'AUTO' : 'MANUAL'), C.auto && !C.maint]];
-        for (var pl = 0; pl < pills.length; pl++) {
-          var px2 = 16 + pl * 132, py2 = 112;
-          ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fillRect(px2, py2, 120, 54);
-          ctx.strokeStyle = pills[pl][2] ? 'rgba(95,211,141,0.55)' : 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1.5; ctx.strokeRect(px2, py2, 120, 54);
-          ctx.fillStyle = '#8b98a4'; ctx.font = '12px ' + SCREEN_THEME.font; ctx.fillText(pills[pl][0], px2 + 10, py2 + 20);
-          ctx.fillStyle = pills[pl][2] ? '#5fd38d' : '#d7dee4'; ctx.font = 'bold 17px ' + SCREEN_THEME.font; ctx.fillText(pills[pl][1], px2 + 10, py2 + 42);
-        }
-        scText(ctx, 16, 196, C.fault ? 'STOP LATCHED - TURN THE MUSHROOM TO RESET' : (C.maint ? 'KEY SWITCH IN MAINT - TURN IT TO RUN' : 'SIGNAL  ' + status), statusCol, 14);
-        scText(ctx, 16, 230, 'TODAY', '#a0acb8');
-        scText(ctx, 100, 230, 'Cycles ' + (a.cycles || 0), '#eef1f5');
-        scText(ctx, 230, 230, 'Tests ' + (a.tests || 0), '#eef1f5');
-        scText(ctx, 16, 268, 'Desk: gates, bars, dispatch, test, auto, stop.  Cabinet: key, lamp test, horn.', '#8b98a4', 12);
+        pkScreenBoard(ctx, s, a, C);   // part 63
       }
     });
     pkPowerScreen(screen, function () { return !!a.open; });

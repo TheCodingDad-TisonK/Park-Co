@@ -67,6 +67,9 @@ or `node_modules/co-engine` by hand.
       "Rework the UI and notifications, every single element, the main menu too": done 2026-11-15 as part 62 (the Dusk Park skin over the
       start screen, HUD, prompt, toasts, feed, menus, settings, panels and the welcome card), plus the new loading screen (part 27 and index.html)
       and a Co Engine splash of about two seconds. Not touched: the 3D screens in the world (booths, the office PC and its apps).
+- [ ] DUO and the platform boxes (2026-11-15): built and tested in headless runs (the box's buttons press with E; dispatch waits for the release; a player at the box becomes the second operator). Not yet play tested by a hired second operator over a long run, and the box position was checked from above for the Serpent, Baron's Drop and the Mountain King only; check every ride's box in your window. Dream Flight's DUO (the release lets the next gondola go) and the main coaster's are the least tested. The Arena and the Skyline have no platform box.
+- [x] Editor (tison, 2026-11-15): the platform boxes and the two cabin booths can be moved in the editor (see CHANGELOG). Left: the control rooms of the Dance Ride, Dream Flight, the Arena and the main coaster are not separate items.
+- [ ] Booths: "upgrade a lot every booth panel and the booth, an operator room feel": every booth, cabin and control room is dressed (part 66). The desk panels themselves are unchanged (already rich): ask him what he wants on them. Look at the Dance, Dream Flight and Arena rooms in play (only checked by lamp count).
 - [ ] Look at the new UI in your own window: sizes at other resolutions and a very wide screen, the Changelog and Credits pages, and the
       save slots screen were not captured.
 - [x] Commit (decision 9.1): tison commits himself; nothing is committed. Release notes are on the Desktop (PARK-CO-RELEASE-NOTES-1.8.2.md).

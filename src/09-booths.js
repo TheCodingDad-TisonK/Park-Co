@@ -177,6 +177,7 @@ function pkBoothDispatch(a) {
   if (C.gates && !a.rowWait) return pkBoothRefuse('Close the gates before dispatch');
   if (a.rowWait && a.stationGates !== false) return pkBoothRefuse('Close the station gates before dispatch');
   if (C.barsWant < 0.5) return pkBoothRefuse('Secure the restraints before dispatch');
+  if (!pkPlatDispatchOk(a, true)) return false;   // DUO (part 64): the platform release first
   if (!pkAttrStart(a)) return pkBoothRefuse('Could not dispatch ' + a.name);
   if (pkOnDutyAt(a.id)) pkXp(1);   // on duty here: the operator's own dispatch earns a little more
   sfx('bell');

@@ -908,7 +908,31 @@
   // ── The control cabin ──────────────────────────────────────────
   // the cabin itself, for a hall or a free-standing control house: o.K is the room in a frame where X(u) = AX + s*u is world
   // x and z is world z ({ u0, u1, z0, z1, door: [z, z] }); the long window is on the z0 side, the door in the u0 wall
+  // (tison, 2026-11-15: "let me move each booth myself in the editor"): the cabin is a world item now, like the kit booth: Ctrl and the left
+  // button drag it, its solids go with it, and its walkable floor and the operator's places follow (pkCabinSync). It moves, it does not turn.
+  var PK_CABINS = [];
   function pkCabinBuild(g, a, o) {
+    var n0 = PK_FLOOR_RECTS.length, cg = null;
+    worldItem('booth', function () { cg = new THREE.Group(); parentOf(null).add(cg); cg.userData.movesOnly = true; pkCabinBuildInner(cg, a, o); });
+    var rs = PK_FLOOR_RECTS.slice(n0), p0 = new THREE.Vector3();
+    cg.updateWorldMatrix(true, false); cg.getWorldPosition(p0);
+    PK_CABINS.push({ a: a, g: cg, p0: p0, rects: rs, base: rs.map(function (r) { return { x0: r.x0, x1: r.x1, z0: r.z0, z1: r.z1 }; }), dx: 0, dz: 0 });
+  }
+  function pkCabinSync() {
+    var v = new THREE.Vector3();
+    PK_CABINS.forEach(function (c) {
+      c.g.updateWorldMatrix(true, false); c.g.getWorldPosition(v);
+      var dx = v.x - c.p0.x, dz = v.z - c.p0.z;
+      if (Math.abs(dx - c.dx) < 1e-4 && Math.abs(dz - c.dz) < 1e-4) return;
+      c.dx = dx; c.dz = dz;
+      c.rects.forEach(function (r, i) { var b = c.base[i]; r.x0 = b.x0 + dx; r.x1 = b.x1 + dx; r.z0 = b.z0 + dz; r.z1 = b.z1 + dz; });
+      c.a.opSpots = undefined;   // the operator's places are read again from the moved door, clock and desk
+    });
+  }
+  hook('boot', pkCabinSync);
+  pkCtlLive({ tick: function () { PK_CAB_T = (PK_CAB_T || 0) - 1; if (PK_CAB_T <= 0) { PK_CAB_T = 60; pkCabinSync(); } } });
+  var PK_CAB_T = 0;
+  function pkCabinBuildInner(g, a, o) {
     var s = o.s, AX = o.AX, K = o.K, T = 0.12, H = o.H || 2.9;
     // o.y raises the whole cabin (a station whose platform stands above the ground): the room is built in a group lifted by
     // it, its solids are lifted with it and its floor is walkable at that height
@@ -987,19 +1011,7 @@
     var screen = touchScreen({
       w: 380, h: 320, pw: 0.94, ph: 0.80, x: cx, y: 1.62, z: K.z1 - 0.1, ry: Math.PI, parent: g, title: a.name,
       draw: function (ctx, sc) {
-        var C = pkCtl(a), waiting = pkAttrWaiting(a);
-        scBg(ctx, sc.w, sc.h);
-        scHead(ctx, sc.w, a.name.toUpperCase(), pkBoothStatus(a, C));
-        scText(ctx, 16, 62, 'ON RIDE', '#a0acb8');
-        scText(ctx, 16, 88, a.riders + ' / ' + a.seats.length, a.riders ? '#5fd38d' : '#eef1f5');
-        scText(ctx, 200, 62, 'QUEUE', '#a0acb8');
-        scText(ctx, 200, 88, String(waiting), waiting ? '#f0c04a' : '#eef1f5');
-        scText(ctx, 16, 122, 'GATES  ' + (C.gates ? 'OPEN' : 'CLOSED'), C.gates ? '#5fd38d' : '#a0acb8');
-        scText(ctx, 16, 152, 'RESTRAINTS  ' + (C.barsWant > 0.5 ? 'DOWN' : 'UP'), C.barsWant > 0.5 ? '#5fd38d' : '#a0acb8');
-        scText(ctx, 16, 182, 'AUTO  ' + (C.auto ? 'ON' : 'OFF'), C.auto ? '#5fd38d' : '#a0acb8');
-        scText(ctx, 16, 212, 'CYCLE  ' + a.run.toFixed(1) + 's', '#eef1f5');
-        scText(ctx, 16, 242, 'CONTROL ROOM  ' + (C.fault ? 'RESET' : (C.maint ? 'MAINT' : 'READY')), C.fault || C.maint ? '#ff6b5e' : '#8f98a4');
-        scText(ctx, 16, 272, 'WAIT  ' + pkBkWait(a) + ' MIN', '#eef1f5');
+        pkScreenBoard(ctx, sc, a, pkCtl(a), { room: true, cycle: true, hint: 'Window: the track. Back panel: the board.' });   // part 63
       }
     });
     pkPowerScreen(screen, function () { return !!a.open; });

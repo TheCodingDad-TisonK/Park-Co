@@ -203,6 +203,8 @@
     var C = pkCtl(a);
     // the line holds the ride only while it can still board: gates shut or seats full, whoever is left waits for the next cycle
     if (C.fault || C.maint || !C.key || (a.queue.length && C.gates && !a.rowWait && pkAttrHasSeat(a)) || a.riders <= 0 || pkAttrWalkers(a)) return false;
+    if (!pkPlatDispatchOk(a, false)) return false;   // DUO (part 64): the platform operator's release comes first
+    pkPlatUsed(a);
     a.state = 'running'; a.t = 0; C.barsWant = 1;
     if (!a.rowWait) C.gates = false;   // a queue gate of its own (a.rowWait) stays as the operator left it
     if (a.holdRows) a.holdRows(a);     // and whoever waits at a row keeps their place there for the next train
@@ -219,8 +221,8 @@
     a.cycles++;
     sfx('chime');
     if (a.curtain) { if (pkCtlAuto(a)) C.gates = true; pkAttrLetOff(a); }   // the house empties; the curtain stays as the show left it
-    else if (pkCtlAuto(a)) { C.barsWant = 0; C.gates = true; pkAttrLetOff(a); }
-    else { a.awaitBars = a.riders > 0; if (!a.awaitBars) C.barsWant = 0; }
+    else if (pkCtlAuto(a) && !pkDuo(a)) { C.barsWant = 0; C.gates = true; pkAttrLetOff(a); }
+    else { a.awaitBars = a.riders > 0; if (!a.awaitBars) C.barsWant = 0; if (pkDuo(a) && pkCtlAuto(a)) C.gates = true; }   // MANUAL, or DUO: the riders wait for the bars to be raised (in DUO by the platform operator)
     screenDirtyAll(); hudDirty = true;
   }
   function pkAttrLetOff(a) {
@@ -263,7 +265,8 @@
         var full = !pkAttrHasSeat(a), walkers = a.boarding, notClosed = a.curtain ? C.gates : C.barsWant < 1;
         if (a.riders > 0 && !walkers && notClosed && (full || (a.t >= (a.boardMin || a.board - 1.4) && !a.queue.length) || a.t >= a.board + 6)) {   // a.boardMin: a ride with a long boarding can go sooner once its line has emptied
           if (!a.rowWait) C.gates = false;
-          C.barsWant = 1; a.t = Math.max(a.t, a.board - 1.4);
+          if (!pkDuo(a)) C.barsWant = 1;   // in DUO the restraints are the platform operator's
+          a.t = Math.max(a.t, a.board - 1.4);
         }
         if (a.t >= a.board && C.barsWant >= 1 && (!C.gates || a.rowWait) && a.riders > 0 && !walkers) pkAttrStart(a);
       }
@@ -273,7 +276,7 @@
       if (a.t >= a.run) pkAttrEnd(a);
     } else if (a.state === 'unloading') {
       if (a.awaitBars) {                          // stopped with riders aboard: they get off when the bars come up
-        if (auto || PK.closed) pkAttrBarsUp(a, C);   // (at closing nobody is left sitting in a stopped ride)
+        if ((auto && !pkDuo(a)) || PK.closed) pkAttrBarsUp(a, C);   // (at closing nobody is left sitting in a stopped ride; in DUO the platform operator lifts the bars)
         if (C.barsWant < 0.5) pkAttrLetOff(a); else return;
       }
       if (a.t >= a.unload) {
@@ -1140,6 +1143,12 @@
       [-1, 1].forEach(function (sd) { [0.95, -0.95].forEach(function (wz) { cyl(0.1, 0.07, M.rubber, sd * 0.66, 0.5, wz, bt, 10); }); });
       var bar = pkMover(bt, 0, 0.9, 0.12);
       pkTube([[-0.42, 0, 0], [-0.4, -0.05, 0.3], [0.4, -0.05, 0.3], [0.42, 0, 0]], 0.035, MAT.steelDark, bar, false, 16, 6);
+      // iron bands round the log, a bow lantern, a coiled painter at the stern and a brass grab rail for the front row
+      [-0.75, 0.2, 0.95].forEach(function (bz2) { var bd = new THREE.Mesh(new THREE.TorusGeometry(0.655, 0.022, 6, 28, 4.68), MAT.steelDark); bd.rotation.z = 2.374; bd.position.set(0, 0.62, bz2); bt.add(bd); });
+      pkRod(0, 1.02, 1.62, 0, 1.3, 1.62, 0.02, MAT.steelDark, bt, 5);
+      box(0.14, 0.2, 0.14, M.gold, 0, 1.4, 1.62, bt, { r: 0.03 }); sphere(0.07, glowMat(0xffe0a0, 1.6), 0, 1.4, 1.62, bt);
+      pkRing(0.14, 0.03, std({ color: 0xcdb28a, roughness: 0.95 }), 0, 1.07, -1.35, bt, 14, false).rotation.x = Math.PI / 2;
+      pkRod(-0.3, 0.9, 1.1, -0.3, 0.9, 0.75, 0.018, M.brass, bt, 5); pkRod(0.3, 0.9, 1.1, 0.3, 0.9, 0.75, 0.018, M.brass, bt, 5);
       pkFuse(bt);
       seats.push({ par: bt, x: -0.26, y: 0.6 - 0.76, z: 0.42, ry: 0, guest: null, boat: bt });
       seats.push({ par: bt, x: 0.26, y: 0.6 - 0.76, z: 0.42, ry: 0, guest: null, boat: bt });
@@ -1191,7 +1200,10 @@
     var millWall = pkPaint(0x8a6a4a, 0.92, 0), millTrim = std({ color: 0x4a3826, roughness: 0.85 }), millRoof = M.slateGreen;
     var WX = lane * 6.4;                                  // the house's back wall, on the side away from the water
     // the back wall, with a window either side of the door
-    box(0.18, 2.7, 10.2, millWall, WX, 1.41, 7.0, g);
+    // the doorway under the name board (z 5.95 to 8.15, 2.1 m high): a wall with no door left the dock shut from every side
+    box(0.18, 2.7, 4.05, millWall, WX, 1.41, 3.925, g); box(0.18, 2.7, 3.95, millWall, WX, 1.41, 10.125, g);
+    box(0.18, 0.66, 2.2, millWall, WX, 2.43, 7.05, g);
+    [5.95, 8.15].forEach(function (jz) { box(0.26, 2.1, 0.1, millTrim, WX, 1.11, jz, g); }); box(0.26, 0.1, 2.4, millTrim, WX, 2.15, 7.05, g);
     [3.4, 10.0].forEach(function (wz) {
       box(0.22, 0.95, 1.5, std({ color: 0xbcd8e2, roughness: 0.25, metalness: 0.1 }), WX + lane * 0.02, 1.7, wz, g);
       box(0.26, 0.1, 1.7, millTrim, WX, 1.2, wz, g); box(0.26, 0.1, 1.7, millTrim, WX, 2.2, wz, g);

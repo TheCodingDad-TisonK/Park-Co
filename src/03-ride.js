@@ -357,36 +357,38 @@
       w: 420, h: 380, pw: 0.9, ph: 0.78, x: 14.8, y: 2.02, z: Z0 + 0.12, parent: null, title: 'Ride control',
       draw: function (ctx, s) {
         var R = PK.ride;
-        scBg(ctx, s.w, s.h); scHead(ctx, s.w, 'RIDE CONTROL', pkRideWord());
+        scBg(ctx, s.w, s.h); scHead(ctx, s.w, 'RIDE CONTROL', pkRideWord());   // part 63's look
         var live = R.fault ? 'STOPPED' : R.state === 'running' ? 'ON TRACK' : R.state === 'dispatch' ? 'DISPATCHING' : R.state === 'ready' ? 'READY TO SEND' : R.state === 'unloading' ? 'UNLOADING' : 'AT THE STATION';
-        var col = R.fault ? '#ff6b5e' : R.state === 'running' ? '#5fd38d' : '#f5b53d';
-        ctx.fillStyle = col; ctx.font = 'bold 42px ' + SCREEN_THEME.font; ctx.textAlign = 'left'; ctx.fillText(live, 16, 92);
-        ctx.textAlign = 'right'; ctx.fillStyle = '#a0acb8'; ctx.font = '16px ' + SCREEN_THEME.font;
-        ctx.fillText((R.v || 0).toFixed(1) + ' m/s', s.w - 16, 92);
+        var col = R.fault ? '#ff7a6b' : R.state === 'running' ? '#6fe0a0' : '#ffc65a';
+        ctx.fillStyle = col; ctx.beginPath(); ctx.arc(26, 77, 6, 0, 6.283); ctx.fill();
+        ctx.fillStyle = col; ctx.font = 'bold 32px ' + SCREEN_THEME.font; ctx.textAlign = 'left'; ctx.fillText(live, 42, 89);
+        ctx.textAlign = 'right'; ctx.fillStyle = '#9fb0c3'; ctx.font = '600 15px ' + SCREEN_THEME.font;
+        ctx.fillText((R.v || 0).toFixed(1) + ' m/s', s.w - 18, 89);
         ctx.textAlign = 'left';
-        var cars = 3, per = Math.ceil(PK.seats.length / cars);
+        var cars = PK_CAR_N, per = Math.ceil(PK.seats.length / cars), cgap = 6, cw = (s.w - 36 - cgap * (cars - 1)) / cars;
         for (var c = 0; c < cars; c++) {
-          var x0 = 16 + c * 132, y0 = 112;
-          ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(x0, y0, 120, 46);
-          for (var q = 0; q < per; q++) { ctx.fillStyle = ((c * per + q) < R.riders) ? '#5fd38d' : 'rgba(255,255,255,0.18)'; ctx.fillRect(x0 + 8 + q * 18, y0 + 10, 13, 26); }
-          ctx.fillStyle = '#7d8a96'; ctx.font = '12px ' + SCREEN_THEME.font; ctx.fillText('CAR ' + (c + 1), x0 + 4, y0 + 44);
+          var x0 = 18 + c * (cw + cgap), y0 = 106;
+          ctx.fillStyle = 'rgba(255,255,255,0.055)'; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x0, y0, cw, 46, 8); else ctx.rect(x0, y0, cw, 46); ctx.fill();
+          var sw = (cw - 12 - (per - 1) * 3) / per;
+          for (var q = 0; q < per; q++) { ctx.fillStyle = ((c * per + q) < R.riders) ? '#6fe0a0' : 'rgba(255,255,255,0.17)'; ctx.fillRect(x0 + 6 + q * (sw + 3), y0 + 8, sw, 20); }
+          ctx.fillStyle = '#7f8fa1'; ctx.font = '600 10.5px ' + SCREEN_THEME.font; ctx.fillText('CAR ' + (c + 1), x0 + 7, y0 + 41);
         }
         var rows = [
-          ['GATES', PK.gates[0] && PK.gates[0].open ? 'OPEN' : 'CLOSED', PK.gates[0] && PK.gates[0].open ? '#5fd38d' : '#a0acb8'],
-          ['RESTRAINTS', R.barsWant > 0.5 ? 'DOWN' : 'UP', R.barsWant > 0.5 ? '#5fd38d' : '#a0acb8'],
-          ['OPERATION', R.fault ? R.fault.toUpperCase() : (S.auto ? 'AUTOMATIC' : 'MANUAL'), R.fault ? '#ff6b5e' : '#f5b53d'],
-          ['TRACK WEAR', Math.round(S.wear || 0) + ' %', (S.wear || 0) > 70 ? '#ff6b5e' : '#eef1f5'],
-          ['FASTEST TODAY', (PK.today.fast || 0).toFixed(1) + ' m/s', '#eef1f5']
+          ['GATES', PK.gates[0] && PK.gates[0].open ? 'OPEN' : 'CLOSED', PK.gates[0] && PK.gates[0].open ? '#6fe0a0' : '#9fb0c3'],
+          ['RESTRAINTS', R.barsWant > 0.5 ? 'DOWN' : 'UP', R.barsWant > 0.5 ? '#6fe0a0' : '#9fb0c3'],
+          ['OPERATION', R.fault ? R.fault.toUpperCase() : (S.auto ? 'AUTOMATIC' : 'MANUAL'), R.fault ? '#ff7a6b' : '#ffc65a'],
+          ['TRACK WEAR', Math.round(S.wear || 0) + ' %', (S.wear || 0) > 70 ? '#ff7a6b' : '#eef2f7'],
+          ['FASTEST TODAY', (PK.today.fast || 0).toFixed(1) + ' m/s', '#eef2f7']
         ];
         for (var i = 0; i < rows.length; i++) {
-          var y = 186 + i * 34;
-          ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(16, y - 16, s.w - 32, 28);
-          ctx.fillStyle = '#a0acb8'; ctx.font = '14px ' + SCREEN_THEME.font; ctx.fillText(rows[i][0], 26, y + 3);
+          var y = 172 + i * 30;
+          ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(18, y, s.w - 36, 26, 8); else ctx.rect(18, y, s.w - 36, 26); ctx.fill();
+          ctx.fillStyle = '#9fb0c3'; ctx.font = '600 12px ' + SCREEN_THEME.font; ctx.fillText(rows[i][0], 30, y + 18);
           ctx.fillStyle = rows[i][2]; ctx.font = 'bold 15px ' + SCREEN_THEME.font; ctx.textAlign = 'right';
-          ctx.fillText(rows[i][1], s.w - 26, y + 3); ctx.textAlign = 'left';
+          ctx.fillText(rows[i][1], s.w - 30, y + 18); ctx.textAlign = 'left';
         }
-        scText(ctx, 16, 336, 'Cycles ' + (S.cycles || 0) + '   Riders today ' + PK.today.rides, '#a0acb8', 13);
-        scText(ctx, 16, 356, 'Level ' + PK.level + '   Tickets ' + PK.today.tickets + '   Snacks ' + PK.today.snacks, '#7d8a96', 13);
+        scChip(ctx, 18, 330, 'CYCLES ' + (S.cycles || 0), '#eef2f7'); scChip(ctx, 128, 330, 'RIDERS ' + PK.today.rides, '#eef2f7'); scChip(ctx, 238, 330, 'LEVEL ' + PK.level, '#9fb0c3');
+        scChip(ctx, 18, 356, 'TICKETS ' + PK.today.tickets, '#9fb0c3'); scChip(ctx, 128, 356, 'SNACKS ' + PK.today.snacks, '#9fb0c3');
       }
     });
     pkPowerScreen(PK.screen, pkCoasterOpen);
@@ -423,6 +425,7 @@
         var L = ['LIFT RUN', 'ANTI-ROLLBACK', 'STATION BRAKES', 'BLOCK CLEAR'];
         for (var i = 0; i < L.length; i++) R2.txt(L[i], -0.24, -0.03 - i * 0.07, 0.0145, '#d6dee3', 'left');
         R2.txt('LAMP TEST', 0.27, -0.25, 0.013, '#aebcc4');
+        R2.txt('OPERATORS', -0.21, -0.255, 0.0135, '#aebcc4'); R2.txt('SOLO', -0.29, -0.345, 0.013, '#aebcc4'); R2.txt('DUO', -0.13, -0.345, 0.013, '#f0c04a');   // part 64
         R2.txt('ISOLATE BEFORE OPENING', 0, -0.425, 0.013, '#7d8a96');
       } });
     pkCtlSetPower(P, pkCoasterOpen);
@@ -430,6 +433,8 @@
     pkCtlGauge(P, -0.21, 0.24, { id: 'liftA', unit: 'amps', min: 0, max: 200, red: 0.85, ticks: 5, r: 0.085, ease: 3, get: function () { return onLift() ? 0.62 + 0.04 * Math.sin(PK_BK_T * 6) : 0.04; } });
     pkCtlGauge(P, 0.21, 0.24, { id: 'chain', unit: 'm/s', min: 0, max: 6, red: 0.8, ticks: 6, r: 0.085, ease: 2, get: function () { return onLift() ? 0.66 : (PK.ride.state === 'running' ? 0.66 : 0); } });
     var lamps = [0x5fd38d, 0xf0c04a, 0xff3b30, 0x5fd38d].map(function (col, i) { return pkCtlLamp(P, -0.31, -0.03 - i * 0.07, { r: 0.016, col: col }); });
+    var mainDuoKey = pkCtlRotary(P, -0.21, -0.3, { id: 'duo', n: 2, pos: pkMainDuo() ? 1 : 0, r: 0.03, names: ['SOLO', 'DUO'], prompt: 'The coaster operators: SOLO or DUO',
+      act: function (pos) { if (!PK_MAIN) { sfx('bad'); mainDuoKey.set(0, true); return; } if (pkSetDuo(PK_MAIN, pos === 1) === false) mainDuoKey.set(pos === 1 ? 0 : 1, true); } });
     var testT = 0;
     pkCtlBtn(P, 0.27, -0.17, { id: 'liftTest', label: 'LAMP TEST', col: 'white', r: 0.026, lampCol: 0xe8e4d8, prompt: 'Lamp test', act: function () { testT = 2; sfx('click'); } });
     pkCtlLive({ tick: function (dt) {
@@ -919,6 +924,7 @@
     return true;   // unforced: open between trains. The boarding gates (the GATES button) no longer drag the station gates with them
   }
   function pkStationGates() {
+    if (pkMainDeskRefuse('station gates')) return false;   // DUO (part 64)
     if (pkStnMoving()) return pkRefuse('Not while the train is moving');
     PK.stnForce = !pkStnOpen();
     var open = PK.stnForce;
@@ -937,6 +943,7 @@
     return pkRefuse('Not while the train is moving');
   }
   function pkBarsDown() {
+    if (pkMainDeskRefuse('restraints')) return false;   // DUO (part 64)
     var R = PK.ride;
     if (!pkCoasterOpen()) return pkRefuse('The coaster breaker is off at the park board');
     if (!S.coasterKey) return pkRefuse('The coaster is locked - turn the operator key on');
@@ -947,6 +954,7 @@
     sfx('lock'); hudDirty = true; return true;
   }
   function pkBarsUp() {
+    if (pkMainDeskRefuse('restraints')) return false;   // DUO (part 64)
     var R = PK.ride;
     if (R.fault) return pkRefuse('The ride is stopped');
     if (R.state === 'running' || R.state === 'arrive' || R.state === 'dispatch') return pkRefuse('Not while the train is moving');
@@ -981,6 +989,8 @@
     if (R.state !== 'ready') return pkRefuse('Restraints first, then dispatch');
     if (pkStillBoarding()) return pkRefuse('Wait for the riders to sit');
     if ((S.wear || 0) >= 90) return pkRefuse('Service the coaster before it goes again');
+    if (!pkPlatDispatchOk(PK_MAIN || { riders: 0 }, true)) return false;   // DUO (part 64): the platform release first
+    pkMainUsed();
     // an empty dispatch is a test run: an operator may send an empty train, it just earns nothing
     var empty = R.riders === 0;
     S.wear = Math.min(100, (S.wear || 0) + 1.5);
@@ -1037,7 +1047,7 @@
     S.cycles = (S.cycles || 0) + 1;
     PK.today.rides += n;
     if (n > 0) pkXp(1);
-    if (auto) {
+    if (auto && !pkMainDuo()) {
       // AUTO lets the riders off by itself: the restraints lift and the platform gates open
       R.barsWant = 0; R.bars = 0;
       PK.gates.forEach(function (gt) { gt.open = true; });
@@ -1101,11 +1111,11 @@
         // the bars come down once someone is aboard and seated (a full train at once, else after eight seconds of boarding),
         // and a train readied with nobody aboard is put back to boarding once, not flapped
         var walking = pkStillBoarding();
-        if (R.state === 'unload' && (R.riders > 0 || R.barsWant > 0.5)) R.barsWant = 0;
+        if (R.state === 'unload' && (R.riders > 0 || R.barsWant > 0.5)) { if (!pkMainDuo()) R.barsWant = 0; }   // in DUO the platform operator lifts the restraints
         else if (R.state === 'idle' || R.state === 'unload') { if (!PK.closed && (S.wear || 0) < 90) { pkOpenGates(); R.loadT = 0; } }
-        else if (R.state === 'loading') { R.loadT += 1.4; if (R.riders > 0 && !walking && (pkSeatsFull() || R.loadT > 8)) pkBarsDown(); }
+        else if (R.state === 'loading') { R.loadT += 1.4; if (R.riders > 0 && !walking && (pkSeatsFull() || R.loadT > 8) && !pkMainDuo()) pkBarsDown(); }   // (DUO: the platform operator's)
         else if (R.state === 'ready') {
-          if (R.riders === 0) { pkBarsUp(); R.loadT = 0; }
+          if (R.riders === 0) { if (!pkMainDuo()) pkBarsUp(); R.loadT = 0; }
           else if ((S.wear || 0) >= 90) {
             // out of service: the riders get off rather than sit with the bars down, and the line stops refilling (pkQueueJoin)
             R.barsWant = 0; R.bars = 0;
@@ -1114,7 +1124,7 @@
             R.riders = 0; R.state = 'unload';
             logEvent('The coaster is out of service until it is serviced', 'bad'); sfx('bad'); toast('The coaster needs a service - press MAINT on the desk', 'bad');
           }
-          else if (!walking) pkDispatch();
+          else if (!walking && (!pkMainDuo() || pkMainPlatDispatchOk())) pkDispatch();
         }
       }
     }

@@ -952,12 +952,13 @@
           if (C.fault && id !== 'gates') { sfx('bad'); toast('Reset ' + a.name + ' first', 'bad'); return; }
           if (id === 'gates') return pkBoothGates(a);
           if (id === 'bars') {
+            if (pkPlatDeskRefuse(a, 'restraints')) return false;
             if (!C.key) { sfx('bad'); toast(a.name + ' is locked - turn the operator key on', 'bad'); return; }
             C.barsWant = C.barsWant > 0.5 ? 0 : 1;
             sfx('click'); toast(a.name + ': restraints ' + (C.barsWant > 0.5 ? 'down' : 'up'), '');
             screenDirtyAll(); return true;
           }
-          if (id === 'station') return pkStationGatesRide(a);
+          if (id === 'station') { if (pkPlatDeskRefuse(a, 'station gates')) return false; return pkStationGatesRide(a); }
           if (id === 'test') return pkBoothTest(a);
         }
       });
