@@ -54,7 +54,7 @@
   // puts it. land names the face (in that frame) the deck-level door opens on, landAt where along it.
   var PK_SKY_ST = [
     { id: 'north', name: 'SKYLINE NORTH', x: -67, z0: -178, z1: -138, tower: [-60, -172], towerH: 5, ry: 0, land: '-x', landAt: 0, link: [-63.4, -62.2, -174.6, -169.4] },
-    { id: 'woods', name: 'WOODS HALT', x: -67, z0: -34, z1: -6, tower: [-61, -44.6], towerH: 5, ry: 0, land: '+z', landAt: -1.6, link: null },
+    { id: 'woods', name: 'WOODS HALT', x: -67, z0: -34, z1: -6, tower: [-61, -44.6], towerH: 5, ry: 0, land: '+z', landAt: -1.2, link: null },
     { id: 'south', name: 'SKYLINE SOUTH', x: -112, z0: 112, z1: 152, tower: [-104, 146], towerH: 5, ry: -Math.PI / 2, land: '+z', landAt: 0, link: [-107.6, -106.3, 143.2, 148.8] }
   ];
   PK_SKY_ST.forEach(function (st) {
@@ -67,7 +67,7 @@
   });
   // the Woods Halt tower stands off the Dark Woods street; its deck-level door opens on a covered gallery that runs south
   // over the street to the platform's north end
-  PK_SKY_ST[1].gal = [-65.2, -61.9, -42.3, -34.0];
+  PK_SKY_ST[1].gal = [-65.2, -61.1, -42.3, -34.0];   // 4.1 m wide: at 3.3 m the only way from the lift lobby was 0.7 m wide for a walker, and the walk-finder found none
   // a point in a tower's own frame, in the world
   function pkSkyTW(st, lx, lz) { var c = Math.cos(st.ry), s = Math.sin(st.ry); return { x: st.tower[0] + lx * c + lz * s, z: st.tower[1] - lx * s + lz * c }; }
   // a rectangle in a tower's frame, as the world box the solids want
@@ -248,7 +248,7 @@
     var H = PK_SKY_TH, W = st.towerH, HW = W / 2, T = 0.34, IN = HW - T, TOP = PK_SKY_TOP;
     // the holes: the street door on +z, the landing door at deck height on the face the plan's link or gallery comes in on
     var holes = { '+z': [{ a0: -1.2, a1: 1.2, y0: 0, y1: 2.7 }], '-z': [], '+x': [], '-x': [] };
-    holes[st.land].push({ a0: st.landAt - 0.65, a1: st.landAt + 0.65, y0: TOP, y1: TOP + 2.2 });
+    holes[st.land].push({ a0: st.landAt - 1.0, a1: st.landAt + 1.0, y0: TOP, y1: TOP + 2.2 });
     ['+z', '-z', '+x', '-x'].forEach(function (f) { pkSkyWall(g, st, f, H, holes[f]); pkSkyLining(g, st, f, H - 0.5, holes[f]); });
     // the stone: a plinth course, two string courses, the frames round the doors, and the quoins up each corner
     ['+z', '-z', '+x', '-x'].forEach(function (f) {
@@ -269,7 +269,7 @@
       put(a, y0 + h + 0.18, w + 0.52, 0.36); put(a, y0 + h + 0.26, 0.34, 0.5);
     };
     frame('+z', 0, 2.4, 0, 2.7);
-    frame(st.land, st.landAt, 1.3, TOP, 2.2);
+    frame(st.land, st.landAt, 2.1, TOP, 2.2);
     // the windows: a tall pane with a stone sill and head on each face at three levels, wherever no door stands
     [5.2, 9.6, 14.0].forEach(function (wy) {
       ['+z', '-z', '+x', '-x'].forEach(function (f) {
@@ -334,13 +334,15 @@
     // two warm lamps inside, one in the hall, one on the landing
     [1.4, TOP + 1.9].forEach(function (ly) { box(0.3, 0.06, 0.3, M.lamp, 0, ly + 1.0, IN - 0.4, g); });
     // the lift: a call at the street and on the landing; E takes you up or down (pkSkyLiftGo)
-    hitBox(1.5, 2.0, 0.5, 0, 1.1, SH + 0.3, { prompt: function () { return PK_SKY_LIFT || PK.playerRide ? '' : 'Take the lift up to the platform'; }, use: function () { pkSkyLiftGo(st, true); } }, g);
+    hitBox(1.5, 2.0, 0.5, 0, 1.1, SH + 0.3, { prompt: function () { return PK_SKY_LIFT || PK.playerRide ? '' : (typeof pkExpansionOpen === 'function' && pkExpansionOpen(1) !== true ? 'The lift is shut until the first expansion' : 'Take the lift up to the platform'); }, use: function () { pkSkyLiftGo(st, true); } }, g);
     hitBox(1.5, 2.0, 0.5, 0, TOP + 1.1, SH + 0.3, { prompt: function () { return PK_SKY_LIFT || PK.playerRide ? '' : 'Take the lift down to the street'; }, use: function () { pkSkyLiftGo(st, false); } }, g);
     return g;
   }
   // the lift ride: the player stands in the cage, which climbs 16 m in seven seconds and lets him out on the gate side
   function pkSkyLiftGo(st, up) {
     if (PK_SKY_LIFT || PK.playerRide) return false;
+    // before expansion stage 1 nothing on the platform can be boarded: the lift stays shut and says why
+    if (up && typeof pkExpansionOpen === 'function' && pkExpansionOpen(1) !== true) { sfx('click'); toast('The Skyline opens with the first expansion', ''); return false; }
     PK_SKY_LIFT = { st: st, y0: up ? 0 : PK_SKY_TOP, y1: up ? PK_SKY_TOP : 0, t: 0, dur: 7 };
     if (st.cage) st.cage.position.y = PK_SKY_LIFT.y0;
     sfx('click'); toast(up ? 'Up to the platform' : 'Down to the street', '');
@@ -756,7 +758,7 @@
   // There is no queue lane in the street: the Skyline's line waits on her platform. A guest walks in at the tower's street
   // door, takes the lift up, crosses the gallery and stands on a waiting spot on the platform; when the train is in they
   // walk along the platform to a door and sit down. Off the train, the same way back down to the Dark Woods street.
-  var PK_SKY_WAY = { door: [-61.0, -41.6], hall: [-61.0, -43.1], cage: [-61.0, -44.6], land: [-62.6, -42.9], gallery: [-63.4, -40.8], plat: [-63.6, -35.0] };
+  var PK_SKY_WAY = { door: [-61.0, -41.6], hall: [-61.0, -43.1], cage: [-61.0, -44.6], land: [-62.2, -42.9], gallery: [-63.4, -40.8], plat: [-63.6, -35.0] };
   function pkSkyUp() { var W = PK_SKY_WAY; return [{ x: W.hall[0], z: W.hall[1] }, { x: W.cage[0], z: W.cage[1] }, { x: W.cage[0] + 0.08, z: W.cage[1], lift: 1 }, { x: W.hall[0], z: W.hall[1] }, { x: W.land[0], z: W.land[1] }, { x: W.gallery[0], z: W.gallery[1] }, { x: W.plat[0], z: W.plat[1] }]; }
   function pkSkyDown() { var W = PK_SKY_WAY; return [{ x: W.plat[0], z: W.plat[1] }, { x: W.gallery[0], z: W.gallery[1] }, { x: W.land[0], z: W.land[1] }, { x: W.hall[0], z: W.hall[1] }, { x: W.cage[0], z: W.cage[1] }, { x: W.cage[0] + 0.08, z: W.cage[1], lift: -1 }, { x: W.hall[0], z: W.hall[1] }, { x: W.door[0], z: W.door[1] }]; }
   // the waiting spots: two rows down the Woods Halt platform, clear of the edge and of the benches

@@ -12,10 +12,10 @@
   // where the boards stand: [x, z, ry, name]. ry turns the front to face the street; both faces carry the map
   var PK_MAP_SPOTS = [
     [10.5, 52.2, Math.PI, 'the forecourt'],
-    [8.15, 15.5, -Math.PI / 2, 'the midway'],
-    [-24, -63.7, 0, 'the Promenade, west'],
+    [8.15, 23.0, -Math.PI / 2, 'the midway, inside the gate'],   // well clear of the hub's signpost
+    [-20, -63.7, 0, 'the Promenade, west'],
     [26, -63.7, 0, 'the Promenade, east'],
-    [-34.3, -50, Math.PI / 2, 'West Street'],
+    [-27.7, -14, -Math.PI / 2, 'West Street'],   // on the coaster's side of the street, well south of the Promenade's board
     [66, -1.0, 0, 'the Avenue, at the East Walk'],
     [-40.5, 34.6, Math.PI, 'the Fairground lane'],
     [134, -5.4, 0, 'the East Parade, at Dragon Gate'],
@@ -23,8 +23,8 @@
   ];
   // the big rides as the ground they cover, [x0, x1, z0, z1]: a plot's circle says nothing useful about a coaster
   var PK_MAP_BOX = {
-    joris: [79, 122, -133, -3], mountain: [82, 121, 5, 69], wildhunt: [-43, 28, -116, -81], serpent: [44, 69, -92, -66],
-    baron: [46, 68, 15, 32], flume: [47, 68, -54, -12], danse: [-63, -32, -39, -11], droom: [-113, -76, -32, 30],
+    joris: [79, 122, -133, -3], mountain: [82, 121, 5, 69], wildhunt: [-57, 27, -116, -81], serpent: [37, 70, -114, -66],
+    baron: [32, 70, 11, 32], flume: [38, 71, -55, -3], ktoy: [6.5, 25, 9, 34], danse: [-63, -32, -39, -11], droom: [-113, -76, -32, 30],
     theater: [-124, -67, -98, -38]
   };
   function pkMapX(x) { var M = PK_MAP; return (x - M.X0) / (M.X1 - M.X0) * M.W; }

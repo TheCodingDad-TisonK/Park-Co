@@ -1,5 +1,96 @@
 # Changelog
 
+## 1.9.0 (2026-11-15): Mayor World Update
+
+## NEW
+- Teddy's Toy Tour: a cosy indoor ride for the little ones (level 20). Ride past a toy-block castle, a teddy tea party and a rainbow, under a moon and stars.
+- A new loading screen with a dusk skyline, a little car rolling along a track, and a tip for the road.
+- A brand new look for the main menu, HUD, pause menu, settings, panels and welcome card.
+- The Log Flume has a second pool, a second lift through a rock tunnel and three long lanes winding home.
+- The main coaster runs six cars (24 seats) with six station gates.
+- Every worker, and you in third person, wears the Park Co uniform.
+
+## IMPROVED
+- Every coaster track has been laid again: longer, smoother and much gentler on riders. The Serpent, Baron's Drop, The Wild Hunt, the Dragon Ride, the Puffin Line and the main coaster all got a new layout.
+- The Log Flume is much longer: 166 m a lap instead of 94.
+- The Co Engine splash is shorter, so you reach the game faster.
+- Fewer pop-ups: no more "Ticket sold" or "Riding..." messages, and repeats only show once.
+- The Arena is quicker: shorter wait before the show, shorter boarding and a shorter show.
+- The Skyline is easier to board: the way up to the platform is wider.
+- The Skyline lift now tells you why it is shut until the first expansion.
+- Night time: lanterns light up properly and there are far more glowing fireflies.
+- Nicer timber on The Wild Hunt and the Dragon Ride, neater topiary, and the teacup rider sees over the cup.
+- The Dragon Ride now stays inside the park, away from the railway.
+- The station gates have their own STN GATES button, and each gate covers a whole car.
+
+## FIXED
+- Dives no longer twist the train round the track (the main coaster after the lift, and Baron's Drop).
+- You are no longer stuck in a closed pocket after the Arena show.
+- The doubled QUEUE sign is gone.
+- Ride exits no longer drop you into a wall (Dragon Ride and Log Flume).
+- Coaster platform ramps slope the right way.
+
+## REMOVED
+- The "Ticket sold", "Toy sold" and "N rode" messages.
+- The old loading screen.
+
+## Unreleased: The Re-lay
+
+Most of this went out in the 1.8.1 build without notes; the queue paving, the animation and the last map changes are new since then.
+
+## Changed
+- The park is laid out again so no two rides crowd each other. The east fence moved out to x 162, eight metres short of the railway, and steps in round Dragon Gate station.
+- The kids' rides (Puffin Line, Little Roundabout, Wobbly Pots) and the acorn playhouse moved to The Little Meadow, the north half of the new east strip.
+- The ferris wheel and the dodgems moved to the south half of the east strip. Baron's Drop has its corner to itself.
+- The teacups moved onto the lawn the kids' rides left. The drop tower moved north of the Skyline station. The log flume moved four metres south, clear of The Serpent's line.
+- Every path was taken up and laid again. All streets are in one table, in one warm paver, drawn as a single surface with one kerb round the outside, so no slab lies over another and the courses run straight through every joint.
+- New streets: the Avenue now runs straight through to the East Walk, the East Walk is one straight street, and the East Parade runs the length of the east strip with a spur to each ride.
+- Guests bound for the east strip climb the footbridge over the Dragon Ride's line instead of walking through its queue.
+- Every queue stands on its own paving, with an apron at its entry and a paved walk from the boarding gate to the ride. A fenced ride has at least two metres of paving outside its fence all round.
+- One signpost at the hub instead of two.
+- The main coaster runs six cars of four seats now (24 seats, it was 12) and has six station gates, one to a car. Each gate is longer, so it covers both rows of its car, and its post stands just behind the car's last row. The GATES button no longer closes the station gates: they work on their own button (STN GATES), and stand open between trains.
+- Every worker wears the Park Co uniform: navy shirt, charcoal trousers, a gold vest with silver bands, a navy cap and a PARK CO name tag. That goes for the sweepers, the gardener, the guards, the cashiers, the ride operators and the player's own body in third person view (it used to look like a guest).
+- The Skyline: the way from the lift lobby to the platform is wider (the landing door is 2 m, the gallery 4.1 m), so a walker can board.
+- Night: the park's lamps are looked for again every 20 seconds (late-built lanterns stayed dark). The fireflies are three times as many and glow, and 70 more follow the eye over the grass.
+- Looks: the timber of The Wild Hunt and the Dragon Ride is a mid brown and grey, the Teacups rider sees over the cup's wall, the topiary is a clipped faceted shape, and the doubled QUEUE board at the rides is one board.
+- The Dragon Ride is laid again on both tracks: the first drop is longer so its pull-out is gentle, the out-and-back stays south of the park fence and off the Lindenburg Railway, and the three small turns now sit on crests with a trim brake. Each track is 411 m instead of 522 and rides for about 60 seconds. The worst push on a rider fell from 9.3 g to 4.1 g, the airtime hills no longer pull riders out of the seat (-4.7 g to -1.2 g).
+- The Puffin Line is a little journey now: 52 m instead of 38, a round turn at each end (radius 4.2 m), a hill and a small stone tunnel on the north lane. It stays a slow pedal train.
+- The Mountain King is left as it is: with its real trim brake the worst push is 4.7 g, under the target.
+- The main coaster is laid again inside the same yard: out of the station the 20 m chain lift, then a vertical dive into the pond on the north lane, a rising 540 degree helix at the west end, a long run east with a new teardrop loop in it (13 m tall, gentle at the foot and tight at the top), the high turn at the east fence, the corkscrew on the way back west, the trim brake and the run home through the rock tunnel. It is 335 m instead of 303 and rides for about 53 seconds instead of 43. The worst push on a rider is 5.0 g, the least through the seat is -1.1 g and the sideways push stays under 1.5 g. The pond, the rock tunnel, the spray and mist zones and the mimic panel in the control room follow the new line.
+- The Wild Hunt is laid again: a long, gentle chain lift west behind the lodge to 28 m, a slow sweep round the crest, one long drop east along the north fence, a hill up to the high turnaround, a camelback home through the middle, a slow turn and a long brake run into the lodge. It is 355 m instead of 299 and rides for about 74 seconds. The worst push on a rider fell from nearly 10 g to under 5 g, and the hills no longer throw a rider out of the seat.
+- Baron's Drop is laid again and runs west across the lawn: out of the station a right turn and a near-vertical chain lift to 23 m, the first dive straight down into the splash basin, two vertical loops, a water brake, a slow U-turn at the west end and the run home through the rockery tunnel. It is 204 m instead of 130 and rides for about 40 seconds. The worst push on a rider fell from nearly 25 g to about 5.5 g.
+- The Serpent is laid again: a 25 m chain lift up the east side, a slow spiral over the north-east corner (two and a quarter turns), then one long falling curve to the west, a trim brake, the vertical loop and home. It is 266 m instead of 201 and rides for about a minute. The worst push on a rider fell from nearly 20 g to about 5 g, and the stone serpent now coils in the open middle of the ride, looking over the queue.
+
+- The Log Flume has a much bigger channel: 166 m a lap instead of 94. Out of the dock the lift is longer and gentler, the chute drops into the first pool, the channel runs east along the north edge, climbs a second lift through a smaller rock tunnel and drops into a second pool, then winds home in three long lanes over the south-east lawn. The lap takes 50 s instead of 30 s. The log store and the boulders moved to the west side.
+- The Arena is quicker: the house closes after 20 s once the line is in (it was 30 s), boarding is 45 s at most (it was 120 s), and the show runs 255 s instead of 291 s (the two stretches where the riders only ride laps were cut from 26 s to 8 s).
+- The Skyline's lift refuses the ride up before expansion stage 1 is open and says why ("The Skyline opens with the first expansion"); the prompt at the lift reads the same.
+- Quieter notices: no more "Ticket sold", "Toy sold" or "Riding ..." toasts, no "N rode" lines in the feed, repeats inside three seconds show once, the toast stack holds two and the feed four lines for seven seconds. The status pill shows the coaster's state only when it is not running on auto, and the open count only when a ride is shut. The office log keeps every line.
+
+- The whole page UI has one new look, "Dusk Park" (part 62): night-blue glass panels, one amber accent, one set of radii and type sizes. It covers the start screen (wordmark, version, a big amber Play button, the other buttons with a chevron, the park behind it lit), the HUD bar (one capsule: day, clock, cash in green, guests, the ride line), the key prompt (a real key cap), the toasts (a coloured stripe, they slide in), the feed, the level card, the pause menu (Resume full width, two columns, Reset and Quit tinted), settings (switches, amber sliders, styled selects), the panels and their tabs, tables, cards, scroll bars and the welcome card. Focus rings and reduced motion are in. The 3D screens in the world (booths, the office PC) are not part of it.
+- A new loading screen: a dusk sky over the park's skyline (a turning ferris wheel, a coaster, the castle, warm lamps), the wordmark, a track whose car rolls along as the bar fills, a line for each stage and a tip. The Co Engine made-with splash now shows about two seconds (it stayed for the whole world build), then this screen takes over and stays at least 5.2 s from that moment, longer if the build takes longer; a click or a key after 2.5 s skips it. It is static markup and CSS in index.html so the browser runs it during the build.
+
+## Added
+- Teddy's Toy Tour, an indoor dark ride for the little ones, on the old ferris wheel plot east of the midway (level 20). A toy-box hall with a block band, a teddy over the door and a night nursery inside: a slow loop (40 m, three little cars, six seats) past a castle of toy blocks, a tea party of teddies and a rainbow to pass under, with a moon and stars overhead. It has its own panel, booth, queue spur from the Avenue and a place on the park board and the map.
+- Park maps: nine big map boards (the forecourt, the midway, the Promenade, West Street, the Avenue, the Fairground lane, the East Parade, The Little Meadow), each with its own YOU ARE HERE. The map is drawn from the park's own streets and rides, so it cannot go out of date. The HQ wall maps show the same map.
+- The park moves when nothing is happening: lanterns flicker from yellow to a darker amber and back, each on its own beat; ride bulbs twinkle; water drifts and glints; flags fly along the East Parade and at the gate; birds circle overhead by day; butterflies wander round the flower beds; fireflies drift over the lawns at night; steam rises from the popcorn cart and the snack stand.
+- Ride upgrades, first batch (the coaster, The Serpent, Baron's Drop). All three now have lights under the track in three chasing circuits, and sound that comes from the train itself: the chain's clack on the lift, a roar that rises with speed, screams at the top of a drop. It is loud on the ride and a murmur from the midway.
+- The coaster: a rock-rimmed pond under the low turns that throws spray as the train skims it, a rock tunnel over the run home with mist in it, and flower beds and topiary in the yard.
+- The Serpent: a great stone serpent coiled round the north of the ride, scaled, its hooded head raised over the queue with lit eyes and an open jaw that breathes mist; the loops fill with mist as the train goes through.
+- Baron's Drop: burning torches round the castle yard and a real plume of spray when the train hits the splash basin.
+- Guests and staff are remodelled. The figure has real proportions (a smaller head, shoulders, a waist, calves, proper hands and trainers), three builds, five outfits (T-shirt, shirt, hoodie, open jacket, dress) with long trousers or shorts, seven hair styles, sun hats and beanies, and some carry a backpack, a shoulder bag or a camera. About one guest in seven is a child. Staff keep their vests, name tags, caps and hard hats.
+- A clearance rule the test suite enforces: at least 8 m between any two rides, fence to fence, and 6 m from any Skyline pier. The few big builds that stand closer are named in part 54 (Dragon Ride and The Mountain King, the Dance Ride and the Arena, the Dance Ride and the coaster, Dream Flight and the Arena).
+
+## Fixed
+- Dives corkscrewed: on every near-vertical stretch the train spun round the track (the main coaster and Baron's Drop after the lift). The roll is held there now.
+- Platform ramps sloped the wrong way: they rose away from the deck. This showed on The Serpent, Baron's Drop, The Wild Hunt, the Puffin Line and The Mountain King.
+- The path rail disappeared about 130 m from the hub, so the far streets had no rail at all.
+- Trees no longer stand on the east strip.
+- The Dragon Ride set the player down inside the footbridge's railing, where they could not move again. Riders now step off on the East Walk.
+- The Log Flume set the player down in the low wall beside its line. Riders now step off a metre clear of it.
+- A coaster whose steep lift ended in a level crest was not found as a lift by the ride plan, so it had no chain speed. The plan now takes the crest where the track first comes within 5 cm of its top.
+- A coaster whose lap length landed on an unlucky number could get a lap time of NaN from the ride plan's last step. The roll-in to the stop no longer takes the root of a hair under zero.
+- A player could walk under the Dragon Ride's footbridge to where the ramp met the ground and end up with the camera inside the planks. Walking under a ramp now stops at the two metre line.
+
 ## 1.8.1 (2026-11-12): World Update
 
 ## Fixed

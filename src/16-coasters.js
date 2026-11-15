@@ -72,7 +72,9 @@
       f.subVectors(tans[(i + 1) % N], tans[(i - 1 + N) % N]).multiplyScalar(v2 / (2 * ds));
       f.y += 9.81;
       f.addScaledVector(tans[i], -f.dot(tans[i]));
-      wt.push(clamp(f.length() / 9.81 - 0.15, 0, 1));
+      // on a near-vertical stretch the push says nothing about which way is up (it only spun the train round the track, a
+      // corkscrew down every dive), so the roll is held there and carried through from either side
+      wt.push(Math.abs(tans[i].y) > 0.88 ? 0 : clamp(f.length() / 9.81 - 0.15, 0, 1));
       var ra = Math.atan2(cr2.crossVectors(ups[i], f).dot(tans[i]), ups[i].dot(f));
       // floating over a hump on an upright stretch pulls the rider up out of the seat: that keeps the track upright (banked
       // by the sideways part only), it never rolls the train over. Only the track's own shape turns it upside down.
@@ -192,6 +194,7 @@
     } else if (!o.pedal) {
       var c = 0;
       for (i = 0; i <= K * 0.7; i++) if (ys[i] > ys[c]) c = i;
+      for (i = 0; i <= c; i++) if (ys[i] >= ys[c] - 0.05) { c = i; break; }   // a level crest: the lift ends where it first gets within 5 cm of the top
       var l0 = c;
       while (l0 > 1 && ys[l0 - 1] < ys[l0] - 1e-4) l0--;                // back down the climb to where it starts
       if (c - l0 > 4) lift = [l0, c];
@@ -199,7 +202,7 @@
     var trims = (o.trim || []).map(function (t) { return [Math.round(((t[0] - u0 + 1) % 1) * K), Math.round(((t[1] - u0 + 1) % 1) * K), t[2]]; });
     var vSt = o.vStation || 2.5, vChain = o.vChain || 2.4, mu = 0.022, drag = 0.0009, V = [0], dIn = o.rollIn || 2.5;
     for (i = 1; i <= K; i++) {
-      var v, s = i * S, d = len - s;
+      var v, s = i * S, d = Math.max(0, len - s);   // (a hair under zero at the last step would make the roll-in root NaN)
       if (o.pedal) v = o.pedal;
       else if (i >= lift[0] && i <= lift[1]) v = vChain;
       else {
@@ -366,29 +369,54 @@
     pkRod(x, h - 0.12, z, tx, ty, tz, 0.07, mat, g, 6);
   }
   // ── The Serpent ───────────────────────────────────────────────────
-  // A double looper in the north-east corner: a long straight station, an 18 m lift up the east fence, the big drop along the
-  // back, a turnaround and a camelback run, then two vertical loops (each shifted sideways, so it crosses over itself) and
-  // home down the west side into the station.
+  // A looper laid from arcs (tools/scratch/tracks/serpent.js): out of the station east, the chain lift up the east side to
+  // 25 m, a slow spiral over the north-east corner (two and a quarter turns, descending), then the first drop in one long
+  // falling curve to the west side, a trim brake and the vertical loop, and home down the west column and a turn into the
+  // station. The middle lies open: the stone serpent coils there.
   var PK_SERPENT_PTS = [
-    [47, 1.05, -70], [49.4, 1.05, -70], [51.8, 1.05, -70], [54.2, 1.05, -70], [56.6, 1.05, -70], [59, 1.05, -70],
-    [61.4, 1.05, -70], [64, 1.3, -70.9], [66.4, 2.2, -72.8], [67.4, 3.8, -75.4], [67.6, 6.5, -78.4], [67.6, 10, -81.8],
-    [67.5, 13.5, -85.2], [67, 16.5, -88.4], [65.6, 18.2, -90.9], [63.2, 18.4, -91.9], [60.4, 17.8, -92.1], [57.6, 13, -91.9],
-    [55.2, 6.2, -91.4], [53, 2.2, -90.6], [50.2, 3.4, -91.6], [47.4, 5.4, -91.1], [45.9, 6.8, -89.6], [46.6, 7, -88.2],
-    [48.8, 6.4, -88], [51.2, 4.4, -88], [53.4, 6.2, -88.1], [55.4, 6, -88.1], [57.6, 3.6, -88], [60.4, 2.6, -87.7],
-    [63, 3, -86.6], [64.4, 3.4, -84.6], [64, 3, -82], [62.2, 2.7, -80.6], [59.6, 2.5, -80.3], [56.9, 2.5, -80.3],
-    [54.85, 2.91, -80.44], [53.12, 4.07, -80.59], [51.96, 5.8, -80.73], [51.55, 7.85, -80.88], [51.96, 9.9, -81.02], [53.12, 11.63, -81.16],
-    [54.85, 12.79, -81.31], [56.9, 13.2, -81.45], [58.95, 12.79, -81.59], [60.68, 11.63, -81.74], [61.84, 9.9, -81.88], [62.25, 7.85, -82.02],
-    [61.84, 5.8, -82.17], [60.68, 4.07, -82.31], [58.95, 2.91, -82.46], [56.9, 2.5, -82.6], [53.6, 2.7, -83], [49.8, 3.3, -83.4],
-    [48.02, 3.71, -83.57], [46.59, 4.84, -83.74], [45.8, 6.49, -83.91], [45.8, 8.31, -84.09], [46.59, 9.96, -84.26], [48.02, 11.09, -84.43],
-    [49.8, 11.5, -84.6], [51.58, 11.09, -84.77], [53.01, 9.96, -84.94], [53.8, 8.31, -85.11], [53.8, 6.49, -85.29], [53.01, 4.84, -85.46],
-    [51.58, 3.71, -85.63], [49.8, 3.3, -85.8], [47.6, 3.4, -86], [45.4, 3.5, -86.1], [43.7, 3.6, -84.7], [43.6, 3.3, -82.2],
-    [44.2, 2.6, -79.6], [44.4, 1.6, -76.6], [44.45, 1.1, -73.8], [44.9, 1.05, -71.8], [45.8, 1.05, -70.5]
+    [47, 1.05, -70], [48.23, 1.05, -70], [49.46, 1.05, -70], [50.69, 1.05, -70], [51.92, 1.05, -70], [53.15, 1.05, -70],
+    [54.38, 1.05, -70], [55.62, 1.05, -70], [56.85, 1.05, -70], [58.08, 1.05, -70], [59.31, 1.05, -70], [60.54, 1.05, -70],
+    [61.77, 1.05, -70], [63, 1.05, -70], [64.17, 1.05, -70.12], [65.3, 1.05, -70.46], [66.33, 1.05, -71.01], [67.24, 1.05, -71.76],
+    [67.99, 1.05, -72.67], [68.54, 1.05, -73.7], [68.88, 1.05, -74.83], [69, 1.05, -76], [69, 1.33, -77.2], [69, 2.18, -78.4],
+    [69, 3.5, -79.6], [69, 4.86, -80.8], [69, 6.22, -82], [69, 7.58, -83.2], [69, 8.94, -84.4], [69, 10.3, -85.6],
+    [69, 11.66, -86.8], [69, 13.03, -88], [69, 14.39, -89.2], [69, 15.75, -90.4], [69, 17.11, -91.6], [69, 18.47, -92.8],
+    [69, 19.83, -94], [69, 21.19, -95.2], [69, 22.55, -96.4], [69, 23.87, -97.6], [69, 24.72, -98.8], [69, 25, -100],
+    [69, 25, -101.2], [69, 25, -102.4], [69, 25, -103.6], [69, 25, -104.8], [69, 25, -106], [68.9, 25, -107.2],
+    [68.59, 24.99, -108.37], [68.08, 24.97, -109.46], [67.4, 24.96, -110.45], [66.56, 24.93, -111.31], [65.58, 24.9, -112.02], [64.49, 24.87, -112.54],
+    [63.33, 24.83, -112.87], [62.13, 24.78, -113], [60.93, 24.73, -112.92], [59.76, 24.68, -112.63], [58.66, 24.62, -112.15], [57.65, 24.56, -111.48],
+    [56.77, 24.5, -110.66], [56.05, 24.43, -109.69], [55.51, 24.35, -108.62], [55.15, 24.28, -107.46], [55.01, 24.2, -106.27], [55.06, 24.11, -105.06],
+    [55.33, 24.03, -103.89], [55.79, 23.94, -102.77], [56.43, 23.85, -101.76], [57.24, 23.75, -100.86], [58.2, 23.66, -100.12], [59.26, 23.56, -99.56],
+    [60.41, 23.45, -99.18], [61.6, 23.35, -99.01], [62.8, 23.24, -99.05], [63.98, 23.14, -99.29], [65.11, 23.03, -99.73], [66.14, 22.92, -100.35],
+    [67.04, 22.8, -101.15], [67.8, 22.69, -102.08], [68.39, 22.57, -103.14], [68.78, 22.46, -104.27], [68.98, 22.34, -105.46], [68.97, 22.22, -106.67],
+    [68.75, 22.11, -107.85], [68.33, 21.99, -108.99], [67.73, 21.87, -110.03], [66.95, 21.75, -110.95], [66.03, 21.63, -111.73], [64.99, 21.51, -112.33],
+    [63.85, 21.39, -112.75], [62.67, 21.28, -112.97], [61.46, 21.16, -112.98], [60.27, 21.04, -112.78], [59.14, 20.93, -112.39], [58.08, 20.81, -111.8],
+    [57.15, 20.7, -111.04], [56.35, 20.58, -110.14], [55.73, 20.47, -109.11], [55.29, 20.36, -107.98], [55.05, 20.26, -106.8], [55.01, 20.15, -105.6],
+    [55.18, 20.05, -104.41], [55.56, 19.94, -103.26], [56.12, 19.84, -102.2], [56.86, 19.75, -101.24], [57.76, 19.65, -100.43], [58.77, 19.56, -99.79],
+    [59.89, 19.47, -99.33], [61.06, 19.39, -99.06], [62.27, 19.3, -99.01], [63.46, 19.22, -99.15], [64.62, 19.15, -99.51], [65.69, 19.07, -100.05],
+    [66.66, 19, -100.77], [67.48, 18.94, -101.65], [68.15, 18.88, -102.66], [68.63, 18.82, -103.76], [68.92, 18.77, -104.93], [69, 18.72, -106.13],
+    [68.87, 18.67, -107.33], [68.54, 18.63, -108.49], [68.02, 18.6, -109.58], [67.31, 18.57, -110.56], [66.45, 18.54, -111.4], [65.46, 18.53, -112.08],
+    [64.37, 18.51, -112.59], [63.2, 18.5, -112.9], [62, 18.5, -113], [60.81, 18.44, -112.97], [59.63, 18.28, -112.87], [58.46, 18.01, -112.71],
+    [57.29, 17.66, -112.49], [56.14, 17.21, -112.2], [55.01, 16.7, -111.85], [53.89, 16.11, -111.44], [52.8, 15.46, -110.98], [51.74, 14.76, -110.45],
+    [50.71, 14.02, -109.87], [49.71, 13.24, -109.23], [48.75, 12.44, -108.53], [47.82, 11.61, -107.79], [46.94, 10.77, -107], [46.1, 9.93, -106.16],
+    [45.31, 9.09, -105.28], [44.57, 8.26, -104.35], [43.87, 7.46, -103.39], [43.23, 6.68, -102.39], [42.65, 5.94, -101.36], [42.12, 5.24, -100.3],
+    [41.66, 4.59, -99.21], [41.25, 4, -98.09], [40.9, 3.49, -96.96], [40.61, 3.04, -95.81], [40.39, 2.69, -94.64], [40.23, 2.42, -93.47],
+    [40.13, 2.26, -92.29], [40.1, 2.2, -91.1], [40.1, 2.2, -89.96], [40.1, 2.2, -88.81], [40.1, 2.2, -87.67], [40.1, 2.2, -86.53],
+    [40.1, 2.2, -85.39], [40.1, 2.2, -84.24], [40.1, 2.2, -83.1], [40.03, 2.33, -81.92], [39.96, 2.71, -80.79], [39.88, 3.32, -79.77],
+    [39.81, 4.14, -78.91], [39.74, 5.12, -78.24], [39.67, 6.23, -77.8], [39.59, 7.4, -77.61], [39.52, 8.59, -77.67], [39.45, 9.74, -77.99],
+    [39.38, 10.79, -78.55], [39.3, 11.69, -79.32], [39.23, 12.41, -80.26], [39.16, 12.91, -81.34], [39.09, 13.17, -82.51], [39.01, 13.17, -83.69],
+    [38.94, 12.91, -84.86], [38.87, 12.41, -85.94], [38.8, 11.69, -86.88], [38.72, 10.79, -87.65], [38.65, 9.74, -88.21], [38.58, 8.59, -88.53],
+    [38.51, 7.4, -88.59], [38.43, 6.23, -88.4], [38.36, 5.12, -87.96], [38.29, 4.14, -87.29], [38.22, 3.32, -86.43], [38.14, 2.71, -85.41],
+    [38.07, 2.33, -84.28], [38, 2.2, -83.1], [38, 2.2, -81.77], [38, 2.2, -80.43], [38, 2.2, -79.1], [38, 2.2, -78.07],
+    [38, 2.2, -77.03], [38, 2.2, -76], [38.12, 2.15, -74.83], [38.46, 2.02, -73.7], [39.01, 1.84, -72.67], [39.76, 1.63, -71.76],
+    [40.67, 1.41, -71.01], [41.7, 1.23, -70.46], [42.83, 1.1, -70.12], [44, 1.05, -70], [45, 1.05, -70], [46, 1.05, -70]
   ];
+  var PK_SERPENT_TRIM = [[40.4, -92.6], [40.4, -87], 15.4];   // the trim brake before the loop: from, to (x, z), and the speed it trims to (m/s)
   function pkBuildSerpent(p) {
     var th = PK_THEME.serpent, M = pkMats(), i;
     var g = new THREE.Group(); scene.add(g);
     var curve = pkCoCurve(PK_SERPENT_PTS), len = curve.getLength(), uP = pkCoUAt(curve, 57.4, -70);
-    var F = pkCoFrames(curve, 520, pkCoProfile(curve, len, uP), uP);
+    var opt = { trim: [[pkCoUAt(curve, PK_SERPENT_TRIM[0][0], PK_SERPENT_TRIM[0][1]), pkCoUAt(curve, PK_SERPENT_TRIM[1][0], PK_SERPENT_TRIM[1][1]), PK_SERPENT_TRIM[2]]] };   // the trim brake holds the loop's entry speed
+    var F = pkCoFrames(curve, 700, pkCoProfile(curve, len, uP, opt), uP);
     var E = { curve: curve, len: len, F: F, gap: 2.35, cars: [], uPark: uP, uOfF: [], run: 30 };
     pkCoLevel(F, curve, E.uPark, 4 * 2.35 + 1.4, 1.4);
     var seats = [], cols = [0x2f8f6f, 0xf0c04a, 0x1f6f55, 0xf0c04a, 0x2f8f6f];
@@ -406,9 +434,7 @@
       spineMat: spineMat, supMat: supMat, tieMat: std({ color: 0x35514b, roughness: 0.7 }),
       skip: function (x, z) { return z > -71.6 && x > 45.5 && x < 62.5; }
     });
-    pkCoBrace(g, 69.2, -80.2, 8.6, 67.7, 8.2, -80.2, supMat);
-    pkCoBrace(g, 69.2, -86.6, 15.6, 67.3, 15.2, -86.7, supMat);
-    pkCoPlan(E);
+    pkCoPlan(E, opt);
     // the station: platform, boom gates, canopy
     pkCoPlatform(g, 47.0, 58.6, -69.35, -66.85, th, 1.05);
     var a = pkAttr({
@@ -432,28 +458,50 @@
   // vertical drop into a tunnel mouth in the rockery, a loop along the east fence (clear of the lift), then round the corner,
   // back along the fence over a camelback and up the west side into the station.
   // ── Baron's Drop ─────────────────────────────────────────────────
-  // The remodel: the vertical loop is gone. The Baron is a double-dive now. Out of the station the near-vertical lift
-  // takes the car to 21 m, the top turn lines it up, and the first drop falls straight into the tunnel mouth in the
-  // rockery. Out of the tunnel it climbs the south-east corner and drops a second time, shallower but steeper, into a
-  // splash basin beside the fence; then the long banked run home past the gatehouse.
+  // A dive coaster laid from arcs (tools/scratch/tracks/baron.js). Out of the station a right turn and the steep chain lift
+  // down the east side to 23 m, a short top turn, and the first dive, straight down, pulling out west along the south lane
+  // through the splash basin. Then two vertical loops, a water brake, a slow U-turn at the west end, and the run home east
+  // through the rockery tunnel into the station.
   var PK_BARON_PTS = [
-    [48.4, 0.95, 15.5], [50.8, 0.95, 15.5], [53.2, 0.95, 15.5], [55.6, 0.95, 15.5], [58, 0.95, 15.5], [60.4, 0.95, 15.5],
-    [62.8, 0.95, 15.5], [64.6, 2, 16], [65.4, 6, 16.6], [65.8, 11.5, 17.3], [65.6, 16.5, 18.3], [64.4, 20.6, 19.6],
-    [61.6, 21.2, 20.8], [60.2, 21.2, 21.1], [57.9, 21.1, 21.9], [56.2, 20.7, 22.5], [56, 19, 22.55], [55.95, 12, 22.55],
-    [55.9, 4, 22.55], [55.9, 1.6, 22.5], [56.4, 1.15, 22.1], [57.6, 1.6, 20.8], [59.4, 2.2, 20.2], [61.8, 2.6, 20.6],
-    [64.2, 3.4, 21.4], [65.6, 4.6, 22.6],                                   // out of the tunnel, into the climb
-    [67.0, 6.4, 24.2], [67.9, 8.6, 26.0], [68.1, 10.4, 27.6],               // the second climb
-    [67.6, 6.0, 29.4], [66.4, 2.2, 30.2],                                   // the second, steeper drop
-    [64.0, 1.6, 30.2], [61.0, 1.4, 30.0],                                   // the splash run
-    [58.0, 4.2, 29.8], [55.0, 6.6, 29.6], [52.0, 4.0, 29.4],                // the banked camelback
-    [49.0, 2.2, 28.6], [47.0, 1.4, 27.0], [46.4, 1.05, 24.6],               // the west turn
-    [46.4, 0.95, 21.8], [46.5, 0.95, 19.0], [46.8, 0.95, 16.8], [47.4, 0.95, 16]
+    [46.8, 0.95, 15.5], [48, 0.95, 15.5], [49.2, 0.95, 15.5], [50.4, 0.95, 15.5], [51.6, 0.95, 15.5], [52.8, 0.95, 15.5],
+    [54, 0.95, 15.5], [55.2, 0.95, 15.5], [56.4, 0.95, 15.5], [57.6, 0.95, 15.5], [58.8, 0.95, 15.5], [60, 0.95, 15.5],
+    [61.2, 0.95, 15.5], [62.4, 0.95, 15.5], [63.6, 0.95, 15.5], [64.8, 0.95, 15.5], [66.04, 0.95, 15.7], [67.15, 0.95, 16.26],
+    [68.04, 0.95, 17.15], [68.6, 0.95, 18.26], [68.8, 0.95, 19.5], [68.8, 1.05, 20.28], [68.8, 1.35, 21], [68.8, 1.83, 21.62],
+    [68.8, 2.45, 22.1], [68.8, 3.17, 22.4], [68.8, 3.95, 22.5], [68.8, 5.18, 22.5], [68.8, 6.41, 22.5], [68.8, 7.64, 22.5],
+    [68.8, 8.87, 22.5], [68.8, 10.1, 22.5], [68.8, 11.33, 22.5], [68.8, 12.57, 22.5], [68.8, 13.8, 22.5], [68.8, 15.03, 22.5],
+    [68.8, 16.26, 22.5], [68.8, 17.49, 22.5], [68.8, 18.72, 22.5], [68.8, 19.95, 22.5], [68.8, 20.73, 22.6], [68.8, 21.45, 22.9],
+    [68.8, 22.07, 23.38], [68.8, 22.55, 24], [68.8, 22.85, 24.72], [68.8, 22.95, 25.5], [68.63, 22.95, 26.58], [68.13, 22.95, 27.56],
+    [67.36, 22.95, 28.33], [66.38, 22.95, 28.83], [65.3, 22.95, 29], [64.39, 22.83, 29], [63.55, 22.48, 29], [62.83, 21.92, 29],
+    [62.27, 21.2, 29], [61.92, 20.36, 29], [61.8, 19.45, 29], [61.8, 18.24, 29], [61.8, 17.02, 29], [61.8, 15.81, 29],
+    [61.8, 14.59, 29], [61.8, 13.38, 29], [61.8, 12.16, 29], [61.8, 10.95, 29], [61.73, 9.74, 29], [61.51, 8.56, 29],
+    [61.15, 7.4, 29], [60.65, 6.3, 29], [60.03, 5.27, 29], [59.29, 4.32, 29], [58.43, 3.46, 29], [57.48, 2.72, 29],
+    [56.45, 2.1, 29], [55.35, 1.6, 29], [54.19, 1.24, 29], [53.01, 1.02, 29], [51.8, 0.95, 29], [50.6, 0.95, 29],
+    [49.4, 0.95, 29], [48.2, 0.95, 29], [47, 0.95, 29], [45.8, 0.95, 29], [44.61, 1.06, 28.94], [43.45, 1.39, 28.87],
+    [42.38, 1.92, 28.81], [41.42, 2.65, 28.74], [40.61, 3.53, 28.68], [39.98, 4.55, 28.61], [39.55, 5.67, 28.55], [39.33, 6.85, 28.48],
+    [39.33, 8.05, 28.42], [39.55, 9.23, 28.35], [39.98, 10.35, 28.29], [40.61, 11.37, 28.22], [41.42, 12.25, 28.16], [42.38, 12.98, 28.09],
+    [43.45, 13.51, 28.03], [44.61, 13.84, 27.96], [45.8, 13.95, 27.9], [46.99, 13.84, 27.84], [48.15, 13.51, 27.77], [49.22, 12.98, 27.71],
+    [50.18, 12.25, 27.64], [50.99, 11.37, 27.58], [51.62, 10.35, 27.51], [52.05, 9.23, 27.45], [52.27, 8.05, 27.38], [52.27, 6.85, 27.32],
+    [52.05, 5.67, 27.25], [51.62, 4.55, 27.19], [50.99, 3.53, 27.12], [50.18, 2.65, 27.06], [49.22, 1.92, 26.99], [48.15, 1.39, 26.93],
+    [46.99, 1.06, 26.86], [45.8, 0.95, 26.8], [44.8, 0.95, 26.8], [43.8, 0.95, 26.8], [42.8, 0.95, 26.8], [41.61, 1.06, 26.74],
+    [40.45, 1.39, 26.67], [39.38, 1.92, 26.61], [38.42, 2.65, 26.54], [37.61, 3.53, 26.48], [36.98, 4.55, 26.41], [36.55, 5.67, 26.35],
+    [36.33, 6.85, 26.28], [36.33, 8.05, 26.22], [36.55, 9.23, 26.15], [36.98, 10.35, 26.09], [37.61, 11.37, 26.02], [38.42, 12.25, 25.96],
+    [39.38, 12.98, 25.89], [40.45, 13.51, 25.83], [41.61, 13.84, 25.76], [42.8, 13.95, 25.7], [43.99, 13.84, 25.64], [45.15, 13.51, 25.57],
+    [46.22, 12.98, 25.51], [47.18, 12.25, 25.44], [47.99, 11.37, 25.38], [48.62, 10.35, 25.31], [49.05, 9.23, 25.25], [49.27, 8.05, 25.18],
+    [49.27, 6.85, 25.12], [49.05, 5.67, 25.05], [48.62, 4.55, 24.99], [47.99, 3.53, 24.92], [47.18, 2.65, 24.86], [46.22, 1.92, 24.79],
+    [45.15, 1.39, 24.73], [43.99, 1.06, 24.66], [42.8, 0.95, 24.6], [41.55, 0.95, 24.6], [40.3, 0.95, 24.6], [39.05, 0.95, 24.6],
+    [37.8, 0.95, 24.6], [36.62, 0.95, 24.44], [35.53, 0.95, 23.99], [34.58, 0.95, 23.27], [33.86, 0.95, 22.33], [33.41, 0.95, 21.23],
+    [33.25, 0.95, 20.05], [33.41, 0.95, 18.87], [33.86, 0.95, 17.78], [34.58, 0.95, 16.83], [35.53, 0.95, 16.11], [36.62, 0.95, 15.66],
+    [37.8, 0.95, 15.5], [38.93, 0.95, 15.5], [40.05, 0.95, 15.5], [41.18, 0.95, 15.5], [42.3, 0.95, 15.5], [43.43, 0.95, 15.5],
+    [44.55, 0.95, 15.5], [45.68, 0.95, 15.5]
   ];
+  // the trim brakes: [from, to] in (x, z) and the speed they hold (m/s): before the loops (their entry speed), then the water brake
+  var PK_BARON_TRIM = [[[50.6, 29], [47.4, 29], 17.2], [[41.4, 24.6], [38.6, 24.6], 7.5]];
   function pkBuildBaron(p) {
     var th = PK_THEME.baron, i;
     var g = new THREE.Group(); scene.add(g);
     var curve = pkCoCurve(PK_BARON_PTS), len = curve.getLength(), uP = pkCoUAt(curve, 56.8, 15.5);
-    var F = pkCoFrames(curve, 500, pkCoProfile(curve, len, uP), uP);
+    var opt = { trim: PK_BARON_TRIM.map(function (t) { return [pkCoUAt(curve, t[0][0], t[0][1]), pkCoUAt(curve, t[1][0], t[1][1]), t[2]]; }) };
+    var F = pkCoFrames(curve, 540, pkCoProfile(curve, len, uP, opt), uP);
     var E = { curve: curve, len: len, F: F, gap: 2.42, cars: [], uPark: uP, uOfF: [], run: 30 };
     pkCoLevel(F, curve, E.uPark, 3 * 2.42 + 1.4, 1.4);
     var seats = [], cols = [0x3a3f48, 0xd8c9a8, 0x3a3f48, 0xd8c9a8];
@@ -469,24 +517,20 @@
     var supMat = std({ color: 0xd0c2a4, roughness: 0.6, metalness: 0.15 });
     pkCoTrackBuild(g, E, {
       spineMat: spineMat, supMat: supMat, tieMat: std({ color: 0x352a24, roughness: 0.75 }),
-      skip: function (x, z) { return (x > 47.5 && x < 63.2 && z > 14.8 && z < 19.4); }
+      skip: function (x, z) { return (x > 45.5 && x < 66 && z > 14.3 && z < 20) || (x > 50.5 && x < 59.8 && z > 27.2 && z < 30.8); }   // the station and the splash basin: no legs
     });
-    // the lift tower and the drop tower: two columns with rods out to the spine
-    pkCoBrace(g, 67.0, 17.3, 9.6, 65.6, 9.8, 17.4, supMat);
-    pkCoBrace(g, 54.6, 22.55, 18.4, 55.7, 18.2, 22.55, supMat);
-    pkCoBrace(g, 57.3, 22.55, 18.4, 56.1, 18.2, 22.55, supMat);
-    pkCoPlan(E);
+    pkCoPlan(E, opt);
     // the splash basin under the second drop: a stone rim, the water, and rocks along the fence side
-    var splash = { x: 62.4, z: 30.0, u: pkCoUAt(curve, 62.4, 30.0) };
-    [[62.4, 28.4, 9.4, 0.5], [62.4, 31.6, 9.4, 0.5], [57.9, 30.0, 0.5, 3.2], [66.9, 30.0, 0.5, 3.2]].forEach(function (w) {
+    var splash = { x: 55.2, z: 29.0, u: pkCoUAt(curve, 55.2, 29.0) };
+    [[55.2, 27.4, 9.2, 0.5], [55.2, 30.6, 9.2, 0.5], [50.8, 29.0, 0.5, 3.2], [59.6, 29.0, 0.5, 3.2]].forEach(function (w) {
       box(w[2], 0.75, w[3], pkMatStone(), w[0], 0.37, w[1], g);
     });
-    var bwater = new THREE.Mesh(new THREE.PlaneGeometry(8.8, 3.0), pkMats().water);
+    var bwater = new THREE.Mesh(new THREE.PlaneGeometry(8.4, 2.8), pkMats().water);
     bwater.rotation.x = -Math.PI / 2; bwater.position.set(splash.x, 0.5, splash.z); g.add(bwater);
-    for (var sb = 0; sb < 7; sb++) pkBoulder(58.4 + sb * 1.25, 31.9 + randf(-0.2, 0.2), randf(0.6, 1.05), g);
+    for (var sb = 0; sb < 5; sb++) pkBoulder(52.4 + sb * 1.5, 26.4 + randf(-0.2, 0.2), randf(0.6, 1.0), g);   // the rocks go on the station side of the basin: the south side is the hall's wall
     E.splash = splash;
     // the tunnel mouth: a stone ring round the track, a dark bore, and the rockery heaped over it
-    var uT = pkCoUAt(curve, 56.9, 21.6);
+    var uT = pkCoUAt(curve, 39.6, 15.5);   // the run home east: the ring stands here, the rock heaped on east of it
     var pT = curve.getPointAt(uT), tT = curve.getTangentAt(uT).normalize();
     pkCoUpAt(F, uT);
     var upT = PK_CO_UP.clone();
@@ -597,24 +641,62 @@
   }
   // ── The Wild Hunt ────────────────────────────────────────────────
   // The big one, in place of the three indoor halls: an out-and-back steel coaster that fills the north strip to the
-  // fence. Out of the lodge it turns back on itself and takes the chain lift west, right behind the station, to 26 m; it
-  // sweeps round the west end on the crest, dives the first drop along the north fence, floats a camelback, climbs into a
-  // high turnaround at the east end, comes home through the middle over two airtime hills, ducks under its own crest in
-  // a low west turn and brakes into the station. It stands in a pine wood, on braced twin columns, not on poles.
+  // fence, laid from arcs (tools/scratch/tracks/wildhunt.js). Out of the lodge it turns back on itself and takes the long
+  // chain lift west, right behind the station, to 28 m; it sweeps round the west end on the crest, dives the first drop east
+  // along the north fence, climbs into a high turnaround at the east end, comes home west through the middle over a
+  // camelback, takes a slow turn at the west end (a trim brake holds it to 9 m/s) and brakes east along the station line
+  // into the lodge. It stands in a pine wood, on braced twin columns, not on poles.
   var PK_HUNT_PTS = [
-    [-6, 1.0, -84.5], [0, 1.0, -84.5], [6, 1.0, -84.5], [10, 1.0, -84.5], [13.5, 1.0, -84.5],        // the station straight
-    [19.46, 1.05, -86.5], [19.46, 1.2, -90.5], [16, 1.45, -92.5],                                     // the turn back into the lift
-    [13, 2.4, -92.5], [8, 5.4, -92.5], [2, 9.1, -92.5], [-5, 13.4, -92.5], [-12, 17.7, -92.5], [-19, 22.0, -92.5], [-24.5, 25.0, -92.5],
-    [-30.5, 26.2, -92.7],                                                                              // the crest
-    [-37.57, 25.9, -95.43], [-40.5, 25.3, -102.5], [-37.57, 24.6, -109.57], [-30.5, 23.8, -112.5],     // the sweep round the west end
-    [-24.5, 20.5, -112.5], [-18.5, 13.5, -112.5], [-12.5, 6.5, -112.5], [-6, 2.8, -112.5], [0, 2.2, -112.5],   // the first drop
-    [6, 5.5, -112.5], [11.5, 11.5, -112.5], [16.5, 15.6, -112.4],                                      // the camelback, up into
-    [21.6, 16.8, -110.6], [23.5, 17.0, -106], [21.6, 16.4, -101.4], [17, 14.8, -99.5],                 // the high turnaround
-    [11, 8.5, -99.5], [5, 4.2, -99.5], [-1, 6.5, -99.5], [-6.5, 10.0, -99.5], [-12, 7.0, -99.5], [-17.5, 4.0, -99.5], [-23, 5.6, -99.5], [-28, 7.2, -99.6],   // the airtime hills
-    [-33.3, 7.0, -97.3], [-35.5, 6.2, -92], [-33.3, 5.0, -86.7], [-28, 3.8, -84.5],                    // the low west turn, under the crest
-    [-22, 2.6, -84.5], [-16, 1.6, -84.5], [-11, 1.1, -84.5]                                            // the brake run
+    [-6, 1, -84.5], [-4.82, 1, -84.5], [-3.65, 1, -84.5], [-2.47, 1, -84.5], [-1.29, 1, -84.5], [-0.12, 1, -84.5],
+    [1.06, 1, -84.5], [2.24, 1, -84.5], [3.41, 1, -84.5], [4.59, 1, -84.5], [5.76, 1, -84.5], [6.94, 1, -84.5],
+    [8.12, 1, -84.5], [9.29, 1, -84.5], [10.47, 1, -84.5], [11.65, 1, -84.5], [12.82, 1, -84.5], [14, 1, -84.5],
+    [15.16, 1, -84.68], [16.2, 1, -85.22], [17.03, 1, -86.05], [17.57, 1, -87.09], [17.75, 1, -88.25], [17.57, 1, -89.41],
+    [17.03, 1, -90.45], [16.2, 1, -91.28], [15.16, 1, -91.82], [14, 1, -92], [12.8, 1.05, -92], [11.59, 1.21, -92],
+    [10.39, 1.48, -92], [9.18, 1.85, -92], [7.98, 2.33, -92], [6.78, 2.92, -92], [5.57, 3.54, -92], [4.37, 4.17, -92],
+    [3.16, 4.79, -92], [1.96, 5.42, -92], [0.76, 6.05, -92], [-0.45, 6.67, -92], [-1.65, 7.3, -92], [-2.86, 7.93, -92],
+    [-4.06, 8.55, -92], [-5.27, 9.18, -92], [-6.47, 9.8, -92], [-7.67, 10.43, -92], [-8.88, 11.06, -92], [-10.08, 11.68, -92],
+    [-11.29, 12.31, -92], [-12.49, 12.93, -92], [-13.69, 13.56, -92], [-14.9, 14.19, -92], [-16.1, 14.81, -92], [-17.31, 15.44, -92],
+    [-18.51, 16.07, -92], [-19.71, 16.69, -92], [-20.92, 17.32, -92], [-22.12, 17.94, -92], [-23.33, 18.57, -92], [-24.53, 19.2, -92],
+    [-25.73, 19.82, -92], [-26.94, 20.45, -92], [-28.14, 21.07, -92], [-29.35, 21.7, -92], [-30.55, 22.33, -92], [-31.76, 22.95, -92],
+    [-32.96, 23.58, -92], [-34.16, 24.21, -92], [-35.37, 24.83, -92], [-36.57, 25.46, -92], [-37.78, 26.08, -92], [-38.98, 26.67, -92],
+    [-40.18, 27.15, -92], [-41.39, 27.52, -92], [-42.59, 27.79, -92], [-43.8, 27.95, -92], [-45, 28, -92], [-46.21, 28, -92.07],
+    [-47.39, 27.98, -92.29], [-48.55, 27.96, -92.65], [-49.65, 27.94, -93.15], [-50.68, 27.9, -93.77], [-51.63, 27.86, -94.51], [-52.49, 27.82, -95.37],
+    [-53.23, 27.77, -96.32], [-53.85, 27.72, -97.35], [-54.35, 27.67, -98.45], [-54.71, 27.61, -99.61], [-54.93, 27.56, -100.79], [-55, 27.5, -102],
+    [-54.93, 27.44, -103.21], [-54.71, 27.39, -104.39], [-54.35, 27.33, -105.55], [-53.85, 27.28, -106.65], [-53.23, 27.23, -107.68], [-52.49, 27.18, -108.63],
+    [-51.63, 27.14, -109.49], [-50.68, 27.1, -110.23], [-49.65, 27.06, -110.85], [-48.55, 27.04, -111.35], [-47.39, 27.02, -111.71], [-46.21, 27, -111.93],
+    [-45, 27, -112], [-43.81, 26.96, -112], [-42.61, 26.85, -112], [-41.42, 26.67, -112], [-40.22, 26.42, -112], [-39.03, 26.11, -112],
+    [-37.83, 25.74, -112], [-36.64, 25.32, -112], [-35.44, 24.85, -112], [-34.25, 24.34, -112], [-33.06, 23.79, -112], [-31.86, 23.21, -112],
+    [-30.67, 22.59, -112], [-29.47, 21.95, -112], [-28.28, 21.29, -112], [-27.08, 20.61, -112], [-25.89, 19.91, -112], [-24.69, 19.21, -112],
+    [-23.5, 18.5, -112], [-22.31, 17.79, -112], [-21.11, 17.09, -112], [-19.92, 16.39, -112], [-18.72, 15.71, -112], [-17.53, 15.05, -112],
+    [-16.33, 14.41, -112], [-15.14, 13.79, -112], [-13.94, 13.21, -112], [-12.75, 12.66, -112], [-11.56, 12.15, -112], [-10.36, 11.68, -112],
+    [-9.17, 11.26, -112], [-7.97, 10.89, -112], [-6.78, 10.58, -112], [-5.58, 10.33, -112], [-4.39, 10.15, -112], [-3.19, 10.04, -112],
+    [-2, 10, -112], [-0.83, 10.09, -112], [0.33, 10.34, -112], [1.5, 10.74, -112], [2.67, 11.26, -112], [3.83, 11.89, -112],
+    [5, 12.59, -112], [6.17, 13.36, -112], [7.33, 14.17, -112], [8.5, 15, -112], [9.67, 15.83, -112], [10.83, 16.64, -112],
+    [12, 17.41, -112], [13.17, 18.11, -112], [14.33, 18.74, -112], [15.5, 19.26, -112], [16.67, 19.66, -112], [17.83, 19.91, -112],
+    [19, 20, -112], [20.17, 19.99, -111.88], [21.3, 19.96, -111.54], [22.33, 19.91, -110.99], [23.24, 19.84, -110.24], [23.99, 19.77, -109.33],
+    [24.54, 19.68, -108.3], [24.88, 19.59, -107.17], [25, 19.5, -106], [24.88, 19.41, -104.83], [24.54, 19.32, -103.7], [23.99, 19.23, -102.67],
+    [23.24, 19.16, -101.76], [22.33, 19.09, -101.01], [21.3, 19.04, -100.46], [20.17, 19.01, -100.12], [19, 19, -100], [17.78, 18.92, -100],
+    [16.57, 18.68, -100], [15.35, 18.3, -100], [14.13, 17.8, -100], [12.91, 17.18, -100], [11.7, 16.47, -100], [10.48, 15.68, -100],
+    [9.26, 14.82, -100], [8.04, 13.91, -100], [6.83, 12.96, -100], [5.61, 11.99, -100], [4.39, 11.01, -100], [3.17, 10.04, -100],
+    [1.96, 9.09, -100], [0.74, 8.18, -100], [-0.48, 7.32, -100], [-1.7, 6.53, -100], [-2.91, 5.82, -100], [-4.13, 5.2, -100],
+    [-5.35, 4.7, -100], [-6.57, 4.32, -100], [-7.78, 4.08, -100], [-9, 4, -100], [-10.19, 4.05, -100], [-11.37, 4.19, -100],
+    [-12.56, 4.42, -100], [-13.75, 4.7, -100], [-14.94, 5.04, -100], [-16.12, 5.42, -100], [-17.31, 5.83, -100], [-18.5, 6.25, -100],
+    [-19.69, 6.67, -100], [-20.87, 7.08, -100], [-22.06, 7.46, -100], [-23.25, 7.8, -100], [-24.44, 8.08, -100], [-25.62, 8.31, -100],
+    [-26.81, 8.45, -100], [-28, 8.5, -100], [-29.19, 8.44, -100], [-30.37, 8.26, -100], [-31.56, 7.99, -100], [-32.75, 7.64, -100],
+    [-33.94, 7.22, -100], [-35.12, 6.76, -100], [-36.31, 6.26, -100], [-37.5, 5.75, -100], [-38.69, 5.24, -100], [-39.87, 4.74, -100],
+    [-41.06, 4.28, -100], [-42.25, 3.86, -100], [-43.44, 3.51, -100], [-44.62, 3.24, -100], [-45.81, 3.06, -100], [-47, 3, -100],
+    [-48.21, 3, -99.9], [-49.39, 3, -99.62], [-50.52, 3, -99.16], [-51.56, 3, -98.52], [-52.48, 3, -97.73], [-53.27, 3, -96.81],
+    [-53.91, 3, -95.77], [-54.37, 3, -94.64], [-54.65, 3, -93.46], [-54.75, 3, -92.25], [-54.65, 3, -91.04], [-54.37, 3, -89.86],
+    [-53.91, 3, -88.73], [-53.27, 3, -87.69], [-52.48, 3, -86.77], [-51.56, 3, -85.98], [-50.52, 3, -85.34], [-49.39, 3, -84.88],
+    [-48.21, 3, -84.6], [-47, 3, -84.5], [-45.79, 2.99, -84.5], [-44.59, 2.98, -84.5], [-43.38, 2.96, -84.5], [-42.18, 2.92, -84.5],
+    [-40.97, 2.88, -84.5], [-39.76, 2.84, -84.5], [-38.56, 2.78, -84.5], [-37.35, 2.72, -84.5], [-36.15, 2.65, -84.5], [-34.94, 2.58, -84.5],
+    [-33.74, 2.51, -84.5], [-32.53, 2.43, -84.5], [-31.32, 2.35, -84.5], [-30.12, 2.26, -84.5], [-28.91, 2.18, -84.5], [-27.71, 2.09, -84.5],
+    [-26.5, 2, -84.5], [-25.29, 1.91, -84.5], [-24.09, 1.82, -84.5], [-22.88, 1.74, -84.5], [-21.68, 1.65, -84.5], [-20.47, 1.57, -84.5],
+    [-19.26, 1.49, -84.5], [-18.06, 1.42, -84.5], [-16.85, 1.35, -84.5], [-15.65, 1.28, -84.5], [-14.44, 1.22, -84.5], [-13.24, 1.16, -84.5],
+    [-12.03, 1.12, -84.5], [-10.82, 1.08, -84.5], [-9.62, 1.04, -84.5], [-8.41, 1.02, -84.5], [-7.21, 1.01, -84.5]
   ];
-  PK_KEEP.push([-36, -104, 9], [20, -106, 9], [-8, -108, 12]);
+  var PK_HUNT_TRIM = [[[-39, -100], [-46, -100], 9]];   // the trim brake before the slow west turn: from, to (x, z), and the speed it holds (m/s)
+  PK_KEEP.push([-48, -100, 13], [-50, -90, 9], [-24, -102, 12], [-6, -104, 14], [16, -104, 12]);
   // Braced bents under a coaster: where the track is low, one stout column with a head; where it is high, two raked
   // columns under a cross head, tied in tiers and cross-braced, each on its own footing. A bent never comes down through
   // a lower pass of the track. Returns where the feet stand, so the planting can keep off them.
@@ -659,8 +741,9 @@
     // path from lawn, so the walk has to be drawn, not just declared.
     // (part 12 lays it with the rest of the paving: pkPaveCore)
     var curve = pkCoCurve(PK_HUNT_PTS), len = curve.getLength(), uP = pkCoUAt(curve, 4, -84.5);
-    var P0 = pkCoProfile(curve, len, uP);
-    var F = pkCoFrames(curve, 760, P0, uP);
+    var opt = { trim: PK_HUNT_TRIM.map(function (t) { return [pkCoUAt(curve, t[0][0], t[0][1]), pkCoUAt(curve, t[1][0], t[1][1]), t[2]]; }) };
+    var P0 = pkCoProfile(curve, len, uP, opt);
+    var F = pkCoFrames(curve, 1000, P0, uP);
     var E = { curve: curve, len: len, F: F, gap: 2.35, cars: [], uPark: uP, uOfF: [], run: 30 };
     pkCoLevel(F, curve, E.uPark, 5 * 2.35 + 1.4, 1.4);
     var seats = [], cols = [0x6b4f8a, 0xc9a227, 0x2a2434, 0xc9a227, 0x6b4f8a, 0x2a2434];
@@ -673,11 +756,11 @@
       });
     }
     var spineMat = std({ color: 0x5a3f7a, roughness: 0.4, metalness: 0.35 });
-    var supMat = std({ color: 0x33363c, roughness: 0.5, metalness: 0.4 });
+    var supMat = std({ color: 0x626872, roughness: 0.55, metalness: 0.25 });   // was 0x33363c: read as flat black from any distance
     var inStation = function (x, z) { return z > -87.2 && x > -8.5 && x < 16.5; };   // nothing stands through the station and its platform
     pkCoTrackBuild(g, E, { spineMat: spineMat, supMat: supMat, tieMat: std({ color: 0x2b2434, roughness: 0.75 }), skip: function () { return true; } });
     var feet = pkCoBents(g, E, { mat: supMat, every: 6.4, skip: inStation });
-    pkCoPlan(E);
+    pkCoPlan(E, opt);
     // the lift: the chain up the middle, and a stair with a handrail up the station side of it
     var N = F.n, l0 = Math.round(((uP + P0.lift[0] / P0.K) % 1) * N), l1 = Math.round(((uP + P0.lift[1] / P0.K) % 1) * N), lp = [];
     for (i = l0; i <= l1; i++) lp.push(F.p[i % N]);
@@ -715,12 +798,12 @@
     var footNear = function (x, z) { for (var j = 0; j < feet.length; j++) if (Math.abs(feet[j][0] - x) < 1.6 && Math.abs(feet[j][1] - z) < 1.6) return true; return false; };
     var planted = 0, tries = 0;
     while (planted < 46 && tries++ < 900) {
-      var tx = randf(-41, 25.5), tz = randf(-116, -88), ts = randf(0.75, 1.25);
+      var tx = randf(-51, 21), tz = randf(-116, -88), ts = randf(0.75, 1.25);
       if (inStation(tx, tz + 1.5) || near(tx, tz, 3.4, 15) || footNear(tx, tz)) continue;
       pkConifer(tx, tz, ts, g, planted * 7 + 3); planted++;
     }
     for (i = 0, tries = 0; i < 16 && tries < 300; tries++) {
-      var bx = randf(-40, 24), bz = randf(-115, -89);
+      var bx = randf(-50, 21), bz = randf(-115, -89);
       if (inStation(bx, bz + 1.5) || near(bx, bz, 2.6, 6) || footNear(bx, bz)) continue;
       pkBoulder(bx, bz, randf(0.8, 1.7), g); i++;
     }
@@ -775,6 +858,10 @@
     // the old halls and then some. It takes the place of Nocturne, The Wreck and Moonwood in one go.
     { id: 'wildhunt', name: 'The Wild Hunt', x: -8, z: -94, r: 30, q: [-1.0, -79.2], qdx: 1, level: 15, pad: 0.02, boothAt: [-8.6, -78.6] }
   );
+  // the Serpent's line fills the strip north of its station (x 38 to 69, z -113 to -70): no tree or lamp goes in it, and the open middle is the serpent's own
+  PK_KEEP.push([47, -105, 11], [62, -104, 11], [53, -90, 19]);
+  // Baron's Drop runs west across the lawn from its station (x 33 to 70, z 11 to 31): nothing is planted or hung in it
+  PK_KEEP.push([39, 20, 9], [48, 25, 9], [60, 23, 9]);
   // the kids' area: The Little Meadow, on the north half of the east strip (it stood on the west lawn, each ride against
   // the next). From the north: the Puffin Line, the Little Roundabout, Wobbly Pots and the acorn playhouse, each a good
   // ten metres from the next, their lines running west to the East Parade
@@ -1014,15 +1101,19 @@
     // the line was drawn on the west lawn round (-60, 40) with its platform's line end to the east. It is laid from those
     // same numbers, carried to the plot and flipped east-west, so the line end faces the Parade
     var MX = function (x) { return p.x - (x + 60); }, MZ = function (z) { return p.z + (z - 40); };
-    // a straight station along the platform, round the west end, a wiggle and a little hill along the north side, round the
-    // east end home: longer than the old oval, and clear of Wobbly Pots' booth and its own
+    // a straight station along the platform, a round turn north, a little hill with a tunnel along the north lane, a round
+    // turn at the west end and home. Laid offline (tools/scratch/tracks/puffin.js), radius 4.2 m, 52 m, in world coordinates
     var pts = [
-      [-54.8, 0.4, 43.6], [-57, 0.4, 43.6], [-59.2, 0.4, 43.6], [-61.4, 0.4, 43.6], [-63.6, 0.4, 43.6], [-65.8, 0.4, 43.6],
-      [-67.9, 0.4, 43], [-69.3, 0.42, 41.4], [-69.2, 0.5, 39.8], [-67.6, 0.62, 38.9], [-65, 0.85, 38.6], [-62.4, 1, 39.3],
-      [-59.8, 0.85, 39], [-57.4, 0.6, 38.9], [-55.2, 0.45, 39.1], [-53.5, 0.4, 40.4], [-53.2, 0.4, 42.2]
-    ].map(function (q) { return [MX(q[0]), q[1], MZ(q[2])]; });
+      [145.2, 0.4, -102.4], [146.39, 0.4, -102.4], [147.57, 0.4, -102.4], [148.76, 0.4, -102.4], [149.95, 0.4, -102.4], [151.14, 0.4, -102.4],
+      [152.32, 0.4, -102.4], [153.51, 0.4, -102.4], [154.7, 0.4, -102.4], [156, 0.4, -102.61], [157.17, 0.4, -103.2], [158.1, 0.4, -104.13],
+      [158.69, 0.4, -105.3], [158.9, 0.4, -106.6], [158.9, 0.4, -107.67], [158.9, 0.4, -108.73], [158.9, 0.4, -109.8], [158.69, 0.4, -111.1],
+      [158.1, 0.4, -112.27], [157.17, 0.4, -113.2], [156, 0.4, -113.79], [154.7, 0.4, -114], [153.45, 0.54, -114], [152.2, 0.85, -114],
+      [150.95, 1.16, -114], [149.7, 1.3, -114], [148.58, 1.16, -114], [147.45, 0.85, -114], [146.33, 0.54, -114], [145.2, 0.4, -114],
+      [143.9, 0.4, -113.79], [142.73, 0.4, -113.2], [141.8, 0.4, -112.27], [141.21, 0.4, -111.1], [141, 0.4, -109.8], [141, 0.4, -108.73],
+      [141, 0.4, -107.67], [141, 0.4, -106.6], [141.21, 0.4, -105.3], [141.8, 0.4, -104.13], [142.73, 0.4, -103.2], [143.9, 0.4, -102.61]
+    ];
     var curve = pkCoCurve(pts), len = curve.getLength(), uP = pkCoUAt(curve, MX(-61.2), MZ(43.6));
-    var F = pkCoFrames(curve, 300, pkCoProfile(curve, len, uP, { pedal: 1.8 }), uP);
+    var F = pkCoFrames(curve, 200, pkCoProfile(curve, len, uP, { pedal: 1.8 }), uP);
     var E = { curve: curve, len: len, F: F, gap: 2.2, cars: [], uPark: uP, uOfF: [], run: 34 };
     pkCoLevel(F, curve, E.uPark, 2.2 + 1.2, 1.2);
     var seats = [], cols = [0xf0c04a, 0xd2622f];
@@ -1047,11 +1138,16 @@
     }
     pkCoPlatform(g, MX(-56.5), MX(-63.5), MZ(43.9), MZ(45.3), th, 0.4);
     // a row of planted rocks down the middle of the loop, clear of the track all round
-    [-66.0, -63.5, -61.0, -58.5, -56.2].forEach(function (rx0) {
-      var rx = MX(rx0), rz = MZ(41.2);
+    [147.5, 149.5, 151.5, 153.5].forEach(function (rx) {
+      var rz = -108.2;
       pkRoundCyl(0.34, 0.42, std({ color: 0x7a6a52, roughness: 0.85 }), rx, 0.21, rz, g, 12);
       sphere(0.3, std({ color: 0x4d7a3a, roughness: 0.95 }), rx, 0.5, rz, g);
     });
+    // the little tunnel under the hill's west slope: two stone walls, a turfed roof and a mound over it
+    var tw = std({ color: 0x7a6a52, roughness: 0.9 }), turf = std({ color: 0x4d7a3a, roughness: 0.95 });
+    [-1, 1].forEach(function (sd) { box(2.6, 2.7, 0.35, tw, 147.3, 1.35, -114.0 + sd * 0.95, g); });
+    box(2.8, 0.3, 2.5, tw, 147.3, 2.85, -114.0, g);
+    var mound = sphere(1.0, turf, 147.3, 2.7, -114.0, g); mound.scale.set(1.5, 0.7, 1.3);
     var a = pkAttr({
       id: p.id, name: p.name, x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats,
       board: 4, run: E.run, unload: 5, extra: E, tickRun: function (at) { pkCoRun(at); }

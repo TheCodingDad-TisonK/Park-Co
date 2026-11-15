@@ -5640,7 +5640,7 @@
   // down); the ride circuit follows its own switch and the same night hours, so a ride can be lit with the paths dark.
   // Every glow lens (userData.glow) and every plainly emissive lamp surface is registered here once and split by where it is
   // used: a material that only appears under a ride group is a ride light, everything else stays on the park circuit.
-  var PK_GLOW_PARK = null, PK_GLOW_RIDE = null, PK_GLOW_PARK_ON = null, PK_GLOW_RIDE_ON = null;
+  var PK_GLOW_AT = 0, PK_GLOW_PARK = null, PK_GLOW_RIDE = null, PK_GLOW_PARK_ON = null, PK_GLOW_RIDE_ON = null;
   function pkGlowRideMat(o) {
     for (var p = o; p && p !== scene; p = p.parent) if (p.userData && (p.userData.attr || p.userData.pkRideRoot)) return true;
     return false;
@@ -5672,7 +5672,10 @@
     PK_GLOW_PARK = park; PK_GLOW_RIDE = ride; PK_GLOW_PARK_ON = null; PK_GLOW_RIDE_ON = null;
   }
   function pkLightsApply(parkOn, rideOn) {
-    if (!PK_GLOW_PARK || !PK_GLOW_RIDE) pkGlowCollect();
+    // lamps built after the first collection (a part that fills in late, an expansion) were never on a switch and stayed dark
+    // while the hub's glowed: look again every twenty seconds
+    var nowMs = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    if (!PK_GLOW_PARK || !PK_GLOW_RIDE || nowMs - PK_GLOW_AT > 20000) { pkGlowCollect(); PK_GLOW_AT = nowMs; }
     var p = !!parkOn, r = !!rideOn;
     if (PK_GLOW_PARK_ON !== p) {
       PK_GLOW_PARK_ON = p;
@@ -6101,7 +6104,14 @@
       var r = $('h-ride');
       if (r) {
         var pr = PK.playerRide, on = pr ? (pr.kind === 'coaster' ? 'the coaster' : pr.a && pr.a.name) : '';
-        r.textContent = (PK.duty ? 'On duty at ' + PK.duty.name + ' · ' : '') + (on ? 'Riding ' + on + ' · ' : '') + 'Coaster: ' + pkRideWord() + (pkCoasterAuto() ? ' (auto)' : '') + ' · ' + pkOpenCount() + ' of ' + pkRideTotal() + ' rides open';
+        // quiet: the coaster's word only when it is not simply running on auto, the open count only when a ride is shut
+        var parts = [];
+        if (PK.duty) parts.push('On duty at ' + PK.duty.name);
+        if (on) parts.push('Riding ' + on);
+        if (!(pkCoasterAuto() && pkRideWord() === 'running')) parts.push('Coaster: ' + pkRideWord() + (pkCoasterAuto() ? ' (auto)' : ''));
+        if (pkOpenCount() < pkRideTotal()) parts.push(pkOpenCount() + ' of ' + pkRideTotal() + ' rides open');
+        r.textContent = parts.join(' · ');
+        r.style.display = parts.length ? '' : 'none';
       }
     },
     panel: function (kind, tab) { return pkPanel(kind, tab); },
@@ -6262,7 +6272,10 @@
     // makeHuman builds the figure but does not put it in the world: without this every new guest walked, queued and rode
     // unseen, and only the odd one back from the pool showed
     var h = makeHuman(pkGuestLook());
-    h.scale.setScalar(0.95 + Math.random() * 0.1);   // a crowd is not one height
+    // a crowd is not one height, and about one guest in seven is a child (part 59 builds the figure)
+    var kid = Math.random() < 0.14;
+    h.scale.setScalar(kid ? 0.6 + Math.random() * 0.16 : 0.92 + Math.random() * 0.12);
+    h.userData.pkKid = kid;
     scene.add(h); return h;
   }
   function pkParkHuman(g) {
@@ -6709,65 +6722,69 @@
   }
   // ── The coaster ───────────────────────────────────────────────────
   // A looping coaster that fills its yard behind the station (x -24..30.5, z -37..-1.5). Out of the station east, round the
-  // control room and up a 20 m chain lift along the east side; over the top turning west, a steep drop along the north fence
-  // into a 14 m vertical loop; a high banked turnaround at the west end; camelbacks east across the middle, under the lift; a
-  // turn at the east fence; back west under the lift, a dip into a corkscrew; a trim brake, a turn inside the turnaround, south
-  // under it and the brakes home. The train is three cars of four seats. The operator's room stands east of the platform.
-  var PK_CAR_N = 3;
+  // control room and up a 20 m chain lift along the east side; over the top turning west, a vertical dive along the north lane;
+  // a rising 540 degree helix at the west end; a long run east, down and under the lift into a teardrop loop (13 m, gentle at the
+  // foot, tight at the top); a high turn at the east fence; back west under the lift, a dip into a corkscrew; a trim brake, a
+  // turn inside the helix, south and the brakes home. The train is three cars of four seats. The operator's room stands east
+  // of the platform.
+  var PK_CAR_N = 6;
   // the four seats of a car, in the order they fill: the platform side first, then the far side, front row before back
   var PK_SEAT_LOCAL = [[-0.35, 0.62], [-0.35, -0.62], [0.35, 0.62], [0.35, -0.62]];
   var PK_CAR_COLS = [0xd94f4f, 0xf0c04a, 0x4f8fd9];
   // the circuit, laid offline from straights, arcs, the loop and the corkscrew with a height profile of vertical arcs and
-  // sampled every 1.2 m along the track (the same kit as the indoor halls). The station straight runs x -11..9.5 at z -4.6,
-  // dead level; the train runs +x along it. Checked clear of itself (2.5 m stacked, 1.9 m side by side; 1.3 at the closest),
-  // of the platform and the control room, inside the yard, and at most 4.6 g (the bottom of the loop) at the speeds
-  // pkCoProfile gives it, with the trim brake after the corkscrew (PK_MAIN_TRIM).
+  // sampled every 1.2 m along the track (the same kit as the indoor halls; tools/scratch/tracks/main.js). The station straight
+  // runs x -11..9.5 at z -4.6, dead level; the train runs +x along it. Checked clear of itself (2.1 m at the closest), of the
+  // platform and the control room, inside the yard, and at most 5.0 g at the speeds pkCoProfile gives it, with the trim
+  // brake after the corkscrew (PK_MAIN_TRIM).
   var PK_TRACK_PTS = [
-    [-11, 0.6, -4.6], [-9.8, 0.6, -4.6], [-8.6, 0.6, -4.6], [-7.4, 0.6, -4.6], [-6.21, 0.6, -4.6], [-5.01, 0.6, -4.6],
-    [-3.81, 0.6, -4.6], [-2.61, 0.6, -4.6], [-1.41, 0.6, -4.6], [-0.21, 0.6, -4.6], [0.99, 0.6, -4.6], [2.19, 0.6, -4.6],
-    [3.38, 0.6, -4.6], [4.58, 0.6, -4.6], [5.78, 0.6, -4.6], [6.98, 0.6, -4.6], [8.18, 0.6, -4.6], [9.38, 0.6, -4.6],
-    [10.57, 0.6, -4.68], [11.73, 0.6, -4.97], [12.83, 0.6, -5.45], [13.83, 0.67, -6.11], [14.69, 0.88, -6.91], [15.39, 1.23, -7.82],
-    [15.9, 1.72, -8.78], [16.25, 2.33, -9.75], [16.44, 3.06, -10.68], [16.5, 3.89, -11.54], [16.5, 4.73, -12.4], [16.5, 5.57, -13.26],
-    [16.5, 6.41, -14.11], [16.5, 7.25, -14.97], [16.5, 8.09, -15.82], [16.5, 8.93, -16.68], [16.5, 9.76, -17.53], [16.5, 10.6, -18.39],
-    [16.5, 11.44, -19.25], [16.5, 12.28, -20.1], [16.5, 13.12, -20.96], [16.5, 13.96, -21.81], [16.5, 14.8, -22.67], [16.5, 15.64, -23.52],
-    [16.5, 16.48, -24.38], [16.5, 17.32, -25.24], [16.5, 18.16, -26.09], [16.5, 18.99, -26.95], [16.5, 19.64, -27.96], [16.5, 19.96, -29.11],
-    [16.5, 19.93, -30.3], [16.48, 19.55, -31.43], [16.3, 18.85, -32.38], [16.06, 17.89, -33.03], [15.86, 16.79, -33.45], [15.66, 15.65, -33.77],
-    [15.44, 14.51, -34.07], [15.2, 13.37, -34.35], [14.94, 12.23, -34.62], [14.66, 11.09, -34.87], [14.36, 9.95, -35.09], [14.05, 8.81, -35.3],
-    [13.69, 7.69, -35.49], [13.22, 6.6, -35.69], [12.62, 5.59, -35.87], [11.88, 4.65, -35.98], [11.02, 3.82, -36], [10.06, 3.09, -36],
-    [9.03, 2.49, -36], [7.93, 2.01, -36], [6.78, 1.67, -36], [5.6, 1.46, -36], [4.41, 1.4, -36], [3.21, 1.49, -36],
-    [2.04, 1.71, -35.99], [0.9, 2.08, -35.98], [-0.19, 2.58, -35.96], [-1.21, 3.21, -35.94], [-2.13, 3.97, -35.91], [-2.95, 4.84, -35.88],
-    [-3.65, 5.82, -35.83], [-4.2, 6.88, -35.78], [-4.58, 8.02, -35.73], [-4.78, 9.2, -35.66], [-4.77, 10.39, -35.58], [-4.55, 11.56, -35.48],
-    [-4.09, 12.66, -35.36], [-3.4, 13.62, -35.22], [-2.48, 14.37, -35.05], [-1.39, 14.81, -34.85], [-0.22, 14.88, -34.63], [0.91, 14.56, -34.42],
-    [1.9, 13.91, -34.24], [2.67, 13.01, -34.09], [3.21, 11.95, -33.96], [3.51, 10.8, -33.86], [3.59, 9.61, -33.77], [3.46, 8.42, -33.7],
-    [3.14, 7.27, -33.63], [2.64, 6.18, -33.58], [2, 5.17, -33.54], [1.22, 4.26, -33.5], [0.33, 3.46, -33.47], [-0.66, 2.78, -33.45],
-    [-1.73, 2.23, -33.43], [-2.85, 1.82, -33.41], [-4.02, 1.55, -33.41], [-5.21, 1.41, -33.4], [-6.4, 1.43, -33.4], [-7.59, 1.58, -33.4],
-    [-8.75, 1.88, -33.4], [-9.87, 2.31, -33.4], [-10.93, 2.87, -33.4], [-11.91, 3.56, -33.4], [-12.84, 4.31, -33.4], [-13.77, 5.07, -33.4],
-    [-14.7, 5.82, -33.4], [-15.63, 6.58, -33.4], [-16.56, 7.34, -33.4], [-17.49, 8.09, -33.32], [-18.39, 8.85, -33.1], [-19.24, 9.61, -32.74],
-    [-20.04, 10.36, -32.25], [-20.78, 11.04, -31.61], [-21.45, 11.6, -30.79], [-22, 12.03, -29.82], [-22.36, 12.32, -28.71], [-22.5, 12.47, -27.54],
-    [-22.51, 12.48, -26.34], [-22.51, 12.35, -25.15], [-22.5, 12.07, -23.99], [-22.34, 11.66, -22.88], [-21.99, 11.11, -21.87], [-21.52, 10.44, -21],
-    [-20.96, 9.66, -20.28], [-20.34, 8.83, -19.68], [-19.63, 8, -19.18], [-18.87, 7.17, -18.78], [-18.05, 6.34, -18.5], [-17.2, 5.51, -18.34],
-    [-16.32, 4.7, -18.3], [-15.38, 3.96, -18.3], [-14.36, 3.33, -18.3], [-13.29, 2.79, -18.3], [-12.16, 2.37, -18.3], [-11.01, 2.06, -18.3],
-    [-9.82, 1.88, -18.3], [-8.63, 1.8, -18.3], [-7.43, 1.86, -18.3], [-6.25, 2.08, -18.3], [-5.12, 2.45, -18.3], [-4.03, 2.97, -18.3],
-    [-3.03, 3.62, -18.3], [-2.12, 4.4, -18.3], [-1.22, 5.2, -18.3], [-0.24, 5.88, -18.3], [0.82, 6.43, -18.3], [1.95, 6.84, -18.3],
-    [3.12, 7.09, -18.3], [4.31, 7.2, -18.3], [5.51, 7.16, -18.3], [6.7, 6.99, -18.3], [7.86, 6.71, -18.3], [8.99, 6.32, -18.3],
-    [10.1, 5.86, -18.3], [11.2, 5.38, -18.3], [12.3, 4.92, -18.3], [13.42, 4.49, -18.3], [14.58, 4.19, -18.3], [15.77, 4.03, -18.3],
-    [16.97, 4.01, -18.3], [18.16, 4.14, -18.3], [19.32, 4.41, -18.3], [20.45, 4.82, -18.3], [21.53, 5.35, -18.3], [22.59, 5.9, -18.3],
-    [23.65, 6.46, -18.31], [24.7, 7.01, -18.45], [25.7, 7.57, -18.82], [26.59, 8.12, -19.39], [27.35, 8.67, -20.13], [27.93, 9.23, -21.02],
-    [28.31, 9.78, -22], [28.48, 10.34, -23.05], [28.42, 10.89, -24.11], [28.13, 11.39, -25.16], [27.59, 11.75, -26.16], [26.8, 11.95, -27.04],
-    [25.82, 11.99, -27.72], [24.72, 11.83, -28.14], [23.59, 11.47, -28.3], [22.54, 10.9, -28.3], [21.6, 10.16, -28.3], [20.82, 9.25, -28.3],
-    [20.2, 8.23, -28.3], [19.58, 7.2, -28.3], [18.83, 6.27, -28.3], [17.93, 5.48, -28.3], [16.92, 4.84, -28.3], [15.82, 4.38, -28.3],
-    [14.65, 4.09, -28.3], [13.46, 4, -28.3], [12.28, 4.03, -28.46], [11.16, 4.21, -28.85], [10.12, 4.59, -29.31], [9.14, 5.15, -29.72],
-    [8.21, 5.85, -29.99], [7.29, 6.61, -30.07], [6.36, 7.35, -29.92], [5.42, 8, -29.55], [4.47, 8.44, -28.99], [3.5, 8.6, -28.31],
-    [2.53, 8.44, -27.62], [1.57, 8.01, -27.06], [0.64, 7.37, -26.68], [-0.29, 6.62, -26.53], [-1.21, 5.86, -26.61], [-2.15, 5.17, -26.87],
-    [-3.12, 4.6, -27.28], [-4.16, 4.22, -27.74], [-5.28, 4.03, -28.13], [-6.46, 4, -28.3], [-7.65, 3.93, -28.3], [-8.83, 3.72, -28.3],
-    [-10, 3.46, -28.3], [-11.17, 3.19, -28.3], [-12.34, 2.92, -28.3], [-13.51, 2.65, -28.3], [-14.68, 2.38, -28.3], [-15.84, 2.12, -28.21],
-    [-16.93, 1.85, -27.81], [-17.86, 1.58, -27.1], [-18.55, 1.31, -26.17], [-18.93, 1.04, -25.07], [-19.01, 0.79, -23.9], [-19.01, 0.64, -22.71],
-    [-19.01, 0.6, -21.52], [-19.01, 0.6, -20.32], [-19.01, 0.6, -19.12], [-19.01, 0.6, -17.92], [-19.01, 0.6, -16.72], [-19.01, 0.6, -15.52],
-    [-19.01, 0.6, -14.32], [-19.01, 0.6, -13.12], [-19.01, 0.6, -11.93], [-19.01, 0.6, -10.73], [-19.01, 0.6, -9.53], [-18.84, 0.6, -8.34],
-    [-18.41, 0.6, -7.23], [-17.72, 0.6, -6.25], [-16.82, 0.6, -5.47], [-15.76, 0.6, -4.92], [-14.6, 0.6, -4.64], [-13.4, 0.6, -4.6],
-    [-12.2, 0.6, -4.6]
+    [-11, 0.6, -4.6], [-9.79, 0.6, -4.6], [-8.59, 0.6, -4.6], [-7.38, 0.6, -4.6], [-6.18, 0.6, -4.6], [-4.97, 0.6, -4.6],
+    [-3.76, 0.6, -4.6], [-2.56, 0.6, -4.6], [-1.35, 0.6, -4.6], [-0.15, 0.6, -4.6], [1.06, 0.6, -4.6], [2.26, 0.6, -4.6],
+    [3.47, 0.6, -4.6], [4.68, 0.6, -4.6], [5.88, 0.6, -4.6], [7.09, 0.6, -4.6], [8.29, 0.6, -4.6], [9.5, 0.6, -4.6],
+    [10.72, 0.67, -4.71], [11.89, 0.84, -5.02], [13, 1.09, -5.54], [14, 1.39, -6.24], [14.86, 1.71, -7.1], [15.56, 2.01, -8.1],
+    [16.08, 2.26, -9.21], [16.39, 2.43, -10.38], [16.5, 2.5, -11.6], [16.5, 2.91, -12.77], [16.5, 4.08, -13.94], [16.5, 5.45, -15.11],
+    [16.5, 6.81, -16.29], [16.5, 8.17, -17.46], [16.5, 9.54, -18.63], [16.5, 10.9, -19.8], [16.5, 12.26, -20.97], [16.5, 13.63, -22.14],
+    [16.5, 14.99, -23.31], [16.5, 16.35, -24.49], [16.5, 17.72, -25.66], [16.5, 18.89, -26.83], [16.5, 19.3, -28], [16.36, 19.3, -29.22],
+    [15.96, 19.3, -30.39], [15.3, 19.3, -31.43], [14.43, 19.3, -32.3], [13.39, 19.3, -32.96], [12.22, 19.3, -33.36], [11, 19.3, -33.5],
+    [10.09, 19.18, -33.5], [9.25, 18.83, -33.5], [8.53, 18.27, -33.5], [7.97, 17.55, -33.5], [7.62, 16.71, -33.5], [7.5, 15.8, -33.5],
+    [7.5, 14.66, -33.5], [7.5, 13.52, -33.5], [7.5, 12.38, -33.5], [7.5, 11.24, -33.5], [7.5, 10.1, -33.5], [7.41, 8.89, -33.5],
+    [7.16, 7.71, -33.5], [6.73, 6.57, -33.5], [6.15, 5.5, -33.5], [5.42, 4.53, -33.5], [4.57, 3.68, -33.5], [3.6, 2.95, -33.5],
+    [2.53, 2.37, -33.5], [1.39, 1.94, -33.5], [0.21, 1.69, -33.5], [-1, 1.6, -33.5], [-2.23, 1.68, -33.5], [-3.45, 1.9, -33.5],
+    [-4.68, 2.22, -33.5], [-5.91, 2.62, -33.5], [-7.14, 3.07, -33.5], [-8.36, 3.53, -33.5], [-9.59, 3.98, -33.5], [-10.82, 4.38, -33.5],
+    [-12.05, 4.7, -33.5], [-13.27, 4.92, -33.5], [-14.5, 5, -33.5], [-15.69, 5, -33.41], [-16.86, 5.01, -33.14], [-17.97, 5.03, -32.71],
+    [-19.01, 5.05, -32.11], [-19.94, 5.07, -31.36], [-20.75, 5.1, -30.49], [-21.43, 5.14, -29.5], [-21.95, 5.18, -28.42], [-22.3, 5.22, -27.28],
+    [-22.48, 5.27, -26.1], [-22.48, 5.32, -24.9], [-22.3, 5.38, -23.72], [-21.95, 5.44, -22.58], [-21.43, 5.5, -21.5], [-20.75, 5.57, -20.51],
+    [-19.94, 5.64, -19.64], [-19.01, 5.72, -18.89], [-17.97, 5.79, -18.29], [-16.86, 5.87, -17.86], [-15.69, 5.95, -17.59], [-14.5, 6.04, -17.5],
+    [-13.31, 6.12, -17.59], [-12.14, 6.21, -17.86], [-11.03, 6.3, -18.29], [-9.99, 6.39, -18.89], [-9.06, 6.48, -19.64], [-8.25, 6.57, -20.51],
+    [-7.57, 6.67, -21.5], [-7.05, 6.76, -22.58], [-6.7, 6.86, -23.72], [-6.52, 6.95, -24.9], [-6.52, 7.05, -26.1], [-6.7, 7.14, -27.28],
+    [-7.05, 7.24, -28.42], [-7.57, 7.33, -29.5], [-8.25, 7.43, -30.49], [-9.06, 7.52, -31.36], [-9.99, 7.61, -32.11], [-11.03, 7.7, -32.71],
+    [-12.14, 7.79, -33.14], [-13.31, 7.88, -33.41], [-14.5, 7.96, -33.5], [-15.69, 8.05, -33.41], [-16.86, 8.13, -33.14], [-17.97, 8.21, -32.71],
+    [-19.01, 8.28, -32.11], [-19.94, 8.36, -31.36], [-20.75, 8.43, -30.49], [-21.43, 8.5, -29.5], [-21.95, 8.56, -28.42], [-22.3, 8.62, -27.28],
+    [-22.48, 8.68, -26.1], [-22.48, 8.73, -24.9], [-22.3, 8.78, -23.72], [-21.95, 8.82, -22.58], [-21.43, 8.86, -21.5], [-20.75, 8.9, -20.51],
+    [-19.94, 8.93, -19.64], [-19.01, 8.95, -18.89], [-17.97, 8.97, -18.29], [-16.86, 8.99, -17.86], [-15.69, 9, -17.59], [-14.5, 9, -17.5],
+    [-13.3, 8.92, -17.5], [-12.1, 8.71, -17.5], [-10.9, 8.38, -17.5], [-9.7, 7.95, -17.5], [-8.5, 7.44, -17.5], [-7.3, 6.89, -17.5],
+    [-6.1, 6.3, -17.5], [-4.9, 5.7, -17.5], [-3.7, 5.11, -17.5], [-2.5, 4.56, -17.5], [-1.3, 4.05, -17.5], [-0.1, 3.62, -17.5],
+    [1.1, 3.29, -17.5], [2.3, 3.08, -17.5], [3.5, 3, -17.5], [4.72, 3.09, -17.63], [5.91, 3.37, -17.75], [7.03, 3.85, -17.88],
+    [8.05, 4.52, -18], [8.91, 5.38, -18.13], [9.58, 6.4, -18.26], [10.01, 7.54, -18.38], [10.16, 8.75, -18.51], [10, 9.96, -18.63],
+    [9.54, 11.09, -18.76], [8.79, 12.05, -18.89], [7.79, 12.75, -19.01], [6.63, 13.13, -19.14], [5.42, 13.13, -19.26], [4.26, 12.75, -19.39],
+    [3.27, 12.05, -19.51], [2.51, 11.09, -19.64], [2.05, 9.96, -19.77], [1.89, 8.75, -19.89], [2.04, 7.54, -20.02], [2.47, 6.4, -20.14],
+    [3.14, 5.38, -20.27], [4, 4.52, -20.4], [5.02, 3.85, -20.52], [6.14, 3.37, -20.65], [7.33, 3.09, -20.77], [8.55, 3, -20.9],
+    [9.74, 3.09, -20.9], [10.92, 3.35, -20.9], [12.1, 3.74, -20.9], [13.29, 4.24, -20.9], [14.47, 4.81, -20.9], [15.66, 5.43, -20.9],
+    [16.84, 6.07, -20.9], [18.03, 6.69, -20.9], [19.21, 7.26, -20.9], [20.4, 7.76, -20.9], [21.58, 8.15, -20.9], [22.77, 8.41, -20.9],
+    [23.95, 8.5, -20.9], [25.13, 8.51, -21.07], [26.22, 8.54, -21.57], [27.13, 8.59, -22.35], [27.77, 8.65, -23.36], [28.11, 8.72, -24.5],
+    [28.11, 8.78, -25.7], [27.77, 8.85, -26.84], [27.13, 8.91, -27.85], [26.22, 8.96, -28.63], [25.13, 8.99, -29.13], [23.95, 9, -29.3],
+    [22.72, 8.91, -29.3], [21.49, 8.67, -29.3], [20.26, 8.3, -29.3], [19.03, 7.83, -29.3], [17.8, 7.28, -29.3], [16.57, 6.7, -29.3],
+    [15.34, 6.1, -29.3], [14.1, 5.52, -29.3], [12.87, 4.97, -29.3], [11.64, 4.5, -29.3], [10.41, 4.13, -29.3], [9.18, 3.89, -29.3],
+    [7.95, 3.8, -29.3], [7.06, 3.8, -29.4], [6.16, 3.84, -29.69], [5.27, 3.97, -30.12], [4.37, 4.29, -30.62], [3.48, 4.85, -31.06],
+    [2.58, 5.63, -31.29], [1.69, 6.5, -31.17], [0.79, 7.28, -30.65], [-0.1, 7.74, -29.79], [-1, 7.74, -28.81], [-1.89, 7.28, -27.95],
+    [-2.79, 6.5, -27.43], [-3.68, 5.63, -27.31], [-4.58, 4.85, -27.54], [-5.47, 4.29, -27.98], [-6.36, 3.97, -28.48], [-7.26, 3.84, -28.91],
+    [-8.15, 3.8, -29.2], [-9.05, 3.8, -29.3], [-10.16, 3.52, -29.3], [-11.27, 2.9, -29.3], [-12.39, 2.28, -29.3], [-13.5, 2, -29.3],
+    [-14.58, 1.92, -29.13], [-15.56, 1.72, -28.63], [-16.33, 1.48, -27.86], [-16.83, 1.28, -26.88], [-17, 1.2, -25.8], [-17, 1.19, -24.63],
+    [-17, 1.16, -23.46], [-17, 1.12, -22.29], [-17, 1.06, -21.12], [-17, 1, -19.95], [-17, 0.93, -18.78], [-17, 0.87, -17.62],
+    [-17, 0.8, -16.45], [-17, 0.74, -15.28], [-17, 0.68, -14.11], [-17, 0.64, -12.94], [-17, 0.61, -11.77], [-17, 0.6, -10.6],
+    [-16.88, 0.6, -9.43], [-16.54, 0.6, -8.3], [-15.99, 0.6, -7.27], [-15.24, 0.6, -6.36], [-14.33, 0.6, -5.61], [-13.3, 0.6, -5.06],
+    [-12.17, 0.6, -4.72]
   ];
-  var PK_MAIN_TRIM = [[-9, -28.3], [-14.5, -28.3], 6];     // the trim brake: from, to (x, z), and the speed it trims to (m/s)
+  var PK_MAIN_TRIM = [[-9, -29.3], [-13.4, -29.3], 6];     // the trim brake: from, to (x, z), and the speed it trims to (m/s)
   function pkMainOpt() {
     var t = PK_MAIN_TRIM;
     return { lift: PK.liftU, trim: [[pkCoUAt(PK.curve, t[0][0], t[0][1]), pkCoUAt(PK.curve, t[1][0], t[1][1]), t[2]]] };
@@ -6784,8 +6801,8 @@
   function pkBuildCoaster() {
     PK.curve = pkCoCurve(PK_TRACK_PTS);
     PK.len = PK.curve.getLength();
-    // the train travels +x along the station, so the front car sits at the highest x: aim the front car at x 4
-    PK.stationU = pkNearestU(4, PK_PLATFORM_Y, PK_STATION_Z);
+    // the train travels +x along the station, so the front car sits at the highest x: aim the front car at x 5.6, so six cars stand on the 20 m platform
+    PK.stationU = pkNearestU(5.6, PK_PLATFORM_Y, PK_STATION_Z);
     PK.stationX0 = PK.curve.getPointAt(PK.stationU).x;
     PK.ride.u = PK.stationU;
     // the lift is the sustained climb to the lap's highest point, found from the track as for the kit coasters
@@ -6793,7 +6810,7 @@
     PK.liftU = [(PK.stationU + P0.lift[0] / P0.K) % 1, (PK.stationU + P0.lift[1] / P0.K) % 1];
     PK.prof = pkCoProfile(PK.curve, PK.len, PK.stationU, pkMainOpt());
     // the frames bank the turns by speed and carry the train through the loop and the corkscrew; the station stays level
-    PK.F = pkCoFrames(PK.curve, 1000, PK.prof, PK.stationU, { roll: [[pkCoUAt(PK.curve, 14, -28.3), pkCoUAt(PK.curve, -7.5, -28.3)]] });   // the corkscrew
+    PK.F = pkCoFrames(PK.curve, 1000, PK.prof, PK.stationU, { roll: [[pkCoUAt(PK.curve, 8, -29.3), pkCoUAt(PK.curve, -9, -29.3)]] });   // the corkscrew
     pkCoLevel(PK.F, PK.curve, PK.stationU, PK.carGap * (PK_CAR_N - 1) + 1.6, 1.6);
     pkTrack(); pkStation(); pkTrain(); pkQueueLine();
     pkPlaceTrain();
@@ -6819,14 +6836,14 @@
     sign(['PARK CO', 'the coaster'], 3.2, 0.8, 0, 3.0, -4.4, 0, { bg: '#1b232c', fg: '#f5b53d' });
     // the gates along the platform edge, one per car door
     for (var ci = 0; ci < PK_CAR_N; ci++) {
-      var x = PK.stationX0 - ci * PK.carGap;
+      var x = PK.stationX0 - ci * PK.carGap - 1.05;   // the hinge post stands just behind the car's last row, the arm runs the whole car
       var g = new THREE.Group(); g.position.set(x, PK_PLATFORM_Y, -3.6); scene.add(g);
       box(0.14, 1.0, 0.14, MAT.steelDark, 0, 0.5, 0, g);          // the hinge post
       var arm = new THREE.Group(); arm.position.set(0, 0.9, 0); arm.userData.dynamic = true; arm.userData.keep = true; g.add(arm);   // it swings, so it must not be baked into the static scene
-      box(1.0, 0.1, 0.1, MAT.hazard, 0.5, 0.14, 0, arm);          // the top rail, across the way in
-      box(1.0, 0.1, 0.1, MAT.hazard, 0.5, -0.28, 0, arm);         // the bottom rail
-      for (var m = 0; m < 5; m++) box(0.05, 0.42, 0.05, MAT.steel, 0.12 + m * 0.19, -0.07, 0, arm);
-      box(0.12, 0.12, 0.12, MAT.red, 0.98, 0.14, 0, arm);         // the end cap
+      box(2.1, 0.1, 0.1, MAT.hazard, 1.05, 0.14, 0, arm);         // the top rail, across the way in
+      box(2.1, 0.1, 0.1, MAT.hazard, 1.05, -0.28, 0, arm);        // the bottom rail
+      for (var m = 0; m < 10; m++) box(0.05, 0.42, 0.05, MAT.steel, 0.12 + m * 0.2, -0.07, 0, arm);
+      box(0.12, 0.12, 0.12, MAT.red, 2.08, 0.14, 0, arm);         // the end cap
       PK.gates.push({ x: x, z: -3.6, g: g, leaf: arm, bar: arm, open: false, t: 0 });
     }
   }
@@ -7613,14 +7630,14 @@
     PK.gates.forEach(function (gt) { gt.open = false; });
     sfx('lock'); hudDirty = true; return true;
   }
-  // The station gates are a master barrier worked by their own button. PK.stnForce is null while they follow the boarding gates,
+  // The station gates are a master barrier worked by their own button. PK.stnForce is null while they stand open between trains (the boarding gates work on their own),
   // true/false once the operator has forced them open/shut. AUTO keeps re-opening the boarding gates (pkOpenGates), so a
   // forced state is what stops it from undoing the button. It clears when the train leaves.
   function pkStnMoving() { var st = PK.ride.state; return st === 'dispatch' || st === 'running' || st === 'arrive'; }
   function pkStnOpen() {
     if (pkStnMoving()) return false;
     if (PK.stnForce === true || PK.stnForce === false) return PK.stnForce;
-    return !!(PK.gates[0] && PK.gates[0].open);
+    return true;   // unforced: open between trains. The boarding gates (the GATES button) no longer drag the station gates with them
   }
   function pkStationGates() {
     if (pkStnMoving()) return pkRefuse('Not while the train is moving');
@@ -8980,26 +8997,33 @@
     return a;
   }
   // ── The log flume ────────────────────────────────────────────────
-  // A double-drop chute: out of the dock the belt lifts the log eleven metres up the west of the course, through the
-  // lift house on the crest and down the long chute into the first splash pool; the channel turns east, climbs a second,
-  // shorter lift through the rock and drops again beside a mill race, then runs home along the east side and round the
-  // north end of the station. The order round the lap is the order of this list; the boats ride a smooth line through it.
+  // A double-drop chute, 166 m a lap (tison, 2026-11-14: "its channel can be way bigger and longer"; it was 94 m): out of the dock
+  // the belt lifts the log eleven metres up the west of the course, through the lift house on the crest and down the long chute
+  // into the first splash pool; the channel runs east along the north edge, climbs a second lift through the rock, drops again
+  // into the second pool, then winds home in three long lanes over the south-east lawn to the dock. The order round the lap is
+  // the order of this list; the boats ride a smooth line through it.
   var PK_FLUME_PTS = [
-    [0, 0.25, 10.5], [0, 0.25, 6], [0, 0.3, 1.5],                                              // the dock
-    [0, 1.2, -1.2], [0, 4.6, -4.2], [0, 8.2, -7.2], [0, 10.8, -10.4],                          // the belt lift
-    [0, 11.2, -13.4],                                                                          // the crest
-    [0, 9.6, -15.6], [0, 5.2, -17.6], [0, 1.2, -19.0],                                         // the long chute
-    [0.8, 0.5, -21.6], [2.8, 0.35, -23.6], [5.2, 0.35, -24.8], [6.9, 0.6, -22.6],               // the turn out of the pool
-    [7.2, 1.6, -18.8], [7.2, 3.4, -14.8], [7.1, 3.8, -11.2],                                   // the second lift (through the tunnel)
-    [7.0, 2.6, -8.6], [6.9, 0.7, -6.4],                                                        // the second drop
-    [6.6, 0.35, -3.4], [6.2, 0.3, 1.0], [5.8, 0.28, 5.6], [5.4, 0.27, 9.2], [4.1, 0.26, 11.7], [2.2, 0.25, 12.75], [0.6, 0.25, 12.3]   // home round the house
-  ];
+    [0, 0.25, 10.5], [0, 0.25, 6], [0, 0.3, 1.5], [0, 0.9, 0.2], [0, 2.6, -2.2],
+    [0, 4.4, -4.8], [0, 6.3, -7.2], [0, 8.1, -9.2], [0, 9.4, -10.6], [0, 10.1, -11.8],
+    [0, 9.3, -13.2], [0, 7.3, -15.2], [0, 5, -17.1], [0, 2.8, -18.8], [0, 1.1, -20.2],
+    [0, 0.6, -21], [0.9, 0.4, -22.5], [2.8, 0.35, -23.5], [5.6, 0.35, -23.8], [8.6, 0.35, -23.8],
+    [10.6, 0.4, -23.3], [11.8, 0.5, -22.2], [12.2, 0.6, -20.8], [12.2, 1.1, -19.2], [12.2, 2.5, -16.6],
+    [12.2, 4, -14], [12.2, 5.5, -11.4], [12.2, 6.4, -9.4], [12.2, 6.3, -8], [12.2, 4.8, -6.4],
+    [12.2, 2.9, -4.9], [12.2, 1.2, -3.7], [12.2, 0.45, -2.8], [12.2, 0.35, 0.4], [12.2, 0.3, 4],
+    [12.2, 0.3, 9], [12.2, 0.3, 14], [12.2, 0.3, 18], [12.2, 0.3, 22], [11.61, 0.3, 23.41],
+    [10.2, 0.3, 24], [8.79, 0.3, 23.41], [8.2, 0.3, 22], [8.2, 0.3, 17.5], [8.2, 0.3, 11.5],
+    [8.2, 0.3, 7.5], [8.2, 0.3, 4.4], [7.64, 0.3, 3.06], [6.3, 0.3, 2.5], [4.96, 0.3, 3.06],
+    [4.4, 0.3, 4.4], [4.4, 0.3, 8.4], [4.4, 0.3, 12.2], [4.4, 0.3, 17.2], [4.4, 0.3, 22],
+    [3.84, 0.3, 23.34], [2.5, 0.3, 23.9], [1.16, 0.3, 23.34], [0.6, 0.28, 22], [0.6, 0.27, 18],
+    [0.6, 0.27, 14.6], [0.3, 0.26, 11.8]
+  ];   // dock and lift at the west (x 0), the chute and first pool (z -22), the east lane (x 12.2) with the second lift and drop, then three lanes south, north and south over the south-east lawn and home
+  var PK_FLUME_FOOT = [15, 32];   // the two chute feet (where a splash goes up)
   function pkBuildFlume(p, open) {
     var M = pkMats(), g = new THREE.Group(); g.position.set(p.x, 0, p.z); scene.add(g);
     var PTS = PK_FLUME_PTS, i, k;
     var curve = new THREE.CatmullRomCurve3(PTS.map(function (q) { return new THREE.Vector3(q[0], q[1], q[2]); }), true, 'centripetal');
     curve.arcLengthDivisions = 900;
-    var total = curve.getLength(), NS = 280, P = curve.getSpacedPoints(NS), step = total / NS;
+    var total = curve.getLength(), NS = 440, P = curve.getSpacedPoints(NS), step = total / NS;
     var T = []; for (i = 0; i <= NS; i++) T.push(curve.getTangentAt(i / NS));
     var sideOf = function (i) { var t = T[i], l = Math.sqrt(t.x * t.x + t.z * t.z) || 1; return [t.z / l, -t.x / l]; };
     // the channel: a planked timber trough with a steel lip, lined in sea-green glass fibre, on steel hoops
@@ -9096,7 +9120,7 @@
     // ── The two splash pools ────────────────────────────────────────
     // Each chute throws the log into a stone basin with a dressed coping. The first is the big one under the eleven-metre
     // drop; the second, smaller, sits under the short chute by the mill race.
-    var pools = [{ x: 0, z: -20.4, w: 8.6, d: 6.6 }, { x: 6.8, z: -5.2, w: 5.6, d: 4.6 }], waters = [water];
+    var pools = [{ x: 0, z: -22.4, w: 8.6, d: 6.6 }, { x: 12.2, z: -1.7, w: 5.6, d: 4.6 }], waters = [water];
     pools.forEach(function (Pl) {
       [[Pl.x, Pl.z - Pl.d / 2, Pl.w + 0.5, 0.5], [Pl.x, Pl.z + Pl.d / 2, Pl.w + 0.5, 0.5], [Pl.x - Pl.w / 2, Pl.z, 0.5, Pl.d - 0.5], [Pl.x + Pl.w / 2, Pl.z, 0.5, Pl.d - 0.5]].forEach(function (w) {
         box(w[2], 0.6, w[3], M.stoneDark, w[0], 0.3, w[1], g);
@@ -9108,9 +9132,9 @@
     // the rock gorge round the first pool
     for (var rk = 0; rk < 18; rk++) {
       var rs = randf(0.5, 1.15), side = rk % 2 ? 1 : -1;
-      pkBoulder(pools[0].x + side * randf(4.2, 5.8), pools[0].z + randf(-3.4, 3.4), rs, g);
+      pkBoulder(pools[0].x + side * randf(4.2, 5.8), pools[0].z + (side > 0 ? randf(-0.6, 3.4) : randf(-3.4, 3.4)), rs, g);
     }
-    for (var rk2 = 0; rk2 < 6; rk2++) pkBoulder(pools[0].x + randf(-3.6, 3.6), pools[0].z - 4.2 - randf(0, 0.8), randf(0.7, 1.3), g);
+    for (var rk2 = 0; rk2 < 6; rk2++) pkBoulder(pools[0].x + randf(-3.6, 1.6), pools[0].z - 3.7 - randf(0, 0.1), randf(0.55, 0.85), g);
     // the tunnel on the second lift: an outcrop of piled rock, the channel running through a dark bore in it
     var tA = null, tB = null;
     for (i = 0; i <= NS; i++) if (P[i].x > 5 && T[i].z > 0.5 && P[i].z > -18.6 && P[i].z < -12.2) { if (!tA) tA = P[i]; tB = P[i]; }
@@ -9122,13 +9146,13 @@
       for (k = 0; k < 7; k++) {
         var f = k / 6, cx = tA.x + (tB.x - tA.x) * f, cy = tA.y + (tB.y - tA.y) * f + 0.7, cz = tA.z + (tB.z - tA.z) * f;
         [-1, 1].forEach(function (sd) {
-          rock(cx + sd * randf(3.3, 3.7), 1.0, cz + randf(-0.3, 0.3), randf(3.2, 3.8));
-          rock(cx + sd * randf(2.7, 3.0), cy + 0.2, cz + randf(-0.3, 0.3), randf(2.8, 3.3));
-          rock(cx + sd * randf(1.5, 1.9), cy + 1.7, cz + randf(-0.3, 0.3), randf(2.6, 3.0));
+          rock(cx + sd * randf(1.9, 2.1), 0.8, cz + randf(-0.3, 0.3), randf(1.6, 1.9));
+          rock(cx + sd * randf(1.8, 2.0), cy + 0.2, cz + randf(-0.3, 0.3), randf(1.6, 1.9));
+          rock(cx + sd * randf(1.1, 1.4), cy + 1.5, cz + randf(-0.3, 0.3), randf(1.6, 1.9));
         });
-        rock(cx + randf(-0.3, 0.3), cy + 2.5, cz, randf(2.6, 3.0));
+        rock(cx + randf(-0.3, 0.3), cy + 2.1, cz, randf(1.6, 1.9));
       }
-      solid(p.x + tA.x - 4.2, p.x + tA.x - 1.4, p.z + tA.z, p.z + tB.z, 0, 4); solid(p.x + tA.x + 1.4, p.x + tA.x + 4.2, p.z + tA.z, p.z + tB.z, 0, 4);
+      solid(p.x + tA.x - 3.0, p.x + tA.x - 1.4, p.z + tA.z, p.z + tB.z, 0, 4); solid(p.x + tA.x + 1.4, p.x + tA.x + 3.0, p.z + tA.z, p.z + tB.z, 0, 4);
     }
     // the station deck along the dock; the mill house below is its walls and roof
     var lane = p.x < 0 ? 1 : -1;
@@ -9180,12 +9204,13 @@
     berths.concat([12.2 + gw / 2 + 0.06]).forEach(function (gzz) { var z1 = gzz - gw / 2 - 0.06; if (z1 - railFrom > 0.3) pkRailRun(p.x + dockX, p.z + railFrom, p.x + dockX, p.z + z1, { solid: true }); railFrom = gzz + gw / 2 + 0.06; });
     // where each chute meets its pool, as a fraction of the lap: the boats throw up a splash when they cross one
     var splashes = [];
-    [10, 19].forEach(function (vi) {
+    PK_FLUME_FOOT.forEach(function (vi) {
       var best = 0, bd2 = 1e9;
       for (var c = 0; c < NS; c++) { var d2 = Math.pow(P[c].x - PTS[vi][0], 2) + Math.pow(P[c].y - PTS[vi][1], 2) + Math.pow(P[c].z - PTS[vi][2], 2); if (d2 < bd2) { bd2 = d2; best = c; } }
       splashes.push({ u: best / NS, x: p.x + PTS[vi][0], z: p.z + PTS[vi][2] });
     });
-    var a = pkAttr({ id: 'flume', name: 'Log flume', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats, board: 10, run: 30, unload: 5,
+    var a = pkAttr({ id: 'flume', name: 'Log flume', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats, board: 10, run: 50, unload: 5,
+      exit: [p.q[0] - 1.0, p.q[1] - 1.3],   // a metre north of the default spot, which stands in the low wall south of the line and held the player fast
       tickRun: function (at, dt) {
         M.waterTex.offset.y -= dt * 0.35;
         if (at.state !== 'running') return;
@@ -9234,7 +9259,7 @@
     for (var apz = 2.4; apz < 12.0; apz += 2.0) pkPavedDisc(1.7, M.paversWarm, p.x + WX + lane * 1.6, 0.045, p.z + apz, null, 1.0);
     // the wheel: a stone head-race under it, a timber axle, twelve paddles, turning in the water. It stands on the west
     // side of the big pool, where the long chute comes down.
-    var wheelX = -6.4, wheelZ = -20.4;
+    var wheelX = -6.4, wheelZ = pools[0].z;
     box(1.2, 1.3, 4.4, M.stone, wheelX - 0.9, 0.65, wheelZ, g);
     box(1.0, 0.5, 4.4, M.stoneDark, wheelX - 0.9, 1.35, wheelZ, g);
     var wheel = new THREE.Group(); wheel.position.set(wheelX, 2.1, wheelZ); g.add(wheel);
@@ -9409,10 +9434,7 @@
     });
     pkBevelBox(0.13, 0.16, P + 0.3, MAT.steelDark, xE, 2.28, zE, parent, 0.02);
     pkSign3D(['QUEUE', th.name.toUpperCase()], 1.6, 0.34, xE, 2.58, zE, dir > 0 ? Math.PI / 2 : -Math.PI / 2, { bg: '#1b232c', fg: '#f5b53d' }, parent);
-    // the line's own number plate, so the player can see where it starts
-    var zPlate = zE + sz * (P / 2 + 0.5);
-    pkRoundCyl(0.045, 1.55, MAT.steelDark, xE + dir * 0.30, 0.77, zPlate, parent, 8);
-    pkSign3D(['QUEUE FROM HERE'], 1.25, 0.20, xE + dir * 0.30, 1.62, zPlate, dir > 0 ? Math.PI / 2 : -Math.PI / 2, { bg: '#1b232c', fg: '#eef1f5' }, parent);
+    // (the second board, QUEUE FROM HERE, stood right behind the QUEUE sign and read as a doubled sign: one board is enough)
     }
     // the player's way in: press E at the entry to ride
     hitBox(2.0, 2.2, 2.0, xE + dir * 0.4, 1.1, zE, {
@@ -9600,9 +9622,10 @@
       box(0.2, 3.0, 0.2, MAT.steel, p.x + 2.4, 1.5, p.z - 6.5, g);
     } else if (a.id === 'flume') {
       // boulders along the channel: lumpy flat-shaded granite at varied scales, half sunk into the ground
-      for (var r = 0; r < 18; r++) pkBoulder(p.x + randf(-4.6, 4.6), p.z + randf(-23, 11), randf(0.55, 1.25), g);
+      // (the channel winds over the whole lawn now: the boulders keep to the west strip, off the queue's lane)
+      for (var r = 0; r < 14; r++) { var bz = randf(-27, -1); if (Math.abs(bz + 9) < 4) bz += 8; pkBoulder(p.x + randf(-15, -10.5), p.z + bz, randf(0.55, 1.25), g); }
       // the log store: a stack of sawn logs under a lean-to, with the board on its post
-      var lgx = p.x + p.r + 2.8, lgz = p.z + 4.0, barkM = pkMats().bark, endM = std({ color: 0xc79a62, roughness: 0.8 });
+      var lgx = p.x - 12.4, lgz = p.z - 9.0, barkM = pkMats().bark, endM = std({ color: 0xc79a62, roughness: 0.8 });
       [[-0.9, 0.4], [0, 0.4], [0.9, 0.4], [-0.45, 1.15], [0.45, 1.15], [0, 1.9]].forEach(function (q) {
         var lg = cyl(0.42, 2.6, barkM, lgx + q[0], q[1], lgz, g, 14); lg.rotation.x = Math.PI / 2;
         [-1.31, 1.31].forEach(function (ez) { var en = new THREE.Mesh(new THREE.CircleGeometry(0.4, 14), endM); en.position.set(lgx + q[0], q[1], lgz + ez); if (ez < 0) en.rotation.y = Math.PI; g.add(en); });
@@ -9610,7 +9633,7 @@
       [[-1.5, -1.2], [1.5, -1.2], [-1.5, 1.2], [1.5, 1.2]].forEach(function (q) { box(0.16, 2.9, 0.16, std({ color: 0x5c4630, roughness: 0.9 }), lgx + q[0], 1.45, lgz + q[1], g); });
       var lt = box(3.6, 0.1, 3.2, pkMats().slate, lgx, 2.95, lgz, g); lt.rotation.z = 0.12;
       solid(lgx - 1.5, lgx + 1.5, lgz - 1.3, lgz + 1.3, 0, 2.4);
-      sign(['LOGS'], 1.6, 0.5, p.x + p.r + 2.8, 2.6, p.z + 5.32, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
+      sign(['LOGS'], 1.6, 0.5, lgx, 2.6, lgz + 1.32, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
     } else if (a.id === 'kround') {
       // the kids' quarter: balloons, soft play blocks and a parent's bench under a shade sail, on the west
       // side away from the queue and clear of the station fence and the booth
@@ -9674,8 +9697,11 @@
     s = s || 1;
     var leaf = std({ color: 0x46763e, roughness: 1 });
     pkRoundCyl(0.34 * s, 0.5, pkMats().stone, x, 0.25, z, parent, 10);
-    var ball = new THREE.Mesh(new THREE.SphereGeometry(0.75 * s, 12, 10), leaf); ball.position.set(x, 1.5 * s, z); ball.castShadow = true; parent.add(ball);
-    sphere(0.4 * s, leaf, x, 2.35 * s, z, parent);
+    // clipped, not smooth: a tapered six-sided tier, a smaller one above it and a faceted crown (two balls read as eggs)
+    leaf.flatShading = true;
+    var low = new THREE.Mesh(new THREE.CylinderGeometry(0.62 * s, 0.82 * s, 1.1 * s, 6, 1), leaf); low.position.set(x, 1.05 * s, z); low.castShadow = true; parent.add(low);
+    var mid = new THREE.Mesh(new THREE.CylinderGeometry(0.4 * s, 0.6 * s, 0.8 * s, 6, 1), leaf); mid.position.set(x, 2.0 * s, z); mid.rotation.y = 0.52; mid.castShadow = true; parent.add(mid);
+    var top = new THREE.Mesh(new THREE.IcosahedronGeometry(0.36 * s, 0), leaf); top.position.set(x, 2.65 * s, z); top.castShadow = true; parent.add(top);
   }
   function pkHedgeRun(x0, z0, x1, z1, parent, h) {
     h = h || 1.0;
@@ -11488,7 +11514,7 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
     // the gardens: the windmill's spur
     [14, -60, 14, -66.6, 3, 'garden'],
     // Coaster Country: The Serpent's spur, the flume's spur
-    [35, -60, 35, -65, 4, 'coaster'], [35, -65, 41, -65, 4, 'coaster'], [35, -20, 47.5, -20, 4, 'coaster'],
+    [35, -60, 35, -65, 4, 'coaster'], [35, -65, 41, -65, 4, 'coaster'], [35, -20, 47.5, -20, 4, 'coaster'], [15.4, 3, 15.4, 11.4, 3.6, 'thrill'],
     // Thrills: Baron's Drop
     [56, 3, 56, 10.5, 4, 'thrill'],
     // the East Walk, one straight street from the Promenade to The Mountain King's line (it was two streets with a jog),
@@ -11606,13 +11632,34 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
     pkPaveRect(-23, -7, 17, 23);            // out to the carousel
     pkPaveRect(-16, 10, -84.5, -62.5);      // the Wild Hunt's forecourt, off the Promenade
   }
+  // a ride's pad: its plot's own, and for a ride inside a ring fence at least a good two metres of paving outside the
+  // fence all round (the exit, the booth's steps and the way round all land on it), short of the park's own fence
+  function pkPadR(p) {
+    var r = p.r * (p.pad || 1.25), S = typeof PK_FLAT_STATIONS !== 'undefined' ? PK_FLAT_STATIONS[p.id] : null;
+    if (S) {
+      r = Math.max(r, S[0] + 2.2);
+      var room = PK_PARK.x1 - p.x - 0.4;
+      if (p.z > PK_EAST_BAY.z0 - r && p.z < PK_EAST_BAY.z1 + r) room = Math.min(room, PK_EAST_BAY.x - p.x - 0.4);
+      r = Math.max(S[0] + 0.4, Math.min(r, room));
+    }
+    return r;
+  }
   function pkPaveBuild() {
     var P = PK_PAVE, M = pkMats(), i;
     P.meshes.forEach(function (m) { if (m.parent) m.parent.remove(m); m.geometry.dispose(); });
     P.meshes = []; P.tris = 0;
     // each ride's own pad, from its plot and its theme (a big coaster sets its own ground and has no pad)
     var shapes = P.shapes.slice(), tints = [];
-    PK_PLOTS.forEach(function (p) { var th = PK_THEME[p.id], r = p.r * (p.pad || 1.25); if (th && r >= 2) shapes.push({ k: 'disc', x: p.x, z: p.z, r: r, tint: th.ground }); });
+    PK_PLOTS.forEach(function (p) { var th = PK_THEME[p.id], r = pkPadR(p); if (th && r >= 2) shapes.push({ k: 'disc', x: p.x, z: p.z, r: r, tint: th.ground }); });
+    // each ride's line: the ground under the lane, an apron in front of its entry where the line forms, and for a ride
+    // inside a ring fence the walk from the boarding gate to the ride, so nobody steps off the line onto grass
+    (PK.lanes || []).forEach(function (l) {
+      var a = l.a, x0 = Math.min(l.x0, l.x1), x1 = Math.max(l.x0, l.x1), z0 = Math.min(l.zA, l.zB), z1 = Math.max(l.zA, l.zB);
+      shapes.push({ k: 'rect', x0: x0 - 0.5, x1: x1 + 0.5, z0: z0 - 0.45, z1: z1 + 0.45, tint: 0 });
+      var farLo = Math.abs(x0 - l.gx) > Math.abs(x1 - l.gx);   // the entry is at the end away from the boarding gate
+      shapes.push({ k: 'rect', x0: farLo ? x0 - 2.6 : x1, x1: farLo ? x0 : x1 + 2.6, z0: z0 - 0.9, z1: z1 + 0.9, tint: 0 });
+      if (a && a.station && a.plot) shapes.push({ k: 'rect', x0: Math.min(l.gx, a.plot.x), x1: Math.max(l.gx, a.plot.x), z0: z0 - 0.3, z1: z1 + 0.3, tint: a.plot && PK_THEME[a.id] ? PK_THEME[a.id].ground : 0 });
+    });
     shapes.forEach(function (s) { if (s.tint && tints.indexOf(s.tint) < 0) tints.push(s.tint); });
     var layer = function (mat, y, pick, grow) {
       var pos = [], uv = [], nor = [];
@@ -11812,8 +11859,8 @@ function pkFenceRunBetter(x0, z0, x1, z1, opt) {
   function pkBuildSignposts() {
     // at the hub: the four lands and the coaster, split over two posts so the boards do not
     // stack into a knot from the middle of the plaza
-    pkSignpost(-4.7, 7.0, [['FAIRGROUND <', Math.PI], ['THRILLS >', 0], ['COASTER ^', Math.PI / 2]]);
-    pkSignpost(-4.7, 4.2, [['DARK WOODS <', Math.PI], ['COASTER COUNTRY >', 0]]);
+    // (one post: there were two here, three metres apart, and with the map board that made three boards in one glance)
+    pkSignpost(-4.7, 5.6, [['FAIRGROUND <', Math.PI], ['DARK WOODS <', Math.PI], ['THRILLS >', 0], ['COASTER COUNTRY >', 0], ['EAST STRIP >', 0]]);
     // at each crossroads plaza, tucked into the corner of the junction
     pkSignpost(-28.4, 0.4, [['TEACUPS <', Math.PI], ['DARK WOODS ^', Math.PI / 2], ['STATION SQUARE >', 0]]);
     pkSignpost(37.4, 0.4, [["BARON'S DROP >", 0], ['COASTER COUNTRY ^', Math.PI / 2], ['< STATION SQUARE', Math.PI]]);
@@ -12717,8 +12764,8 @@ function pkBuildCoasterConsole(at) {
   // the mimic's sections start at points on the track, laid in lap order from the station
   var HB = pkCtlHood(G, CX, TOP + PH * Math.cos(TILT) + 0.16, CZ + 0.31 - PH * Math.sin(TILT) - 0.06, 2.44, 0.22, 0.2);
   var at0 = function (x, z) { return ((pkCoUAt(PK.curve, x, z) - PK.stationU) % 1 + 1) % 1; };
-  var SEC = [['STATION', 0], ['LIFT', ((PK.liftU[0] - PK.stationU) % 1 + 1) % 1], ['DROP\nLOOP', ((PK.liftU[1] - PK.stationU) % 1 + 1) % 1],
-    ['TURN\nHILLS', at0(-12.4, -28.9)], ['CORK-\nSCREW', at0(16, -28.3)], ['BRAKES', at0(-9, -28.3)], ['STATION', at0(-19, -14)]];
+  var SEC = [['STATION', 0], ['LIFT', ((PK.liftU[0] - PK.stationU) % 1 + 1) % 1], ['DROP\nHELIX', ((PK.liftU[1] - PK.stationU) % 1 + 1) % 1],
+    ['LOOP\nHILLS', at0(3.5, -17.5)], ['CORK-\nSCREW', at0(6, -29.3)], ['BRAKES', at0(-9, -29.3)], ['STATION', at0(-17, -14)]];
   PK.coasterSections = SEC;   // the wall's track display (part 03) names the same sections
   var mimic = [];
   for (var si = 0; si < 6; si++) mimic.push(pkCtlAnnun(HB, -1.08 + si * 0.2, 0, 0.18, 0.12, SEC[si][0], { col: si === 0 ? '#5fd38d' : si === 5 ? '#ff9a52' : '#8fc3ff' }));
@@ -12868,7 +12915,7 @@ function pkCtlHood(parent, x, y, z, w, h, lean) {
 var PK_CAB_RIDES = [
   ['coaster', 'THE COASTER'], ['carousel', 'CAROUSEL'], ['teacups', 'TEACUPS'], ['ferris', 'FERRIS WHEEL'],
   ['dodgems', 'DODGEMS'], ['droptower', 'DROP TOWER'], ['flume', 'LOG FLUME'], ['danse', 'DANCE RIDE'],
-  ['kround', 'LITTLE ROUNDABOUT'], ['kpots', 'WOBBLY POTS'], ['kpuffin', 'PUFFIN LINE'],
+  ['kround', 'LITTLE ROUNDABOUT'], ['kpots', 'WOBBLY POTS'], ['kpuffin', 'PUFFIN LINE'], ['ktoy', "TEDDY'S TOY TOUR"],
   ['serpent', 'THE SERPENT'], ['baron', "BARON'S DROP"], ['wildhunt', 'THE WILD HUNT'],
   ['mountain', 'THE MOUNTAIN KING'],
   ['droom', 'DREAM FLIGHT'], ['joris', 'DRAGON RIDE']
@@ -13262,6 +13309,12 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       c.beginPath(); c.arc(x - r * 0.55, y + r * 0.1, r * 0.2, Math.PI * 0.5, Math.PI * 1.5); c.stroke();
       c.fillStyle = S.acc; [-0.22, 0.02, 0.26].forEach(function (k) { c.beginPath(); c.arc(x + k * r, y + r * 0.12, r * 0.07, 0, 6.28); c.fill(); });
     },
+    ktoy: function (c, x, y, r, S) {
+      c.fillStyle = '#b98550'; c.beginPath(); c.arc(x, y + r * 0.08, r * 0.46, 0, 6.28); c.fill();
+      c.beginPath(); c.arc(x - r * 0.38, y - r * 0.32, r * 0.2, 0, 6.28); c.fill(); c.beginPath(); c.arc(x + r * 0.38, y - r * 0.32, r * 0.2, 0, 6.28); c.fill();
+      c.fillStyle = '#e9d5b0'; c.beginPath(); c.ellipse(x, y + r * 0.2, r * 0.22, r * 0.17, 0, 0, 6.28); c.fill();
+      c.fillStyle = '#2a1c14'; c.beginPath(); c.arc(x - r * 0.17, y - r * 0.02, r * 0.05, 0, 6.28); c.fill(); c.beginPath(); c.arc(x + r * 0.17, y - r * 0.02, r * 0.05, 0, 6.28); c.fill(); c.beginPath(); c.arc(x, y + r * 0.14, r * 0.06, 0, 6.28); c.fill();
+    },
     kpuffin: function (c, x, y, r, S) {
       c.fillStyle = '#20232a'; c.beginPath(); c.arc(x, y, r * 0.62, 0, 6.28); c.fill();
       c.fillStyle = '#f4f1e6'; c.beginPath(); c.ellipse(x - r * 0.12, y + r * 0.02, r * 0.36, r * 0.42, 0, 0, 6.28); c.fill();
@@ -13443,6 +13496,12 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       sig: { label: 'KETTLE', sfx: 'pkKettle', words: 'the kettle whistles', col: 'orange' },
       ann: [['voice', 'TUNES', '#ffe36a'], ['happy', 'HAPPY\nRIDERS', '#5fd38d']],
       tele: function (a, C, T) { return ['WOBBLE ' + T.rpm.toFixed(1) + ' RPM', 'POTS ' + T.n + '  HAPPY ' + a.riders]; } },
+    ktoy: { style: 'toy', base: ['#6f9ae0', '#2f5fb4', 'rgba(255,240,170,0.22)'], title: "Teddy's Toy Tour", model: 'NURSERY LINE 3 · SLOW AND SLEEPY', kind: 'track', seatCol: 0xffe36a,
+      blocks: ['STATION', 'CASTLE', 'RAINBOW', 'TEA PARTY'],
+      g2: { unit: 'km/h', min: 0, max: 8, ticks: 4, red: 0, get: function (T) { return T.v * 3.6 / 8; } },
+      sig: { label: 'LULLABY', sfx: 'pkTeaBell', words: 'the music box plays', col: 'pink' },
+      ann: [['voice', 'TUNES', '#ffe36a'], ['happy', 'HAPPY\nRIDERS', '#5fd38d']],
+      tele: function (a, C, T) { return ['TOUR ' + (T.v * 3.6).toFixed(1) + ' KM/H', 'SLEEPY RIDERS ' + a.riders + '  ' + T.block]; } },
     kpuffin: { style: 'toy', base: ['#7fc8f0', '#3f8fc8', 'rgba(255,255,255,0.2)'], title: 'Puffin Line', model: 'PEDAL LINE 2 · STEADY AS SHE GOES', kind: 'track', seatCol: 0xffe36a,
       blocks: ['STATION', 'HILL', 'TRACK', 'HOME'],
       g2: { unit: 'km/h', min: 0, max: 16, ticks: 4, red: 0, get: function (T) { return T.v * 3.6 / 16; } },
@@ -14164,7 +14223,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // booking: no guest record, no invisible body - the camera is the rider.
   function pkPlayerSeatAttr(a, seat) {
     seat.player = true; a.riders++;
-    PK.playerRide = { kind: 'attr', a: a, seat: seat, started: a.state === 'running', yaw0: player.yaw, pitch0: player.pitch, eye: 1.30, face: Math.PI + (seat.ry || 0) };
+    PK.playerRide = { kind: 'attr', a: a, seat: seat, started: a.state === 'running', yaw0: player.yaw, pitch0: player.pitch, eye: a.id === 'teacups' ? 1.62 : 1.30, face: Math.PI + (seat.ry || 0) };   // the teacup's wall stood in front of the eye at 1.30
     if (a.state === 'idle') {
       var C = pkCtl(a);
       a.state = 'boarding'; a.t = 0; C.gates = true; pkAttrBarsUp(a, C); a.boarding = 0;
@@ -14347,7 +14406,9 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       f.subVectors(tans[(i + 1) % N], tans[(i - 1 + N) % N]).multiplyScalar(v2 / (2 * ds));
       f.y += 9.81;
       f.addScaledVector(tans[i], -f.dot(tans[i]));
-      wt.push(clamp(f.length() / 9.81 - 0.15, 0, 1));
+      // on a near-vertical stretch the push says nothing about which way is up (it only spun the train round the track, a
+      // corkscrew down every dive), so the roll is held there and carried through from either side
+      wt.push(Math.abs(tans[i].y) > 0.88 ? 0 : clamp(f.length() / 9.81 - 0.15, 0, 1));
       var ra = Math.atan2(cr2.crossVectors(ups[i], f).dot(tans[i]), ups[i].dot(f));
       // floating over a hump on an upright stretch pulls the rider up out of the seat: that keeps the track upright (banked
       // by the sideways part only), it never rolls the train over. Only the track's own shape turns it upside down.
@@ -14467,6 +14528,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     } else if (!o.pedal) {
       var c = 0;
       for (i = 0; i <= K * 0.7; i++) if (ys[i] > ys[c]) c = i;
+      for (i = 0; i <= c; i++) if (ys[i] >= ys[c] - 0.05) { c = i; break; }   // a level crest: the lift ends where it first gets within 5 cm of the top
       var l0 = c;
       while (l0 > 1 && ys[l0 - 1] < ys[l0] - 1e-4) l0--;                // back down the climb to where it starts
       if (c - l0 > 4) lift = [l0, c];
@@ -14474,7 +14536,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var trims = (o.trim || []).map(function (t) { return [Math.round(((t[0] - u0 + 1) % 1) * K), Math.round(((t[1] - u0 + 1) % 1) * K), t[2]]; });
     var vSt = o.vStation || 2.5, vChain = o.vChain || 2.4, mu = 0.022, drag = 0.0009, V = [0], dIn = o.rollIn || 2.5;
     for (i = 1; i <= K; i++) {
-      var v, s = i * S, d = len - s;
+      var v, s = i * S, d = Math.max(0, len - s);   // (a hair under zero at the last step would make the roll-in root NaN)
       if (o.pedal) v = o.pedal;
       else if (i >= lift[0] && i <= lift[1]) v = vChain;
       else {
@@ -14641,29 +14703,54 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     pkRod(x, h - 0.12, z, tx, ty, tz, 0.07, mat, g, 6);
   }
   // ── The Serpent ───────────────────────────────────────────────────
-  // A double looper in the north-east corner: a long straight station, an 18 m lift up the east fence, the big drop along the
-  // back, a turnaround and a camelback run, then two vertical loops (each shifted sideways, so it crosses over itself) and
-  // home down the west side into the station.
+  // A looper laid from arcs (tools/scratch/tracks/serpent.js): out of the station east, the chain lift up the east side to
+  // 25 m, a slow spiral over the north-east corner (two and a quarter turns, descending), then the first drop in one long
+  // falling curve to the west side, a trim brake and the vertical loop, and home down the west column and a turn into the
+  // station. The middle lies open: the stone serpent coils there.
   var PK_SERPENT_PTS = [
-    [47, 1.05, -70], [49.4, 1.05, -70], [51.8, 1.05, -70], [54.2, 1.05, -70], [56.6, 1.05, -70], [59, 1.05, -70],
-    [61.4, 1.05, -70], [64, 1.3, -70.9], [66.4, 2.2, -72.8], [67.4, 3.8, -75.4], [67.6, 6.5, -78.4], [67.6, 10, -81.8],
-    [67.5, 13.5, -85.2], [67, 16.5, -88.4], [65.6, 18.2, -90.9], [63.2, 18.4, -91.9], [60.4, 17.8, -92.1], [57.6, 13, -91.9],
-    [55.2, 6.2, -91.4], [53, 2.2, -90.6], [50.2, 3.4, -91.6], [47.4, 5.4, -91.1], [45.9, 6.8, -89.6], [46.6, 7, -88.2],
-    [48.8, 6.4, -88], [51.2, 4.4, -88], [53.4, 6.2, -88.1], [55.4, 6, -88.1], [57.6, 3.6, -88], [60.4, 2.6, -87.7],
-    [63, 3, -86.6], [64.4, 3.4, -84.6], [64, 3, -82], [62.2, 2.7, -80.6], [59.6, 2.5, -80.3], [56.9, 2.5, -80.3],
-    [54.85, 2.91, -80.44], [53.12, 4.07, -80.59], [51.96, 5.8, -80.73], [51.55, 7.85, -80.88], [51.96, 9.9, -81.02], [53.12, 11.63, -81.16],
-    [54.85, 12.79, -81.31], [56.9, 13.2, -81.45], [58.95, 12.79, -81.59], [60.68, 11.63, -81.74], [61.84, 9.9, -81.88], [62.25, 7.85, -82.02],
-    [61.84, 5.8, -82.17], [60.68, 4.07, -82.31], [58.95, 2.91, -82.46], [56.9, 2.5, -82.6], [53.6, 2.7, -83], [49.8, 3.3, -83.4],
-    [48.02, 3.71, -83.57], [46.59, 4.84, -83.74], [45.8, 6.49, -83.91], [45.8, 8.31, -84.09], [46.59, 9.96, -84.26], [48.02, 11.09, -84.43],
-    [49.8, 11.5, -84.6], [51.58, 11.09, -84.77], [53.01, 9.96, -84.94], [53.8, 8.31, -85.11], [53.8, 6.49, -85.29], [53.01, 4.84, -85.46],
-    [51.58, 3.71, -85.63], [49.8, 3.3, -85.8], [47.6, 3.4, -86], [45.4, 3.5, -86.1], [43.7, 3.6, -84.7], [43.6, 3.3, -82.2],
-    [44.2, 2.6, -79.6], [44.4, 1.6, -76.6], [44.45, 1.1, -73.8], [44.9, 1.05, -71.8], [45.8, 1.05, -70.5]
+    [47, 1.05, -70], [48.23, 1.05, -70], [49.46, 1.05, -70], [50.69, 1.05, -70], [51.92, 1.05, -70], [53.15, 1.05, -70],
+    [54.38, 1.05, -70], [55.62, 1.05, -70], [56.85, 1.05, -70], [58.08, 1.05, -70], [59.31, 1.05, -70], [60.54, 1.05, -70],
+    [61.77, 1.05, -70], [63, 1.05, -70], [64.17, 1.05, -70.12], [65.3, 1.05, -70.46], [66.33, 1.05, -71.01], [67.24, 1.05, -71.76],
+    [67.99, 1.05, -72.67], [68.54, 1.05, -73.7], [68.88, 1.05, -74.83], [69, 1.05, -76], [69, 1.33, -77.2], [69, 2.18, -78.4],
+    [69, 3.5, -79.6], [69, 4.86, -80.8], [69, 6.22, -82], [69, 7.58, -83.2], [69, 8.94, -84.4], [69, 10.3, -85.6],
+    [69, 11.66, -86.8], [69, 13.03, -88], [69, 14.39, -89.2], [69, 15.75, -90.4], [69, 17.11, -91.6], [69, 18.47, -92.8],
+    [69, 19.83, -94], [69, 21.19, -95.2], [69, 22.55, -96.4], [69, 23.87, -97.6], [69, 24.72, -98.8], [69, 25, -100],
+    [69, 25, -101.2], [69, 25, -102.4], [69, 25, -103.6], [69, 25, -104.8], [69, 25, -106], [68.9, 25, -107.2],
+    [68.59, 24.99, -108.37], [68.08, 24.97, -109.46], [67.4, 24.96, -110.45], [66.56, 24.93, -111.31], [65.58, 24.9, -112.02], [64.49, 24.87, -112.54],
+    [63.33, 24.83, -112.87], [62.13, 24.78, -113], [60.93, 24.73, -112.92], [59.76, 24.68, -112.63], [58.66, 24.62, -112.15], [57.65, 24.56, -111.48],
+    [56.77, 24.5, -110.66], [56.05, 24.43, -109.69], [55.51, 24.35, -108.62], [55.15, 24.28, -107.46], [55.01, 24.2, -106.27], [55.06, 24.11, -105.06],
+    [55.33, 24.03, -103.89], [55.79, 23.94, -102.77], [56.43, 23.85, -101.76], [57.24, 23.75, -100.86], [58.2, 23.66, -100.12], [59.26, 23.56, -99.56],
+    [60.41, 23.45, -99.18], [61.6, 23.35, -99.01], [62.8, 23.24, -99.05], [63.98, 23.14, -99.29], [65.11, 23.03, -99.73], [66.14, 22.92, -100.35],
+    [67.04, 22.8, -101.15], [67.8, 22.69, -102.08], [68.39, 22.57, -103.14], [68.78, 22.46, -104.27], [68.98, 22.34, -105.46], [68.97, 22.22, -106.67],
+    [68.75, 22.11, -107.85], [68.33, 21.99, -108.99], [67.73, 21.87, -110.03], [66.95, 21.75, -110.95], [66.03, 21.63, -111.73], [64.99, 21.51, -112.33],
+    [63.85, 21.39, -112.75], [62.67, 21.28, -112.97], [61.46, 21.16, -112.98], [60.27, 21.04, -112.78], [59.14, 20.93, -112.39], [58.08, 20.81, -111.8],
+    [57.15, 20.7, -111.04], [56.35, 20.58, -110.14], [55.73, 20.47, -109.11], [55.29, 20.36, -107.98], [55.05, 20.26, -106.8], [55.01, 20.15, -105.6],
+    [55.18, 20.05, -104.41], [55.56, 19.94, -103.26], [56.12, 19.84, -102.2], [56.86, 19.75, -101.24], [57.76, 19.65, -100.43], [58.77, 19.56, -99.79],
+    [59.89, 19.47, -99.33], [61.06, 19.39, -99.06], [62.27, 19.3, -99.01], [63.46, 19.22, -99.15], [64.62, 19.15, -99.51], [65.69, 19.07, -100.05],
+    [66.66, 19, -100.77], [67.48, 18.94, -101.65], [68.15, 18.88, -102.66], [68.63, 18.82, -103.76], [68.92, 18.77, -104.93], [69, 18.72, -106.13],
+    [68.87, 18.67, -107.33], [68.54, 18.63, -108.49], [68.02, 18.6, -109.58], [67.31, 18.57, -110.56], [66.45, 18.54, -111.4], [65.46, 18.53, -112.08],
+    [64.37, 18.51, -112.59], [63.2, 18.5, -112.9], [62, 18.5, -113], [60.81, 18.44, -112.97], [59.63, 18.28, -112.87], [58.46, 18.01, -112.71],
+    [57.29, 17.66, -112.49], [56.14, 17.21, -112.2], [55.01, 16.7, -111.85], [53.89, 16.11, -111.44], [52.8, 15.46, -110.98], [51.74, 14.76, -110.45],
+    [50.71, 14.02, -109.87], [49.71, 13.24, -109.23], [48.75, 12.44, -108.53], [47.82, 11.61, -107.79], [46.94, 10.77, -107], [46.1, 9.93, -106.16],
+    [45.31, 9.09, -105.28], [44.57, 8.26, -104.35], [43.87, 7.46, -103.39], [43.23, 6.68, -102.39], [42.65, 5.94, -101.36], [42.12, 5.24, -100.3],
+    [41.66, 4.59, -99.21], [41.25, 4, -98.09], [40.9, 3.49, -96.96], [40.61, 3.04, -95.81], [40.39, 2.69, -94.64], [40.23, 2.42, -93.47],
+    [40.13, 2.26, -92.29], [40.1, 2.2, -91.1], [40.1, 2.2, -89.96], [40.1, 2.2, -88.81], [40.1, 2.2, -87.67], [40.1, 2.2, -86.53],
+    [40.1, 2.2, -85.39], [40.1, 2.2, -84.24], [40.1, 2.2, -83.1], [40.03, 2.33, -81.92], [39.96, 2.71, -80.79], [39.88, 3.32, -79.77],
+    [39.81, 4.14, -78.91], [39.74, 5.12, -78.24], [39.67, 6.23, -77.8], [39.59, 7.4, -77.61], [39.52, 8.59, -77.67], [39.45, 9.74, -77.99],
+    [39.38, 10.79, -78.55], [39.3, 11.69, -79.32], [39.23, 12.41, -80.26], [39.16, 12.91, -81.34], [39.09, 13.17, -82.51], [39.01, 13.17, -83.69],
+    [38.94, 12.91, -84.86], [38.87, 12.41, -85.94], [38.8, 11.69, -86.88], [38.72, 10.79, -87.65], [38.65, 9.74, -88.21], [38.58, 8.59, -88.53],
+    [38.51, 7.4, -88.59], [38.43, 6.23, -88.4], [38.36, 5.12, -87.96], [38.29, 4.14, -87.29], [38.22, 3.32, -86.43], [38.14, 2.71, -85.41],
+    [38.07, 2.33, -84.28], [38, 2.2, -83.1], [38, 2.2, -81.77], [38, 2.2, -80.43], [38, 2.2, -79.1], [38, 2.2, -78.07],
+    [38, 2.2, -77.03], [38, 2.2, -76], [38.12, 2.15, -74.83], [38.46, 2.02, -73.7], [39.01, 1.84, -72.67], [39.76, 1.63, -71.76],
+    [40.67, 1.41, -71.01], [41.7, 1.23, -70.46], [42.83, 1.1, -70.12], [44, 1.05, -70], [45, 1.05, -70], [46, 1.05, -70]
   ];
+  var PK_SERPENT_TRIM = [[40.4, -92.6], [40.4, -87], 15.4];   // the trim brake before the loop: from, to (x, z), and the speed it trims to (m/s)
   function pkBuildSerpent(p) {
     var th = PK_THEME.serpent, M = pkMats(), i;
     var g = new THREE.Group(); scene.add(g);
     var curve = pkCoCurve(PK_SERPENT_PTS), len = curve.getLength(), uP = pkCoUAt(curve, 57.4, -70);
-    var F = pkCoFrames(curve, 520, pkCoProfile(curve, len, uP), uP);
+    var opt = { trim: [[pkCoUAt(curve, PK_SERPENT_TRIM[0][0], PK_SERPENT_TRIM[0][1]), pkCoUAt(curve, PK_SERPENT_TRIM[1][0], PK_SERPENT_TRIM[1][1]), PK_SERPENT_TRIM[2]]] };   // the trim brake holds the loop's entry speed
+    var F = pkCoFrames(curve, 700, pkCoProfile(curve, len, uP, opt), uP);
     var E = { curve: curve, len: len, F: F, gap: 2.35, cars: [], uPark: uP, uOfF: [], run: 30 };
     pkCoLevel(F, curve, E.uPark, 4 * 2.35 + 1.4, 1.4);
     var seats = [], cols = [0x2f8f6f, 0xf0c04a, 0x1f6f55, 0xf0c04a, 0x2f8f6f];
@@ -14681,9 +14768,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       spineMat: spineMat, supMat: supMat, tieMat: std({ color: 0x35514b, roughness: 0.7 }),
       skip: function (x, z) { return z > -71.6 && x > 45.5 && x < 62.5; }
     });
-    pkCoBrace(g, 69.2, -80.2, 8.6, 67.7, 8.2, -80.2, supMat);
-    pkCoBrace(g, 69.2, -86.6, 15.6, 67.3, 15.2, -86.7, supMat);
-    pkCoPlan(E);
+    pkCoPlan(E, opt);
     // the station: platform, boom gates, canopy
     pkCoPlatform(g, 47.0, 58.6, -69.35, -66.85, th, 1.05);
     var a = pkAttr({
@@ -14707,28 +14792,50 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // vertical drop into a tunnel mouth in the rockery, a loop along the east fence (clear of the lift), then round the corner,
   // back along the fence over a camelback and up the west side into the station.
   // ── Baron's Drop ─────────────────────────────────────────────────
-  // The remodel: the vertical loop is gone. The Baron is a double-dive now. Out of the station the near-vertical lift
-  // takes the car to 21 m, the top turn lines it up, and the first drop falls straight into the tunnel mouth in the
-  // rockery. Out of the tunnel it climbs the south-east corner and drops a second time, shallower but steeper, into a
-  // splash basin beside the fence; then the long banked run home past the gatehouse.
+  // A dive coaster laid from arcs (tools/scratch/tracks/baron.js). Out of the station a right turn and the steep chain lift
+  // down the east side to 23 m, a short top turn, and the first dive, straight down, pulling out west along the south lane
+  // through the splash basin. Then two vertical loops, a water brake, a slow U-turn at the west end, and the run home east
+  // through the rockery tunnel into the station.
   var PK_BARON_PTS = [
-    [48.4, 0.95, 15.5], [50.8, 0.95, 15.5], [53.2, 0.95, 15.5], [55.6, 0.95, 15.5], [58, 0.95, 15.5], [60.4, 0.95, 15.5],
-    [62.8, 0.95, 15.5], [64.6, 2, 16], [65.4, 6, 16.6], [65.8, 11.5, 17.3], [65.6, 16.5, 18.3], [64.4, 20.6, 19.6],
-    [61.6, 21.2, 20.8], [60.2, 21.2, 21.1], [57.9, 21.1, 21.9], [56.2, 20.7, 22.5], [56, 19, 22.55], [55.95, 12, 22.55],
-    [55.9, 4, 22.55], [55.9, 1.6, 22.5], [56.4, 1.15, 22.1], [57.6, 1.6, 20.8], [59.4, 2.2, 20.2], [61.8, 2.6, 20.6],
-    [64.2, 3.4, 21.4], [65.6, 4.6, 22.6],                                   // out of the tunnel, into the climb
-    [67.0, 6.4, 24.2], [67.9, 8.6, 26.0], [68.1, 10.4, 27.6],               // the second climb
-    [67.6, 6.0, 29.4], [66.4, 2.2, 30.2],                                   // the second, steeper drop
-    [64.0, 1.6, 30.2], [61.0, 1.4, 30.0],                                   // the splash run
-    [58.0, 4.2, 29.8], [55.0, 6.6, 29.6], [52.0, 4.0, 29.4],                // the banked camelback
-    [49.0, 2.2, 28.6], [47.0, 1.4, 27.0], [46.4, 1.05, 24.6],               // the west turn
-    [46.4, 0.95, 21.8], [46.5, 0.95, 19.0], [46.8, 0.95, 16.8], [47.4, 0.95, 16]
+    [46.8, 0.95, 15.5], [48, 0.95, 15.5], [49.2, 0.95, 15.5], [50.4, 0.95, 15.5], [51.6, 0.95, 15.5], [52.8, 0.95, 15.5],
+    [54, 0.95, 15.5], [55.2, 0.95, 15.5], [56.4, 0.95, 15.5], [57.6, 0.95, 15.5], [58.8, 0.95, 15.5], [60, 0.95, 15.5],
+    [61.2, 0.95, 15.5], [62.4, 0.95, 15.5], [63.6, 0.95, 15.5], [64.8, 0.95, 15.5], [66.04, 0.95, 15.7], [67.15, 0.95, 16.26],
+    [68.04, 0.95, 17.15], [68.6, 0.95, 18.26], [68.8, 0.95, 19.5], [68.8, 1.05, 20.28], [68.8, 1.35, 21], [68.8, 1.83, 21.62],
+    [68.8, 2.45, 22.1], [68.8, 3.17, 22.4], [68.8, 3.95, 22.5], [68.8, 5.18, 22.5], [68.8, 6.41, 22.5], [68.8, 7.64, 22.5],
+    [68.8, 8.87, 22.5], [68.8, 10.1, 22.5], [68.8, 11.33, 22.5], [68.8, 12.57, 22.5], [68.8, 13.8, 22.5], [68.8, 15.03, 22.5],
+    [68.8, 16.26, 22.5], [68.8, 17.49, 22.5], [68.8, 18.72, 22.5], [68.8, 19.95, 22.5], [68.8, 20.73, 22.6], [68.8, 21.45, 22.9],
+    [68.8, 22.07, 23.38], [68.8, 22.55, 24], [68.8, 22.85, 24.72], [68.8, 22.95, 25.5], [68.63, 22.95, 26.58], [68.13, 22.95, 27.56],
+    [67.36, 22.95, 28.33], [66.38, 22.95, 28.83], [65.3, 22.95, 29], [64.39, 22.83, 29], [63.55, 22.48, 29], [62.83, 21.92, 29],
+    [62.27, 21.2, 29], [61.92, 20.36, 29], [61.8, 19.45, 29], [61.8, 18.24, 29], [61.8, 17.02, 29], [61.8, 15.81, 29],
+    [61.8, 14.59, 29], [61.8, 13.38, 29], [61.8, 12.16, 29], [61.8, 10.95, 29], [61.73, 9.74, 29], [61.51, 8.56, 29],
+    [61.15, 7.4, 29], [60.65, 6.3, 29], [60.03, 5.27, 29], [59.29, 4.32, 29], [58.43, 3.46, 29], [57.48, 2.72, 29],
+    [56.45, 2.1, 29], [55.35, 1.6, 29], [54.19, 1.24, 29], [53.01, 1.02, 29], [51.8, 0.95, 29], [50.6, 0.95, 29],
+    [49.4, 0.95, 29], [48.2, 0.95, 29], [47, 0.95, 29], [45.8, 0.95, 29], [44.61, 1.06, 28.94], [43.45, 1.39, 28.87],
+    [42.38, 1.92, 28.81], [41.42, 2.65, 28.74], [40.61, 3.53, 28.68], [39.98, 4.55, 28.61], [39.55, 5.67, 28.55], [39.33, 6.85, 28.48],
+    [39.33, 8.05, 28.42], [39.55, 9.23, 28.35], [39.98, 10.35, 28.29], [40.61, 11.37, 28.22], [41.42, 12.25, 28.16], [42.38, 12.98, 28.09],
+    [43.45, 13.51, 28.03], [44.61, 13.84, 27.96], [45.8, 13.95, 27.9], [46.99, 13.84, 27.84], [48.15, 13.51, 27.77], [49.22, 12.98, 27.71],
+    [50.18, 12.25, 27.64], [50.99, 11.37, 27.58], [51.62, 10.35, 27.51], [52.05, 9.23, 27.45], [52.27, 8.05, 27.38], [52.27, 6.85, 27.32],
+    [52.05, 5.67, 27.25], [51.62, 4.55, 27.19], [50.99, 3.53, 27.12], [50.18, 2.65, 27.06], [49.22, 1.92, 26.99], [48.15, 1.39, 26.93],
+    [46.99, 1.06, 26.86], [45.8, 0.95, 26.8], [44.8, 0.95, 26.8], [43.8, 0.95, 26.8], [42.8, 0.95, 26.8], [41.61, 1.06, 26.74],
+    [40.45, 1.39, 26.67], [39.38, 1.92, 26.61], [38.42, 2.65, 26.54], [37.61, 3.53, 26.48], [36.98, 4.55, 26.41], [36.55, 5.67, 26.35],
+    [36.33, 6.85, 26.28], [36.33, 8.05, 26.22], [36.55, 9.23, 26.15], [36.98, 10.35, 26.09], [37.61, 11.37, 26.02], [38.42, 12.25, 25.96],
+    [39.38, 12.98, 25.89], [40.45, 13.51, 25.83], [41.61, 13.84, 25.76], [42.8, 13.95, 25.7], [43.99, 13.84, 25.64], [45.15, 13.51, 25.57],
+    [46.22, 12.98, 25.51], [47.18, 12.25, 25.44], [47.99, 11.37, 25.38], [48.62, 10.35, 25.31], [49.05, 9.23, 25.25], [49.27, 8.05, 25.18],
+    [49.27, 6.85, 25.12], [49.05, 5.67, 25.05], [48.62, 4.55, 24.99], [47.99, 3.53, 24.92], [47.18, 2.65, 24.86], [46.22, 1.92, 24.79],
+    [45.15, 1.39, 24.73], [43.99, 1.06, 24.66], [42.8, 0.95, 24.6], [41.55, 0.95, 24.6], [40.3, 0.95, 24.6], [39.05, 0.95, 24.6],
+    [37.8, 0.95, 24.6], [36.62, 0.95, 24.44], [35.53, 0.95, 23.99], [34.58, 0.95, 23.27], [33.86, 0.95, 22.33], [33.41, 0.95, 21.23],
+    [33.25, 0.95, 20.05], [33.41, 0.95, 18.87], [33.86, 0.95, 17.78], [34.58, 0.95, 16.83], [35.53, 0.95, 16.11], [36.62, 0.95, 15.66],
+    [37.8, 0.95, 15.5], [38.93, 0.95, 15.5], [40.05, 0.95, 15.5], [41.18, 0.95, 15.5], [42.3, 0.95, 15.5], [43.43, 0.95, 15.5],
+    [44.55, 0.95, 15.5], [45.68, 0.95, 15.5]
   ];
+  // the trim brakes: [from, to] in (x, z) and the speed they hold (m/s): before the loops (their entry speed), then the water brake
+  var PK_BARON_TRIM = [[[50.6, 29], [47.4, 29], 17.2], [[41.4, 24.6], [38.6, 24.6], 7.5]];
   function pkBuildBaron(p) {
     var th = PK_THEME.baron, i;
     var g = new THREE.Group(); scene.add(g);
     var curve = pkCoCurve(PK_BARON_PTS), len = curve.getLength(), uP = pkCoUAt(curve, 56.8, 15.5);
-    var F = pkCoFrames(curve, 500, pkCoProfile(curve, len, uP), uP);
+    var opt = { trim: PK_BARON_TRIM.map(function (t) { return [pkCoUAt(curve, t[0][0], t[0][1]), pkCoUAt(curve, t[1][0], t[1][1]), t[2]]; }) };
+    var F = pkCoFrames(curve, 540, pkCoProfile(curve, len, uP, opt), uP);
     var E = { curve: curve, len: len, F: F, gap: 2.42, cars: [], uPark: uP, uOfF: [], run: 30 };
     pkCoLevel(F, curve, E.uPark, 3 * 2.42 + 1.4, 1.4);
     var seats = [], cols = [0x3a3f48, 0xd8c9a8, 0x3a3f48, 0xd8c9a8];
@@ -14744,24 +14851,20 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var supMat = std({ color: 0xd0c2a4, roughness: 0.6, metalness: 0.15 });
     pkCoTrackBuild(g, E, {
       spineMat: spineMat, supMat: supMat, tieMat: std({ color: 0x352a24, roughness: 0.75 }),
-      skip: function (x, z) { return (x > 47.5 && x < 63.2 && z > 14.8 && z < 19.4); }
+      skip: function (x, z) { return (x > 45.5 && x < 66 && z > 14.3 && z < 20) || (x > 50.5 && x < 59.8 && z > 27.2 && z < 30.8); }   // the station and the splash basin: no legs
     });
-    // the lift tower and the drop tower: two columns with rods out to the spine
-    pkCoBrace(g, 67.0, 17.3, 9.6, 65.6, 9.8, 17.4, supMat);
-    pkCoBrace(g, 54.6, 22.55, 18.4, 55.7, 18.2, 22.55, supMat);
-    pkCoBrace(g, 57.3, 22.55, 18.4, 56.1, 18.2, 22.55, supMat);
-    pkCoPlan(E);
+    pkCoPlan(E, opt);
     // the splash basin under the second drop: a stone rim, the water, and rocks along the fence side
-    var splash = { x: 62.4, z: 30.0, u: pkCoUAt(curve, 62.4, 30.0) };
-    [[62.4, 28.4, 9.4, 0.5], [62.4, 31.6, 9.4, 0.5], [57.9, 30.0, 0.5, 3.2], [66.9, 30.0, 0.5, 3.2]].forEach(function (w) {
+    var splash = { x: 55.2, z: 29.0, u: pkCoUAt(curve, 55.2, 29.0) };
+    [[55.2, 27.4, 9.2, 0.5], [55.2, 30.6, 9.2, 0.5], [50.8, 29.0, 0.5, 3.2], [59.6, 29.0, 0.5, 3.2]].forEach(function (w) {
       box(w[2], 0.75, w[3], pkMatStone(), w[0], 0.37, w[1], g);
     });
-    var bwater = new THREE.Mesh(new THREE.PlaneGeometry(8.8, 3.0), pkMats().water);
+    var bwater = new THREE.Mesh(new THREE.PlaneGeometry(8.4, 2.8), pkMats().water);
     bwater.rotation.x = -Math.PI / 2; bwater.position.set(splash.x, 0.5, splash.z); g.add(bwater);
-    for (var sb = 0; sb < 7; sb++) pkBoulder(58.4 + sb * 1.25, 31.9 + randf(-0.2, 0.2), randf(0.6, 1.05), g);
+    for (var sb = 0; sb < 5; sb++) pkBoulder(52.4 + sb * 1.5, 26.4 + randf(-0.2, 0.2), randf(0.6, 1.0), g);   // the rocks go on the station side of the basin: the south side is the hall's wall
     E.splash = splash;
     // the tunnel mouth: a stone ring round the track, a dark bore, and the rockery heaped over it
-    var uT = pkCoUAt(curve, 56.9, 21.6);
+    var uT = pkCoUAt(curve, 39.6, 15.5);   // the run home east: the ring stands here, the rock heaped on east of it
     var pT = curve.getPointAt(uT), tT = curve.getTangentAt(uT).normalize();
     pkCoUpAt(F, uT);
     var upT = PK_CO_UP.clone();
@@ -14872,24 +14975,62 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   }
   // ── The Wild Hunt ────────────────────────────────────────────────
   // The big one, in place of the three indoor halls: an out-and-back steel coaster that fills the north strip to the
-  // fence. Out of the lodge it turns back on itself and takes the chain lift west, right behind the station, to 26 m; it
-  // sweeps round the west end on the crest, dives the first drop along the north fence, floats a camelback, climbs into a
-  // high turnaround at the east end, comes home through the middle over two airtime hills, ducks under its own crest in
-  // a low west turn and brakes into the station. It stands in a pine wood, on braced twin columns, not on poles.
+  // fence, laid from arcs (tools/scratch/tracks/wildhunt.js). Out of the lodge it turns back on itself and takes the long
+  // chain lift west, right behind the station, to 28 m; it sweeps round the west end on the crest, dives the first drop east
+  // along the north fence, climbs into a high turnaround at the east end, comes home west through the middle over a
+  // camelback, takes a slow turn at the west end (a trim brake holds it to 9 m/s) and brakes east along the station line
+  // into the lodge. It stands in a pine wood, on braced twin columns, not on poles.
   var PK_HUNT_PTS = [
-    [-6, 1.0, -84.5], [0, 1.0, -84.5], [6, 1.0, -84.5], [10, 1.0, -84.5], [13.5, 1.0, -84.5],        // the station straight
-    [19.46, 1.05, -86.5], [19.46, 1.2, -90.5], [16, 1.45, -92.5],                                     // the turn back into the lift
-    [13, 2.4, -92.5], [8, 5.4, -92.5], [2, 9.1, -92.5], [-5, 13.4, -92.5], [-12, 17.7, -92.5], [-19, 22.0, -92.5], [-24.5, 25.0, -92.5],
-    [-30.5, 26.2, -92.7],                                                                              // the crest
-    [-37.57, 25.9, -95.43], [-40.5, 25.3, -102.5], [-37.57, 24.6, -109.57], [-30.5, 23.8, -112.5],     // the sweep round the west end
-    [-24.5, 20.5, -112.5], [-18.5, 13.5, -112.5], [-12.5, 6.5, -112.5], [-6, 2.8, -112.5], [0, 2.2, -112.5],   // the first drop
-    [6, 5.5, -112.5], [11.5, 11.5, -112.5], [16.5, 15.6, -112.4],                                      // the camelback, up into
-    [21.6, 16.8, -110.6], [23.5, 17.0, -106], [21.6, 16.4, -101.4], [17, 14.8, -99.5],                 // the high turnaround
-    [11, 8.5, -99.5], [5, 4.2, -99.5], [-1, 6.5, -99.5], [-6.5, 10.0, -99.5], [-12, 7.0, -99.5], [-17.5, 4.0, -99.5], [-23, 5.6, -99.5], [-28, 7.2, -99.6],   // the airtime hills
-    [-33.3, 7.0, -97.3], [-35.5, 6.2, -92], [-33.3, 5.0, -86.7], [-28, 3.8, -84.5],                    // the low west turn, under the crest
-    [-22, 2.6, -84.5], [-16, 1.6, -84.5], [-11, 1.1, -84.5]                                            // the brake run
+    [-6, 1, -84.5], [-4.82, 1, -84.5], [-3.65, 1, -84.5], [-2.47, 1, -84.5], [-1.29, 1, -84.5], [-0.12, 1, -84.5],
+    [1.06, 1, -84.5], [2.24, 1, -84.5], [3.41, 1, -84.5], [4.59, 1, -84.5], [5.76, 1, -84.5], [6.94, 1, -84.5],
+    [8.12, 1, -84.5], [9.29, 1, -84.5], [10.47, 1, -84.5], [11.65, 1, -84.5], [12.82, 1, -84.5], [14, 1, -84.5],
+    [15.16, 1, -84.68], [16.2, 1, -85.22], [17.03, 1, -86.05], [17.57, 1, -87.09], [17.75, 1, -88.25], [17.57, 1, -89.41],
+    [17.03, 1, -90.45], [16.2, 1, -91.28], [15.16, 1, -91.82], [14, 1, -92], [12.8, 1.05, -92], [11.59, 1.21, -92],
+    [10.39, 1.48, -92], [9.18, 1.85, -92], [7.98, 2.33, -92], [6.78, 2.92, -92], [5.57, 3.54, -92], [4.37, 4.17, -92],
+    [3.16, 4.79, -92], [1.96, 5.42, -92], [0.76, 6.05, -92], [-0.45, 6.67, -92], [-1.65, 7.3, -92], [-2.86, 7.93, -92],
+    [-4.06, 8.55, -92], [-5.27, 9.18, -92], [-6.47, 9.8, -92], [-7.67, 10.43, -92], [-8.88, 11.06, -92], [-10.08, 11.68, -92],
+    [-11.29, 12.31, -92], [-12.49, 12.93, -92], [-13.69, 13.56, -92], [-14.9, 14.19, -92], [-16.1, 14.81, -92], [-17.31, 15.44, -92],
+    [-18.51, 16.07, -92], [-19.71, 16.69, -92], [-20.92, 17.32, -92], [-22.12, 17.94, -92], [-23.33, 18.57, -92], [-24.53, 19.2, -92],
+    [-25.73, 19.82, -92], [-26.94, 20.45, -92], [-28.14, 21.07, -92], [-29.35, 21.7, -92], [-30.55, 22.33, -92], [-31.76, 22.95, -92],
+    [-32.96, 23.58, -92], [-34.16, 24.21, -92], [-35.37, 24.83, -92], [-36.57, 25.46, -92], [-37.78, 26.08, -92], [-38.98, 26.67, -92],
+    [-40.18, 27.15, -92], [-41.39, 27.52, -92], [-42.59, 27.79, -92], [-43.8, 27.95, -92], [-45, 28, -92], [-46.21, 28, -92.07],
+    [-47.39, 27.98, -92.29], [-48.55, 27.96, -92.65], [-49.65, 27.94, -93.15], [-50.68, 27.9, -93.77], [-51.63, 27.86, -94.51], [-52.49, 27.82, -95.37],
+    [-53.23, 27.77, -96.32], [-53.85, 27.72, -97.35], [-54.35, 27.67, -98.45], [-54.71, 27.61, -99.61], [-54.93, 27.56, -100.79], [-55, 27.5, -102],
+    [-54.93, 27.44, -103.21], [-54.71, 27.39, -104.39], [-54.35, 27.33, -105.55], [-53.85, 27.28, -106.65], [-53.23, 27.23, -107.68], [-52.49, 27.18, -108.63],
+    [-51.63, 27.14, -109.49], [-50.68, 27.1, -110.23], [-49.65, 27.06, -110.85], [-48.55, 27.04, -111.35], [-47.39, 27.02, -111.71], [-46.21, 27, -111.93],
+    [-45, 27, -112], [-43.81, 26.96, -112], [-42.61, 26.85, -112], [-41.42, 26.67, -112], [-40.22, 26.42, -112], [-39.03, 26.11, -112],
+    [-37.83, 25.74, -112], [-36.64, 25.32, -112], [-35.44, 24.85, -112], [-34.25, 24.34, -112], [-33.06, 23.79, -112], [-31.86, 23.21, -112],
+    [-30.67, 22.59, -112], [-29.47, 21.95, -112], [-28.28, 21.29, -112], [-27.08, 20.61, -112], [-25.89, 19.91, -112], [-24.69, 19.21, -112],
+    [-23.5, 18.5, -112], [-22.31, 17.79, -112], [-21.11, 17.09, -112], [-19.92, 16.39, -112], [-18.72, 15.71, -112], [-17.53, 15.05, -112],
+    [-16.33, 14.41, -112], [-15.14, 13.79, -112], [-13.94, 13.21, -112], [-12.75, 12.66, -112], [-11.56, 12.15, -112], [-10.36, 11.68, -112],
+    [-9.17, 11.26, -112], [-7.97, 10.89, -112], [-6.78, 10.58, -112], [-5.58, 10.33, -112], [-4.39, 10.15, -112], [-3.19, 10.04, -112],
+    [-2, 10, -112], [-0.83, 10.09, -112], [0.33, 10.34, -112], [1.5, 10.74, -112], [2.67, 11.26, -112], [3.83, 11.89, -112],
+    [5, 12.59, -112], [6.17, 13.36, -112], [7.33, 14.17, -112], [8.5, 15, -112], [9.67, 15.83, -112], [10.83, 16.64, -112],
+    [12, 17.41, -112], [13.17, 18.11, -112], [14.33, 18.74, -112], [15.5, 19.26, -112], [16.67, 19.66, -112], [17.83, 19.91, -112],
+    [19, 20, -112], [20.17, 19.99, -111.88], [21.3, 19.96, -111.54], [22.33, 19.91, -110.99], [23.24, 19.84, -110.24], [23.99, 19.77, -109.33],
+    [24.54, 19.68, -108.3], [24.88, 19.59, -107.17], [25, 19.5, -106], [24.88, 19.41, -104.83], [24.54, 19.32, -103.7], [23.99, 19.23, -102.67],
+    [23.24, 19.16, -101.76], [22.33, 19.09, -101.01], [21.3, 19.04, -100.46], [20.17, 19.01, -100.12], [19, 19, -100], [17.78, 18.92, -100],
+    [16.57, 18.68, -100], [15.35, 18.3, -100], [14.13, 17.8, -100], [12.91, 17.18, -100], [11.7, 16.47, -100], [10.48, 15.68, -100],
+    [9.26, 14.82, -100], [8.04, 13.91, -100], [6.83, 12.96, -100], [5.61, 11.99, -100], [4.39, 11.01, -100], [3.17, 10.04, -100],
+    [1.96, 9.09, -100], [0.74, 8.18, -100], [-0.48, 7.32, -100], [-1.7, 6.53, -100], [-2.91, 5.82, -100], [-4.13, 5.2, -100],
+    [-5.35, 4.7, -100], [-6.57, 4.32, -100], [-7.78, 4.08, -100], [-9, 4, -100], [-10.19, 4.05, -100], [-11.37, 4.19, -100],
+    [-12.56, 4.42, -100], [-13.75, 4.7, -100], [-14.94, 5.04, -100], [-16.12, 5.42, -100], [-17.31, 5.83, -100], [-18.5, 6.25, -100],
+    [-19.69, 6.67, -100], [-20.87, 7.08, -100], [-22.06, 7.46, -100], [-23.25, 7.8, -100], [-24.44, 8.08, -100], [-25.62, 8.31, -100],
+    [-26.81, 8.45, -100], [-28, 8.5, -100], [-29.19, 8.44, -100], [-30.37, 8.26, -100], [-31.56, 7.99, -100], [-32.75, 7.64, -100],
+    [-33.94, 7.22, -100], [-35.12, 6.76, -100], [-36.31, 6.26, -100], [-37.5, 5.75, -100], [-38.69, 5.24, -100], [-39.87, 4.74, -100],
+    [-41.06, 4.28, -100], [-42.25, 3.86, -100], [-43.44, 3.51, -100], [-44.62, 3.24, -100], [-45.81, 3.06, -100], [-47, 3, -100],
+    [-48.21, 3, -99.9], [-49.39, 3, -99.62], [-50.52, 3, -99.16], [-51.56, 3, -98.52], [-52.48, 3, -97.73], [-53.27, 3, -96.81],
+    [-53.91, 3, -95.77], [-54.37, 3, -94.64], [-54.65, 3, -93.46], [-54.75, 3, -92.25], [-54.65, 3, -91.04], [-54.37, 3, -89.86],
+    [-53.91, 3, -88.73], [-53.27, 3, -87.69], [-52.48, 3, -86.77], [-51.56, 3, -85.98], [-50.52, 3, -85.34], [-49.39, 3, -84.88],
+    [-48.21, 3, -84.6], [-47, 3, -84.5], [-45.79, 2.99, -84.5], [-44.59, 2.98, -84.5], [-43.38, 2.96, -84.5], [-42.18, 2.92, -84.5],
+    [-40.97, 2.88, -84.5], [-39.76, 2.84, -84.5], [-38.56, 2.78, -84.5], [-37.35, 2.72, -84.5], [-36.15, 2.65, -84.5], [-34.94, 2.58, -84.5],
+    [-33.74, 2.51, -84.5], [-32.53, 2.43, -84.5], [-31.32, 2.35, -84.5], [-30.12, 2.26, -84.5], [-28.91, 2.18, -84.5], [-27.71, 2.09, -84.5],
+    [-26.5, 2, -84.5], [-25.29, 1.91, -84.5], [-24.09, 1.82, -84.5], [-22.88, 1.74, -84.5], [-21.68, 1.65, -84.5], [-20.47, 1.57, -84.5],
+    [-19.26, 1.49, -84.5], [-18.06, 1.42, -84.5], [-16.85, 1.35, -84.5], [-15.65, 1.28, -84.5], [-14.44, 1.22, -84.5], [-13.24, 1.16, -84.5],
+    [-12.03, 1.12, -84.5], [-10.82, 1.08, -84.5], [-9.62, 1.04, -84.5], [-8.41, 1.02, -84.5], [-7.21, 1.01, -84.5]
   ];
-  PK_KEEP.push([-36, -104, 9], [20, -106, 9], [-8, -108, 12]);
+  var PK_HUNT_TRIM = [[[-39, -100], [-46, -100], 9]];   // the trim brake before the slow west turn: from, to (x, z), and the speed it holds (m/s)
+  PK_KEEP.push([-48, -100, 13], [-50, -90, 9], [-24, -102, 12], [-6, -104, 14], [16, -104, 12]);
   // Braced bents under a coaster: where the track is low, one stout column with a head; where it is high, two raked
   // columns under a cross head, tied in tiers and cross-braced, each on its own footing. A bent never comes down through
   // a lower pass of the track. Returns where the feet stand, so the planting can keep off them.
@@ -14934,8 +15075,9 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     // path from lawn, so the walk has to be drawn, not just declared.
     // (part 12 lays it with the rest of the paving: pkPaveCore)
     var curve = pkCoCurve(PK_HUNT_PTS), len = curve.getLength(), uP = pkCoUAt(curve, 4, -84.5);
-    var P0 = pkCoProfile(curve, len, uP);
-    var F = pkCoFrames(curve, 760, P0, uP);
+    var opt = { trim: PK_HUNT_TRIM.map(function (t) { return [pkCoUAt(curve, t[0][0], t[0][1]), pkCoUAt(curve, t[1][0], t[1][1]), t[2]]; }) };
+    var P0 = pkCoProfile(curve, len, uP, opt);
+    var F = pkCoFrames(curve, 1000, P0, uP);
     var E = { curve: curve, len: len, F: F, gap: 2.35, cars: [], uPark: uP, uOfF: [], run: 30 };
     pkCoLevel(F, curve, E.uPark, 5 * 2.35 + 1.4, 1.4);
     var seats = [], cols = [0x6b4f8a, 0xc9a227, 0x2a2434, 0xc9a227, 0x6b4f8a, 0x2a2434];
@@ -14948,11 +15090,11 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       });
     }
     var spineMat = std({ color: 0x5a3f7a, roughness: 0.4, metalness: 0.35 });
-    var supMat = std({ color: 0x33363c, roughness: 0.5, metalness: 0.4 });
+    var supMat = std({ color: 0x626872, roughness: 0.55, metalness: 0.25 });   // was 0x33363c: read as flat black from any distance
     var inStation = function (x, z) { return z > -87.2 && x > -8.5 && x < 16.5; };   // nothing stands through the station and its platform
     pkCoTrackBuild(g, E, { spineMat: spineMat, supMat: supMat, tieMat: std({ color: 0x2b2434, roughness: 0.75 }), skip: function () { return true; } });
     var feet = pkCoBents(g, E, { mat: supMat, every: 6.4, skip: inStation });
-    pkCoPlan(E);
+    pkCoPlan(E, opt);
     // the lift: the chain up the middle, and a stair with a handrail up the station side of it
     var N = F.n, l0 = Math.round(((uP + P0.lift[0] / P0.K) % 1) * N), l1 = Math.round(((uP + P0.lift[1] / P0.K) % 1) * N), lp = [];
     for (i = l0; i <= l1; i++) lp.push(F.p[i % N]);
@@ -14990,12 +15132,12 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var footNear = function (x, z) { for (var j = 0; j < feet.length; j++) if (Math.abs(feet[j][0] - x) < 1.6 && Math.abs(feet[j][1] - z) < 1.6) return true; return false; };
     var planted = 0, tries = 0;
     while (planted < 46 && tries++ < 900) {
-      var tx = randf(-41, 25.5), tz = randf(-116, -88), ts = randf(0.75, 1.25);
+      var tx = randf(-51, 21), tz = randf(-116, -88), ts = randf(0.75, 1.25);
       if (inStation(tx, tz + 1.5) || near(tx, tz, 3.4, 15) || footNear(tx, tz)) continue;
       pkConifer(tx, tz, ts, g, planted * 7 + 3); planted++;
     }
     for (i = 0, tries = 0; i < 16 && tries < 300; tries++) {
-      var bx = randf(-40, 24), bz = randf(-115, -89);
+      var bx = randf(-50, 21), bz = randf(-115, -89);
       if (inStation(bx, bz + 1.5) || near(bx, bz, 2.6, 6) || footNear(bx, bz)) continue;
       pkBoulder(bx, bz, randf(0.8, 1.7), g); i++;
     }
@@ -15050,6 +15192,10 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     // the old halls and then some. It takes the place of Nocturne, The Wreck and Moonwood in one go.
     { id: 'wildhunt', name: 'The Wild Hunt', x: -8, z: -94, r: 30, q: [-1.0, -79.2], qdx: 1, level: 15, pad: 0.02, boothAt: [-8.6, -78.6] }
   );
+  // the Serpent's line fills the strip north of its station (x 38 to 69, z -113 to -70): no tree or lamp goes in it, and the open middle is the serpent's own
+  PK_KEEP.push([47, -105, 11], [62, -104, 11], [53, -90, 19]);
+  // Baron's Drop runs west across the lawn from its station (x 33 to 70, z 11 to 31): nothing is planted or hung in it
+  PK_KEEP.push([39, 20, 9], [48, 25, 9], [60, 23, 9]);
   // the kids' area: The Little Meadow, on the north half of the east strip (it stood on the west lawn, each ride against
   // the next). From the north: the Puffin Line, the Little Roundabout, Wobbly Pots and the acorn playhouse, each a good
   // ten metres from the next, their lines running west to the East Parade
@@ -15289,15 +15435,19 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     // the line was drawn on the west lawn round (-60, 40) with its platform's line end to the east. It is laid from those
     // same numbers, carried to the plot and flipped east-west, so the line end faces the Parade
     var MX = function (x) { return p.x - (x + 60); }, MZ = function (z) { return p.z + (z - 40); };
-    // a straight station along the platform, round the west end, a wiggle and a little hill along the north side, round the
-    // east end home: longer than the old oval, and clear of Wobbly Pots' booth and its own
+    // a straight station along the platform, a round turn north, a little hill with a tunnel along the north lane, a round
+    // turn at the west end and home. Laid offline (tools/scratch/tracks/puffin.js), radius 4.2 m, 52 m, in world coordinates
     var pts = [
-      [-54.8, 0.4, 43.6], [-57, 0.4, 43.6], [-59.2, 0.4, 43.6], [-61.4, 0.4, 43.6], [-63.6, 0.4, 43.6], [-65.8, 0.4, 43.6],
-      [-67.9, 0.4, 43], [-69.3, 0.42, 41.4], [-69.2, 0.5, 39.8], [-67.6, 0.62, 38.9], [-65, 0.85, 38.6], [-62.4, 1, 39.3],
-      [-59.8, 0.85, 39], [-57.4, 0.6, 38.9], [-55.2, 0.45, 39.1], [-53.5, 0.4, 40.4], [-53.2, 0.4, 42.2]
-    ].map(function (q) { return [MX(q[0]), q[1], MZ(q[2])]; });
+      [145.2, 0.4, -102.4], [146.39, 0.4, -102.4], [147.57, 0.4, -102.4], [148.76, 0.4, -102.4], [149.95, 0.4, -102.4], [151.14, 0.4, -102.4],
+      [152.32, 0.4, -102.4], [153.51, 0.4, -102.4], [154.7, 0.4, -102.4], [156, 0.4, -102.61], [157.17, 0.4, -103.2], [158.1, 0.4, -104.13],
+      [158.69, 0.4, -105.3], [158.9, 0.4, -106.6], [158.9, 0.4, -107.67], [158.9, 0.4, -108.73], [158.9, 0.4, -109.8], [158.69, 0.4, -111.1],
+      [158.1, 0.4, -112.27], [157.17, 0.4, -113.2], [156, 0.4, -113.79], [154.7, 0.4, -114], [153.45, 0.54, -114], [152.2, 0.85, -114],
+      [150.95, 1.16, -114], [149.7, 1.3, -114], [148.58, 1.16, -114], [147.45, 0.85, -114], [146.33, 0.54, -114], [145.2, 0.4, -114],
+      [143.9, 0.4, -113.79], [142.73, 0.4, -113.2], [141.8, 0.4, -112.27], [141.21, 0.4, -111.1], [141, 0.4, -109.8], [141, 0.4, -108.73],
+      [141, 0.4, -107.67], [141, 0.4, -106.6], [141.21, 0.4, -105.3], [141.8, 0.4, -104.13], [142.73, 0.4, -103.2], [143.9, 0.4, -102.61]
+    ];
     var curve = pkCoCurve(pts), len = curve.getLength(), uP = pkCoUAt(curve, MX(-61.2), MZ(43.6));
-    var F = pkCoFrames(curve, 300, pkCoProfile(curve, len, uP, { pedal: 1.8 }), uP);
+    var F = pkCoFrames(curve, 200, pkCoProfile(curve, len, uP, { pedal: 1.8 }), uP);
     var E = { curve: curve, len: len, F: F, gap: 2.2, cars: [], uPark: uP, uOfF: [], run: 34 };
     pkCoLevel(F, curve, E.uPark, 2.2 + 1.2, 1.2);
     var seats = [], cols = [0xf0c04a, 0xd2622f];
@@ -15322,11 +15472,16 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     }
     pkCoPlatform(g, MX(-56.5), MX(-63.5), MZ(43.9), MZ(45.3), th, 0.4);
     // a row of planted rocks down the middle of the loop, clear of the track all round
-    [-66.0, -63.5, -61.0, -58.5, -56.2].forEach(function (rx0) {
-      var rx = MX(rx0), rz = MZ(41.2);
+    [147.5, 149.5, 151.5, 153.5].forEach(function (rx) {
+      var rz = -108.2;
       pkRoundCyl(0.34, 0.42, std({ color: 0x7a6a52, roughness: 0.85 }), rx, 0.21, rz, g, 12);
       sphere(0.3, std({ color: 0x4d7a3a, roughness: 0.95 }), rx, 0.5, rz, g);
     });
+    // the little tunnel under the hill's west slope: two stone walls, a turfed roof and a mound over it
+    var tw = std({ color: 0x7a6a52, roughness: 0.9 }), turf = std({ color: 0x4d7a3a, roughness: 0.95 });
+    [-1, 1].forEach(function (sd) { box(2.6, 2.7, 0.35, tw, 147.3, 1.35, -114.0 + sd * 0.95, g); });
+    box(2.8, 0.3, 2.5, tw, 147.3, 2.85, -114.0, g);
+    var mound = sphere(1.0, turf, 147.3, 2.7, -114.0, g); mound.scale.set(1.5, 0.7, 1.3);
     var a = pkAttr({
       id: p.id, name: p.name, x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats,
       board: 4, run: E.run, unload: 5, extra: E, tickRun: function (at) { pkCoRun(at); }
@@ -16682,7 +16837,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   function pkHQMonitorWall(x, y, z) {
     var g = new THREE.Group(); g.position.set(x, y, z); scene.add(g);
     pkBevelBox(3.5, 1.4, 0.1, MAT.steelDark, 0, 0, -0.04, g, 0.02);
-    var LANDS = [['THE FAIRGROUND', ['carousel', 'teacups']], ['THE EAST STRIP', ['ferris', 'dodgems', 'kround', 'kpots', 'kpuffin']], ['THE DARK WOODS', ['danse', 'droptower', 'wildhunt']],
+    var LANDS = [['THE FAIRGROUND', ['carousel', 'teacups', 'ktoy']], ['THE EAST STRIP', ['ferris', 'dodgems', 'kround', 'kpots', 'kpuffin']], ['THE DARK WOODS', ['danse', 'droptower', 'wildhunt']],
       ['COASTER COUNTRY', ['flume', 'serpent', 'baron']], ['DREAM REALM', ['droom']], ['THE COASTER', []], ['THE GATE', null]];
     LANDS.forEach(function (L, i) {
       var cx = -1.15 + (i % 3) * 1.15, cy = 0.33 - Math.floor(i / 3) * 0.66;
@@ -18588,16 +18743,38 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   GAME.migrate = function (s) { s = _pkOpMigrate ? _pkOpMigrate(s) : s; if (s.operator && typeof s.operators !== 'number') { s.operators = 1; s.auto = true; } return s; };
   var _pkOpT = GAME.T;
   GAME.T = function () { var t = _pkOpT(); t.PK_OPS = PK_OPS; t.pkOpTick = pkOpTick; t.pkOpMake = pkOpMake; t.pkOpRemove = pkOpRemove; t.pkOpCount = pkOpCount; t.pkOpSpots = pkOpSpots; t.pkOpCanWork = pkOpCanWork; t.route = route; return t; };
-  // plays its wordmark for a beat once the made-with splash (Co Engine 89-splash) hands the screen over — 1.6 s, then it
-  // fades into the start screen. With no #co-splash on the page (an older engine), it still fades at boot, the way it
-  // always did. The bar and the tips animate on transform/opacity only, so the compositor keeps them moving while the
-  // boot call below blocks the main thread.
+  var PK_SPL_HOLD = 5200, PK_SPL_SKIP = 2500, PK_SPL_CO = 1900;
+  var PK_SPL_T0 = Date.now();   // the page's clock for this screen: the bar runs from PK_SPL_T0 + PK_SPL_CO
+  var PK_SPL_TIPS = [
+    'Work a ride by hand from its booth: the desk has the gates, the bars and dispatch.',
+    'Press E at a ride\'s entry to board it yourself, or take the operator\'s chair.',
+    'Guests like short lines. Feature a ride on the park board to bring them in.',
+    'F3 lifts you off the ground to fly over the park; F3 again to land.',
+    'The park lights switch on at dusk when the park board says so.',
+    'A new ride unlocks with each level. The expansion stages come later.',
+    'Every desk, every lever and every key in the booths does something.'
+  ];
+  (function () {
+    var tip = document.getElementById('pk-spl-tip');
+    if (tip) tip.innerHTML = '<b>DID YOU KNOW</b>' + PK_SPL_TIPS[Math.floor(Math.random() * PK_SPL_TIPS.length)];
+  })();
   function pkSplashFade() {
     var el = document.getElementById('dc-splash'); if (!el) return;
     el.classList.add('out');
     setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 700);
   }
-  if (document.getElementById('co-splash')) hook('co-splash-end', function () { setTimeout(pkSplashFade, 1600); });
+  // the build is done: stay until the bar has run its full hold, and at least half a second more
+  function pkSplashHold() {
+    var el = document.getElementById('dc-splash'); if (!el) return;
+    var done = false, shown = PK_SPL_T0 + PK_SPL_CO;
+    var fade = function () { if (done) return; done = true; window.removeEventListener('keydown', skip, true); window.removeEventListener('pointerdown', skip, true); pkSplashFade(); };
+    var skip = function () { if (Date.now() - shown >= PK_SPL_SKIP) fade(); };
+    var left = Math.max(500, shown + PK_SPL_HOLD - Date.now());
+    setTimeout(function () { el.classList.add('skip'); }, Math.max(0, shown + PK_SPL_SKIP - Date.now()));
+    window.addEventListener('keydown', skip, true); window.addEventListener('pointerdown', skip, true);
+    setTimeout(fade, left);
+  }
+  if (document.getElementById('co-splash')) hook('co-splash-end', function () { pkSplashHold(); });
   else hook('boot', pkSplashFade);
   // sleep instead of the pack's own "admire it" prompt: E skips to 07:00 the next day, the same wages and day-reset a
   // real midnight runs (02-guests.js pkNewDay).
@@ -19773,6 +19950,16 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   var PK_TH_SCENES = [[0, 'House to half'], [3, 'Curtain up: the Keeper'], [26, 'The gate: five riders'], [58, 'The salute'], [72, 'Training in the square'],
     [98, 'Count Grimwald rises'], [124, 'The guards'], [149, 'The hydra wakes'], [183, 'Five riders, five gifts'], [203, 'The hydra falls'],
     [219, 'Lindenburg saved'], [256, 'The bow'], [270, 'Exit and curtain']];
+  // tison 2026-11-14: a shorter show. The two stretches where the five only ride laps (the training, the victory lap) are cut
+  // from 26 s to 8 s each, so the show runs 255 s instead of 291. Every cue, the scenes list and the applause go through this map.
+  function pkThMap(t) {
+    if (t <= 72) return t;
+    if (t < 98) return 72 + (t - 72) * 8 / 26;
+    if (t <= 226) return t - 18;
+    if (t < 252) return 208 + (t - 226) * 8 / 26;
+    return t - 36;
+  }
+  PK_TH_SCENES.forEach(function (s) { s[0] = pkThMap(s[0]); });
   function pkThSceneAt(t) { var n = PK_TH_SCENES[0][1]; PK_TH_SCENES.forEach(function (s) { if (t >= s[0]) n = s[1]; }); return n.toUpperCase(); }
   function pkTheaterWallScreens(a, g, BF, BZ0, BX) {
     var X = a.extra;
@@ -20267,7 +20454,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       op(286, 'house', 1), op(288, 'wash', 0), op(290, 'city', 0)
     );
     pkArenaPlusCues(cues, c, each, line);   // part 37: the music, the gifts' effects, the lights' moods, the fireworks
-    cues.forEach(function (q, i) { q.i = i; });
+    cues.forEach(function (q, i) { q.i = i; q.t = pkThMap(q.t); });
     cues.sort(function (p, q) { return p.t - q.t || p.i - q.i; });
     return cues;
   }
@@ -20289,7 +20476,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   function pkTheaterTickRun(a, dt) {
     var C = pkCtl(a), X = a.extra, lw = X.lightWant, cast = pkTheaterCast(a);
     // the audience applauds from the bow until the curtain is in
-    var clap = a.state === 'running' && a.t >= 256 && a.t < 283;
+    var clap = a.state === 'running' && a.t >= pkThMap(256) && a.t < pkThMap(283);
     for (var si = 0; si < a.seats.length; si++) if (a.seats[si].guest) a.seats[si].guest.clap = clap;
     if (a.state === 'running' && X.cues) {
       while (X.cueI < X.cues.length && a.t >= X.cues[X.cueI].t) {
@@ -20354,14 +20541,14 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   function pkBuildTheater(p) {
     var a = pkAttr({
       id: 'theater', name: 'The Lindenburg Arena', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1],
-      seats: [], board: 120, run: 291, unload: 18, exit: [PK_TH.CX + 23.5, PK_TH.CZ + 11.0],   // out through the stair hall's gates, along the forecourt's north edge
+      seats: [], board: 45, run: 255, unload: 18, exit: [PK_TH.CX + 34, PK_TH.CZ + 11.0],   // was CX + 23.5: a closed pocket once the show was over (the player could not walk out); now on the open ground east of it
       start: pkTheaterShowBegin, tickRun: pkTheaterTickRun   // doors open two minutes: the walk from the gate is about 95 s
     });
     pkTheaterBuild(a);
     a.foot = [[PK_TH.CX - 28, PK_TH.CX + 30.6, PK_TH.CZ - 30.5, PK_TH.CZ + 30.5]];   // the stand, the arena and the city, for part 54's clearances (the Arena is not one group)
     var C = pkCtl(a); C.barsWant = 1; C.bars = 1;   // the curtain starts closed
     a.curtain = true;
-    a.boardMin = 30;   // on AUTO the house closes once the line is in and seated, after half a minute at least
+    a.boardMin = 20;   // on AUTO the house closes once the line is in and seated, after half a minute at least
     // the audience's way between the stair hall and the seats: straight up the middle of the stair, across the landing and
     // through onto the stand's top walkway (route() finds the lobby, and the walkway and the row); out, the same in reverse
     var way = function () {
@@ -22717,7 +22904,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       if (t.thirdPerson) {
         // Position the player body at the cab/seating spot, facing the right way
         if (!t.playerBody) {
-          t.playerBody = makeHuman({ shirt: std({ color: 0x2a3f5f, roughness: 0.8 }), pants: std({ color: 0x1a1a1a, roughness: 0.9 }) });
+          t.playerBody = makeHuman({ uniform: true, key: 'player' });
           t.playerBody.visible = false;
           t.playerBody.userData.dynamic = true;
           scene.add(t.playerBody);
@@ -23094,7 +23281,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // Create the body when needed
   function ensureBody() {
     if (!PK_3P.body) {
-      PK_3P.body = makeHuman({ shirt: std({ color: 0x2a3f5f, roughness: 0.8 }), pants: std({ color: 0x1a1a1a, roughness: 0.9 }) });
+      PK_3P.body = makeHuman({ uniform: true, key: 'player' });
       PK_3P.body.visible = false;
       PK_3P.body.userData.dynamic = true;
       scene.add(PK_3P.body);
@@ -27594,7 +27781,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // puts it. land names the face (in that frame) the deck-level door opens on, landAt where along it.
   var PK_SKY_ST = [
     { id: 'north', name: 'SKYLINE NORTH', x: -67, z0: -178, z1: -138, tower: [-60, -172], towerH: 5, ry: 0, land: '-x', landAt: 0, link: [-63.4, -62.2, -174.6, -169.4] },
-    { id: 'woods', name: 'WOODS HALT', x: -67, z0: -34, z1: -6, tower: [-61, -44.6], towerH: 5, ry: 0, land: '+z', landAt: -1.6, link: null },
+    { id: 'woods', name: 'WOODS HALT', x: -67, z0: -34, z1: -6, tower: [-61, -44.6], towerH: 5, ry: 0, land: '+z', landAt: -1.2, link: null },
     { id: 'south', name: 'SKYLINE SOUTH', x: -112, z0: 112, z1: 152, tower: [-104, 146], towerH: 5, ry: -Math.PI / 2, land: '+z', landAt: 0, link: [-107.6, -106.3, 143.2, 148.8] }
   ];
   PK_SKY_ST.forEach(function (st) {
@@ -27607,7 +27794,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   });
   // the Woods Halt tower stands off the Dark Woods street; its deck-level door opens on a covered gallery that runs south
   // over the street to the platform's north end
-  PK_SKY_ST[1].gal = [-65.2, -61.9, -42.3, -34.0];
+  PK_SKY_ST[1].gal = [-65.2, -61.1, -42.3, -34.0];   // 4.1 m wide: at 3.3 m the only way from the lift lobby was 0.7 m wide for a walker, and the walk-finder found none
   // a point in a tower's own frame, in the world
   function pkSkyTW(st, lx, lz) { var c = Math.cos(st.ry), s = Math.sin(st.ry); return { x: st.tower[0] + lx * c + lz * s, z: st.tower[1] - lx * s + lz * c }; }
   // a rectangle in a tower's frame, as the world box the solids want
@@ -27788,7 +27975,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     var H = PK_SKY_TH, W = st.towerH, HW = W / 2, T = 0.34, IN = HW - T, TOP = PK_SKY_TOP;
     // the holes: the street door on +z, the landing door at deck height on the face the plan's link or gallery comes in on
     var holes = { '+z': [{ a0: -1.2, a1: 1.2, y0: 0, y1: 2.7 }], '-z': [], '+x': [], '-x': [] };
-    holes[st.land].push({ a0: st.landAt - 0.65, a1: st.landAt + 0.65, y0: TOP, y1: TOP + 2.2 });
+    holes[st.land].push({ a0: st.landAt - 1.0, a1: st.landAt + 1.0, y0: TOP, y1: TOP + 2.2 });
     ['+z', '-z', '+x', '-x'].forEach(function (f) { pkSkyWall(g, st, f, H, holes[f]); pkSkyLining(g, st, f, H - 0.5, holes[f]); });
     // the stone: a plinth course, two string courses, the frames round the doors, and the quoins up each corner
     ['+z', '-z', '+x', '-x'].forEach(function (f) {
@@ -27809,7 +27996,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       put(a, y0 + h + 0.18, w + 0.52, 0.36); put(a, y0 + h + 0.26, 0.34, 0.5);
     };
     frame('+z', 0, 2.4, 0, 2.7);
-    frame(st.land, st.landAt, 1.3, TOP, 2.2);
+    frame(st.land, st.landAt, 2.1, TOP, 2.2);
     // the windows: a tall pane with a stone sill and head on each face at three levels, wherever no door stands
     [5.2, 9.6, 14.0].forEach(function (wy) {
       ['+z', '-z', '+x', '-x'].forEach(function (f) {
@@ -27874,13 +28061,15 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     // two warm lamps inside, one in the hall, one on the landing
     [1.4, TOP + 1.9].forEach(function (ly) { box(0.3, 0.06, 0.3, M.lamp, 0, ly + 1.0, IN - 0.4, g); });
     // the lift: a call at the street and on the landing; E takes you up or down (pkSkyLiftGo)
-    hitBox(1.5, 2.0, 0.5, 0, 1.1, SH + 0.3, { prompt: function () { return PK_SKY_LIFT || PK.playerRide ? '' : 'Take the lift up to the platform'; }, use: function () { pkSkyLiftGo(st, true); } }, g);
+    hitBox(1.5, 2.0, 0.5, 0, 1.1, SH + 0.3, { prompt: function () { return PK_SKY_LIFT || PK.playerRide ? '' : (typeof pkExpansionOpen === 'function' && pkExpansionOpen(1) !== true ? 'The lift is shut until the first expansion' : 'Take the lift up to the platform'); }, use: function () { pkSkyLiftGo(st, true); } }, g);
     hitBox(1.5, 2.0, 0.5, 0, TOP + 1.1, SH + 0.3, { prompt: function () { return PK_SKY_LIFT || PK.playerRide ? '' : 'Take the lift down to the street'; }, use: function () { pkSkyLiftGo(st, false); } }, g);
     return g;
   }
   // the lift ride: the player stands in the cage, which climbs 16 m in seven seconds and lets him out on the gate side
   function pkSkyLiftGo(st, up) {
     if (PK_SKY_LIFT || PK.playerRide) return false;
+    // before expansion stage 1 nothing on the platform can be boarded: the lift stays shut and says why
+    if (up && typeof pkExpansionOpen === 'function' && pkExpansionOpen(1) !== true) { sfx('click'); toast('The Skyline opens with the first expansion', ''); return false; }
     PK_SKY_LIFT = { st: st, y0: up ? 0 : PK_SKY_TOP, y1: up ? PK_SKY_TOP : 0, t: 0, dur: 7 };
     if (st.cage) st.cage.position.y = PK_SKY_LIFT.y0;
     sfx('click'); toast(up ? 'Up to the platform' : 'Down to the street', '');
@@ -28296,7 +28485,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // There is no queue lane in the street: the Skyline's line waits on her platform. A guest walks in at the tower's street
   // door, takes the lift up, crosses the gallery and stands on a waiting spot on the platform; when the train is in they
   // walk along the platform to a door and sit down. Off the train, the same way back down to the Dark Woods street.
-  var PK_SKY_WAY = { door: [-61.0, -41.6], hall: [-61.0, -43.1], cage: [-61.0, -44.6], land: [-62.6, -42.9], gallery: [-63.4, -40.8], plat: [-63.6, -35.0] };
+  var PK_SKY_WAY = { door: [-61.0, -41.6], hall: [-61.0, -43.1], cage: [-61.0, -44.6], land: [-62.2, -42.9], gallery: [-63.4, -40.8], plat: [-63.6, -35.0] };
   function pkSkyUp() { var W = PK_SKY_WAY; return [{ x: W.hall[0], z: W.hall[1] }, { x: W.cage[0], z: W.cage[1] }, { x: W.cage[0] + 0.08, z: W.cage[1], lift: 1 }, { x: W.hall[0], z: W.hall[1] }, { x: W.land[0], z: W.land[1] }, { x: W.gallery[0], z: W.gallery[1] }, { x: W.plat[0], z: W.plat[1] }]; }
   function pkSkyDown() { var W = PK_SKY_WAY; return [{ x: W.plat[0], z: W.plat[1] }, { x: W.gallery[0], z: W.gallery[1] }, { x: W.land[0], z: W.land[1] }, { x: W.hall[0], z: W.hall[1] }, { x: W.cage[0], z: W.cage[1] }, { x: W.cage[0] + 0.08, z: W.cage[1], lift: -1 }, { x: W.hall[0], z: W.hall[1] }, { x: W.door[0], z: W.door[1] }]; }
   // the waiting spots: two rows down the Woods Halt platform, clear of the edge and of the benches
@@ -29114,7 +29303,7 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // No lane ever crosses another: the loop is a "W" whose last leg tucks back under the station through a small
   // south turn, so the train always enters the station heading north.
   var PK_JORIS = {
-    name: 'Dragon Ride', ax: 100, az: -1, qz: 1, a: 0x2f6fbf, b: 0xc8452a, spine: 0x8a6a4a, legs: 0x5a4028, ground: 0x8fa080, sign: '#f0c04a'
+    name: 'Dragon Ride', ax: 100, az: -1, qz: 1, a: 0x2f6fbf, b: 0xc8452a, spine: 0x9a7448, legs: 0x7a5636, ground: 0x8fa080, sign: '#f0c04a'
   };
   // local frame -> world: forward (local x) runs north (world -z), yard (local z) runs east (world +x)
   function pkJorisW(lx, lz) { return [PK_JORIS.ax + lz, PK_JORIS.az - lx]; }
@@ -29143,32 +29332,27 @@ function pkBuildParkCabinet(px, py, pz, ry) {
         add(lx, mid + R * Math.sin(th), y0 + (y1 - y0) * t);
       }
     }
-    // the station roll and the lift
+    // the station roll and the lift (unchanged: the hall, the stair and the booth hang off them)
     run(24, D1, 0.6);
     run(54, D1, 22);
-    run(72, D1, 5, { ease: true });                    // the first drop
-    // pass 1, north: two airtime hills
-    run(94, D1, 5, { h: sg > 0 ? 5.5 : 6.5, n: 1 });
-    run(116, D1, 5, { h: sg > 0 ? 7.5 : 6.5, n: 1 });
-    run(123, D1, 6.5);
-    arc(123, D1, D4, 6.5, true);                       // the big outer turn to the far lane
-    // pass 2, south on the outer lane
-    run(100, D4, 5, { h: sg > 0 ? 6.5 : 5, n: 1 });
-    run(76, D4, 5, { h: sg > 0 ? 5.5 : 7, n: 1 });
-    run(54, D4, 5, { h: sg > 0 ? 4.5 : 3.4, n: 2 });
-    run(36, D4, 5, { h: sg > 0 ? 4.0 : 5.5, n: 1 });
-    arc(36, D4, D3, 5, false);                         // the south turn, over to the third lane
-    // pass 3, north
-    run(60, D3, 5, { h: sg > 0 ? 7.0 : 6, n: 1 });
-    run(84, D3, 5, { h: sg > 0 ? 5.5 : 7, n: 1 });
-    run(106, D3, 5, { h: sg > 0 ? 4.8 : 3.6, n: 2 });
-    run(123, D3, 6);
-    arc(123, D3, D2, 6, true);                         // the small north turn
+    run(84, D1, 5, { ease: true });                    // the first drop, long enough that its pull-out is gentle
+    // pass 1, north, level, to the big outer turn (R 9): everything stays south of lx 111 (world z -112), off the railway
+    run(102, D1, 5);
+    arc(102, D1, D4, 5, true);                         // the big outer turn to the far lane
+    // pass 2, south on the outer lane: two airtime hills, then up to the south turn, which sits on a crest so it is slow
+    run(78, D4, 5, { h: sg > 0 ? 3.1 : 2.8, n: 1 });
+    run(56, D4, 5, { h: sg > 0 ? 2.8 : 3.1, n: 1 });
+    run(36, D4, 14, { ease: true });
+    arc(36, D4, D3, 14, false);                        // the south turn, over to the third lane (a trim brake holds it slow)
+    // pass 3, north: down off the crest, a hill, and up to the north turn
+    run(60, D3, 5, { ease: true });
+    run(84, D3, 5, { h: sg > 0 ? 3.1 : 2.8, n: 1 });
+    run(108, D3, 12, { ease: true });
+    arc(108, D3, D2, 12, true);                        // the small north turn on the crest (a trim brake holds it slow)
     // pass 4, south, then the brake run down beside the hall
-    run(102, D2, 5, { h: sg > 0 ? 4.5 : 5.5, n: 1 });
-    run(78, D2, 5, { h: sg > 0 ? 6.5 : 7.5, n: 1 });
-    run(56, D2, 5, { h: sg > 0 ? 4.2 : 3.5, n: 2 });
-    run(40, D2, 4.2, { h: sg > 0 ? 5.0 : 4, n: 1 });
+    run(84, D2, 5, { ease: true });
+    run(60, D2, 5, { h: sg > 0 ? 2.8 : 3.1, n: 1 });
+    run(40, D2, 4.2, { h: sg > 0 ? 2.5 : 2.2, n: 1 });
     run(24, D2, 2.2);
     run(8, D2, 1.2);
     arc(8, D2, D1, 1.0, false);                        // tuck back under the station, now heading north again
@@ -29259,19 +29443,22 @@ function pkBuildParkCabinet(px, py, pz, ry) {
       var pts = pkJorisPoints(yd).map(function (q) { var w = pkJorisW(q[0], q[2]); return [w[0], q[1], w[1]]; });
       var curve = pkCoCurve(pts), len = curve.getLength();
       var park = pkJorisW(22, yd), uP = pkCoUAt(curve, park[0], park[1]);
-      var F = pkCoFrames(curve, 1000, pkCoProfile(curve, len, uP, { rollIn: 12 }), uP, null);
+      // two trim brakes hold the train to 8 m/s on the two small turns that sit on crests (south turn lx 36, north turn lx 108)
+      var tw = function (lx, d) { return pkJorisW(lx, (yd < 0 ? -1 : 1) * d); }, tu = function (lx, d) { var w = tw(lx, d); return pkCoUAt(curve, w[0], w[1]); };
+      var opt = { rollIn: 12, trim: [[tu(41, 20.5), tu(37, 20.5), 8], [tu(103, 14.5), tu(107, 14.5), 8]] };
+      var F = pkCoFrames(curve, 1500, pkCoProfile(curve, len, uP, opt), uP, null);
       var E = { curve: curve, len: len, F: F, gap: 2.35, cars: [], uPark: uP, uOfF: [], run: Math.round(len / 7) };
       pkCoLevel(F, curve, E.uPark, 4 * 2.35 + 1.4, 1.4);
       for (var i = 0; i < 4; i++) { var car = pkJorisCar(col, i === 0); scene.add(car.g); E.cars.push(car); car.seats.forEach(function (s) { seats.push({ par: car.g, x: s.x, y: s.y, z: s.z, ry: 0, guest: null, track: id }); }); }
       pkCoTrackBuild(g, E, { spineMat: wood, supMat: leg, tieMat: std({ color: 0x4a3a28, roughness: 0.8 }), railMat: MAT.steelDark, skip: function () { return true; } });   // no lone legs: pkJorisTrestle frames it
-      pkCoPlan(E, { rollIn: 12 });
+      pkCoPlan(E, opt);
       pkCoPlace(E, E.uPark);
       subs[id] = E;
     });
     var run = Math.max(subs.water.run, subs.vuur.run);
     var a = pkAttr({
       id: 'joris', name: PK_JORIS.name, x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], qdx: -1, g: g, seats: seats,
-      board: 11, run: run, unload: 6, exit: [86.5, -2.0],   // set down west of the dragon gate, clear of the line
+      board: 11, run: run, unload: 6, exit: [86.5, 0.5],   // set down west of the dragon gate on the East Walk, clear of the line and of the footbridge's rail (z -2.2), which held the player fast
       extra: subs, tickRun: function (at2) { pkJorisRun(at2); },
       start: function (at2) { pkJorisStart(at2); }
     });
@@ -29288,8 +29475,8 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     subs.uOfF = subs.water.uOfF;
     subs.u0 = subs.water.u0;
     if (PK_PANEL.joris) PK_PANEL.joris.curve2 = subs.vuur.curve;   // the mimic draws both lanes once this is set (part 14)
-    // where the first drop bottoms out (lx 72), on the Water curve: the race keeps both trains level until here
-    var dropW = pkJorisW(74, -2.5); subs.uDrop = pkCoUAt(subs.water.curve, dropW[0], dropW[1]);
+    // where the first drop bottoms out (lx 84), on the Water curve: the race keeps both trains level until here
+    var dropW = pkJorisW(86, -2.5); subs.uDrop = pkCoUAt(subs.water.curve, dropW[0], dropW[1]);
     // the foot of the lift (lx 24), and where the last car of the train clears its top (lx 54 plus the train's length)
     var liftW = pkJorisW(26, -2.5), topW = pkJorisW(54 + 4 * 2.35, -2.5);
     subs.uLift = pkCoUAt(subs.water.curve, liftW[0], liftW[1]); subs.uTop = pkCoUAt(subs.water.curve, topW[0], topW[1]);
@@ -29949,6 +30136,17 @@ function pkBuildParkCabinet(px, py, pz, ry) {
     PK_FLOOR_RECTS.push({ x0: D0, x1: D1, z0: Z - HW, z1: Z + HW, y: Y, ramp: RL, overhead: true });
     PK_FLOOR_RECTS.push({ x0: D0, x1: D1, z0: Z - HW, z1: Z + HW, y: Y, ramp: RL, rampDir: -1, overhead: true });
   }
+  // nobody walks under the ramps where the deck is lower than a head: a walker on the ground (not on the deck) is stopped
+  // at the 2 m line instead of at the planks. The deck itself, and the high middle where the line passes under, stay open.
+  // (player only: guests and the nav grid never call collides)
+  var _pkJorisPrevCollides = GAME.collides;
+  GAME.collides = function (x, z, opt) {
+    if (_pkJorisPrevCollides && _pkJorisPrevCollides(x, z, opt)) return true;
+    var B = PK_JORIS_BR, xw = B.d0 - B.rl, xe = B.d1 + B.rl;
+    if (PK.playerRide || player.y > 0.45 || Math.abs(z - B.z) > B.hw || x <= xw || x >= xe) return false;
+    var h = x <= B.d0 ? B.y * (x - xw) / B.rl : x >= B.d1 ? B.y * (xe - x) / B.rl : B.y;   // the deck's height here
+    return h > 0.5 && h < 2.0;
+  };
   // ── The operator's desk (pkCabinBuild calls this in place of the kit's desk; the ride panel goes in its middle). In the
   // desk group's own frame: +z toward the chair, -z toward the window, the top at 0.745. A walnut desk the full width of
   // the window with a brass nosing, pedestals at both wings and the knee space in the middle; on the left wing the public
@@ -30576,10 +30774,10 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   // where the boards stand: [x, z, ry, name]. ry turns the front to face the street; both faces carry the map
   var PK_MAP_SPOTS = [
     [10.5, 52.2, Math.PI, 'the forecourt'],
-    [8.15, 15.5, -Math.PI / 2, 'the midway'],
-    [-24, -63.7, 0, 'the Promenade, west'],
+    [8.15, 23.0, -Math.PI / 2, 'the midway, inside the gate'],   // well clear of the hub's signpost
+    [-20, -63.7, 0, 'the Promenade, west'],
     [26, -63.7, 0, 'the Promenade, east'],
-    [-34.3, -50, Math.PI / 2, 'West Street'],
+    [-27.7, -14, -Math.PI / 2, 'West Street'],   // on the coaster's side of the street, well south of the Promenade's board
     [66, -1.0, 0, 'the Avenue, at the East Walk'],
     [-40.5, 34.6, Math.PI, 'the Fairground lane'],
     [134, -5.4, 0, 'the East Parade, at Dragon Gate'],
@@ -30587,8 +30785,8 @@ function pkBuildParkCabinet(px, py, pz, ry) {
   ];
   // the big rides as the ground they cover, [x0, x1, z0, z1]: a plot's circle says nothing useful about a coaster
   var PK_MAP_BOX = {
-    joris: [79, 122, -133, -3], mountain: [82, 121, 5, 69], wildhunt: [-43, 28, -116, -81], serpent: [44, 69, -92, -66],
-    baron: [46, 68, 15, 32], flume: [47, 68, -54, -12], danse: [-63, -32, -39, -11], droom: [-113, -76, -32, 30],
+    joris: [79, 122, -133, -3], mountain: [82, 121, 5, 69], wildhunt: [-57, 27, -116, -81], serpent: [37, 70, -114, -66],
+    baron: [32, 70, 11, 32], flume: [38, 71, -55, -3], ktoy: [6.5, 25, 9, 34], danse: [-63, -32, -39, -11], droom: [-113, -76, -32, 30],
     theater: [-124, -67, -98, -38]
   };
   function pkMapX(x) { var M = PK_MAP; return (x - M.X0) / (M.X1 - M.X0) * M.W; }
@@ -30751,6 +30949,1127 @@ function pkBuildParkCabinet(px, py, pz, ry) {
 
   var _pkMapPrevT = GAME.T;
   GAME.T = function () { var t = _pkMapPrevT(); t.PK_MAP = PK_MAP; t.PK_MAP_SPOTS = PK_MAP_SPOTS; t.PK_PAVE = PK_PAVE; t.pkMapX = pkMapX; t.pkMapZ = pkMapZ; return t; };
+  // ── Why ──────────────────────────────────────────────────────────
+  // Between a ride cycle and the next the park stood perfectly still: every lantern the same flat yellow, every pond a
+  // sheet of glass, the sky empty. A real park is never still. This part adds the small movement, none of it tied to a
+  // ride or to the player:
+  //   - every lantern and lamp flickers on its own: its flame drifts from yellow to a slightly darker amber and back, and
+  //     now and then gutters for a moment; no two keep the same time;
+  //   - the coloured bulbs on the rides twinkle and chase;
+  //   - the water moves: every pond, basin and channel drifts and glints;
+  //   - flags fly: tall pennants along the East Parade and at the gate, rippling in the wind, which gusts;
+  //   - birds circle over the park in loose flocks, wings beating, and drift off at dusk;
+  //   - butterflies wander round the flower beds and the plazas by day;
+  //   - fireflies drift over the lawns at night;
+  //   - steam rises from the popcorn cart and the snack stand.
+  // All of it is cheap: the lamps are walked a slice at a time, the flags and the butterflies only move near the eye, the
+  // fireflies are one draw.
+  var PK_AMB = { t: 0, lampAt: 0, rideAt: 0, flags: [], birds: [], flies: [], fire: null, steam: [], gust: 0, built: false, puffTex: null };
+  function pkAmbNight() { return S.time >= 18.5 || S.time < 6.5; }
+  function pkAmbRand(seed) { var x = Math.sin(seed * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+
+  // ── The lamps ────────────────────────────────────────────────────
+  // a lamp's own slow breath (two sines that never line up) and a rare quick gutter; 0 is full, 1 is the dimmest
+  function pkAmbFlame(t, ph) {
+    var slow = 0.5 + 0.5 * Math.sin(t * 1.7 + ph) * Math.sin(t * 2.9 + ph * 1.73);
+    var fast = 0.5 + 0.5 * Math.sin(t * 11.0 + ph * 3.1);
+    var gut = Math.sin(t * 0.37 + ph * 5.3) > 0.985 ? 0.6 : 0;
+    return Math.min(1, slow * 0.7 + fast * 0.18 + gut);
+  }
+  function pkAmbLamps(dt) {
+    var A = PK_AMB, t = A.t, i, m, n, k;
+    // the park's lamps: a slice of them each frame (there are thousands), so each is touched about fifteen times a second
+    if (PK_GLOW_PARK && PK_GLOW_PARK_ON) {
+      n = PK_GLOW_PARK.length; k = Math.max(40, Math.ceil(n / 4));
+      for (i = 0; i < k && n; i++) {
+        A.lampAt = (A.lampAt + 1) % n; m = PK_GLOW_PARK[A.lampAt];
+        if (!m.userData.pkAmb) {
+          var e = m.emissive, warm = e.r > 0.75 && e.g > 0.5 && e.b < 0.9 && e.r >= e.b;
+          m.userData.pkAmb = { r: e.r, g: e.g, b: e.b, warm: warm, ph: pkAmbRand(A.lampAt + 1) * 50 };
+        }
+        var U = m.userData.pkAmb; if (!U.warm) continue;
+        var f = pkAmbFlame(t, U.ph);
+        // yellow, a little darker yellow, yellow: the flame drops toward amber as it dims
+        m.emissive.setRGB(U.r * (1 - 0.06 * f), U.g * (1 - 0.24 * f), U.b * (1 - 0.5 * f));
+        m.emissiveIntensity = m.userData.pkGlowBase * (1 - 0.3 * f);
+      }
+    }
+    // the rides' bulbs: each twinkles on its own beat, so a rim of bulbs reads as a chase
+    if (PK_GLOW_RIDE && PK_GLOW_RIDE_ON) {
+      n = PK_GLOW_RIDE.length; k = Math.max(40, Math.ceil(n / 3));
+      for (i = 0; i < k && n; i++) {
+        A.rideAt = (A.rideAt + 1) % n; m = PK_GLOW_RIDE[A.rideAt];
+        if (m.userData.pkAmbPh === undefined) m.userData.pkAmbPh = pkAmbRand(A.rideAt + 7) * 6.2832;
+        var s = Math.sin(t * 3.2 + m.userData.pkAmbPh);
+        m.emissiveIntensity = m.userData.pkGlowBase * (s > 0.2 ? 1.12 : 0.5 + 0.3 * (s + 1));
+      }
+    }
+  }
+
+  // ── The water ────────────────────────────────────────────────────
+  function pkAmbWater(dt) {
+    var M = pkMats(), w = M.water; if (!w || !w.map) return;
+    w.map.offset.x = (w.map.offset.x + dt * 0.018) % 1; w.map.offset.y = (w.map.offset.y + dt * 0.011) % 1;
+    w.emissiveIntensity = 0.35 + 0.1 * Math.sin(PK_AMB.t * 0.9);
+  }
+
+  // ── The flags ────────────────────────────────────────────────────
+  // a tall pole with a long swallow-tailed pennant, laid as a strip of quads that ripple from the hoist out
+  function pkAmbFlag(x, z, h, colA, colB) {
+    var K = pkMats(), g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+    pkBevelBox(0.4, 0.3, 0.4, K.stone, 0, 0.15, 0, g, 0.04);
+    pkRoundCyl(0.06, h, pkPaint(0xf4f1e6, 0.5, 0.2), 0, h / 2, 0, g, 10);
+    sphere(0.11, K.gold, 0, h + 0.08, 0, g);
+    solid(x - 0.2, x + 0.2, z - 0.2, z + 0.2, 0, 2.2);
+    var L = 2.6, Hh = 1.0, NX = 14, pos = [], col = [], idx = [], cA = new THREE.Color(colA), cB = new THREE.Color(colB), i;
+    for (i = 0; i <= NX; i++) {
+      var u = i / NX, tail = u > 0.72 ? (u - 0.72) / 0.28 : 0;            // the swallow tail: the fly end narrows to two points
+      var top = Hh / 2 * (1 - 0.35 * u), bot = -Hh / 2 * (1 - 0.35 * u);
+      pos.push(u * L, top, 0, u * L - tail * 0.55, 0, 0, u * L, bot, 0);   // the middle of the fly end is cut back: the notch
+      var c = Math.floor(u * 5) % 2 ? cB : cA;
+      col.push(c.r, c.g, c.b, c.r, c.g, c.b, c.r, c.g, c.b);
+    }
+    for (i = 0; i < NX; i++) { var a = i * 3, b = a + 3; idx.push(a, b, a + 1, b, b + 1, a + 1, a + 1, b + 1, a + 2, b + 1, b + 2, a + 2); }
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.setIndex(idx); geo.computeVertexNormals();
+    var mat = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.85 }); mat.userData.noBake = true;
+    var fl = new THREE.Mesh(geo, mat); fl.position.set(0, h - 0.7, 0); fl.castShadow = true; fl.userData.dynamic = true; fl.userData.noBake = true; g.add(fl);
+    PK_AMB.flags.push({ m: fl, base: pos.slice(), L: L, ph: pkAmbRand(x * 3 + z) * 20, x: x, z: z });
+  }
+  function pkAmbFlags(dt) {
+    var A = PK_AMB, t = A.t, cx = camera.position.x, cz = camera.position.z;
+    A.gust = 0.75 + 0.25 * Math.sin(t * 0.23) + 0.15 * Math.sin(t * 0.71 + 1.3);       // the wind comes and goes
+    for (var f = 0; f < A.flags.length; f++) {
+      var F = A.flags[f]; if ((F.x - cx) * (F.x - cx) + (F.z - cz) * (F.z - cz) > 110 * 110) continue;
+      var P = F.m.geometry.attributes.position, B = F.base, g = A.gust;
+      for (var i = 0; i < P.count; i++) {
+        var x = B[i * 3], u = x / F.L, w = Math.sin(x * 2.6 - t * 5.2 * g + F.ph) * 0.2 * u + Math.sin(x * 5.3 - t * 8.1 * g + F.ph * 1.7) * 0.06 * u;
+        P.setXYZ(i, x - 0.12 * u * u * (1.2 - g), B[i * 3 + 1] - 0.5 * u * u * (1.2 - g) + Math.sin(x * 2.1 - t * 4.4 + F.ph) * 0.04 * u, w);
+      }
+      P.needsUpdate = true;
+      F.m.rotation.y = 0.5 + 0.3 * Math.sin(t * 0.17 + F.ph);                           // and veers a little
+    }
+  }
+
+  // ── The birds ────────────────────────────────────────────────────
+  function pkAmbBird(col) {
+    var g = new THREE.Group(); g.userData.dynamic = true;
+    var m = std({ color: col, roughness: 0.9, side: THREE.DoubleSide }); m.userData.noBake = true;
+    var body = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.55, 5), m); body.rotation.x = Math.PI / 2; g.add(body);
+    var wg = new THREE.BufferGeometry();
+    wg.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, -0.16, 0.62, 0, -0.05, 0, 0, 0.14], 3)); wg.computeVertexNormals();
+    var wl = new THREE.Mesh(wg, m), wr = new THREE.Mesh(wg, m); wr.scale.x = -1; g.add(wl); g.add(wr);
+    scene.add(g);
+    return { g: g, wl: wl, wr: wr };
+  }
+  function pkAmbBirdsBuild() {
+    // three loose flocks: [centre x, centre z, radius, height, how many, the way round]
+    [[0, -20, 46, 34, 6, 1], [104, -62, 38, 30, 5, -1], [-66, 8, 34, 27, 5, 1], [140, 10, 30, 32, 4, -1]].forEach(function (F, fi) {
+      for (var i = 0; i < F[4]; i++) {
+        var b = pkAmbBird(i % 3 ? 0x2b2b30 : 0xe9e6dc), r = pkAmbRand(fi * 31 + i);
+        b.cx = F[0]; b.cz = F[1]; b.r = F[2] * (0.75 + 0.5 * r); b.h = F[3] + 8 * pkAmbRand(fi * 17 + i * 3); b.dir = F[5];
+        b.a = r * 6.2832; b.sp = (0.11 + 0.05 * pkAmbRand(fi * 7 + i * 5)) * 46 / b.r; b.ph = r * 9; b.flap = 7 + 3 * r;
+        PK_AMB.birds.push(b);
+      }
+    });
+  }
+  function pkAmbBirds(dt) {
+    var A = PK_AMB, t = A.t, roost = pkAmbNight();
+    for (var i = 0; i < A.birds.length; i++) {
+      var b = A.birds[i];
+      if (b.g.visible === roost) b.g.visible = !roost;        // gone to roost after dark
+      if (roost) continue;
+      b.a += b.dir * b.sp * dt;
+      var wob = 1 + 0.18 * Math.sin(t * 0.21 + b.ph), x = b.cx + Math.cos(b.a) * b.r * wob, z = b.cz + Math.sin(b.a) * b.r * wob * 0.8;
+      var y = b.h + 2.5 * Math.sin(t * 0.33 + b.ph * 2);
+      b.g.position.set(x, y, z);
+      b.g.rotation.y = -b.a + (b.dir > 0 ? Math.PI : 0);
+      b.g.rotation.z = -b.dir * 0.3;                           // banked into the turn
+      // a few beats, then a glide
+      var cyc = (t * 0.25 + b.ph) % 1, w = cyc < 0.7 ? Math.sin(t * b.flap + b.ph) * 0.75 : 0.12;
+      b.wl.rotation.z = w; b.wr.rotation.z = -w;
+    }
+  }
+
+  // ── The butterflies ──────────────────────────────────────────────
+  function pkAmbFliesBuild() {
+    var spots = [[0, 10.5, 6], [-31, 3, 6], [35, 3, 6], [2, -44, 6], [2, -52, 6], [-15, -44, 5], [18, -44, 5], [147, -29, 6], [141, -66, 7], [-46.8, 20, 4], [0, 44, 7], [131, 30, 6], [-8.5, -70, 6], [56, 6, 4]];
+    var cols = [0xf2c230, 0xf08a2c, 0xffffff, 0x7fb8f0, 0xe85a8a];
+    spots.forEach(function (sp, si) {
+      for (var k = 0; k < 2; k++) {
+        var g = new THREE.Group(); g.userData.dynamic = true; scene.add(g);
+        var m = std({ color: cols[(si + k) % cols.length], roughness: 0.8, side: THREE.DoubleSide }); m.userData.noBake = true;
+        var wg = new THREE.BufferGeometry();
+        wg.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, -0.05, 0.13, 0, -0.1, 0.11, 0, 0.07, 0, 0, -0.05, 0.11, 0, 0.07, 0, 0, 0.06], 3)); wg.computeVertexNormals();
+        var wl = new THREE.Mesh(wg, m), wr = new THREE.Mesh(wg, m); wr.scale.x = -1; g.add(wl); g.add(wr);
+        PK_AMB.flies.push({ g: g, wl: wl, wr: wr, cx: sp[0], cz: sp[1], r: sp[2], ph: pkAmbRand(si * 13 + k * 5) * 30 });
+      }
+    });
+  }
+  function pkAmbFlies(dt) {
+    var A = PK_AMB, t = A.t, off = pkAmbNight() || (typeof WEATHER !== 'undefined' && WEATHER && WEATHER.rain > 0.3), cx = camera.position.x, cz = camera.position.z;
+    for (var i = 0; i < A.flies.length; i++) {
+      var f = A.flies[i], near = (f.cx - cx) * (f.cx - cx) + (f.cz - cz) * (f.cz - cz) < 45 * 45, show = !off && near;
+      if (f.g.visible !== show) f.g.visible = show;
+      if (!show) continue;
+      // a wandering figure of eight round its patch, never straight, rising and dipping
+      var a = t * 0.5 + f.ph, x = f.cx + Math.sin(a) * f.r * (0.6 + 0.4 * Math.sin(a * 0.37)), z = f.cz + Math.sin(a * 1.31 + 1) * f.r * 0.8;
+      var y = 0.7 + 0.5 * Math.sin(a * 2.3) + 0.25 * Math.sin(t * 3.1 + f.ph);
+      f.g.rotation.y = Math.atan2(x - f.g.position.x, z - f.g.position.z);
+      f.g.position.set(x, y, z);
+      var w = Math.sin(t * 16 + f.ph) * 1.1;
+      f.wl.rotation.z = w; f.wr.rotation.z = -w;
+    }
+  }
+
+  // ── The fireflies ────────────────────────────────────────────────
+  function pkAmbFireBuild() {
+    // the lawns they drift over, [x0, x1, z0, z1, how many]
+    var lawns = [[-28, 32, -58, -46, 26], [131, 158, -48, -12, 22], [-62, -48, -6, 12, 14], [12, 60, 8, 30, 18], [-28, -10, 26, 29, 4]].map(function (L) { return [L[0], L[1], L[2], L[3], L[4] * 3]; });
+    var pos = [], seed = [], n = 0;
+    lawns.forEach(function (L, li) { for (var i = 0; i < L[4]; i++) { var a = pkAmbRand(li * 91 + i * 3), b = pkAmbRand(li * 57 + i * 7 + 1); pos.push(L[0] + (L[1] - L[0]) * a, 1, L[2] + (L[3] - L[2]) * b); seed.push(a * 40, b * 40); n++; } });
+    // a soft round glow, added to the night, big enough to read at thirty metres; 70 more follow the eye over the grass
+    var NEAR = 70, glowTex = makeAlphaTex(32, 32, function (c, w, h) { var gr = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.35, 'rgba(255,255,255,0.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = gr; c.fillRect(0, 0, w, h); });
+    var nearOff = []; for (var q = 0; q < NEAR; q++) { pos.push(0, 1, 0); seed.push(pkAmbRand(q * 17 + 5) * 40, pkAmbRand(q * 29 + 3) * 40); nearOff.push((pkAmbRand(q * 11 + 1) - 0.5) * 60, (pkAmbRand(q * 23 + 7) - 0.5) * 60); n++; }
+    var geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    var mat = new THREE.PointsMaterial({ color: 0xe0ff70, size: 0.55, map: glowTex, transparent: true, opacity: 0.95, depthWrite: false, sizeAttenuation: true, blending: THREE.AdditiveBlending }); mat.userData.noBake = true;
+    var pts = new THREE.Points(geo, mat); pts.frustumCulled = false; pts.userData.dynamic = true; pts.userData.noBake = true; pts.visible = false; scene.add(pts);
+    PK_AMB.fire = { pts: pts, base: pos.slice(), seed: seed, n: n, nearFrom: n - NEAR, nearOff: nearOff };
+  }
+  function pkAmbFire(dt) {
+    var F = PK_AMB.fire; if (!F) return;
+    var on = pkAmbNight(); if (F.pts.visible !== on) F.pts.visible = on;
+    if (!on) return;
+    var P = F.pts.geometry.attributes.position, t = PK_AMB.t, cxe = camera.position.x, cze = camera.position.z, hi = player.y > 3;
+    // the cloud that follows the eye: fixed spots in the world, repeating every 60 m, so there are always some within thirty metres
+    for (var k = F.nearFrom; k < F.n; k++) { var ox = F.nearOff[(k - F.nearFrom) * 2], oz = F.nearOff[(k - F.nearFrom) * 2 + 1]; F.base[k * 3] = ox + 60 * Math.round((cxe - ox) / 60); F.base[k * 3 + 2] = oz + 60 * Math.round((cze - oz) / 60); }
+    for (var i = 0; i < F.n; i++) {
+      var a = F.seed[i * 2], b = F.seed[i * 2 + 1];
+      P.setXYZ(i, F.base[i * 3] + Math.sin(t * 0.31 + a) * 2.2, 0.9 + 0.7 * Math.sin(t * 0.47 + b) + 0.3 * Math.sin(t * 1.3 + a), F.base[i * 3 + 2] + Math.sin(t * 0.27 + b) * 2.2);
+    }
+    P.needsUpdate = true;
+    F.pts.material.opacity = 0.55 + 0.4 * Math.sin(t * 2.3);       // they pulse together, as they do
+  }
+
+  // ── The steam ────────────────────────────────────────────────────
+  function pkAmbSteamBuild() {
+    PK_AMB.puffTex = makeAlphaTex(64, 64, function (c, w, h) {
+      var gr = c.createRadialGradient(w / 2, h / 2, 2, w / 2, h / 2, w / 2); gr.addColorStop(0, 'rgba(255,255,255,0.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = gr; c.fillRect(0, 0, w, h);
+    });
+    // [x, y, z, how far it rises, how wide it grows]
+    [[7.1, 2.0, 17.6, 1.6, 0.7], [-15.6, 3.3, 13.2, 2.6, 1.1]].forEach(function (E, ei) {
+      for (var i = 0; i < 5; i++) {
+        var m = new THREE.SpriteMaterial({ map: PK_AMB.puffTex, color: 0xf4f4f0, transparent: true, opacity: 0, depthWrite: false }); m.userData.noBake = true;
+        var s = new THREE.Sprite(m); s.userData.dynamic = true; s.userData.noBake = true; scene.add(s);
+        PK_AMB.steam.push({ s: s, x: E[0], y: E[1], z: E[2], rise: E[3], wide: E[4], ph: i / 5 + ei * 0.13 });
+      }
+    });
+  }
+  function pkAmbSteam(dt) {
+    var A = PK_AMB, t = A.t, cx = camera.position.x, cz = camera.position.z;
+    for (var i = 0; i < A.steam.length; i++) {
+      var p = A.steam[i], near = (p.x - cx) * (p.x - cx) + (p.z - cz) * (p.z - cz) < 70 * 70;
+      if (p.s.visible !== near) p.s.visible = near;
+      if (!near) continue;
+      var u = (t * 0.22 + p.ph) % 1;
+      p.s.position.set(p.x + Math.sin(t * 0.6 + p.ph * 9) * 0.25 * u + 0.5 * u * A.gust, p.y + u * p.rise, p.z + Math.cos(t * 0.5 + p.ph * 7) * 0.2 * u);
+      var sc = 0.25 + p.wide * u; p.s.scale.set(sc, sc, 1);
+      p.s.material.opacity = 0.5 * Math.sin(Math.PI * u) * (1 - 0.4 * u);
+    }
+  }
+
+  // ── Building it, and the beat ────────────────────────────────────
+  function pkAmbientBuild() {
+    if (PK_AMB.built) return;
+    PK_AMB.built = true;
+    // the flags: along the East Parade (east side, between the spurs) in each land's colours, and a pair at the gate
+    [[-106, 0xe58a2f, 0x2f9fb0], [-66, 0x2f9fb0, 0xf4f1e6], [-41, 0xe58a2f, 0xf4f1e6], [-16, 0x2f9fb0, 0xe58a2f]].forEach(function (q) { pkAmbFlag(130.2, q[0], 7.5, q[1], q[2]); });
+    [[9, 0x2f6fb3, 0xf0c04a], [37, 0xf0c04a, 0x2f6fb3]].forEach(function (q) { pkAmbFlag(130.2, q[0], 7.5, q[1], q[2]); });
+    pkAmbFlag(-15.8, 39.5, 8.5, 0xb8231c, 0xf5b53d); pkAmbFlag(15.8, 39.5, 8.5, 0xf5b53d, 0xb8231c);
+    pkAmbBirdsBuild(); pkAmbFliesBuild(); pkAmbFireBuild(); pkAmbSteamBuild();
+  }
+  function pkAmbientTick(dt) {
+    if (!PK_AMB.built || !dt) return;
+    var d = Math.min(dt, 0.1); PK_AMB.t += d;
+    pkAmbLamps(d); pkAmbWater(d); pkAmbFlags(d); pkAmbBirds(d); pkAmbFlies(d); pkAmbFire(d); pkAmbSteam(d);
+  }
+  var _pkAmbPrevTheme = pkThemeBuild;
+  pkThemeBuild = function () { _pkAmbPrevTheme(); pkAmbientBuild(); };
+  hook('frame', function (dt) { pkAmbientTick(dt); });
+
+  var _pkAmbPrevT = GAME.T;
+  GAME.T = function () { var t = _pkAmbPrevT(); t.PK_AMB = PK_AMB; t.pkAmbientTick = pkAmbientTick; t.pkAmbFlame = pkAmbFlame; return t; };
+  // ── Why ──────────────────────────────────────────────────────────
+  // The three steel coasters were track on a lawn: a good ride, nothing to look at, and silent. This part is the first batch
+  // of the ride upgrades tison asked for ("everything, with effects"). It is one kit, driven by where each train really is,
+  // and three sets of scenery built with it.
+  //
+  // The kit (any coaster can be given to it: pkCfxRide):
+  //   - track lights: a bulb under the spine every metre and a half, in three circuits, so at night the track is drawn in
+  //     light and the circuits chase (part 57 twinkles them; they are ride lights, on the rides' own switch);
+  //   - sound, from the train's own motion: the chain's clack on a lift, a roar that rises with speed, a scream as a drop
+  //     begins, the hiss of a splash. All of it fades with distance, so it is loud on the ride and a murmur from the midway;
+  //   - effect zones: a place on the ground that answers when the train comes through it: a plume of spray off a pond, mist
+  //     in a tunnel, a breath of smoke;
+  //   - emitters that run by themselves near the eye: a torch's flame, a drift of mist.
+  // The scenery:
+  //   - the coaster: a rock-rimmed pond under the low turns that the train skims (spray), a rock tunnel over the run home
+  //     (mist), flower beds and topiary in the yard;
+  //   - The Serpent: a great stone serpent coiled round the north of the ride, its head raised over the queue, eyes lit,
+  //     breathing mist; boulders and clipped planting; the loops fill with mist as the train goes through;
+  //   - Baron's Drop: torches burning round the castle yard, and a real plume when the train hits the splash basin.
+  var PK_CFX = { rides: [], parts: [], free: [], emit: [], t: 0, built: false, tex: null, roar: null, roarWant: 0, bulbs: 0, fired: 0 };
+
+  // ── The voices ───────────────────────────────────────────────────
+  SFX.pkScream = function (t, o) {
+    var g = (o && o.g) || 1;
+    for (var i = 0; i < 5; i++) sTone('sawtooth', 650 + Math.random() * 520, t + Math.random() * 0.3, 0.9 + Math.random() * 0.5, 0.011 * g, { f1: 380 + Math.random() * 220, lp: 2400 });
+  };
+  SFX.pkClack = function (t, o) { var g = (o && o.g) || 1; sNoise(t, 0.03, 0.05 * g, { freq: 2600 }); sTone('square', 150, t, 0.035, 0.018 * g, { lp: 700 }); };
+  SFX.pkSplash = function (t, o) { var g = (o && o.g) || 1; sNoise(t, 1.1, 0.2 * g, { type: 'lowpass', freq: 1900, fade: true }); sNoise(t + 0.05, 0.5, 0.12 * g, { freq: 5200, fade: true }); };
+  SFX.pkHiss = function (t, o) { var g = (o && o.g) || 1; sNoise(t, 0.9, 0.07 * g, { freq: 6500, fade: true }); };
+  // how loud something at p is to the eye: 1 on top of it, nothing past 85 m
+  function pkCfxNear(p) {
+    var d = Math.sqrt((p.x - camera.position.x) * (p.x - camera.position.x) + (p.y - camera.position.y) * (p.y - camera.position.y) + (p.z - camera.position.z) * (p.z - camera.position.z));
+    return d > 85 ? 0 : Math.min(1, 9 / (d + 2));
+  }
+  function pkCfxSay(kind, p, k) { var g = pkCfxNear(p) * (k || 1); if (g > 0.03) sfx(kind, { g: g }); }
+  // the roar: one filtered noise that runs all the time and is turned up by the fastest train near the eye
+  function pkCfxRoar(dt) {
+    var C = PK_CFX, want = C.roarWant; C.roarWant = 0;
+    if (!AC || (SET && SET.sound === false)) { if (C.roar) C.roar.gain.gain.value = 0; return; }
+    if (!C.roar) {
+      if (want < 0.01) return;
+      try {
+        var len = AC.sampleRate * 2, buf = AC.createBuffer(1, len, AC.sampleRate), d = buf.getChannelData(0);
+        for (var i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+        var src = AC.createBufferSource(); src.buffer = buf; src.loop = true;
+        var flt = AC.createBiquadFilter(); flt.type = 'bandpass'; flt.frequency.value = 400; flt.Q.value = 0.7;
+        var gn = AC.createGain(); gn.gain.value = 0;
+        src.connect(flt); flt.connect(gn); gn.connect(sfxBus || AC.destination); src.start();
+        C.roar = { gain: gn, flt: flt, v: 0 };
+      } catch (e) { return; }
+    }
+    var R = C.roar; R.v += (want - R.v) * Math.min(1, dt * 6);
+    R.gain.gain.value = Math.min(0.5, R.v * 0.42);
+    R.flt.frequency.value = 260 + R.v * 900;
+  }
+
+  // ── The particles ────────────────────────────────────────────────
+  function pkCfxTex() {
+    if (PK_CFX.tex) return PK_CFX.tex;
+    PK_CFX.tex = makeAlphaTex(64, 64, function (c, w, h) {
+      var gr = c.createRadialGradient(w / 2, h / 2, 2, w / 2, h / 2, w / 2); gr.addColorStop(0, 'rgba(255,255,255,0.95)'); gr.addColorStop(0.5, 'rgba(255,255,255,0.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = gr; c.fillRect(0, 0, w, h);
+    });
+    return PK_CFX.tex;
+  }
+  // one puff: where, which way, how long, how big it starts and ends, its colour, how hard gravity pulls and how see-through
+  function pkCfxPuff(x, y, z, vx, vy, vz, life, s0, s1, col, grav, op, add) {
+    var C = PK_CFX, p = C.free.pop();
+    if (!p) {
+      if (C.parts.length >= 170) return;
+      var m = new THREE.SpriteMaterial({ map: pkCfxTex(), transparent: true, depthWrite: false }); m.userData.noBake = true;
+      var s = new THREE.Sprite(m); s.userData.dynamic = true; s.userData.noBake = true; scene.add(s);
+      p = { s: s, on: false }; C.parts.push(p);
+    }
+    p.on = true; p.x = x; p.y = y; p.z = z; p.vx = vx; p.vy = vy; p.vz = vz; p.t = 0; p.life = life; p.s0 = s0; p.s1 = s1; p.g = grav || 0; p.op = op === undefined ? 0.7 : op;
+    p.s.material.color.setHex(col); p.s.material.blending = add ? THREE.AdditiveBlending : THREE.NormalBlending; p.s.visible = true;
+  }
+  function pkCfxParts(dt) {
+    var C = PK_CFX;
+    for (var i = 0; i < C.parts.length; i++) {
+      var p = C.parts[i]; if (!p.on) continue;
+      p.t += dt;
+      if (p.t >= p.life || p.y < -0.2) { p.on = false; p.s.visible = false; C.free.push(p); continue; }
+      p.vy -= p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+      var u = p.t / p.life, sc = p.s0 + (p.s1 - p.s0) * u;
+      p.s.position.set(p.x, p.y, p.z); p.s.scale.set(sc, sc, 1);
+      p.s.material.opacity = p.op * Math.sin(Math.PI * Math.min(1, u * 1.15 + 0.08));
+    }
+  }
+  // the bursts
+  function pkCfxSpray(x, y, z, dx, dz, k) {       // water thrown up and forward, falling back
+    for (var i = 0; i < 26 * (k || 1); i++) pkCfxPuff(x + randf(-1.2, 1.2), y + 0.2, z + randf(-1.2, 1.2), dx * randf(1, 4) + randf(-2.2, 2.2), randf(4, 9.5) * (k || 1), dz * randf(1, 4) + randf(-2.2, 2.2), randf(0.9, 1.6), 0.5, randf(1.6, 2.6), 0xe9f6ff, 11, 0.75);
+    for (var j = 0; j < 8; j++) pkCfxPuff(x + randf(-2, 2), y + 0.4, z + randf(-2, 2), randf(-0.6, 0.6), randf(0.6, 1.4), randf(-0.6, 0.6), randf(2, 3.2), 1.6, 4.2, 0xffffff, 0, 0.3);
+  }
+  function pkCfxMist(x, y, z, r, n, col) {        // a slow bank of mist
+    for (var i = 0; i < n; i++) pkCfxPuff(x + randf(-r, r), y + randf(0, 0.8), z + randf(-r, r), randf(-0.35, 0.35), randf(0.1, 0.5), randf(-0.35, 0.35), randf(3, 5.5), 1.6, randf(4, 6.5), col || 0xeef2f4, 0, 0.3);
+  }
+  function pkCfxSmoke(x, y, z, dx, dz, n, col) {  // a breath of smoke, pushed one way
+    for (var i = 0; i < n; i++) pkCfxPuff(x, y, z, dx * randf(1.2, 2.6) + randf(-0.3, 0.3), randf(0.3, 1.1), dz * randf(1.2, 2.6) + randf(-0.3, 0.3), randf(1.8, 3.2), 0.5, randf(2.2, 3.6), col || 0xdfe6e2, 0, 0.42);
+  }
+
+  // ── The track lights ─────────────────────────────────────────────
+  // three circuits of bulbs under the spine: three materials, a third of a turn apart, so the twinkle of part 57 runs
+  // along the track as a chase
+  function pkCfxBulbs(g, curve, F, len, cols, step) {
+    var n = Math.floor(len / (step || 1.5)), mats = [], lists = [[], [], []], i, k;
+    for (k = 0; k < 3; k++) { var m = glowMat(cols[k % cols.length], 1.25); m.userData.pkAmbPh = k * 2.0944; m.userData.noBake = true; mats.push(m); }
+    var up = new THREE.Vector3(), mx = new THREE.Matrix4();
+    for (i = 0; i < n; i++) {
+      var u = i / n, p = curve.getPointAt(u), fi = Math.min(F.n - 1, Math.round(u * F.n));
+      up.copy(F.up[fi]);
+      lists[i % 3].push([p.x - up.x * 0.78, p.y - up.y * 0.78, p.z - up.z * 0.78]);
+    }
+    var geo = new THREE.SphereGeometry(0.075, 8, 6);
+    for (k = 0; k < 3; k++) {
+      var im = new THREE.InstancedMesh(geo, mats[k], lists[k].length);
+      for (i = 0; i < lists[k].length; i++) { mx.makeTranslation(lists[k][i][0], lists[k][i][1], lists[k][i][2]); im.setMatrixAt(i, mx); }
+      im.instanceMatrix.needsUpdate = true; im.frustumCulled = false; im.userData.noBake = true; g.add(im);
+      PK_CFX.bulbs += lists[k].length;
+    }
+  }
+
+  // ── A ride given to the kit ──────────────────────────────────────
+  // o: { id, lead: function () -> the lead car's world position, running: function () -> is the train out, zones: [...] }
+  // a zone: { x, z, r, yMax, fire: function (p, vx, vz, speed) }
+  function pkCfxRide(o) { o.last = null; o.speed = 0; o.vy = 0; o.clack = 0; o.dropped = false; o.zones = o.zones || []; PK_CFX.rides.push(o); return o; }
+  function pkCfxRides(dt) {
+    var C = PK_CFX;
+    for (var i = 0; i < C.rides.length; i++) {
+      var r = C.rides[i], p = r.lead(); if (!p) continue;
+      if (!r.last) { r.last = p.clone(); continue; }
+      var vx = (p.x - r.last.x) / dt, vy = (p.y - r.last.y) / dt, vz = (p.z - r.last.z) / dt, sp = Math.sqrt(vx * vx + vy * vy + vz * vz);
+      r.last.copy(p);
+      if (sp > 45) continue;                                   // a jump (the train was put back at the station): not motion
+      r.speed += (sp - r.speed) * Math.min(1, dt * 8); r.vy += (vy - r.vy) * Math.min(1, dt * 8);
+      if (!r.running() || r.speed < 0.3) { r.dropped = false; for (var q = 0; q < r.zones.length; q++) r.zones[q].hot = false; continue; }
+      var near = pkCfxNear(p);
+      // the lift: slow and climbing
+      if (r.vy > 0.7 && r.speed < 5) { r.clack -= dt; if (r.clack <= 0) { r.clack = 0.26; pkCfxSay('pkClack', p); } }
+      // a drop begins
+      if (r.vy < -6.5 && !r.dropped) { r.dropped = true; pkCfxSay('pkScream', p, 1.3); }
+      else if (r.vy > -1.5) r.dropped = false;
+      // the roar
+      C.roarWant = Math.max(C.roarWant, near * Math.min(1, r.speed / 19));
+      // the zones
+      for (var z = 0; z < r.zones.length; z++) {
+        var Z = r.zones[z], inside = (p.x - Z.x) * (p.x - Z.x) + (p.z - Z.z) * (p.z - Z.z) < Z.r * Z.r && (Z.yMax === undefined || p.y < Z.yMax);
+        if (inside && !Z.hot) { Z.hot = true; C.fired++; Z.fire(p, vx / (sp || 1), vz / (sp || 1), r.speed); }
+        else if (!inside) Z.hot = false;
+      }
+    }
+  }
+  // an emitter that runs on its own while the eye is near: { x, y, z, every, t, fire: function (e) }
+  function pkCfxEmit(e) { e.t = Math.random() * e.every; PK_CFX.emit.push(e); return e; }
+  function pkCfxEmits(dt) {
+    var C = PK_CFX, cx = camera.position.x, cz = camera.position.z;
+    for (var i = 0; i < C.emit.length; i++) {
+      var e = C.emit[i]; if ((e.x - cx) * (e.x - cx) + (e.z - cz) * (e.z - cz) > 65 * 65) continue;
+      if (e.night && !(S.time >= 18 || S.time < 7)) continue;
+      e.t -= dt; if (e.t > 0) continue;
+      e.t = e.every * randf(0.7, 1.3); e.fire(e);
+    }
+  }
+
+  // ── The scenery: the coaster ─────────────────────────────────────
+  function pkCfxCoaster() {
+    var K = pkMats(), g = PK.coasterG; if (!g) return;
+    // the pond under the dive's foot at the north of the yard: the train skims it as it pulls out
+    var pond = new THREE.Mesh(new THREE.CircleGeometry(1, 40), K.water); pond.rotation.x = -Math.PI / 2; pond.scale.set(9.2, 2.25, 1); pond.position.set(2, 0.05, -33.5); g.add(pond);
+    var bank = new THREE.Mesh(new THREE.CircleGeometry(1, 40), K.stoneDark); bank.rotation.x = -Math.PI / 2; bank.scale.set(9.7, 2.6, 1); bank.position.set(2, 0.03, -33.5); g.add(bank);
+    for (var a = 0; a < 6.2832; a += 0.19) {
+      var bx = 2 + Math.cos(a) * 9.6, bz = -33.5 + Math.sin(a) * 2.55;
+      if (Math.sin(a) < -0.55) continue;                       // the north bank is the yard rail's
+      pkBoulder(bx + randf(-0.25, 0.25), bz + randf(-0.2, 0.2), randf(0.32, 0.62), g);
+    }
+    [[-5.5, -30.7, 0.9], [-3.6, -30.4, 0.6], [8.8, -30.6, 1.0], [10.2, -30.9, 0.65], [1.5, -30.6, 0.5]].forEach(function (b) { pkBoulder(b[0], b[1], b[2], g); });
+    // the rock tunnel over the run home, along the west side: boulders either side and slabs across
+    // (walls of rock leaning in, roof rocks bedded on them, rubble at the feet: one mass with a way through)
+    // cut rock, the same faceted stone as the flume's gorge: each piece a boulder's own shape, stretched to a wall or a lintel
+    var rock = pkRockMats(), geos = pkCrownGeos(), ri = 0;
+    var crag = function (x, y, z, sx, sy, sz) {
+      var m = new THREE.Mesh(geos[ri % geos.length], rock[ri % rock.length]); ri++;
+      m.scale.set(sx, sy, sz); m.position.set(x, y, z); m.rotation.set(randf(-0.12, 0.12), randf(0, 6.283), randf(-0.12, 0.12)); m.castShadow = true; m.receiveShadow = true; g.add(m); return m;
+    };
+    for (var tz = -24.6; tz <= -20.4; tz += 1.4) {
+      [-1, 1].forEach(function (sd) {
+        crag(-17 + sd * randf(2.75, 3.0), 1.9, tz + randf(-0.25, 0.25), randf(2.3, 2.9), randf(4.4, 5.4), randf(2.2, 2.8));
+        crag(-17 + sd * randf(4.0, 4.6), 0.8, tz + randf(-0.5, 0.5), randf(1.8, 2.6), randf(1.8, 2.6), randf(1.8, 2.4));
+      });
+      crag(-17 + randf(-0.4, 0.4), 4.55 + randf(-0.1, 0.3), tz, randf(6.6, 7.4), randf(2.0, 2.6), randf(2.2, 2.8));
+    }
+    [[-18.9, -26.6, 1.2], [-15.1, -26.4, 1.0], [-19.0, -18.9, 1.1], [-15.0, -19.0, 0.9], [-21.2, -22.5, 0.9], [-12.6, -13.0, 0.8]].forEach(function (b) { pkBoulder(b[0], b[1], b[2], g); });
+    // the yard: beds and clipped planting on the lawn inside the rail, clear of every support
+    [[-12, -11.5, 2.6, 1.3], [-2, -11.5, 2.6, 1.3], [8, -11.5, 2.6, 1.3], [22, -11, 2.6, 1.3], [-12, -23.2, 1.3, 2.6], [10, -23.2, 2.6, 1.3]].forEach(function (b) { pkFlowerBed(b[0], b[1], b[2], b[3], null, true); });
+    [[-7, -11.5], [3, -11.5], [15, -11], [-12, -26], [24, -14]].forEach(function (q) { pkTopiary(q[0], q[1], g, 1); });
+    pkCfxBulbs(g, PK.curve, PK.F, PK.len, [0xfff2c0, 0x7fc8ff, 0xfff2c0], 1.5);
+    var spray = function (p, dx, dz, sp) { if (sp < 5) return; pkCfxSpray(p.x, 0.1, p.z, dx, dz, Math.min(1.3, sp / 14)); pkCfxSay('pkSplash', p); };
+    pkCfxRide({
+      id: 'coaster',
+      lead: function () { var c = PK.cars[0]; c = c && (c.g || c); return c ? c.position : null; },
+      running: function () { var s = PK.ride.state; return s === 'running' || s === 'dispatch' || s === 'arrive'; },
+      zones: [
+        { x: 1.2, z: -33.5, r: 3.0, yMax: 2.6, fire: spray }, { x: -5.4, z: -33.5, r: 3.0, yMax: 2.8, fire: spray },
+        { x: -17, z: -22.5, r: 3.4, yMax: 2.4, fire: function (p) { pkCfxMist(-17, 0.8, -22.5, 2.6, 12); pkCfxSay('pkHiss', p); } }
+      ]
+    });
+    pkCfxEmit({ x: -17, y: 0.6, z: -22.5, every: 2.4, fire: function (e) { pkCfxMist(e.x, e.y, e.z + randf(-3, 3), 1.2, 2); } });
+  }
+
+  // ── The scenery: The Serpent ─────────────────────────────────────
+  function pkCfxSerpent() {
+    var a = PK.attrById.serpent; if (!a || !a.g || !a.extra) return;
+    var g = a.g, E = a.extra, K = pkMats(), th = PK_THEME.serpent;
+    // its skin: dark green scales, each with a paler edge, and a gold diamond band down the back
+    var skinTex = tex(256, 256, function (c, w, h) {
+      c.fillStyle = '#1f5a40'; c.fillRect(0, 0, w, h);
+      for (var yy = -1; yy < 9; yy++) for (var xx = -1; xx < 9; xx++) {
+        var sx = xx * 32 + (yy % 2 ? 16 : 0), sy = yy * 32;
+        c.fillStyle = (xx + yy) % 3 ? '#2b7a55' : '#236848'; c.beginPath(); c.moveTo(sx, sy + 16); c.lineTo(sx + 16, sy); c.lineTo(sx + 32, sy + 16); c.lineTo(sx + 16, sy + 34); c.closePath(); c.fill();
+        c.strokeStyle = 'rgba(160,220,170,0.55)'; c.lineWidth = 2; c.beginPath(); c.moveTo(sx, sy + 16); c.lineTo(sx + 16, sy + 34); c.lineTo(sx + 32, sy + 16); c.stroke();
+      }
+      c.fillStyle = '#c9a227'; for (var d = 0; d < 4; d++) { c.beginPath(); c.moveTo(d * 64 + 32, 104); c.lineTo(d * 64 + 54, 128); c.lineTo(d * 64 + 32, 152); c.lineTo(d * 64 + 10, 128); c.closePath(); c.fill(); }
+    }, 14, 2);
+    var skin = std({ map: skinTex, roughness: 0.6, metalness: 0.1 }), belly = pkPaint(0xd8c98a, 0.6, 0.1), gold = K.gold, mouthM = pkPaint(0x8a1f1a, 0.6, 0.05), skinPlain = pkPaint(0x236848, 0.6, 0.1);
+    // the stone serpent: coiled in the open middle of the ride, inside the great curve of the first drop, its body rising
+    // and falling, its head lifted at the south side, looking down on the queue and the Promenade
+    var cx = 54.6, cz = -87.6, R = 8.6, pts = [], n = 44, i;   // the track keeps 5 m clear of this ring all round
+    for (i = 0; i <= n; i++) {
+      var f = i / n, ang = -2.7 + f * 3.4, lift = f > 0.86 ? (f - 0.86) / 0.14 : 0;        // from the north-west, round the north and the east, to the south side
+      var rr = R + Math.sin(f * 21) * 0.6 - lift * 1.2;
+      pts.push([cx + Math.cos(ang) * rr, 0.55 + Math.max(0, Math.sin(f * 17)) * 0.9 + lift * lift * 3.4, cz + Math.sin(ang) * rr * 0.93]);
+    }
+    // the body in three girths: the tail, the middle, the neck
+    pkTube(pts.slice(0, 10), 0.34, skin, g, false, 40, 10); pkTube(pts.slice(9, 38), 0.62, skin, g, false, 90, 12); pkTube(pts.slice(37), 0.5, skin, g, false, 36, 12);
+    sphere(0.2, skin, pts[0][0], pts[0][1], pts[0][2], g);
+    for (i = 4; i < n - 2; i += 3) { var b = pts[i]; var ring = pkRing(i < 10 ? 0.37 : i > 37 ? 0.53 : 0.65, 0.05, gold, b[0], b[1], b[2], g, 16); var nx = pts[i + 1][0] - b[0], nz = pts[i + 1][2] - b[2]; ring.rotation.set(0, Math.atan2(nx, nz), 0); ring.rotateX(Math.PI / 2); }
+    // the head
+    var H = pts[n], Hp = pts[n - 2], hd = Math.atan2(H[0] - Hp[0], H[2] - Hp[2]);
+    var head = new THREE.Group(); head.position.set(H[0], H[1], H[2]); head.rotation.y = hd; g.add(head);
+    // the skull, the snout, the hood behind the head, and the lower jaw hanging open on its own hinge
+    pkBlob(0.95, 0.5, 1.2, skinPlain, 0, 0.28, 0.6, head); pkBlob(0.62, 0.34, 0.8, skinPlain, 0, 0.2, 1.5, head);
+    pkBlob(1.5, 0.95, 0.28, skinPlain, 0, 0.1, -0.35, head).rotation.x = -0.25; pkBlob(1.25, 0.8, 0.1, belly, 0, 0.08, -0.16, head).rotation.x = -0.25;
+    pkBlob(0.7, 0.07, 1.25, mouthM, 0, 0.0, 0.95, head);
+    var jaw = new THREE.Group(); jaw.position.set(0, -0.05, 0.1); jaw.rotation.x = 0.42; head.add(jaw);
+    pkBlob(0.72, 0.2, 1.15, belly, 0, -0.16, 0.85, jaw); pkBlob(0.6, 0.05, 1.05, mouthM, 0, 0.0, 0.9, jaw);
+    [-1, 1].forEach(function (s) { var lf = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.26, 6), std({ color: 0xf4f1e6, roughness: 0.4 })); lf.position.set(s * 0.22, 0.14, 1.75); jaw.add(lf); });
+    [-1, 1].forEach(function (s) {
+      sphere(0.17, glowMat(0xffc21a, 1.6), s * 0.56, 0.5, 1.0, head); pkBlob(0.03, 0.13, 0.04, std({ color: 0x101010, roughness: 0.3 }), s * 0.66, 0.5, 1.12, head);
+      var fang = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.42, 6), std({ color: 0xf4f1e6, roughness: 0.4 })); fang.position.set(s * 0.3, -0.18, 1.95); fang.rotation.x = Math.PI; head.add(fang);
+      pkBlob(0.2, 0.1, 0.34, skinPlain, s * 0.5, 0.66, 0.95, head);   // the brow
+    });
+    var tongue = box(0.06, 0.03, 1.1, pkPaint(0xc8342a, 0.5, 0.1), 0, -0.12, 2.2, head); tongue.rotation.x = 0.25;
+    [-1, 1].forEach(function (s) { var fk = box(0.04, 0.03, 0.34, pkPaint(0xc8342a, 0.5, 0.1), s * 0.07, -0.26, 2.86, head); fk.rotation.set(0.25, s * 0.35, 0); });
+    var mouth = new THREE.Vector3(0, -0.1, 1.9).applyAxisAngle(new THREE.Vector3(0, 1, 0), hd).add(head.position);
+    var dirx = Math.sin(hd), dirz = Math.cos(hd);
+    // boulders and clipped green under the coils
+    for (i = 2; i < n - 4; i += 4) { pkBoulder(pts[i][0] + randf(-1.2, 1.2), pts[i][2] + randf(-1.2, 1.2), randf(0.5, 1.0), g); if (i % 8 === 2) pkTopiary(pts[i][0] + randf(-1.6, 1.6), pts[i][2] + 1.6, g, randf(0.9, 1.3)); }
+    PK_KEEP.push([cx, cz, 12]);
+    pkCfxBulbs(g, E.curve, E.F, E.len, [0x7fffb0, 0xfff2c0, 0x2fd08a], 1.4);
+    // the lowest the track comes, away from the station: the loops' foot, where the mist lies
+    var low = null; for (i = 0; i < 200; i++) { var u = i / 200, du = Math.abs(u - E.uPark); if (Math.min(du, 1 - du) < 0.12) continue; var p = E.curve.getPointAt(u); if (!low || p.y < low.y) low = p; }
+    pkCfxRide({
+      id: 'serpent',
+      lead: function () { return E.cars[0] ? E.cars[0].g.position : null; },
+      running: function () { return a.state === 'running'; },
+      zones: [
+        { x: low.x, z: low.z, r: 4.2, fire: function (p) { pkCfxMist(low.x, 0.6, low.z, 3.2, 14, 0xe6f4ea); pkCfxSay('pkHiss', p); } },
+        { x: mouth.x, z: mouth.z, r: 13, fire: function (p) { pkCfxSmoke(mouth.x, mouth.y, mouth.z, dirx, dirz, 12, 0xd8f0dc); pkCfxSay('pkHiss', mouth, 1.4); } }
+      ]
+    });
+    pkCfxEmit({ x: mouth.x, y: mouth.y, z: mouth.z, every: 3.2, fire: function (e) { pkCfxSmoke(e.x, e.y, e.z, dirx, dirz, 3, 0xd8f0dc); } });
+    pkCfxEmit({ x: low.x, y: 0.5, z: low.z, every: 2.2, fire: function (e) { pkCfxMist(e.x, e.y, e.z, 3.5, 2, 0xe6f4ea); } });
+    PK_CFX.serpent = { head: head, mouth: mouth };
+  }
+
+  // ── The scenery: Baron's Drop ────────────────────────────────────
+  function pkCfxTorch(x, z, g) {
+    var K = pkMats();
+    pkBevelBox(0.36, 0.26, 0.36, K.stoneDark, x, 0.13, z, g, 0.03);
+    pkRoundCyl(0.06, 2.5, K.iron, x, 1.25, z, g, 8);
+    pkLathe([[0, 0], [0.12, 0], [0.3, 0.22], [0.26, 0.26], [0.1, 0.06], [0, 0.06]], K.iron, x, 2.5, z, g, 12);
+    sphere(0.13, glowMat(0xff8a2a, 1.8), x, 2.74, z, g);
+    solid(x - 0.18, x + 0.18, z - 0.18, z + 0.18, 0, 2.6);
+    pkCfxEmit({ x: x, y: 2.8, z: z, every: 0.09, fire: function (e) {
+      pkCfxPuff(e.x + randf(-0.05, 0.05), e.y, e.z + randf(-0.05, 0.05), randf(-0.12, 0.12), randf(0.9, 1.5), randf(-0.12, 0.12), randf(0.35, 0.6), 0.42, 0.12, Math.random() < 0.5 ? 0xffb030 : 0xff6a1a, 0, 0.85, true);
+      if (Math.random() < 0.08) pkCfxPuff(e.x, e.y + 0.5, e.z, randf(-0.2, 0.2), randf(0.5, 0.9), randf(-0.2, 0.2), 1.6, 0.3, 0.9, 0x55504a, 0, 0.25);
+    } });
+  }
+  function pkCfxBaron() {
+    var a = PK.attrById.baron; if (!a || !a.g || !a.extra) return;
+    var g = a.g, E = a.extra;
+    [[40.4, 11.6], [40.4, 19.4], [60.6, 26.6], [60.6, 31.0]].forEach(function (q) { pkCfxTorch(q[0], q[1], g); });
+    pkCfxBulbs(g, E.curve, E.F, E.len, [0xff5a3a, 0xffc24a, 0xff5a3a], 1.5);
+    var zones = [];
+    if (E.splash) zones.push({ x: E.splash.x, z: E.splash.z, r: 3.4, yMax: 3.2, fire: function (p, dx, dz, sp) { pkCfxSpray(E.splash.x, 0.5, E.splash.z, dx, dz, 1.5); pkCfxSay('pkSplash', p, 1.4); } });
+    pkCfxRide({ id: 'baron', lead: function () { return E.cars[0] ? E.cars[0].g.position : null; }, running: function () { return a.state === 'running'; }, zones: zones });
+  }
+
+  // ── Building it, and the beat ────────────────────────────────────
+  function pkCoasterFxBuild() {
+    if (PK_CFX.built) return;
+    PK_CFX.built = true;
+    pkCfxCoaster(); pkCfxSerpent(); pkCfxBaron();
+  }
+  function pkCoasterFxTick(dt) {
+    if (!PK_CFX.built || !dt) return;
+    var d = Math.min(dt, 0.1); PK_CFX.t += d;
+    pkCfxRides(d); pkCfxEmits(d); pkCfxParts(d); pkCfxRoar(d);
+  }
+  var _pkCfxPrevTheme = pkThemeBuild;
+  pkThemeBuild = function () { _pkCfxPrevTheme(); pkCoasterFxBuild(); };
+  hook('frame', function (dt) { pkCoasterFxTick(dt); });
+
+  var _pkCfxPrevT = GAME.T;
+  GAME.T = function () { var t = _pkCfxPrevT(); t.PK_CFX = PK_CFX; t.pkCoasterFxTick = pkCoasterFxTick; t.pkCfxSpray = pkCfxSpray; t.pkCfxMist = pkCfxMist; return t; };
+  // ── Why ──────────────────────────────────────────────────────────
+  // The engine's figure is a mannequin: a head a quarter of its height, limbs that are plain tubes, and one silhouette for
+  // every man, woman and child in the park. tison asked for the guests and the staff to be remodelled.
+  //
+  // This part replaces makeHuman. The rig is the engine's, to the pivot: two hips with a knee each, a torso, two
+  // shoulders with an elbow and a hand each, a head and a face, all under the same names in userData, so animateHuman,
+  // the seats, the benches, the carried things and the speech bubble work exactly as before. What hangs on the rig is new:
+  //   - proportions: a smaller head on a longer neck (about six and a half heads tall), shoulders, a waist, tapered limbs
+  //     with calves, proper hands, trainers with a toe and a sole;
+  //   - builds: slim, medium and broad, so a crowd is not one outline;
+  //   - clothes: a T-shirt with a print, a buttoned shirt, a hoodie with its hood down, an open jacket over a top, a dress;
+  //     long trousers or shorts with socks;
+  //   - hair: cropped, side-parted, long, a ponytail, a bun, curls, bald; a cap, a sun hat or a beanie on some;
+  //   - things carried: a backpack, a shoulder bag, a camera on a strap;
+  //   - staff keep what they were given: the vest with its bands, the name tag, the cap, the hard hat.
+  // Guests also come in sizes now: about one in seven is a child.
+  var PK_PPL = { G: null, M: null, made: 0 };
+  function pkPplGeo() {
+    if (PK_PPL.G) return PK_PPL.G;
+    var G = PK_PPL.G = {
+      thigh: roundCylGeo(0.082, 0.062, 0.42, 14), thighTop: roundCylGeo(0.084, 0.074, 0.22, 14), thighLow: roundCylGeo(0.07, 0.06, 0.2, 14),
+      knee: new THREE.SphereGeometry(0.06, 12, 8), shin: roundCylGeo(0.058, 0.04, 0.38, 14), calf: new THREE.SphereGeometry(0.056, 12, 8),
+      sock: roundCylGeo(0.046, 0.043, 0.07, 12), hem: roundCylGeo(0.062, 0.06, 0.035, 14),
+      shoe: bevelGeo(0.1, 0.075, 0.2, 0.03, 3), toe: new THREE.SphereGeometry(0.052, 12, 8), sole: bevelGeo(0.108, 0.028, 0.275, 0.012, 1), stripe: bevelGeo(0.104, 0.02, 0.09, 0.006, 1),
+      hips: bevelGeo(0.33, 0.18, 0.2, 0.075, 3), waist: taperGeo(bevelGeo(0.37, 0.34, 0.2, 0.08, 3).clone(), 0.34, 0.84, 0.92), chest: bevelGeo(0.4, 0.26, 0.22, 0.095, 3),
+      yoke: bevelGeo(0.52, 0.11, 0.18, 0.05, 3),
+      belt: bevelGeo(0.335, 0.04, 0.205, 0.01, 1), buckle: bevelGeo(0.045, 0.034, 0.016, 0.004, 1),
+      collar: bevelGeo(0.08, 0.034, 0.012, 0.004, 1), placket: bevelGeo(0.028, 0.5, 0.01, 0.004, 1), button: roundCylGeo(0.008, 0.008, 0.006, 8),
+      print: bevelGeo(0.17, 0.12, 0.008, 0.003, 1), band: bevelGeo(0.405, 0.05, 0.225, 0.01, 1), pouch: bevelGeo(0.2, 0.1, 0.012, 0.006, 1),
+      hood: new THREE.SphereGeometry(0.12, 14, 10), drawstr: roundCylGeo(0.005, 0.005, 0.12, 6),
+      lapel: bevelGeo(0.12, 0.52, 0.016, 0.006, 1), skirt: roundCylGeo(0.15, 0.25, 0.44, 18),
+      shoulder: new THREE.SphereGeometry(0.056, 12, 10), upperArm: roundCylGeo(0.05, 0.04, 0.29, 12), sleeve: roundCylGeo(0.056, 0.052, 0.16, 12),
+      elbow: new THREE.SphereGeometry(0.041, 10, 8), foreArm: roundCylGeo(0.039, 0.03, 0.27, 12), cuff: roundCylGeo(0.036, 0.034, 0.03, 12),
+      hand: bevelGeo(0.058, 0.085, 0.03, 0.013, 2), thumb: roundCylGeo(0.011, 0.01, 0.045, 8),
+      neck: roundCylGeo(0.04, 0.048, 0.1, 12), skull: new THREE.SphereGeometry(0.125, 24, 18), jaw: new THREE.SphereGeometry(0.1, 18, 12),
+      ear: new THREE.SphereGeometry(0.024, 8, 6), nose: new THREE.SphereGeometry(0.017, 10, 8),
+      hairCap: new THREE.SphereGeometry(0.13, 22, 12, 0, Math.PI * 2, 0, Math.PI * 0.52), hairBack: new THREE.SphereGeometry(0.13, 18, 10, Math.PI * 1.1, Math.PI * 0.8, Math.PI * 0.38, Math.PI * 0.32),
+      fringe: new THREE.SphereGeometry(0.13, 18, 6, Math.PI * 0.18, Math.PI * 0.64, Math.PI * 0.27, Math.PI * 0.2), part: new THREE.SphereGeometry(0.13, 14, 6, Math.PI * 0.1, Math.PI * 0.5, Math.PI * 0.2, Math.PI * 0.3),
+      fall: new THREE.CylinderGeometry(0.136, 0.15, 0.3, 18, 2, true, Math.PI * 0.42, Math.PI * 1.16), bun: new THREE.SphereGeometry(0.058, 12, 10),
+      tail: roundCylGeo(0.036, 0.016, 0.26, 10), curl: new THREE.SphereGeometry(0.05, 9, 7),
+      beard: new THREE.SphereGeometry(0.105, 16, 8, -Math.PI * 0.1, Math.PI * 1.2, Math.PI * 0.55, Math.PI * 0.38),
+      capDome: new THREE.SphereGeometry(0.137, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), peak: bevelGeo(0.16, 0.012, 0.12, 0.005, 1), capBtn: new THREE.SphereGeometry(0.016, 8, 6),
+      brim: roundCylGeo(0.25, 0.25, 0.012, 24), hatBand: roundCylGeo(0.139, 0.139, 0.03, 20), beanie: new THREE.SphereGeometry(0.139, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.56), pom: new THREE.SphereGeometry(0.035, 8, 6),
+      hardDome: new THREE.SphereGeometry(0.146, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.5), hardRim: roundCylGeo(0.165, 0.165, 0.014, 22), hardPeak: bevelGeo(0.13, 0.012, 0.07, 0.004, 1),
+      vest: bevelGeo(0.43, 0.46, 0.25, 0.055, 3), vband: bevelGeo(0.44, 0.04, 0.26, 0.012, 1), vstrap: bevelGeo(0.045, 0.26, 0.26, 0.012, 1),
+      pack: bevelGeo(0.26, 0.34, 0.12, 0.04, 2), packPocket: bevelGeo(0.18, 0.13, 0.03, 0.012, 1), strap: bevelGeo(0.035, 0.36, 0.25, 0.01, 1),
+      bag: bevelGeo(0.2, 0.15, 0.07, 0.025, 2), bagStrap: bevelGeo(0.025, 0.62, 0.025, 0.006, 1), cam: bevelGeo(0.1, 0.065, 0.05, 0.012, 1), lens: roundCylGeo(0.026, 0.028, 0.045, 12),
+      lensRing: new THREE.TorusGeometry(0.031, 0.005, 6, 16), bridge: bevelGeo(0.024, 0.005, 0.005, 0.002, 1)
+    };
+    G.skull.scale(0.93, 1.13, 0.99); G.jaw.scale(0.86, 0.74, 0.9); G.ear.scale(0.5, 1.2, 0.85); G.nose.scale(0.85, 1.25, 1.1); G.calf.scale(1, 1.9, 1.05); G.toe.scale(1, 0.72, 1.25);
+    G.hairCap.scale(1.0, 1.14, 1.03); G.hairBack.scale(1.01, 1.16, 1.04); G.fringe.scale(1.005, 1.145, 1.04); G.part.scale(1.01, 1.15, 1.04); G.beard.scale(0.9, 0.95, 0.95);
+    G.hood.scale(1.15, 0.75, 0.9); G.capDome.scale(1, 0.92, 1.04); G.beanie.scale(1, 1.05, 1.03); G.hardDome.scale(1, 0.95, 1.05);
+    for (var k in G) keepShared(G[k]);
+    var M = PK_PPL.M = {
+      sole: std({ color: 0xece8de, roughness: 0.9 }), sock: std({ color: 0xf2f0ea, roughness: 0.95 }), belt: std({ color: 0x3a2a1a, roughness: 0.5 }), button: std({ color: 0xf2f2f2, roughness: 0.8 }),
+      band: std({ color: 0xc9ced3, roughness: 0.3, metalness: 0.4, emissive: 0x666666, emissiveIntensity: 0.25 }), frame: std({ color: 0x222222, roughness: 0.4, metalness: 0.5 }),
+      cam: std({ color: 0x1c1e22, roughness: 0.45, metalness: 0.3 }), glass: std({ color: 0x223040, roughness: 0.1, metalness: 0.6 }), straw: std({ color: 0xd9c08a, roughness: 0.95 })
+    };
+    for (var m in M) keepShared(M[m]);
+    return G;
+  }
+  var PK_PPL_BUILDS = { slim: [0.9, 0.92, 0.225], mid: [1.0, 1.0, 0.243], broad: [1.12, 1.1, 0.268] };   // [torso width, depth, shoulder x]
+  var PK_PPL_SHOES = [0xf4f1e6, 0x2a2d33, 0xd94f4f, 0x3b5b8a, 0x6b4a2a, 0x8a8f96];
+  var PK_PPL_PACKS = [0x2f5d8a, 0xb8452f, 0x3a3f48, 0x5fa86a, 0x7a5a9a, 0xd8a23c];
+  // opt, as the engine's: skin, hair, style, shirt, pants, vest, name, rolled, mood, cap, capMat, hardhat, noBeard, beard, glasses, key.
+  // New, all optional (picked at random when not given, except on staff in a vest or a hard hat, who get the plain shirt):
+  // build ('slim' | 'mid' | 'broad'), outfit ('tee' | 'shirt' | 'hoodie' | 'jacket' | 'dress'), shorts, hat ('sun' | 'beanie'),
+  // carry ('pack' | 'bag' | 'camera'), accent (a colour for the print, the stripe and the lining)
+  // The Park Co uniform, worn by everyone who works here and by the player: a navy shirt, charcoal trousers, a gold vest with
+  // silver bands, a navy cap and a PARK CO name tag. Asked for with opt.uniform, and given on its own to the engine's staff
+  // characters (the sweepers, the gardener, the guards, the cashiers) and the ride operators, found by the key they are made with.
+  var PK_PPL_STAFFKEY = /^(sweeper|sweeperNorth|gardener|guard[A-Za-z]*|cashier[A-Za-z]*|operator):/;
+  function pkUniformOpt(opt) {
+    var U = PK_PPL.U || (PK_PPL.U = { shirt: std({ map: TEX.cloth, color: 0x1d3b63, roughness: 0.92 }), pants: std({ map: TEX.cloth, color: 0x2a2d33, roughness: 0.95 }), vest: std({ color: 0xf2b632, roughness: 0.7 }), cap: std({ color: 0x1d3b63, roughness: 0.8 }) });
+    var o = {}; for (var k in opt) o[k] = opt[k];
+    o.shirt = U.shirt; o.pants = U.pants; o.vest = U.vest; o.cap = true; o.capMat = U.cap; o.outfit = 'shirt'; o.hardhat = null; o.name = o.name || 'PARK CO'; o.shorts = false;
+    return o;
+  }
+  function pkMakeHuman(opt) {
+    opt = opt || {};
+    if (opt.uniform || PK_PPL_STAFFKEY.test(opt.key || '')) opt = pkUniformOpt(opt);
+    var G = pkPplGeo(), M = PK_PPL.M, staff = !!(opt.vest || opt.hardhat || opt.name);
+    var skinCol = opt.skin || pick(SKINS), hairCol = opt.hair || pick(HAIRS);
+    var style = opt.style || pick(['short', 'short', 'part', 'long', 'pony', 'bun', 'curly', 'bald', 'cap']);
+    var build = PK_PPL_BUILDS[opt.build || (staff ? 'mid' : pick(['slim', 'slim', 'mid', 'mid', 'mid', 'broad']))] || PK_PPL_BUILDS.mid;
+    var outfit = opt.outfit || (staff ? 'shirt' : pick(['tee', 'tee', 'tee', 'shirt', 'hoodie', 'jacket', 'dress']));
+    var shorts = opt.shorts !== undefined ? !!opt.shorts : (!staff && outfit !== 'dress' && Math.random() < 0.38);
+    var skin = std({ color: skinCol, roughness: 0.72 }), shirt = opt.shirt || std({ map: TEX.cloth, color: pick(SHIRTS), roughness: 0.92 }), pants = opt.pants || std({ map: TEX.cloth, color: pick(PANTS), roughness: 0.95 });
+    var hair = std({ color: hairCol, roughness: 0.6 }), hairSide = hair.clone(); hairSide.side = THREE.DoubleSide;
+    var shoeM = std({ color: pick(PK_PPL_SHOES), roughness: 0.6 });
+    var accentCol = opt.accent || pick([0xf4f1e6, 0xf0c04a, 0x2f3440, 0xd94f4f, 0x4f8fd9, 0xffffff]);
+    var accent = std({ color: accentCol, roughness: 0.85 });
+    var rolled = opt.rolled !== undefined ? !!opt.rolled : Math.random() < 0.4;
+    var longSleeve = outfit === 'hoodie' || outfit === 'jacket' || (outfit === 'shirt' && !rolled);
+    var shortSleeve = outfit === 'tee' || outfit === 'dress';
+    var g = new THREE.Group(), u = g.userData; u.dynamic = true;
+    u.key = opt.key || 'f' + Math.floor(Math.random() * 100000); u.mood = opt.mood || 'neutral'; u.blink = 0; u.blinkIn = randf(2, 6); u.walk = 0; u.idleT = Math.random() * 10; u.lookYaw = 0; u.lookPitch = 0; u.skinKey = skinCol.toString(16); u.phase = Math.random() * 6.28;
+    u.pkLook = { build: opt.build, outfit: outfit, shorts: shorts, style: style };
+    g.scale.setScalar(HUMAN_SCALE);
+    function mesh(geo, mat, x, y, z, parent) { var m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; (parent || g).add(m); return m; }
+    // ── the legs ──
+    var legSkin = outfit === 'dress';
+    function leg(side) {
+      var hip = new THREE.Group(); hip.position.set(side * 0.095, 0.86, 0); g.add(hip);
+      if (legSkin) mesh(G.thigh, skin, 0, -0.21, 0, hip);
+      else if (shorts) { mesh(G.thighTop, pants, 0, -0.11, 0, hip); mesh(G.thighLow, skin, 0, -0.31, 0, hip); mesh(G.hem, pants, 0, -0.215, 0, hip); }
+      else mesh(G.thigh, pants, 0, -0.21, 0, hip);
+      var knee = new THREE.Group(); knee.position.set(0, -0.42, 0); hip.add(knee); hip.userData.knee = knee;
+      var lower = (shorts || legSkin) ? skin : pants;
+      mesh(G.knee, lower, 0, 0, 0, knee); mesh(G.shin, lower, 0, -0.19, 0, knee); mesh(G.calf, lower, 0, -0.14, -0.012, knee);
+      if (shorts || legSkin) mesh(G.sock, M.sock, 0, -0.345, 0, knee); else mesh(G.hem, pants, 0, -0.355, 0, knee);
+      // a trainer: the upper, a rounded toe, a pale sole and a stripe across the laces
+      mesh(G.shoe, shoeM, 0, -0.4, 0.035, knee); mesh(G.toe, shoeM, 0, -0.41, 0.135, knee); mesh(G.sole, M.sole, 0, -0.444, 0.05, knee); mesh(G.stripe, accent, 0, -0.37, 0.07, knee);
+      return hip;
+    }
+    u.legs = [leg(-1), leg(1)];
+    // ── the torso ──
+    var torso = new THREE.Group(); torso.position.y = 0.86; g.add(torso); u.torso = torso;
+    var bw = build[0], bd = build[1];
+    var sc = function (m, w, d) { m.scale.set(w === undefined ? bw : w, 1, d === undefined ? bd : d); return m; };
+    var lowerM = outfit === 'dress' ? shirt : pants;
+    sc(mesh(G.hips, lowerM, 0, 0.02, 0, torso));
+    if (outfit !== 'dress' && outfit !== 'hoodie') { sc(mesh(G.belt, M.belt, 0, 0.105, 0, torso)); mesh(G.buckle, MAT.chrome, 0, 0.105, 0.105 * bd, torso); }
+    sc(mesh(G.waist, shirt, 0, 0.29, 0, torso)); u.chest = sc(mesh(G.chest, shirt, 0, 0.5, 0, torso));
+    sc(mesh(G.yoke, shirt, 0, 0.585, -0.005, torso), bw * (build[2] / 0.243) * 0.98, bd);   // the shoulders: one line from arm to arm, so an arm grows out of the body
+    var fz = 0.112 * bd;                                           // the front of the chest
+    if (outfit === 'tee') { mesh(G.print, accent, 0, 0.47, fz + 0.002, torso); }
+    else if (outfit === 'shirt') {
+      [-1, 1].forEach(function (sd) { var cl = mesh(G.collar, shirt, sd * 0.045, 0.635, fz - 0.004, torso); cl.rotation.set(-0.35, sd * -0.25, sd * -0.62); });
+      mesh(G.placket, shirt, 0, 0.38, fz, torso); for (var b = 0; b < 4; b++) mesh(G.button, M.button, 0, 0.2 + b * 0.11, fz + 0.006, torso).rotation.x = Math.PI / 2;
+    } else if (outfit === 'hoodie') {
+      mesh(G.hood, shirt, 0, 0.62, -0.1 * bd, torso); mesh(G.pouch, shirt, 0, 0.2, fz - 0.008, torso); sc(mesh(G.band, shirt, 0, 0.115, 0, torso));
+      [-1, 1].forEach(function (sd) { mesh(G.drawstr, M.button, sd * 0.035, 0.55, fz + 0.004, torso); });
+    } else if (outfit === 'jacket') {
+      mesh(G.lapel, accent, 0, 0.39, fz - 0.004, torso).scale.x = 0.8;   // the top underneath, showing down the open front
+      [-1, 1].forEach(function (sd) { var cl = mesh(G.collar, shirt, sd * 0.07, 0.635, fz - 0.002, torso); cl.rotation.set(-0.3, sd * -0.3, sd * -0.7); cl.scale.set(1.3, 1.3, 1); });
+    } else if (outfit === 'dress') {
+      sc(mesh(G.skirt, shirt, 0, -0.14, 0, torso), bw * 1.02, bd * 0.95); sc(mesh(G.band, accent, 0, 0.14, 0, torso), bw * 0.9, bd * 0.92);
+    }
+    if (opt.vest) { sc(mesh(G.vest, opt.vest, 0, 0.33, 0, torso)); sc(mesh(G.vband, M.band, 0, 0.22, 0, torso)); sc(mesh(G.vband, M.band, 0, 0.38, 0, torso)); mesh(G.vstrap, M.band, -0.13 * bw, 0.5, 0, torso).scale.z = bd; mesh(G.vstrap, M.band, 0.13 * bw, 0.5, 0, torso).scale.z = bd; }
+    if (opt.name) { var tag = new THREE.Mesh(new THREE.PlaneGeometry(0.13, 0.046), new THREE.MeshBasicMaterial({ map: textTex([opt.name], { w: 128, h: 48, bg: '#fff', fg: '#1b232c' }) })); tag.position.set(0.09, 0.46, (opt.vest ? 0.132 : 0.116) * bd); torso.add(tag); }
+    // what they carry
+    var carry = opt.carry !== undefined ? opt.carry : (staff ? null : (Math.random() < 0.26 ? 'pack' : Math.random() < 0.16 ? 'bag' : Math.random() < 0.09 ? 'camera' : null));
+    if (carry === 'pack') {
+      var packM = std({ color: pick(PK_PPL_PACKS), roughness: 0.85 });
+      mesh(G.pack, packM, 0, 0.42, -0.17 * bd, torso); mesh(G.packPocket, accent, 0, 0.36, -0.235 * bd, torso);
+      [-1, 1].forEach(function (sd) { mesh(G.strap, packM, sd * 0.12 * bw, 0.47, -0.005, torso).scale.z = bd; });
+    } else if (carry === 'bag') {
+      var bagM = std({ color: pick([0x6b4a2a, 0x2a2d33, 0xb8452f, 0xd9c08a]), roughness: 0.7 });
+      mesh(G.bag, bagM, -0.22 * bw, 0.06, 0.02, torso); var bs = mesh(G.bagStrap, bagM, -0.03, 0.4, fz + 0.004, torso); bs.rotation.z = -0.62; var bs2 = mesh(G.bagStrap, bagM, -0.03, 0.4, -fz - 0.004, torso); bs2.rotation.z = -0.62;
+    } else if (carry === 'camera') {
+      mesh(G.cam, M.cam, 0, 0.36, fz + 0.03, torso); mesh(G.lens, M.cam, 0, 0.36, fz + 0.075, torso).rotation.x = Math.PI / 2; mesh(G.lensRing, M.glass, 0, 0.36, fz + 0.1, torso);
+      [-1, 1].forEach(function (sd) { var st = mesh(G.bagStrap, M.cam, sd * 0.06, 0.5, fz + 0.01, torso); st.scale.set(0.6, 0.45, 0.6); st.rotation.z = sd * 0.25; });
+    }
+    // ── the arms ──
+    function arm(side) {
+      var sh = new THREE.Group(); sh.position.set(side * build[2], 0.6, 0); torso.add(sh);
+      mesh(G.shoulder, shirt, 0, 0, 0, sh);
+      if (shortSleeve) { mesh(G.sleeve, shirt, 0, -0.08, 0, sh); mesh(G.upperArm, skin, 0, -0.16, 0, sh); }
+      else mesh(G.upperArm, shirt, 0, -0.16, 0, sh);
+      var el = new THREE.Group(); el.position.set(0, -0.31, 0); sh.add(el); sh.userData.elbow = el;
+      var foreM = longSleeve ? shirt : skin;
+      mesh(G.elbow, foreM, 0, 0, 0, el); mesh(G.foreArm, foreM, 0, -0.14, 0, el);
+      if (longSleeve) mesh(G.cuff, outfit === 'hoodie' ? shirt : accent, 0, -0.265, 0, el); else if (outfit === 'shirt') mesh(G.cuff, shirt, 0, -0.02, 0, el);
+      var hand = mesh(G.hand, skin, 0, -0.325, 0, el); el.userData.hand = hand;
+      var th = mesh(G.thumb, skin, side * 0.032, -0.305, 0.012, el); th.rotation.z = side * 0.6;
+      return sh;
+    }
+    u.arms = [arm(-1), arm(1)];
+    // ── the head ──
+    var head = new THREE.Group(); head.position.set(0, 0.66, 0); torso.add(head); u.head = head;
+    var hy = 0.2;
+    mesh(G.neck, skin, 0, 0.04, 0, head); mesh(G.skull, skin, 0, hy, 0, head); mesh(G.jaw, skin, 0, hy - 0.07, 0.012, head); mesh(G.nose, skin, 0, hy - 0.012, 0.124, head);
+    [-1, 1].forEach(function (s) { mesh(G.ear, skin, s * 0.116, hy, -0.008, head); });
+    var hat = opt.hat !== undefined ? opt.hat : (staff || opt.cap || style === 'cap' ? null : (Math.random() < 0.1 ? 'sun' : Math.random() < 0.06 ? 'beanie' : null));
+    var capOn = (style === 'cap' || !!opt.cap) && !opt.hardhat, covered = capOn || !!opt.hardhat || hat === 'beanie';
+    if (style !== 'bald') {
+      if (!covered) mesh(G.hairCap, hair, 0, hy + 0.005, 0, head);
+      mesh(G.hairBack, hair, 0, hy + 0.002, 0, head);
+      if (style === 'long') mesh(G.fall, hairSide, 0, hy - 0.13, -0.01, head);
+      else if (style === 'pony') { var tl = mesh(G.tail, hair, 0, hy - 0.05, -0.16, head); tl.rotation.x = -0.5; mesh(G.bun, hair, 0, hy + 0.06, -0.13, head).scale.setScalar(0.7); }
+      else if (style === 'bun') mesh(G.bun, hair, 0, hy + 0.13, -0.085, head);
+      else if (style === 'curly' && !covered) for (var c = 0; c < 11; c++) { var ca = c / 11 * Math.PI * 2, cr = c % 2 ? 0.1 : 0.075; mesh(G.curl, hair, Math.cos(ca) * cr, hy + 0.105 + (c % 3) * 0.018, Math.sin(ca) * cr - 0.005, head); }
+      if (!covered || capOn) { if (style === 'part') mesh(G.part, hair, 0, hy + 0.004, 0, head); else if (style !== 'curly') mesh(G.fringe, hair, 0, hy + 0.003, 0, head); }
+    }
+    if ((opt.beard === true || (opt.beard === undefined && Math.random() < 0.22)) && !opt.noBeard && outfit !== 'dress') mesh(G.beard, hairSide, 0, hy - 0.015, 0.006, head);
+    var face = new THREE.Mesh(new THREE.PlaneGeometry(0.215, 0.215), new THREE.MeshBasicMaterial({ map: faceTex(u.key, u.mood, u.skinKey), transparent: true, depthWrite: false })); face.position.set(0, hy + 0.004, 0.124); head.add(face); u.face = face;
+    if (opt.glasses === true || (opt.glasses === undefined && Math.random() < 0.22)) { [-0.046, 0.046].forEach(function (x) { mesh(G.lensRing, M.frame, x, hy + 0.012, 0.13, head); }); mesh(G.bridge, M.frame, 0, hy + 0.014, 0.131, head); }
+    // hats sit on the brows, never over the eyes
+    if (capOn) { var capM = opt.capMat || MAT.blue; mesh(G.capDome, capM, 0, hy + 0.04, 0, head); var peak = mesh(G.peak, capM, 0, hy + 0.045, 0.165, head); peak.rotation.x = 0.16; mesh(G.capBtn, capM, 0, hy + 0.166, 0, head); }
+    else if (opt.hardhat) { mesh(G.hardDome, opt.hardhat, 0, hy + 0.045, 0, head); mesh(G.hardRim, opt.hardhat, 0, hy + 0.047, 0, head); var hp = mesh(G.hardPeak, opt.hardhat, 0, hy + 0.047, 0.19, head); hp.rotation.x = 0.12; }
+    else if (hat === 'sun') { mesh(G.capDome, M.straw, 0, hy + 0.045, 0, head); mesh(G.brim, M.straw, 0, hy + 0.05, 0, head); mesh(G.hatBand, accent, 0, hy + 0.066, 0, head); }
+    else if (hat === 'beanie') { var bn = opt.capMat || accent; mesh(G.beanie, bn, 0, hy + 0.035, 0, head); mesh(G.hatBand, bn, 0, hy + 0.045, 0, head); mesh(G.pom, M.button, 0, hy + 0.185, 0, head); }
+    // each pivot's fixed pieces become one mesh per material; the face, the chest and the hands stay their own (they animate, or things are put in them)
+    mergeHumanGroup(head, [face]);
+    mergeHumanGroup(torso, [u.chest]);
+    u.legs.forEach(function (hip) { mergeHumanGroup(hip, []); if (hip.userData.knee) mergeHumanGroup(hip.userData.knee, []); });
+    u.arms.forEach(function (shd) { mergeHumanGroup(shd, []); if (shd.userData.elbow) mergeHumanGroup(shd.userData.elbow, [shd.userData.elbow.userData.hand]); });
+    groundBlob(0.8, 0.8, 0, 0, g, 0.002);
+    PK_PPL.made++;
+    runHooks('humanMade', g, opt);
+    return g;
+  }
+  makeHuman = pkMakeHuman;
+
+  var _pkPplPrevT = GAME.T;
+  GAME.T = function () { var t = _pkPplPrevT(); t.PK_PPL = PK_PPL; t.pkMakeHuman = pkMakeHuman; t.makeHuman = function (o) { return makeHuman(o); }; t.animateHuman = animateHuman; return t; };
+  // ── What is routine ──────────────────────────────────────────────
+  // toasts: a sale, a ride's start, the little confirmations of a button press
+  var PK_NT_TOAST = /^(Ticket sold|Toy sold|Ice cream sold|Fries sold|Riding |Test run|The station bell rings|Teleported|Use button:|Toy |Ticket window )/i;
+  // the feed: how many rode, a ride starting or stopping on its own, the AUTO switch, a dispatch count
+  var PK_NT_FEED = /( rode$| started$| stopping$|^Dispatch with |^AUTO (on|off)$|set to (AUTO|MANUAL)$|: test run$|^Test run|^Clocked (in|out)|^Ride lights |: the train is leaving soon$)/i;
+  var PK_NT = { last: {}, feedMs: 7000, toastMax: 2 };
+
+  var _pkNtToast = toast, _pkNtLog = logEvent;
+  // the same line twice inside three seconds is one line; a routine line is not shown
+  toast = function (msg, kind) {
+    var m = String(msg == null ? '' : msg);
+    if (kind !== 'bad' && PK_NT_TOAST.test(m)) return;
+    var now = Date.now(), k = 't:' + m;
+    if (PK_NT.last[k] && now - PK_NT.last[k] < 3000) return;
+    PK_NT.last[k] = now;
+    var r = _pkNtToast.apply(null, arguments);
+    var box = document.getElementById('h-toasts'); if (box) while (box.children.length > PK_NT.toastMax) box.removeChild(box.firstChild);
+    return r;
+  };
+  logEvent = function (msg, kind) {
+    var m = String(msg == null ? '' : msg);
+    var routine = kind !== 'bad' && PK_NT_FEED.test(m);
+    var now = Date.now(), k = 'l:' + m;
+    if (PK_NT.last[k] && now - PK_NT.last[k] < 3000) return;
+    PK_NT.last[k] = now;
+    var r = _pkNtLog.apply(null, arguments);   // the office's log keeps every line
+    var feed = document.getElementById('h-feed');
+    if (feed && feed.lastChild) {
+      if (routine) feed.removeChild(feed.lastChild);   // a routine line never reaches the screen
+      else { var d = feed.lastChild; while (feed.children.length > 4) feed.removeChild(feed.firstChild); setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, PK_NT.feedMs); }
+    }
+    return r;
+  };
+  var PK_TT = { x: 15.4, z: 22.8, HX: 7.7, HZ: 9.8, DOOR: 1.5, H: 4.4 };   // the hall's middle, half sides, half door width, wall height
+  PK_PLOTS.push({ id: 'ktoy', name: "Teddy's Toy Tour", x: PK_TT.x, z: PK_TT.z, r: 11, q: [PK_TT.x, 11.2], qdx: -1, level: 20, pad: 1.0, boothAt: [20.6, 9.6] });
+  PK_THEME.ktoy = { a: 0x3f6fc4, b: 0xf0c04a, ground: 0x9ab07a, name: "Teddy's Toy Tour", noBunting: true, noDecor: true };
+  PK_KEEP.push([PK_TT.x, PK_TT.z, 11]);
+
+  // the loop in world coordinates: a rounded rectangle 8.4 m by 13.2 m (corner radius 2.4), run counter-clockwise from the north: west
+  // along the short north side, south down the long west side (the station), east along the south, north up the east side over a
+  // small rise under the rainbow, about 40 m
+  function pkTtPts() {
+    var cx = PK_TT.x, cz = PK_TT.z, P = [], R = 2.4, HXT = 4.2, HZT = 6.6, i, a;
+    var add = function (lx, lz, y) { P.push([+(cx + lx).toFixed(2), +(y === undefined ? 0.4 : y).toFixed(2), +(cz + lz).toFixed(2)]); };
+    var arc = function (ccx, ccz, a0, a1) { for (i = 1; i < 4; i++) { a = a0 + (a1 - a0) * i / 4; add(ccx + R * Math.cos(a), ccz + R * Math.sin(a)); } };
+    add(HXT - R, -HZT); add(0, -HZT);                                                                          // the north side, heading west
+    add(-(HXT - R), -HZT); arc(-(HXT - R), -(HZT - R), -Math.PI / 2, -Math.PI); add(-HXT, -(HZT - R));       // round the north-west corner
+    for (var z = -(HZT - R) + 1.2; z < HZT - R - 0.4; z += 1.2) add(-HXT, z);                                  // down the west side: the station
+    add(-HXT, HZT - R); arc(-(HXT - R), HZT - R, Math.PI, Math.PI / 2); add(-(HXT - R), HZT);                 // round the south-west corner
+    add(0, HZT); add(HXT - R, HZT); arc(HXT - R, HZT - R, Math.PI / 2, 0); add(HXT, HZT - R);                  // east along the south, round the south-east corner
+    for (var zn = HZT - R - 1.2; zn > -(HZT - R) + 0.4; zn -= 1.2) add(HXT, zn, 0.4 + 0.62 * Math.pow(Math.sin(Math.PI * clamp((zn + 3.6) / 7.2, 0, 1)), 2));   // up the east side, over the rise
+    add(HXT, -(HZT - R)); arc(HXT - R, -(HZT - R), 0, -Math.PI / 2);                                           // round the north-east corner, back to the start
+    return P;
+  }
+
+  // a sitting teddy: body, head, snout, ears, arms and feet, in one colour with a lighter muzzle, facing along +z at ry = 0
+  function pkTtTeddy(parent, x, z, s, ry, col, bow) {
+    var fur = std({ color: col, roughness: 0.95 }), pale = std({ color: 0xe9d5b0, roughness: 0.95 }), dark = std({ color: 0x2a1c14, roughness: 0.6 });
+    var t = new THREE.Group(); t.position.set(x, 0, z); t.rotation.y = ry; t.scale.set(s, s, s); parent.add(t);
+    pkBlob(0.5, 0.55, 0.45, fur, 0, 0.55, 0, t);                                   // body
+    pkBlob(0.34, 0.3, 0.1, pale, 0, 0.52, 0.4, t);                                 // belly
+    sphere(0.36, fur, 0, 1.38, 0.02, t);                                           // head
+    pkBlob(0.17, 0.13, 0.14, pale, 0, 1.3, 0.33, t); sphere(0.05, dark, 0, 1.36, 0.46, t);   // muzzle and nose
+    [-1, 1].forEach(function (sd) {
+      sphere(0.13, fur, sd * 0.27, 1.66, 0, t); sphere(0.07, pale, sd * 0.27, 1.66, 0.06, t);   // ears
+      sphere(0.04, dark, sd * 0.13, 1.45, 0.32, t);                                // eyes
+      pkBlob(0.14, 0.34, 0.14, fur, sd * 0.56, 0.62, 0.08, t).rotation.z = -sd * 0.45;   // arms
+      pkBlob(0.2, 0.15, 0.3, fur, sd * 0.28, 0.12, 0.28, t);                       // feet
+    });
+    if (bow) { var bm = std({ color: bow, roughness: 0.6 }); pkBlob(0.12, 0.07, 0.05, bm, -0.1, 1.1, 0.3, t); pkBlob(0.12, 0.07, 0.05, bm, 0.1, 1.1, 0.3, t); sphere(0.04, bm, 0, 1.1, 0.31, t); }
+    return t;
+  }
+
+  function pkBuildToyTour(p) {
+    var M = pkMats(), th = PK_THEME.ktoy, cx = PK_TT.x, cz = PK_TT.z, HX = PK_TT.HX, HZ = PK_TT.HZ, H = PK_TT.H, i, k;
+    var g = new THREE.Group(); scene.add(g);
+    var bx = function (w, h, d, mat, lx, y, lz, par) { return box(w, h, d, mat, cx + lx, y, cz + lz, par || g); };
+    var sol = function (lx0, lx1, lz0, lz1, y0, y1) { solid(cx + lx0, cx + lx1, cz + lz0, cz + lz1, y0, y1); };
+    // the materials: a painted nursery, all warm, the inside lit by its own glow rather than by the sun
+    var cream = std({ color: 0xf2e6c8, roughness: 0.85 }), blue = std({ color: 0x3f6fc4, roughness: 0.6 }), red = std({ color: 0xd2493a, roughness: 0.6 });
+    var yellow = std({ color: 0xf0c04a, roughness: 0.55 }), green = std({ color: 0x4f9a5a, roughness: 0.6 }), wood = std({ color: 0xa87a4a, roughness: 0.8 });
+    var glowW = std({ color: 0x4a3a20, emissive: 0xffd890, emissiveIntensity: 0.9, roughness: 0.6 });
+    var navy = std({ color: 0x141a3a, roughness: 0.95, emissive: 0x0a0e24, emissiveIntensity: 0.6, side: THREE.DoubleSide });
+    var carpet = std({ color: 0x23306a, roughness: 1, emissive: 0x0e1638, emissiveIntensity: 0.5 });
+    var star = new THREE.MeshBasicMaterial({ color: 0xfff2c8 });
+    var moonM = new THREE.MeshBasicMaterial({ color: 0xf6efc8 });
+    var cloudM = std({ color: 0xf0f2ff, roughness: 1, emissive: 0x6a74a8, emissiveIntensity: 0.55 });
+    // ── The hall: stone base, painted walls with a toy-block band, a hipped roof ───────────────────────
+    bx(2 * HX + 0.8, 0.3, 2 * HZ + 0.8, M.stoneDark, 0, 0.15, 0);                                  // plinth
+    bx(2 * HX - 0.8, 0.06, 2 * HZ - 0.8, carpet, 0, 0.33, 0);                                       // the floor, a night-blue carpet
+    var T = 0.4, wh = H - 0.3;
+    bx(2 * HX, wh, T, cream, 0, 0.3 + wh / 2, HZ - T / 2);                                         // south wall
+    bx(T, wh, 2 * HZ - 2 * T, cream, -HX + T / 2, 0.3 + wh / 2, 0); bx(T, wh, 2 * HZ - 2 * T, cream, HX - T / 2, 0.3 + wh / 2, 0);   // west and east
+    var dw = PK_TT.DOOR;                                                                            // the north wall, with the door
+    bx(HX - dw, wh, T, cream, -(HX + dw) / 2, 0.3 + wh / 2, -HZ + T / 2); bx(HX - dw, wh, T, cream, (HX + dw) / 2, 0.3 + wh / 2, -HZ + T / 2);
+    bx(2 * dw, wh - 2.9, T, cream, 0, 0.3 + 2.9 + (wh - 2.9) / 2, -HZ + T / 2);
+    // the toy-block band: alternating coloured blocks along the foot of every wall, a gilt rail above them
+    var bands = [blue, red, yellow, green];
+    for (k = 0; k < 4; k++) {
+      var len = k % 2 ? 2 * HZ : 2 * HX, n = Math.round(len / 1.1), bw = len / n;
+      for (i = 0; i < n; i++) {
+        var m = bands[(i + k) % 4];
+        if (k === 0) bx(bw - 0.06, 0.7, 0.12, m, -HX + bw * (i + 0.5), 0.65, -HZ - 0.02);
+        if (k === 2) bx(bw - 0.06, 0.7, 0.12, m, -HX + bw * (i + 0.5), 0.65, HZ + 0.02);
+        if (k === 1) bx(0.12, 0.7, bw - 0.06, m, -HX - 0.02, 0.65, -HZ + bw * (i + 0.5));
+        if (k === 3) bx(0.12, 0.7, bw - 0.06, m, HX + 0.02, 0.65, -HZ + bw * (i + 0.5));
+      }
+    }
+    // windows with a warm glow, two a side on the long walls, shuttered and boxed
+    [-4.5, 4.5].forEach(function (wz) {
+      [-HX, HX].forEach(function (wx) {
+        var sg = wx < 0 ? -1 : 1;
+        bx(0.1, 1.3, 1.7, glowW, wx - sg * 0.18, 2.35, wz);
+        [-1, 1].forEach(function (sd) { bx(0.12, 1.4, 0.55, blue, wx - sg * 0.2, 2.35, wz + sd * 1.15); });
+        bx(0.2, 0.12, 2.0, yellow, wx - sg * 0.24, 1.62, wz); bx(0.2, 0.12, 2.0, yellow, wx - sg * 0.24, 3.1, wz);
+      });
+    });
+    pkHipRoof(2 * HX + 1.2, 2 * HZ + 1.2, 2.6, std({ color: 0x8f3524, roughness: 0.65, side: THREE.DoubleSide }), cx, H + 0.05, cz, g);
+    bx(2 * HX + 1.4, 0.25, 2 * HZ + 1.4, yellow, 0, H - 0.1, 0);                                    // the eaves board
+    pkRoundCyl(0.9, 0.4, M.stoneDark, cx, H + 2.7, cz, g, 12);
+    // the front: a rounded door frame, a teddy's face over it and the name on blocks
+    bx(2 * dw + 0.7, 0.45, 0.5, yellow, 0, 3.55, -HZ - 0.1);
+    [-1, 1].forEach(function (sd) { bx(0.35, 3.3, 0.5, yellow, sd * (dw + 0.17), 1.95, -HZ - 0.1); });
+    var face = new THREE.Group(); face.position.set(cx, 6.1, cz - HZ - 1.3); g.add(face);
+    var fur = std({ color: 0xb98550, roughness: 0.95 }), pale = std({ color: 0xe9d5b0, roughness: 0.95 }), dk = std({ color: 0x2a1c14, roughness: 0.6 });
+    sphere(1.35, fur, 0, 0, 0, face); pkBlob(0.62, 0.48, 0.4, pale, 0, -0.3, 1.0, face); sphere(0.17, dk, 0, -0.12, 1.38, face);
+    [-1, 1].forEach(function (sd) { sphere(0.55, fur, sd * 1.05, 1.05, 0, face); sphere(0.3, pale, sd * 1.05, 1.05, 0.2, face); sphere(0.14, dk, sd * 0.5, 0.35, 1.2, face); });
+    bx(3.4, 1.6, 0.4, yellow, 0, 5.15, -HZ - 0.9);
+    pkSign3D(["TEDDY'S TOY TOUR"], 4.9, 0.62, cx, 3.95, cz - HZ - 0.38, Math.PI, { bg: '#2a3f7a', fg: '#ffd96a' }, g);
+    pkSign3D(['FOR SMALL RIDERS'], 3.2, 0.34, cx, 0.95, cz - HZ - 0.2, Math.PI, { bg: '#3f6fc4', fg: '#ffffff' }, g);
+    // the inside: a deep blue lining under a gilt rail, so the nursery reads as night
+    var lin = std({ color: 0x2c3a78, roughness: 0.95, emissive: 0x141c44, emissiveIntensity: 0.7 }), LI = 0.04, lh = wh - 0.2;
+    bx(2 * HX - 2 * T, lh, LI, lin, 0, 0.3 + lh / 2, HZ - T - LI / 2);
+    bx(LI, lh, 2 * HZ - 2 * T, lin, -HX + T + LI / 2, 0.3 + lh / 2, 0); bx(LI, lh, 2 * HZ - 2 * T, lin, HX - T - LI / 2, 0.3 + lh / 2, 0);
+    bx(HX - T - dw, lh, LI, lin, -(HX - T + dw) / 2, 0.3 + lh / 2, -HZ + T + LI / 2); bx(HX - T - dw, lh, LI, lin, (HX - T + dw) / 2, 0.3 + lh / 2, -HZ + T + LI / 2);
+    bx(2 * HX - 2 * T, 0.07, 0.07, yellow, 0, 1.35, HZ - T - 0.06); bx(0.07, 0.07, 2 * HZ - 2 * T, yellow, -HX + T + 0.06, 1.35, 0); bx(0.07, 0.07, 2 * HZ - 2 * T, yellow, HX - T - 0.06, 1.35, 0);
+    // ── Solid walls: the hall is a room, the door is not a wall ───────────────────────────────────────
+    sol(-HX, HX, HZ - T, HZ, 0, H); sol(-HX, -HX + T, -HZ, HZ, 0, H); sol(HX - T, HX, -HZ, HZ, 0, H);
+    sol(-HX, -dw, -HZ, -HZ + T, 0, H); sol(dw, HX, -HZ, -HZ + T, 0, H);
+    // a ceiling of night: a navy ceiling, stars strung under it and a moon
+    var ceil = new THREE.Mesh(new THREE.PlaneGeometry(2 * HX - 0.6, 2 * HZ - 0.6), navy); ceil.rotation.x = Math.PI / 2; ceil.position.set(cx, H - 0.45, cz); g.add(ceil);
+    var rnd = pkRng(61), sp = [];
+    for (i = 0; i < 140; i++) sp.push([cx + (rnd() * 2 - 1) * (HX - 1), H - 0.5 - rnd() * 0.5, cz + (rnd() * 2 - 1) * (HZ - 1)]);
+    pkBulbs(sp, star, 0.07, g);
+    sphere(0.8, moonM, cx - 1.2, H - 1.4, cz + 1.0, g);
+    // ── The track and the three little cars ───────────────────────────────────────────────────────
+    var curve = pkCoCurve(pkTtPts()), len = curve.getLength(), uP = pkCoUAt(curve, cx - 4.2, cz + 2.2);
+    var F = pkCoFrames(curve, 160, pkCoProfile(curve, len, uP, { pedal: 1.4 }), uP);
+    var E = { curve: curve, len: len, F: F, gap: 2.2, cars: [], uPark: uP, uOfF: [], run: 34 };
+    pkCoLevel(F, curve, E.uPark, 2.2 * 2 + 1.2, 1.2);
+    var seats = [], cols = [0xd2493a, 0xf0c04a, 0x3f6fc4];
+    for (i = 0; i < 3; i++) {
+      var car = pkCoCar(cols[i], { w: 1.2, d: 1.7 });
+      scene.add(car.g); E.cars.push(car);
+      car.seats.forEach(function (st) { seats.push({ par: car.g, x: st.x, y: st.y, z: st.z, ry: 0, guest: null }); });
+    }
+    pkCoTrackBuild(g, E, { spineMat: std({ color: 0x8a6a4a, roughness: 0.75 }), supMat: std({ color: 0x4a443c, roughness: 0.7 }), tieMat: std({ color: 0x59503f, roughness: 0.85 }), skip: function () { return true; } });
+    pkCoPlan(E, { pedal: 1.4 });
+    // sleepers under the line, so it sits on the floor like a toy railway
+    for (var s = 0.4; s < len; s += 0.9) { var q = curve.getPointAt(s / len), tg = curve.getTangentAt(s / len); var sl = box(1.5, 0.05, 0.16, wood, q.x, 0.36, q.z, g); sl.rotation.y = Math.atan2(tg.x, tg.z) + Math.PI / 2; }
+    // the platform on the north side of the station straight, against the door
+    bx(1.4, 0.1, 7.8, M.kerb, -5.5, 0.4, 0); bx(1.3, 0.04, 7.7, M.pavers, -5.5, 0.46, 0); bx(0.14, 0.03, 7.8, MAT.hazard, -4.82, 0.485, 0);
+    // ── The nursery: the scenes the line runs past ────────────────────────────────────────────────
+    // north: a castle of toy blocks stacked against the wall, with a red tower; letter blocks beside it
+    var blk = [blue, red, yellow, green, cream];
+    [[-6.2, 2], [-4.9, 3], [-3.6, 2]].forEach(function (b, bi) { for (k = 0; k < b[1]; k++) bx(1.25, 0.9, 1.25, blk[(bi + k) % 5], b[0], 0.78 + k * 0.9, -8.5); });
+    pkRoundCyl(0.42, 2.4, red, cx - 4.9, 3.9, cz - 8.5, g, 10); pkRoundCyl(0.6, 0.18, yellow, cx - 4.9, 5.2, cz - 8.5, g, 10);
+    var cn = new THREE.Mesh(new THREE.ConeGeometry(0.58, 0.9, 10), blue); cn.position.set(cx - 4.9, 5.75, cz - 8.5); g.add(cn);
+    ['A', 'B', 'C'].forEach(function (ch, ci) { bx(0.62, 0.62, 0.62, blk[ci + 1], 2.6 + ci * 0.7, 0.67, -8.7); });
+    // south: the tea party: a low table, a teapot and teddies in bows round it
+    pkRoundCyl(0.68, 0.07, wood, cx, 0.85, cz + 8.3, g, 20); pkRoundCyl(0.1, 0.5, wood, cx, 0.6, cz + 8.3, g, 8);
+    pkLathe([[0, 0], [0.2, 0], [0.3, 0.12], [0.32, 0.26], [0.23, 0.4], [0, 0.42]], cream, cx, 0.9, cz + 8.3, g, 14);
+    pkTtTeddy(g, cx - 1.5, cz + 8.4, 0.8, Math.PI / 2, 0xb98550, 0xe0508a);
+    pkTtTeddy(g, cx + 1.5, cz + 8.4, 0.8, -Math.PI / 2, 0xd8b078, 0x3f6fc4);
+    pkTtTeddy(g, cx + 4.2, cz + 8.1, 0.95, -Math.PI * 0.75, 0x8a5a38, 0xf0c04a);
+    // east: a rainbow over the rise, seven bands, on two cloud banks
+    var rbc = [0xe03a3a, 0xf08a2a, 0xf0d23a, 0x4fb04f, 0x3a8ae0, 0x4a4ad0, 0x9a4ad0];
+    rbc.forEach(function (c, ri) {
+      var rm = std({ color: c, emissive: c, emissiveIntensity: 0.45, roughness: 0.6 });
+      var rr = 2.15 - ri * 0.15, ar = new THREE.Mesh(new THREE.TorusGeometry(rr, 0.09, 6, 28, Math.PI), rm);
+      ar.position.set(cx + 4.2, 0.55, cz); g.add(ar);
+    });
+    [-1, 1].forEach(function (sd) { [0, 1].forEach(function (oi) { sphere(0.6 - oi * 0.1, cloudM, cx + 4.2 + sd * (1.7 + oi * 0.5), 0.55 + oi * 0.2, cz + (oi - 0.5) * 0.4, g); }); });
+    // the corners: balloons on strings, soldiers on guard
+    [[6.5, -8.4, 0xd2493a], [-6.5, 8.4, 0x3f6fc4], [6.6, 8.4, 0xf0c04a], [-6.6, -8.4, 0x4f9a5a]].forEach(function (b) {
+      pkRod(cx + b[0], 0.4, cz + b[1], cx + b[0], 2.3, cz + b[1], 0.012, MAT.steel, g, 4);
+      var bl = new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 10), std({ color: b[2], emissive: b[2], emissiveIntensity: 0.3, roughness: 0.4 })); bl.scale.y = 1.2; bl.position.set(cx + b[0], 2.65, cz + b[1]); g.add(bl);
+    });
+    [[6.4, -5.0], [6.4, 5.0]].forEach(function (b, bi) {
+      pkRoundCyl(0.2, 1.1, bi ? blue : red, cx + b[0], 0.9, cz + b[1], g, 10); sphere(0.2, cream, cx + b[0], 1.6, cz + b[1], g); pkRoundCyl(0.16, 0.36, dk, cx + b[0], 1.9, cz + b[1], g, 10);
+    });
+    pkTtTeddy(g, cx + 3.4, cz - 8.2, 0.85, Math.PI, 0xc9a078, 0xd2493a);                            // a doorman by the door
+    // scenery solids, so no one walks through a castle or a teapot table
+    sol(-6.9, -2.9, -9.2, -7.7, 0.3, 3.0); sol(-0.8, 0.8, 7.5, 9.1, 0.3, 1.2);
+    pkFuse(g);
+    var a = pkAttr({ id: p.id, name: p.name, x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], qdx: p.qdx, g: g, seats: seats, board: 6, run: E.run, unload: 5, extra: E, tickRun: function (at) { pkCoRun(at); } });
+    var C = pkCtl(a);
+    E.a = a;
+    [-2.6, -0.4, 1.8].forEach(function (gz) {
+      var gp = new THREE.Group(); gp.position.set(cx - 4.8, 0.95, cz + gz); gp.userData.dynamic = true; gp.userData.keep = true; g.add(gp);
+      box(0.07, 0.09, 0.92, MAT.hazard, 0, 0, 0.46, gp, { r: 0.02 }); box(0.05, 0.05, 0.92, MAT.steel, 0, -0.2, 0.46, gp); box(0.1, 0.14, 0.1, MAT.red, 0, 0, 0.9, gp);
+      C.stationGateObjs.push(function (t) { gp.rotation.x = -t * Math.PI / 2.1; });
+      pkRoundCyl(0.09, 1.06, MAT.steelDark, cx - 4.8, 0.55, cz + gz, g, 8);
+    });
+    E.cars.forEach(function (c) { C.barObjs.push(function (bb) { c.bar.rotation.x = -1.35 * (1 - bb); }); });
+    pkCoPlace(E, E.uPark);
+    return a;
+  }
+  // built before the standard pass, so the booth pass finds it
+  var _pkBuildAttractionsTT = pkBuildAttractions;
+  pkBuildAttractions = function () {
+    PK_PLOTS.forEach(function (p) {
+      if (p.id !== 'ktoy') return;
+      var a = pkBuildToyTour(p);
+      a.level = p.level; a.plot = p; a.open = pkRideSavedOpen(p.id);
+      if (S.rides) S.rides[p.id] = a.open;
+    });
+    _pkBuildAttractionsTT();
+  };
+  var PK_UI = { css: null };
+  function pkUiCss() {
+    return [
+      // ── Tokens ─────────────────────────────────────────────────
+      ':root { --pk-glass: linear-gradient(180deg, rgba(26,38,56,0.93), rgba(13,20,31,0.95)); --pk-glass-soft: rgba(14,21,32,0.66); --pk-edge: rgba(255,255,255,0.10); --pk-edge-hi: rgba(255,255,255,0.18); --pk-amber: #f5b53d; --pk-amber-hi: #ffd27a; --pk-amber-lo: #d9951c; --pk-green: #6fe0a0; --pk-red: #ff7a6b; --pk-blue: #7fb4ff; --pk-text: #eef2f7; --pk-muted: #9fb0c3; --pk-r: 14px; --pk-r-sm: 9px; --pk-shadow: 0 22px 60px rgba(0,0,0,0.55), 0 2px 0 rgba(255,255,255,0.04) inset; --pk-ease: cubic-bezier(0.2, 0.8, 0.2, 1); }',
+      'body { --panel: #101822; --line: rgba(255,255,255,0.10); --amber: #f5b53d; --muted: #9fb0c3; --text: #eef2f7; }',
+      'body ::selection { background: rgba(245,181,61,0.35); }',
+      'body * { scrollbar-width: thin; scrollbar-color: rgba(159,176,195,0.32) transparent; }',
+      'body *::-webkit-scrollbar { width: 7px; height: 7px; } body *::-webkit-scrollbar-thumb { background: rgba(159,176,195,0.3); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; } body *::-webkit-scrollbar-track { background: transparent; }',
+      'body :focus-visible { outline: 2px solid var(--pk-amber); outline-offset: 2px; }',
+      // ── Buttons, everywhere ───────────────────────────────────
+      'body .dc-btn, body .dc-menu-btns button, body .dc-menu-row button, body #dc-panel-tabs button, body .co-mm .co-mm-btns button, body .co-mm .co-mm-body button, body #dc-panel-body button, body #dc-menu-body button { border: 1px solid var(--pk-edge); border-radius: var(--pk-r-sm); background: rgba(255,255,255,0.055); color: var(--pk-text); font: inherit; font-weight: 600; letter-spacing: 0.01em; transition: transform 0.14s var(--pk-ease), background 0.14s, border-color 0.14s, box-shadow 0.14s, color 0.14s; }',
+      'body .dc-btn:hover, body .dc-menu-btns button:hover, body .dc-menu-row button:hover, body #dc-panel-tabs button:hover, body .co-mm .co-mm-btns button:hover, body .co-mm .co-mm-body button:hover, body #dc-panel-body button:hover, body #dc-menu-body button:hover { background: rgba(255,255,255,0.11); border-color: rgba(245,181,61,0.55); }',
+      'body .dc-btn:active, body .dc-menu-btns button:active, body #dc-panel-body button:active, body .co-mm .co-mm-btns button:active { transform: translateY(1px) scale(0.99); }',
+      'body .dc-btn.primary, body .dc-menu-btns button.primary, body .co-mm button.primary, body #dc-panel-tabs button.on { background: linear-gradient(180deg, rgba(245,181,61,0.26), rgba(245,181,61,0.12)); border-color: rgba(245,181,61,0.6); color: var(--pk-amber-hi); }',
+      'body #dc-panel-body button, body #dc-menu-body button { padding: 6px 12px; margin: 2px; }',
+      // ── The start screen ──────────────────────────────────────
+      'body #dc-start.co-mm { justify-content: flex-start; padding-left: 8vw; background: linear-gradient(90deg, rgba(4,7,12,0.94) 0%, rgba(4,7,12,0.78) 34%, rgba(4,7,12,0.30) 72%, rgba(4,7,12,0.12) 100%), radial-gradient(120% 90% at 85% 100%, rgba(240,164,85,0.22), transparent 60%); }',
+      'body #dc-start.co-mm .co-mm-card { width: min(430px, 92vw); text-align: left; padding: 22px 28px 20px; border-radius: 20px; background: var(--pk-glass-soft); border: 1px solid var(--pk-edge-hi); box-shadow: var(--pk-shadow); backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2); animation: pk-rise 0.55s var(--pk-ease) both; }',
+      'body #dc-start.co-mm .pk-wordmark { display: block; width: min(250px, 78%); height: auto; margin: -4px 0 6px -4px; filter: drop-shadow(0 6px 22px rgba(0,0,0,0.5)); }',
+      'body #dc-start.co-mm h1.co-mm-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }',
+      'body #dc-start.co-mm .co-mm-subtitle { margin: 0 0 10px; color: var(--pk-muted); font-size: 14.5px; line-height: 1.45; }',
+      'body #dc-start.co-mm #dc-start-stats { justify-content: flex-start; margin: 0 0 6px; gap: 6px; }',
+      'body #dc-start.co-mm #dc-start-stats span { background: rgba(255,255,255,0.06); border: 1px solid var(--pk-edge); border-radius: 999px; padding: 3px 11px 3px 9px; font-size: 12px; font-weight: 600; color: var(--pk-text); }',
+      'body #dc-start.co-mm #dc-start-stats span::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: var(--pk-amber); vertical-align: 1px; }',
+      'body #dc-start.co-mm #dc-start-note { margin: 4px 0 0; font-size: 12.5px; color: var(--pk-muted); }',
+      'body #dc-start.co-mm .co-mm-btns { margin-top: 14px; gap: 6px; align-items: stretch; }',
+      'body #dc-start.co-mm .co-mm-btns button { position: relative; padding: 8px 16px; font-size: 14.5px; text-align: left; background: rgba(255,255,255,0.045); border-color: var(--pk-edge); }',
+      'body #dc-start.co-mm .co-mm-btns button::after { content: "\\203A"; position: absolute; right: 14px; top: 50%; transform: translateY(-52%); color: var(--pk-muted); font-size: 20px; transition: transform 0.16s var(--pk-ease), color 0.16s; }',
+      'body #dc-start.co-mm .co-mm-btns button:hover { transform: translateX(4px); }',
+      'body #dc-start.co-mm .co-mm-btns button:hover::after { color: var(--pk-amber-hi); transform: translate(3px, -52%); }',
+      'body #dc-start.co-mm .co-mm-btns button.primary { padding: 12px 18px; font-size: 17px; font-weight: 700; letter-spacing: 0.04em; color: #1b1405; background: linear-gradient(180deg, var(--pk-amber-hi), var(--pk-amber) 55%, var(--pk-amber-lo)); border-color: rgba(255,226,160,0.9); box-shadow: 0 8px 26px rgba(245,181,61,0.30), 0 1px 0 rgba(255,255,255,0.5) inset; }',
+      'body #dc-start.co-mm .co-mm-btns button.primary::after { color: #1b1405; }',
+      'body #dc-start.co-mm .co-mm-btns button.primary:hover { filter: brightness(1.06); box-shadow: 0 10px 32px rgba(245,181,61,0.42), 0 1px 0 rgba(255,255,255,0.5) inset; }',
+      'body #dc-start.co-mm .co-mm-btns button:last-child:not(.primary):hover { border-color: rgba(255,122,107,0.6); }',
+      'body #dc-start.co-mm::after { content: attr(data-ver); position: absolute; left: 8vw; bottom: 22px; color: rgba(159,176,195,0.75); font-size: 12px; letter-spacing: 0.08em; }',
+      '@keyframes pk-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }',
+      '@keyframes pk-fade { from { opacity: 0; } to { opacity: 1; } }',
+      '@keyframes pk-pop { from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); } to { opacity: 1; transform: translate(-50%, -50%); } }',
+      '@keyframes pk-slide-in { from { opacity: 0; transform: translateX(26px); } to { opacity: 1; transform: none; } }',
+      // ── The pause menu and its pages ──────────────────────────
+      'body #dc-menu.co-mm { background: radial-gradient(100% 100% at 50% 40%, rgba(5,8,14,0.78), rgba(3,5,9,0.92)); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: pk-fade 0.22s ease both; }',
+      'body #dc-menu .dc-menu-card, body #dc-menu .co-mm-card { background: var(--pk-glass); border: 1px solid var(--pk-edge-hi); border-radius: 20px; box-shadow: var(--pk-shadow); padding: 26px 30px 24px; width: min(480px, 92vw); animation: pk-rise 0.32s var(--pk-ease) both; }',
+      'body #dc-menu h2.co-mm-title, body #dc-menu h2 { margin: 0 0 4px; font-size: 13px; font-weight: 700; letter-spacing: 0.3em; text-transform: uppercase; color: var(--pk-amber); }',
+      'body #dc-menu .dc-sub { color: var(--pk-muted); font-size: 13px; margin: 0 0 12px; }',
+      'body #dc-menu .dc-menu-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 12px; }',
+      'body #dc-menu .dc-menu-btns button { margin: 0; padding: 11px 12px; font-size: 14.5px; text-align: center; }',
+      'body #dc-menu .dc-menu-btns button.primary { grid-column: 1 / -1; padding: 14px; font-size: 16px; font-weight: 700; letter-spacing: 0.04em; color: #1b1405; background: linear-gradient(180deg, var(--pk-amber-hi), var(--pk-amber) 55%, var(--pk-amber-lo)); border-color: rgba(255,226,160,0.9); box-shadow: 0 6px 22px rgba(245,181,61,0.26); }',
+      'body #dc-menu .dc-menu-btns button[data-menu="reset"], body #dc-menu .dc-menu-btns button[data-menu="quit"] { color: #ffb4aa; }',
+      'body #dc-menu .dc-menu-btns button[data-menu="reset"]:hover, body #dc-menu .dc-menu-btns button[data-menu="quit"]:hover { border-color: rgba(255,122,107,0.65); background: rgba(255,122,107,0.10); }',
+      'body #dc-menu-body, body .co-mm-body { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--pk-edge); }',
+      'body .dc-menu-row { margin: 0 0 10px; }',
+      // ── Forms: rows, sliders, switches, selects ───────────────
+      'body .dc-form label, body .co-mm .co-mm-body .dc-form label { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 9px 2px; border-bottom: 1px solid var(--pk-edge); color: var(--pk-text); font-size: 14px; }',
+      'body .dc-form label:last-child { border-bottom: 0; }',
+      'body input[type=range] { -webkit-appearance: none; appearance: none; height: 5px; width: 170px; border-radius: 5px; background: rgba(255,255,255,0.14); outline-offset: 6px; }',
+      'body input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, var(--pk-amber-hi), var(--pk-amber)); border: 2px solid #1b1405; box-shadow: 0 2px 8px rgba(0,0,0,0.5); cursor: pointer; transition: transform 0.12s; }',
+      'body input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.18); }',
+      'body input[type=checkbox] { -webkit-appearance: none; appearance: none; position: relative; width: 38px; height: 22px; border-radius: 999px; background: rgba(255,255,255,0.16); border: 1px solid var(--pk-edge); cursor: pointer; transition: background 0.16s, border-color 0.16s; margin: 0; flex: none; }',
+      'body input[type=checkbox]::after { content: ""; position: absolute; left: 2px; top: 2px; width: 16px; height: 16px; border-radius: 50%; background: #dfe6ee; transition: transform 0.16s var(--pk-ease), background 0.16s; box-shadow: 0 1px 4px rgba(0,0,0,0.4); }',
+      'body input[type=checkbox]:checked { background: rgba(245,181,61,0.85); border-color: rgba(255,226,160,0.8); }',
+      'body input[type=checkbox]:checked::after { transform: translateX(16px); background: #fff; }',
+      'body select, body input[type=number], body input[type=text] { background: rgba(0,0,0,0.32); color: var(--pk-text); border: 1px solid var(--pk-edge); border-radius: var(--pk-r-sm); padding: 6px 10px; font: inherit; font-size: 13.5px; }',
+      'body select:hover, body input[type=number]:hover, body input[type=text]:hover { border-color: rgba(245,181,61,0.5); }',
+      'body .dc-ta { background: rgba(0,0,0,0.34); border: 1px solid var(--pk-edge); border-radius: var(--pk-r-sm); color: var(--pk-text); }',
+      // ── Panels and their tabs ─────────────────────────────────
+      'body #dc-panel { background: var(--pk-glass); border: 1px solid var(--pk-edge-hi); border-radius: 18px; box-shadow: var(--pk-shadow); padding: 18px 22px 20px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); animation: pk-pop 0.22s var(--pk-ease) both; }',
+      'body #dc-panel header { padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--pk-edge); gap: 12px; }',
+      'body #dc-panel header h2 { font-size: 13px; font-weight: 700; letter-spacing: 0.26em; text-transform: uppercase; color: var(--pk-amber); }',
+      'body #dc-panel-tabs { display: flex; gap: 3px; padding: 3px; border-radius: 12px; background: rgba(0,0,0,0.30); border: 1px solid var(--pk-edge); }',
+      'body #dc-panel-tabs button { margin: 0; padding: 6px 13px; border: 0; border-radius: 9px; background: transparent; font-size: 13.5px; color: var(--pk-muted); }',
+      'body #dc-panel-tabs button:hover { color: var(--pk-text); background: rgba(255,255,255,0.07); }',
+      'body #dc-panel-tabs button.on { color: #1b1405; background: linear-gradient(180deg, var(--pk-amber-hi), var(--pk-amber)); box-shadow: 0 2px 10px rgba(245,181,61,0.3); }',
+      'body #dc-panel-close { width: 34px; height: 34px; padding: 0; margin: 0; border-radius: 50%; font-size: 15px; line-height: 1; }',
+      'body #dc-panel-body { line-height: 1.5; font-size: 14px; }',
+      'body #dc-panel-body h3, body #dc-menu-body h3 { margin: 16px 0 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--pk-amber); }',
+      'body #dc-panel-body p { margin: 0 0 8px; }',
+      'body #dc-panel-body table { border-collapse: collapse; width: 100%; } body #dc-panel-body th { text-align: left; font-size: 11.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pk-muted); font-weight: 600; } body #dc-panel-body td, body #dc-panel-body th { padding: 6px 8px; border-bottom: 1px solid var(--pk-edge); } body #dc-panel-body tr:hover td { background: rgba(255,255,255,0.035); }',
+      'body .dc-grid { gap: 10px; } body .dc-card { background: rgba(255,255,255,0.045); border: 1px solid var(--pk-edge); border-radius: 12px; padding: 10px 12px; transition: border-color 0.14s, background 0.14s; } body .dc-card:hover { border-color: rgba(245,181,61,0.4); background: rgba(255,255,255,0.07); } body .dc-card small { color: var(--pk-muted); }',
+      'body kbd, body code { background: rgba(255,255,255,0.09); border: 1px solid var(--pk-edge-hi); border-bottom-width: 2px; border-radius: 6px; padding: 1px 7px; font: 600 12px Consolas, monospace; color: var(--pk-amber-hi); }',
+      // ── The HUD ───────────────────────────────────────────────
+      'body #dc-hud .top { top: 12px; left: 14px; gap: 0; padding: 4px; border-radius: 999px; background: var(--pk-glass-soft); border: 1px solid var(--pk-edge); box-shadow: 0 10px 30px rgba(0,0,0,0.35); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }',
+      'body #dc-hud .top span { background: transparent; border: 0; border-radius: 0; padding: 5px 14px; font-size: 14px; font-weight: 600; color: var(--pk-text); font-variant-numeric: tabular-nums; }',
+      'body #dc-hud .top span + span { border-left: 1px solid var(--pk-edge); }',
+      'body #dc-hud #h-day { color: var(--pk-amber-hi); letter-spacing: 0.04em; }',
+      'body #dc-hud #h-cash { color: var(--pk-green); font-weight: 700; }',
+      'body #dc-hud #h-guests { color: var(--pk-muted); font-weight: 500; }',
+      'body #dc-hud #h-ride { color: var(--pk-amber-hi); font-weight: 500; }',
+      'body #h-prompt { bottom: 17%; padding: 8px 16px 8px 10px; border-radius: 999px; background: var(--pk-glass-soft); border: 1px solid var(--pk-edge-hi); box-shadow: 0 8px 26px rgba(0,0,0,0.4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); font-weight: 600; animation: pk-rise 0.18s var(--pk-ease) both; }',
+      'body #h-prompt b { display: inline-block; min-width: 22px; margin-right: 10px; padding: 1px 8px; text-align: center; border-radius: 7px; background: linear-gradient(180deg, var(--pk-amber-hi), var(--pk-amber)); color: #1b1405; font-weight: 800; box-shadow: 0 2px 0 rgba(120,80,10,0.8); }',
+      'body #h-toasts { right: 16px; bottom: 16px; gap: 8px; align-items: flex-end; }',
+      'body #h-toasts div { max-width: 340px; padding: 9px 14px 9px 12px; border: 1px solid var(--pk-edge); border-left: 3px solid var(--pk-blue); border-radius: 11px; background: var(--pk-glass); box-shadow: 0 10px 28px rgba(0,0,0,0.45); font-weight: 600; font-size: 13.5px; animation: pk-slide-in 0.28s var(--pk-ease) both; }',
+      'body #h-toasts .good { border-left-color: var(--pk-green); border-color: var(--pk-edge); } body #h-toasts .bad { border-left-color: var(--pk-red); border-color: var(--pk-edge); } body #h-toasts .rare { border-left-color: var(--pk-amber); }',
+      'body #h-feed { left: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 3px; max-width: 360px; font-size: 12.5px; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }',
+      'body #h-feed div { padding: 3px 10px 3px 8px; border-radius: 8px; background: rgba(8,12,19,0.5); color: #cbd6e2; animation: pk-fade 0.3s ease both; }',
+      'body #h-feed .t { color: var(--pk-amber); font-variant-numeric: tabular-nums; margin-right: 8px; font-weight: 700; }',
+      'body #h-feed .bad { color: #ffb4aa; } body #h-feed .rare, body #h-feed .good { color: #c9f2d9; }',
+      'body #h-card { top: 14%; padding: 16px 24px; min-width: 280px; text-align: center; border-radius: 16px; background: var(--pk-glass); border: 1px solid var(--pk-edge-hi); box-shadow: var(--pk-shadow); animation: pk-rise 0.35s var(--pk-ease) both; }',
+      'body #h-card b { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 700; letter-spacing: 0.28em; text-transform: uppercase; color: var(--pk-amber); }',
+      'body #h-fps, body #h-devlink, body #h-edit { border-radius: 999px; background: var(--pk-glass-soft); border: 1px solid var(--pk-edge); font-variant-numeric: tabular-nums; }',
+      // ── The welcome card ──────────────────────────────────────
+      'body #pk-welcome { background: radial-gradient(100% 100% at 50% 40%, rgba(5,8,14,0.7), rgba(3,5,9,0.9)); backdrop-filter: blur(5px); animation: pk-fade 0.3s ease both; }',
+      'body #pk-welcome .pk-welcome-card { background: var(--pk-glass); border: 1px solid var(--pk-edge-hi); border-radius: 22px; box-shadow: var(--pk-shadow); padding: 30px 34px 26px; animation: pk-rise 0.4s var(--pk-ease) both; }',
+      'body #pk-welcome h1 { font-size: 32px; font-weight: 700; } body #pk-welcome .pk-welcome-eyebrow { letter-spacing: 0.3em; font-weight: 700; }',
+      'body #pk-welcome h2 { letter-spacing: 0.2em; font-size: 12px; }',
+      'body #pk-welcome button { padding: 12px 24px; font-size: 16px; font-weight: 700; letter-spacing: 0.03em; color: #1b1405; background: linear-gradient(180deg, var(--pk-amber-hi), var(--pk-amber) 55%, var(--pk-amber-lo)); border: 1px solid rgba(255,226,160,0.9); border-radius: 12px; box-shadow: 0 8px 24px rgba(245,181,61,0.28); cursor: pointer; }',
+      '@media (prefers-reduced-motion: reduce) { body *, body *::before, body *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }',
+      '@media (max-width: 720px) { body #dc-start.co-mm { padding-left: 0; justify-content: center; } body #dc-start.co-mm::after { left: 50%; transform: translateX(-50%); } body #dc-menu .dc-menu-btns { grid-template-columns: 1fr; } }'
+    ].join('\n');
+  }
+  function pkUiMount() {
+    if (PK_UI.css) return;
+    var st = document.createElement('style'); st.id = 'pk-ui-skin'; st.textContent = pkUiCss();
+    document.head.appendChild(st); PK_UI.css = st;
+  }
+  // the start screen is drawn by the engine from data, so its wordmark and version go in once it is on the page (and again if it is redrawn)
+  function pkUiStart() {
+    var s = document.getElementById('dc-start'); if (!s) return;
+    s.setAttribute('data-ver', 'v' + (window.PARK_VERSION || '') + '  ·  Co Engine');
+    var fix = function () {
+      var card = s.querySelector('.co-mm-card'); if (!card || card.querySelector('.pk-wordmark')) return;
+      var img = document.createElement('img'); img.className = 'pk-wordmark'; img.src = 'game/wordmark.png'; img.alt = 'Park Co';
+      card.insertBefore(img, card.firstChild);
+    };
+    fix();
+    if (window.MutationObserver) new MutationObserver(fix).observe(s, { childList: true });
+  }
+  pkUiMount();
+  hook('boot', pkUiStart);
   (function () {
     var canvasId = 'co-canvas';
     var KEY = 'pk-use-button';            // 'lmb' or 'e'

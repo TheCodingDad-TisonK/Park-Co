@@ -952,26 +952,33 @@
     return a;
   }
   // ── The log flume ────────────────────────────────────────────────
-  // A double-drop chute: out of the dock the belt lifts the log eleven metres up the west of the course, through the
-  // lift house on the crest and down the long chute into the first splash pool; the channel turns east, climbs a second,
-  // shorter lift through the rock and drops again beside a mill race, then runs home along the east side and round the
-  // north end of the station. The order round the lap is the order of this list; the boats ride a smooth line through it.
+  // A double-drop chute, 166 m a lap (tison, 2026-11-14: "its channel can be way bigger and longer"; it was 94 m): out of the dock
+  // the belt lifts the log eleven metres up the west of the course, through the lift house on the crest and down the long chute
+  // into the first splash pool; the channel runs east along the north edge, climbs a second lift through the rock, drops again
+  // into the second pool, then winds home in three long lanes over the south-east lawn to the dock. The order round the lap is
+  // the order of this list; the boats ride a smooth line through it.
   var PK_FLUME_PTS = [
-    [0, 0.25, 10.5], [0, 0.25, 6], [0, 0.3, 1.5],                                              // the dock
-    [0, 1.2, -1.2], [0, 4.6, -4.2], [0, 8.2, -7.2], [0, 10.8, -10.4],                          // the belt lift
-    [0, 11.2, -13.4],                                                                          // the crest
-    [0, 9.6, -15.6], [0, 5.2, -17.6], [0, 1.2, -19.0],                                         // the long chute
-    [0.8, 0.5, -21.6], [2.8, 0.35, -23.6], [5.2, 0.35, -24.8], [6.9, 0.6, -22.6],               // the turn out of the pool
-    [7.2, 1.6, -18.8], [7.2, 3.4, -14.8], [7.1, 3.8, -11.2],                                   // the second lift (through the tunnel)
-    [7.0, 2.6, -8.6], [6.9, 0.7, -6.4],                                                        // the second drop
-    [6.6, 0.35, -3.4], [6.2, 0.3, 1.0], [5.8, 0.28, 5.6], [5.4, 0.27, 9.2], [4.1, 0.26, 11.7], [2.2, 0.25, 12.75], [0.6, 0.25, 12.3]   // home round the house
-  ];
+    [0, 0.25, 10.5], [0, 0.25, 6], [0, 0.3, 1.5], [0, 0.9, 0.2], [0, 2.6, -2.2],
+    [0, 4.4, -4.8], [0, 6.3, -7.2], [0, 8.1, -9.2], [0, 9.4, -10.6], [0, 10.1, -11.8],
+    [0, 9.3, -13.2], [0, 7.3, -15.2], [0, 5, -17.1], [0, 2.8, -18.8], [0, 1.1, -20.2],
+    [0, 0.6, -21], [0.9, 0.4, -22.5], [2.8, 0.35, -23.5], [5.6, 0.35, -23.8], [8.6, 0.35, -23.8],
+    [10.6, 0.4, -23.3], [11.8, 0.5, -22.2], [12.2, 0.6, -20.8], [12.2, 1.1, -19.2], [12.2, 2.5, -16.6],
+    [12.2, 4, -14], [12.2, 5.5, -11.4], [12.2, 6.4, -9.4], [12.2, 6.3, -8], [12.2, 4.8, -6.4],
+    [12.2, 2.9, -4.9], [12.2, 1.2, -3.7], [12.2, 0.45, -2.8], [12.2, 0.35, 0.4], [12.2, 0.3, 4],
+    [12.2, 0.3, 9], [12.2, 0.3, 14], [12.2, 0.3, 18], [12.2, 0.3, 22], [11.61, 0.3, 23.41],
+    [10.2, 0.3, 24], [8.79, 0.3, 23.41], [8.2, 0.3, 22], [8.2, 0.3, 17.5], [8.2, 0.3, 11.5],
+    [8.2, 0.3, 7.5], [8.2, 0.3, 4.4], [7.64, 0.3, 3.06], [6.3, 0.3, 2.5], [4.96, 0.3, 3.06],
+    [4.4, 0.3, 4.4], [4.4, 0.3, 8.4], [4.4, 0.3, 12.2], [4.4, 0.3, 17.2], [4.4, 0.3, 22],
+    [3.84, 0.3, 23.34], [2.5, 0.3, 23.9], [1.16, 0.3, 23.34], [0.6, 0.28, 22], [0.6, 0.27, 18],
+    [0.6, 0.27, 14.6], [0.3, 0.26, 11.8]
+  ];   // dock and lift at the west (x 0), the chute and first pool (z -22), the east lane (x 12.2) with the second lift and drop, then three lanes south, north and south over the south-east lawn and home
+  var PK_FLUME_FOOT = [15, 32];   // the two chute feet (where a splash goes up)
   function pkBuildFlume(p, open) {
     var M = pkMats(), g = new THREE.Group(); g.position.set(p.x, 0, p.z); scene.add(g);
     var PTS = PK_FLUME_PTS, i, k;
     var curve = new THREE.CatmullRomCurve3(PTS.map(function (q) { return new THREE.Vector3(q[0], q[1], q[2]); }), true, 'centripetal');
     curve.arcLengthDivisions = 900;
-    var total = curve.getLength(), NS = 280, P = curve.getSpacedPoints(NS), step = total / NS;
+    var total = curve.getLength(), NS = 440, P = curve.getSpacedPoints(NS), step = total / NS;
     var T = []; for (i = 0; i <= NS; i++) T.push(curve.getTangentAt(i / NS));
     var sideOf = function (i) { var t = T[i], l = Math.sqrt(t.x * t.x + t.z * t.z) || 1; return [t.z / l, -t.x / l]; };
     // the channel: a planked timber trough with a steel lip, lined in sea-green glass fibre, on steel hoops
@@ -1068,7 +1075,7 @@
     // ── The two splash pools ────────────────────────────────────────
     // Each chute throws the log into a stone basin with a dressed coping. The first is the big one under the eleven-metre
     // drop; the second, smaller, sits under the short chute by the mill race.
-    var pools = [{ x: 0, z: -20.4, w: 8.6, d: 6.6 }, { x: 6.8, z: -5.2, w: 5.6, d: 4.6 }], waters = [water];
+    var pools = [{ x: 0, z: -22.4, w: 8.6, d: 6.6 }, { x: 12.2, z: -1.7, w: 5.6, d: 4.6 }], waters = [water];
     pools.forEach(function (Pl) {
       [[Pl.x, Pl.z - Pl.d / 2, Pl.w + 0.5, 0.5], [Pl.x, Pl.z + Pl.d / 2, Pl.w + 0.5, 0.5], [Pl.x - Pl.w / 2, Pl.z, 0.5, Pl.d - 0.5], [Pl.x + Pl.w / 2, Pl.z, 0.5, Pl.d - 0.5]].forEach(function (w) {
         box(w[2], 0.6, w[3], M.stoneDark, w[0], 0.3, w[1], g);
@@ -1080,9 +1087,9 @@
     // the rock gorge round the first pool
     for (var rk = 0; rk < 18; rk++) {
       var rs = randf(0.5, 1.15), side = rk % 2 ? 1 : -1;
-      pkBoulder(pools[0].x + side * randf(4.2, 5.8), pools[0].z + randf(-3.4, 3.4), rs, g);
+      pkBoulder(pools[0].x + side * randf(4.2, 5.8), pools[0].z + (side > 0 ? randf(-0.6, 3.4) : randf(-3.4, 3.4)), rs, g);
     }
-    for (var rk2 = 0; rk2 < 6; rk2++) pkBoulder(pools[0].x + randf(-3.6, 3.6), pools[0].z - 4.2 - randf(0, 0.8), randf(0.7, 1.3), g);
+    for (var rk2 = 0; rk2 < 6; rk2++) pkBoulder(pools[0].x + randf(-3.6, 1.6), pools[0].z - 3.7 - randf(0, 0.1), randf(0.55, 0.85), g);
     // the tunnel on the second lift: an outcrop of piled rock, the channel running through a dark bore in it
     var tA = null, tB = null;
     for (i = 0; i <= NS; i++) if (P[i].x > 5 && T[i].z > 0.5 && P[i].z > -18.6 && P[i].z < -12.2) { if (!tA) tA = P[i]; tB = P[i]; }
@@ -1094,13 +1101,13 @@
       for (k = 0; k < 7; k++) {
         var f = k / 6, cx = tA.x + (tB.x - tA.x) * f, cy = tA.y + (tB.y - tA.y) * f + 0.7, cz = tA.z + (tB.z - tA.z) * f;
         [-1, 1].forEach(function (sd) {
-          rock(cx + sd * randf(3.3, 3.7), 1.0, cz + randf(-0.3, 0.3), randf(3.2, 3.8));
-          rock(cx + sd * randf(2.7, 3.0), cy + 0.2, cz + randf(-0.3, 0.3), randf(2.8, 3.3));
-          rock(cx + sd * randf(1.5, 1.9), cy + 1.7, cz + randf(-0.3, 0.3), randf(2.6, 3.0));
+          rock(cx + sd * randf(1.9, 2.1), 0.8, cz + randf(-0.3, 0.3), randf(1.6, 1.9));
+          rock(cx + sd * randf(1.8, 2.0), cy + 0.2, cz + randf(-0.3, 0.3), randf(1.6, 1.9));
+          rock(cx + sd * randf(1.1, 1.4), cy + 1.5, cz + randf(-0.3, 0.3), randf(1.6, 1.9));
         });
-        rock(cx + randf(-0.3, 0.3), cy + 2.5, cz, randf(2.6, 3.0));
+        rock(cx + randf(-0.3, 0.3), cy + 2.1, cz, randf(1.6, 1.9));
       }
-      solid(p.x + tA.x - 4.2, p.x + tA.x - 1.4, p.z + tA.z, p.z + tB.z, 0, 4); solid(p.x + tA.x + 1.4, p.x + tA.x + 4.2, p.z + tA.z, p.z + tB.z, 0, 4);
+      solid(p.x + tA.x - 3.0, p.x + tA.x - 1.4, p.z + tA.z, p.z + tB.z, 0, 4); solid(p.x + tA.x + 1.4, p.x + tA.x + 3.0, p.z + tA.z, p.z + tB.z, 0, 4);
     }
     // the station deck along the dock; the mill house below is its walls and roof
     var lane = p.x < 0 ? 1 : -1;
@@ -1152,12 +1159,13 @@
     berths.concat([12.2 + gw / 2 + 0.06]).forEach(function (gzz) { var z1 = gzz - gw / 2 - 0.06; if (z1 - railFrom > 0.3) pkRailRun(p.x + dockX, p.z + railFrom, p.x + dockX, p.z + z1, { solid: true }); railFrom = gzz + gw / 2 + 0.06; });
     // where each chute meets its pool, as a fraction of the lap: the boats throw up a splash when they cross one
     var splashes = [];
-    [10, 19].forEach(function (vi) {
+    PK_FLUME_FOOT.forEach(function (vi) {
       var best = 0, bd2 = 1e9;
       for (var c = 0; c < NS; c++) { var d2 = Math.pow(P[c].x - PTS[vi][0], 2) + Math.pow(P[c].y - PTS[vi][1], 2) + Math.pow(P[c].z - PTS[vi][2], 2); if (d2 < bd2) { bd2 = d2; best = c; } }
       splashes.push({ u: best / NS, x: p.x + PTS[vi][0], z: p.z + PTS[vi][2] });
     });
-    var a = pkAttr({ id: 'flume', name: 'Log flume', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats, board: 10, run: 30, unload: 5,
+    var a = pkAttr({ id: 'flume', name: 'Log flume', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], g: g, seats: seats, board: 10, run: 50, unload: 5,
+      exit: [p.q[0] - 1.0, p.q[1] - 1.3],   // a metre north of the default spot, which stands in the low wall south of the line and held the player fast
       tickRun: function (at, dt) {
         M.waterTex.offset.y -= dt * 0.35;
         if (at.state !== 'running') return;
@@ -1206,7 +1214,7 @@
     for (var apz = 2.4; apz < 12.0; apz += 2.0) pkPavedDisc(1.7, M.paversWarm, p.x + WX + lane * 1.6, 0.045, p.z + apz, null, 1.0);
     // the wheel: a stone head-race under it, a timber axle, twelve paddles, turning in the water. It stands on the west
     // side of the big pool, where the long chute comes down.
-    var wheelX = -6.4, wheelZ = -20.4;
+    var wheelX = -6.4, wheelZ = pools[0].z;
     box(1.2, 1.3, 4.4, M.stone, wheelX - 0.9, 0.65, wheelZ, g);
     box(1.0, 0.5, 4.4, M.stoneDark, wheelX - 0.9, 1.35, wheelZ, g);
     var wheel = new THREE.Group(); wheel.position.set(wheelX, 2.1, wheelZ); g.add(wheel);

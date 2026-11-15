@@ -236,6 +236,12 @@
       c.beginPath(); c.arc(x - r * 0.55, y + r * 0.1, r * 0.2, Math.PI * 0.5, Math.PI * 1.5); c.stroke();
       c.fillStyle = S.acc; [-0.22, 0.02, 0.26].forEach(function (k) { c.beginPath(); c.arc(x + k * r, y + r * 0.12, r * 0.07, 0, 6.28); c.fill(); });
     },
+    ktoy: function (c, x, y, r, S) {
+      c.fillStyle = '#b98550'; c.beginPath(); c.arc(x, y + r * 0.08, r * 0.46, 0, 6.28); c.fill();
+      c.beginPath(); c.arc(x - r * 0.38, y - r * 0.32, r * 0.2, 0, 6.28); c.fill(); c.beginPath(); c.arc(x + r * 0.38, y - r * 0.32, r * 0.2, 0, 6.28); c.fill();
+      c.fillStyle = '#e9d5b0'; c.beginPath(); c.ellipse(x, y + r * 0.2, r * 0.22, r * 0.17, 0, 0, 6.28); c.fill();
+      c.fillStyle = '#2a1c14'; c.beginPath(); c.arc(x - r * 0.17, y - r * 0.02, r * 0.05, 0, 6.28); c.fill(); c.beginPath(); c.arc(x + r * 0.17, y - r * 0.02, r * 0.05, 0, 6.28); c.fill(); c.beginPath(); c.arc(x, y + r * 0.14, r * 0.06, 0, 6.28); c.fill();
+    },
     kpuffin: function (c, x, y, r, S) {
       c.fillStyle = '#20232a'; c.beginPath(); c.arc(x, y, r * 0.62, 0, 6.28); c.fill();
       c.fillStyle = '#f4f1e6'; c.beginPath(); c.ellipse(x - r * 0.12, y + r * 0.02, r * 0.36, r * 0.42, 0, 0, 6.28); c.fill();
@@ -417,6 +423,12 @@
       sig: { label: 'KETTLE', sfx: 'pkKettle', words: 'the kettle whistles', col: 'orange' },
       ann: [['voice', 'TUNES', '#ffe36a'], ['happy', 'HAPPY\nRIDERS', '#5fd38d']],
       tele: function (a, C, T) { return ['WOBBLE ' + T.rpm.toFixed(1) + ' RPM', 'POTS ' + T.n + '  HAPPY ' + a.riders]; } },
+    ktoy: { style: 'toy', base: ['#6f9ae0', '#2f5fb4', 'rgba(255,240,170,0.22)'], title: "Teddy's Toy Tour", model: 'NURSERY LINE 3 · SLOW AND SLEEPY', kind: 'track', seatCol: 0xffe36a,
+      blocks: ['STATION', 'CASTLE', 'RAINBOW', 'TEA PARTY'],
+      g2: { unit: 'km/h', min: 0, max: 8, ticks: 4, red: 0, get: function (T) { return T.v * 3.6 / 8; } },
+      sig: { label: 'LULLABY', sfx: 'pkTeaBell', words: 'the music box plays', col: 'pink' },
+      ann: [['voice', 'TUNES', '#ffe36a'], ['happy', 'HAPPY\nRIDERS', '#5fd38d']],
+      tele: function (a, C, T) { return ['TOUR ' + (T.v * 3.6).toFixed(1) + ' KM/H', 'SLEEPY RIDERS ' + a.riders + '  ' + T.block]; } },
     kpuffin: { style: 'toy', base: ['#7fc8f0', '#3f8fc8', 'rgba(255,255,255,0.2)'], title: 'Puffin Line', model: 'PEDAL LINE 2 · STEADY AS SHE GOES', kind: 'track', seatCol: 0xffe36a,
       blocks: ['STATION', 'HILL', 'TRACK', 'HOME'],
       g2: { unit: 'km/h', min: 0, max: 16, ticks: 4, red: 0, get: function (T) { return T.v * 3.6 / 16; } },

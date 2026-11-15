@@ -41,7 +41,7 @@
     // the gardens: the windmill's spur
     [14, -60, 14, -66.6, 3, 'garden'],
     // Coaster Country: The Serpent's spur, the flume's spur
-    [35, -60, 35, -65, 4, 'coaster'], [35, -65, 41, -65, 4, 'coaster'], [35, -20, 47.5, -20, 4, 'coaster'],
+    [35, -60, 35, -65, 4, 'coaster'], [35, -65, 41, -65, 4, 'coaster'], [35, -20, 47.5, -20, 4, 'coaster'], [15.4, 3, 15.4, 11.4, 3.6, 'thrill'],
     // Thrills: Baron's Drop
     [56, 3, 56, 10.5, 4, 'thrill'],
     // the East Walk, one straight street from the Promenade to The Mountain King's line (it was two streets with a jog),
@@ -159,13 +159,34 @@
     pkPaveRect(-23, -7, 17, 23);            // out to the carousel
     pkPaveRect(-16, 10, -84.5, -62.5);      // the Wild Hunt's forecourt, off the Promenade
   }
+  // a ride's pad: its plot's own, and for a ride inside a ring fence at least a good two metres of paving outside the
+  // fence all round (the exit, the booth's steps and the way round all land on it), short of the park's own fence
+  function pkPadR(p) {
+    var r = p.r * (p.pad || 1.25), S = typeof PK_FLAT_STATIONS !== 'undefined' ? PK_FLAT_STATIONS[p.id] : null;
+    if (S) {
+      r = Math.max(r, S[0] + 2.2);
+      var room = PK_PARK.x1 - p.x - 0.4;
+      if (p.z > PK_EAST_BAY.z0 - r && p.z < PK_EAST_BAY.z1 + r) room = Math.min(room, PK_EAST_BAY.x - p.x - 0.4);
+      r = Math.max(S[0] + 0.4, Math.min(r, room));
+    }
+    return r;
+  }
   function pkPaveBuild() {
     var P = PK_PAVE, M = pkMats(), i;
     P.meshes.forEach(function (m) { if (m.parent) m.parent.remove(m); m.geometry.dispose(); });
     P.meshes = []; P.tris = 0;
     // each ride's own pad, from its plot and its theme (a big coaster sets its own ground and has no pad)
     var shapes = P.shapes.slice(), tints = [];
-    PK_PLOTS.forEach(function (p) { var th = PK_THEME[p.id], r = p.r * (p.pad || 1.25); if (th && r >= 2) shapes.push({ k: 'disc', x: p.x, z: p.z, r: r, tint: th.ground }); });
+    PK_PLOTS.forEach(function (p) { var th = PK_THEME[p.id], r = pkPadR(p); if (th && r >= 2) shapes.push({ k: 'disc', x: p.x, z: p.z, r: r, tint: th.ground }); });
+    // each ride's line: the ground under the lane, an apron in front of its entry where the line forms, and for a ride
+    // inside a ring fence the walk from the boarding gate to the ride, so nobody steps off the line onto grass
+    (PK.lanes || []).forEach(function (l) {
+      var a = l.a, x0 = Math.min(l.x0, l.x1), x1 = Math.max(l.x0, l.x1), z0 = Math.min(l.zA, l.zB), z1 = Math.max(l.zA, l.zB);
+      shapes.push({ k: 'rect', x0: x0 - 0.5, x1: x1 + 0.5, z0: z0 - 0.45, z1: z1 + 0.45, tint: 0 });
+      var farLo = Math.abs(x0 - l.gx) > Math.abs(x1 - l.gx);   // the entry is at the end away from the boarding gate
+      shapes.push({ k: 'rect', x0: farLo ? x0 - 2.6 : x1, x1: farLo ? x0 : x1 + 2.6, z0: z0 - 0.9, z1: z1 + 0.9, tint: 0 });
+      if (a && a.station && a.plot) shapes.push({ k: 'rect', x0: Math.min(l.gx, a.plot.x), x1: Math.max(l.gx, a.plot.x), z0: z0 - 0.3, z1: z1 + 0.3, tint: a.plot && PK_THEME[a.id] ? PK_THEME[a.id].ground : 0 });
+    });
     shapes.forEach(function (s) { if (s.tint && tints.indexOf(s.tint) < 0) tints.push(s.tint); });
     var layer = function (mat, y, pick, grow) {
       var pos = [], uv = [], nor = [];
@@ -365,8 +386,8 @@
   function pkBuildSignposts() {
     // at the hub: the four lands and the coaster, split over two posts so the boards do not
     // stack into a knot from the middle of the plaza
-    pkSignpost(-4.7, 7.0, [['FAIRGROUND <', Math.PI], ['THRILLS >', 0], ['COASTER ^', Math.PI / 2]]);
-    pkSignpost(-4.7, 4.2, [['DARK WOODS <', Math.PI], ['COASTER COUNTRY >', 0]]);
+    // (one post: there were two here, three metres apart, and with the map board that made three boards in one glance)
+    pkSignpost(-4.7, 5.6, [['FAIRGROUND <', Math.PI], ['DARK WOODS <', Math.PI], ['THRILLS >', 0], ['COASTER COUNTRY >', 0], ['EAST STRIP >', 0]]);
     // at each crossroads plaza, tucked into the corner of the junction
     pkSignpost(-28.4, 0.4, [['TEACUPS <', Math.PI], ['DARK WOODS ^', Math.PI / 2], ['STATION SQUARE >', 0]]);
     pkSignpost(37.4, 0.4, [["BARON'S DROP >", 0], ['COASTER COUNTRY ^', Math.PI / 2], ['< STATION SQUARE', Math.PI]]);

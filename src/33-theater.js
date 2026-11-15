@@ -714,6 +714,16 @@
   var PK_TH_SCENES = [[0, 'House to half'], [3, 'Curtain up: the Keeper'], [26, 'The gate: five riders'], [58, 'The salute'], [72, 'Training in the square'],
     [98, 'Count Grimwald rises'], [124, 'The guards'], [149, 'The hydra wakes'], [183, 'Five riders, five gifts'], [203, 'The hydra falls'],
     [219, 'Lindenburg saved'], [256, 'The bow'], [270, 'Exit and curtain']];
+  // tison 2026-11-14: a shorter show. The two stretches where the five only ride laps (the training, the victory lap) are cut
+  // from 26 s to 8 s each, so the show runs 255 s instead of 291. Every cue, the scenes list and the applause go through this map.
+  function pkThMap(t) {
+    if (t <= 72) return t;
+    if (t < 98) return 72 + (t - 72) * 8 / 26;
+    if (t <= 226) return t - 18;
+    if (t < 252) return 208 + (t - 226) * 8 / 26;
+    return t - 36;
+  }
+  PK_TH_SCENES.forEach(function (s) { s[0] = pkThMap(s[0]); });
   function pkThSceneAt(t) { var n = PK_TH_SCENES[0][1]; PK_TH_SCENES.forEach(function (s) { if (t >= s[0]) n = s[1]; }); return n.toUpperCase(); }
   function pkTheaterWallScreens(a, g, BF, BZ0, BX) {
     var X = a.extra;
@@ -1208,7 +1218,7 @@
       op(286, 'house', 1), op(288, 'wash', 0), op(290, 'city', 0)
     );
     pkArenaPlusCues(cues, c, each, line);   // part 37: the music, the gifts' effects, the lights' moods, the fireworks
-    cues.forEach(function (q, i) { q.i = i; });
+    cues.forEach(function (q, i) { q.i = i; q.t = pkThMap(q.t); });
     cues.sort(function (p, q) { return p.t - q.t || p.i - q.i; });
     return cues;
   }
@@ -1230,7 +1240,7 @@
   function pkTheaterTickRun(a, dt) {
     var C = pkCtl(a), X = a.extra, lw = X.lightWant, cast = pkTheaterCast(a);
     // the audience applauds from the bow until the curtain is in
-    var clap = a.state === 'running' && a.t >= 256 && a.t < 283;
+    var clap = a.state === 'running' && a.t >= pkThMap(256) && a.t < pkThMap(283);
     for (var si = 0; si < a.seats.length; si++) if (a.seats[si].guest) a.seats[si].guest.clap = clap;
     if (a.state === 'running' && X.cues) {
       while (X.cueI < X.cues.length && a.t >= X.cues[X.cueI].t) {
@@ -1295,14 +1305,14 @@
   function pkBuildTheater(p) {
     var a = pkAttr({
       id: 'theater', name: 'The Lindenburg Arena', x: p.x, z: p.z, qx: p.q[0], qz: p.q[1],
-      seats: [], board: 120, run: 291, unload: 18, exit: [PK_TH.CX + 23.5, PK_TH.CZ + 11.0],   // out through the stair hall's gates, along the forecourt's north edge
+      seats: [], board: 45, run: 255, unload: 18, exit: [PK_TH.CX + 34, PK_TH.CZ + 11.0],   // was CX + 23.5: a closed pocket once the show was over (the player could not walk out); now on the open ground east of it
       start: pkTheaterShowBegin, tickRun: pkTheaterTickRun   // doors open two minutes: the walk from the gate is about 95 s
     });
     pkTheaterBuild(a);
     a.foot = [[PK_TH.CX - 28, PK_TH.CX + 30.6, PK_TH.CZ - 30.5, PK_TH.CZ + 30.5]];   // the stand, the arena and the city, for part 54's clearances (the Arena is not one group)
     var C = pkCtl(a); C.barsWant = 1; C.bars = 1;   // the curtain starts closed
     a.curtain = true;
-    a.boardMin = 30;   // on AUTO the house closes once the line is in and seated, after half a minute at least
+    a.boardMin = 20;   // on AUTO the house closes once the line is in and seated, after half a minute at least
     // the audience's way between the stair hall and the seats: straight up the middle of the stair, across the landing and
     // through onto the stand's top walkway (route() finds the lobby, and the walkway and the row); out, the same in reverse
     var way = function () {

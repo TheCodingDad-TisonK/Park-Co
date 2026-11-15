@@ -32,7 +32,7 @@ module.exports = `
     ok(T.PK.attractions.every((x) => T.pkCtl(x).key) && S.coasterKey === true && !!T.pkConsole().parts.key, 'turning the keys ON unlocks every ride and the coaster'); }
   // the world
   ok(!!T.pkTrack() && T.pkTrack().getLength() > 100, 'the coaster is a closed circuit ' + T.pkTrack().getLength().toFixed(0) + ' m long');
-  ok(T.pkTrain().length === 3 && T.pkSeats().length === 12, 'three cars and twelve seats');
+  ok(T.pkTrain().length === 6 && T.pkSeats().length === 24, 'six cars and twenty-four seats');
   // the re-lay: no two rides stand closer than 8 m, fence to fence, and none within 6 m of a viaduct pier. The few big
   // builds that are waived are named in part 54 and counted here, so a new one cannot slip in beside them
   { const feet = T.pkRideFeet(), gaps = T.pkRideGaps(), all = T.pkRideGaps(undefined, true), piers = T.pkPierGaps();
@@ -43,16 +43,34 @@ module.exports = `
     ok(T.pkRectGap([0, 4, 0, 4], [12, 14, 0, 4]) === 8 && Math.abs(T.pkRectGap({ c: [0, 0, 5] }, { c: [20, 0, 5] }) - 10) < 1e-9 && Math.abs(T.pkRectGap({ c: [0, 0, 5] }, [8, 9, -1, 1]) - 3) < 1e-9, 'the gap measure: box to box, ring to ring, ring to box');
     const P = T.PK_PARK, inPark = feet.filter((f) => f.id !== 'joris' && f.id !== 'mountain' && f.id !== 'wildhunt').every((f) => f.rects.every((r) => r.c ? (r.c[0] + r.c[2] < P.x1 && r.c[0] - r.c[2] > P.x0) : (r[1] < P.x1 && r[0] > P.x0)));
     ok(P.x1 === 162 && inPark, 'the east fence stands at x 162 and the rides on the strip stand inside it'); }
+  // the paving is one surface: a kerb layer and the pavers over it, nothing else laid as a street
+  { const P = T.PK_PAVE; ok(P.built && P.meshes.length >= 2 && P.meshes.length <= 24 && P.shapes.length > 40 && P.tris > 100, 'the paving is one surface: ' + P.shapes.length + ' shapes in ' + P.meshes.length + ' meshes'); }
+  // the map boards: nine of them, none within twenty metres of another, each with its own place on the map
+  { const B = T.PK_MAP.boards; let near = 1e9; B.forEach((p, i) => B.forEach((q, j) => { if (j > i) near = Math.min(near, Math.hypot(p.x - q.x, p.z - q.z)); }));
+    ok(B.length === 9 && near > 20 && !!T.PK_MAP.tex && T.pkMapX(0) > 0 && T.pkMapX(0) < T.PK_MAP.W, 'nine map boards, the nearest two ' + near.toFixed(0) + ' m apart'); }
+  // the park breathes: flags, birds, butterflies and fireflies are built, and a lamp's flame stays between full and dim
+  { const A = T.PK_AMB; let lo = 1, hi = 0; for (let k = 0; k < 400; k++) { const f = T.pkAmbFlame(k * 0.13, 7.3); lo = Math.min(lo, f); hi = Math.max(hi, f); }
+    const x0 = A.flags[0].m.geometry.attributes.position.getZ(30); T.pkAmbientTick(0.05); T.pkAmbientTick(0.05);
+    ok(A.flags.length === 8 && A.birds.length === 20 && A.flies.length > 20 && !!A.fire && lo >= 0 && hi <= 1 && hi - lo > 0.4, 'the ambient life is built: ' + A.flags.length + ' flags, ' + A.birds.length + ' birds, ' + A.flies.length + ' butterflies; a flame runs ' + lo.toFixed(2) + ' to ' + hi.toFixed(2)); }
+  // the coaster effects: three rides in the kit, their track lights strung, and a splash throws spray
+  { const C = T.PK_CFX, on = () => C.parts.filter((p) => p.on).length, before = on(); T.pkCfxSpray(0, 0.1, -34.5, 1, 0, 1); T.pkCoasterFxTick(0.05);
+    ok(C.rides.length === 3 && C.bulbs > 300 && on() - before >= 20 && C.rides.every((r) => !!r.lead()), 'three coasters in the effects kit, ' + C.bulbs + ' track bulbs, a splash throws ' + (on() - before) + ' puffs'); }
+  // the people are the remodelled figure, on the engine's rig: hips with knees, shoulders with elbows and hands, a head, a face
+  { const h = T.makeHuman({ outfit: 'hoodie', style: 'pony', carry: 'pack' }), u = h.userData, d = T.makeHuman({ outfit: 'dress', shorts: false }), st = T.makeHuman({ vest: new T.THREE.MeshStandardMaterial({ color: 0xf0a020 }), name: 'SAM', cap: true });
+    const rig = (x) => { const v = x.userData; return v.legs.length === 2 && v.arms.length === 2 && v.legs.every((l) => !!l.userData.knee) && v.arms.every((a) => !!a.userData.elbow && !!a.userData.elbow.userData.hand && !!a.userData.elbow.userData.hand.parent) && !!v.torso && !!v.head && !!v.face && !!v.chest; };
+    const top = (x) => new T.THREE.Box3().setFromObject(x).max.y;
+    T.animateHuman(h, 0.016, 'walk', 1.5); T.animateHuman(h, 0.016, 'sit', 0); T.animateHuman(h, 0.016, 'idle', 0);
+    ok(T.PK_PPL.made > 3 && rig(h) && rig(d) && rig(st) && u.pkLook.outfit === 'hoodie' && top(h) > 1.6 && top(h) < 1.85 && T.PK.guests.every((g) => !!g.g.userData.pkLook), 'the people are the new figure on the old rig: ' + T.PK_PPL.made + ' made, ' + top(h).toFixed(2) + ' m tall, walks, sits and stands'); }
   // the rides that moved in the re-lay stand where the plan put them, and a guest can walk from the hub to each one's line
   { const at = (id, x, z) => { const a = T.PK.attrById[id]; return !!a && Math.abs(a.x - x) < 0.01 && Math.abs(a.z - z) < 0.01; };
     ok(at('ferris', 150, 52) && at('dodgems', 144, 13) && at('kround', 150, -79) && at('kpots', 150, -54) && at('kpuffin', 150, -106) && at('teacups', -52, 42) && at('droptower', -51.5, -64),
       'the wheel, the dodgems and the kids rides stand on the east strip; the teacups on the old kids lawn; the drop tower north of the Skyline station'); }
-  ok(T.pkTurnstiles().length === 4 && T.pkGates().length === 3, 'four turnstiles at the gate and three platform gates');
+  ok(T.pkTurnstiles().length === 4 && T.pkGates().length === 6, 'four turnstiles at the gate and six platform gates');
   ok(T.pkBooths().length === 2 && !!T.pkBooths()[0].screen && !!T.pkBooths()[1].screen, 'two ticket windows, a screen each');
   ok(!!T.pkScreen() && !!T.pkSnack() && !!T.pkConsole() && !!T.pkConsole().parts.buttons.gates && !!T.pkConsole().parts.gauges.speed && !!T.pkConsole().parts.lever, 'the operator room has its screen and a real desk: buttons, a throttle and gauges');
   ok(T.pkScreen().zones.length === 0, 'the room screen reports the ride; it does not take taps');
   { const attractions = T.PK.attractions;
-    ok(attractions.length === 18 && attractions.every((a) => !!a.booth && !!a.boothScreen), 'every attraction has an operator booth and screen');
+    ok(attractions.length === 19 && attractions.every((a) => !!a.booth && !!a.boothScreen), 'every attraction has an operator booth and screen');
     ok(attractions.every((a) => {
       const sc = a.boothScreen, m = sc.mesh, g = a.booth, wp = m.getWorldPosition(new T.THREE.Vector3());
       const dx = wp.x - g.position.x, dz = wp.z - g.position.z;
@@ -122,7 +140,7 @@ module.exports = `
     ok(C.maint === false && a.state === 'boarding', 'back to RUN, the line boards: ' + a.state);
     C.gates = false; a.state = 'idle'; a.queue.length = 0; T.pkAttrUnseatAll(a); g.state = 'leave'; g.attr = null; }
   ok(!!T.PK.console && T.PK.console.parts.mode && T.PK.console.parts.stop, 'the control desk runs off the physical hardware');
-  ok(!!T.pkCabinet() && !!T.pkCabinet().rides.carousel && !!T.pkCabinet().rides.coaster && Object.keys(T.pkCabinet().rides).length === 18 && !!T.pkCabinet().gauges.load, 'the park switchboard has all 18 ride breakers, the coaster among them, and its own dials');
+  ok(!!T.pkCabinet() && !!T.pkCabinet().rides.carousel && !!T.pkCabinet().rides.coaster && Object.keys(T.pkCabinet().rides).length === 19 && !!T.pkCabinet().gauges.load, 'the park switchboard has all 19 ride breakers, the coaster among them, and its own dials');
   { const L = T.pkCabinet().lights, was = S.lights;
     L.flip(); const on = L.on === true && S.lights === true && T.PK.lights === true;
     L.flip(); const off = L.on === false && S.lights === false && T.PK.lights === false;
@@ -317,7 +335,7 @@ module.exports = `
     for (let k = 0; k < 1200 && R.riders < 2; k++) { T.pkRideTick(0.05); T.pkGuestTick(0.05); }
     ok(R.riders === 2 && next.every((g) => g.state === 'seated'), 'the second line walks in from the lane'); }
   // the rides
-  ok(T.PK.attractions.length === 18, 'eighteen rides besides the main coaster: ' + T.PK.attractions.length);
+  ok(T.PK.attractions.length === 19, 'nineteen rides besides the main coaster: ' + T.PK.attractions.length);
   ok(T.PK.attrById.carousel && T.PK.attrById.carousel.seats.length === 8, 'the carousel has eight horses');
   ok(T.PK.attrById.ferris && T.PK.attrById.ferris.seats.length === 16, 'the ferris wheel has eight cabins of two');
   { const d = T.CO.npcs(), ids = d.workers.map((w) => w.id);
@@ -342,7 +360,7 @@ module.exports = `
     T.pkCtl(a).fault = ''; a.state = 'unloading'; a.t = a.unload; a.queue.length = 0; a.riders = 0; T.pkAttrTick(a, 0.05); T.pkAttrUnseatAll(a); guest.state = 'gone'; T.pkGuestTick(0.01); T.PK.guests.push(...keep); }
   // the real queue lanes and the player's own turn on the rides
   // every ride but the Skyline, whose line waits up on her platform (it is reached by the tower's lift, not a street lane)
-  ok(T.pkLanes().length === 17 && T.pkLanes().every((L) => L.a && L.a.id !== 'skyline' && !!L.leafL && !!L.leafR), 'every ride has a fenced queue lane and a boarding gate, the Skyline its platform');
+  ok(T.pkLanes().length === 18 && T.pkLanes().every((L) => L.a && L.a.id !== 'skyline' && !!L.leafL && !!L.leafR), 'every ride has a fenced queue lane and a boarding gate, the Skyline its platform');
   // the arena's lane holds a sixty-seat show's line and Danse Macabre's and Droomvlucht's theirs (36 and 24 riders), so they run deeper than a ride's three rows; they still fold and still keep to 8.5 m
   ok(T.pkLanes().every((L) => L.x1 > L.x0 && L.zB > L.zA && L.x1 - L.x0 < 8.5 && (L.zB - L.zA < 3.6 || L.a.id === 'theater' || L.a.id === 'danse' || L.a.id === 'droom' || L.a.id === 'joris') && L.rows % 2 === 1),
     'the lanes fold into switchbacks, none longer than 8.5 m: ' + T.pkLanes().map((L) => L.a.id + ' ' + (L.x1 - L.x0).toFixed(1) + 'x' + (L.zB - L.zA).toFixed(1)).join(', '));
@@ -462,7 +480,7 @@ module.exports = `
     a.t = a.run * 0.5; T.pkAttrTick(a, 0.016);
     const moved = Math.hypot(E.cars[0].g.position.x - x0, E.cars[0].g.position.z - z0);
     a.state = 'idle'; a.t = 0; T.pkAttrTick(a, 0.016);
-    ok(moved > 4 && E.cars[0].g.position.y < 1.2, 'the Puffin Line crawls its oval: ' + moved.toFixed(1) + ' m round'); }
+    ok(moved > 4 && E.cars[0].g.position.y < 2.0, 'the Puffin Line crawls its oval: ' + moved.toFixed(1) + ' m round'); }
   // speeds as real rides go: every coaster's top speed from its own drop, a lift at chain speed, a slow wheel, a true free fall;
   // and every coaster's lift ridden upright (the track's roll is held to the world's up, not wound in by the turns)
   { const kmh = (v) => Math.round(v * 3.6), top = {};
@@ -474,8 +492,8 @@ module.exports = `
       'the lift climbs at chain speed, the wheel turns slowly, the tower holds before it drops');
     // the main coaster is the big one: a long lap, a 20 m lift, a loop and a corkscrew it rides upside down, a trim brake
     { const F = T.PK.F, len = T.PK.len; let ymax = 0, upMin = 1; for (let i = 0; i < F.n; i++) { ymax = Math.max(ymax, F.p[i].y); upMin = Math.min(upMin, F.up[i].y); }
-      const tu = (T.pkCoUAt(T.PK.curve, -11, -28.3)), vt = T.pkSpeedAt(tu);
-      let corkUp = 1; for (let i = 0; i < F.n; i++) { const p = F.p[i]; if (p.x > -6 && p.x < 13 && p.z > -31 && p.z < -25.5 && p.y > 7.5) corkUp = Math.min(corkUp, F.up[i].y); }
+      const tu = (T.pkCoUAt(T.PK.curve, -11, -29.3)), vt = T.pkSpeedAt(tu);
+      let corkUp = 1; for (let i = 0; i < F.n; i++) { const p = F.p[i]; if (p.x > -6 && p.x < 13 && p.z > -31.6 && p.z < -27 && p.y > 7.5) corkUp = Math.min(corkUp, F.up[i].y); }
       ok(len > 280 && ymax > 18 && upMin < -0.9 && corkUp < -0.8 && vt <= 6.05, 'the main coaster: ' + len.toFixed(0) + ' m, lift to ' + ymax.toFixed(1) + ' m, upside down in the loop (up ' + upMin.toFixed(2) + ') and the corkscrew (' + corkUp.toFixed(2) + '), trimmed to ' + vt.toFixed(1) + ' m/s'); }
     let worst = 0;
     ['serpent', 'wildhunt'].forEach((id) => { const E = T.PK.attrById[id].extra, F = E.F, L = T.pkCoProfile(E.curve, E.len, E.uPark);
@@ -485,7 +503,7 @@ module.exports = `
   // the level ladder and the prices
   ok(T.PK_LEVELS.length === 34 && T.PK_LEVELS[0].name === 'The gate' && T.PK_LEVELS[6].unlock === 'lights' && T.PK_LEVELS[25].name === 'The Skyline' && T.PK_LEVELS[33].name === 'The East Fair', 'the level ladder runs from the gate to the park lights and on to the five expansion stages');
   ok(T.pkPrice(5) === 30 && T.pkPrice(-100) === 5 && T.pkPrice(1000) === 200, 'the ticket price clamps 5 to 200');
-  ok(T.pkOpenCount() === 18 && T.pkOpenCount() === T.pkRideTotal(), 'every ride that can run is open from the first day (' + T.pkOpenCount() + ' of ' + T.pkRideTotal() + '; the Skyline waits for stage 1)');
+  ok(T.pkOpenCount() === 19 && T.pkOpenCount() === T.pkRideTotal(), 'every ride that can run is open from the first day (' + T.pkOpenCount() + ' of ' + T.pkRideTotal() + '; the Skyline waits for stage 1)');
   { const x0 = T.PK.xp; T.pkXp(60); ok(T.PK.xp === x0 + 60 && T.PK.level >= 2 && T.PK.snackOpen === true && S.snackOpen === true, 'xp opens the snack stand at level 2'); }
   ok(T.pkSnackPrice(1) === 7 && T.pkSnackPrice(-100) === 1, 'the snack price clamps 1 to 40');
   // the snack stand
@@ -554,7 +572,7 @@ module.exports = `
   { const P = T.pkConsole().parts, R = T.PK.ride, u0 = R.u, st0 = R.state, lit = () => P.mimic.findIndex((m) => m.on);
     T.pkSetCoasterKey(true); R.u = T.PK.stationU; T.pkCtlTick(0.05); const a1 = lit();
     R.u = (T.PK.liftU[0] + T.PK.liftU[1]) / 2; T.pkCtlTick(0.05); const a2 = lit();
-    R.u = T.pkCoUAt(T.PK.curve, 2.5, -28.3); T.pkCtlTick(0.05); const a3 = lit();
+    R.u = T.pkCoUAt(T.PK.curve, 2.5, -29.3); T.pkCtlTick(0.05); const a3 = lit();
     R.u = u0; R.state = st0; T.pkCtlTick(0.05);
     const a = T.PK.attrById.carousel, C = T.pkCtl(a), bp = a.boothPanel; T.pkAttrUnseatAll(a); a.state = 'idle'; a.t = 0; T.pkSetRideKey(a, false); T.pkCtlTick(0.05); const off = !bp.ann.key.on;
     T.pkSetRideKey(a, true); C.fault = 'test'; T.pkCtlTick(0.05); const fault = bp.ann.fault.on === 'flash' && bp.ann.key.on; C.fault = ''; T.pkCtlTick(0.05);

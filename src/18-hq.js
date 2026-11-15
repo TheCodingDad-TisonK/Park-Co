@@ -372,7 +372,7 @@
   function pkHQMonitorWall(x, y, z) {
     var g = new THREE.Group(); g.position.set(x, y, z); scene.add(g);
     pkBevelBox(3.5, 1.4, 0.1, MAT.steelDark, 0, 0, -0.04, g, 0.02);
-    var LANDS = [['THE FAIRGROUND', ['carousel', 'teacups']], ['THE EAST STRIP', ['ferris', 'dodgems', 'kround', 'kpots', 'kpuffin']], ['THE DARK WOODS', ['danse', 'droptower', 'wildhunt']],
+    var LANDS = [['THE FAIRGROUND', ['carousel', 'teacups', 'ktoy']], ['THE EAST STRIP', ['ferris', 'dodgems', 'kround', 'kpots', 'kpuffin']], ['THE DARK WOODS', ['danse', 'droptower', 'wildhunt']],
       ['COASTER COUNTRY', ['flume', 'serpent', 'baron']], ['DREAM REALM', ['droom']], ['THE COASTER', []], ['THE GATE', null]];
     LANDS.forEach(function (L, i) {
       var cx = -1.15 + (i % 3) * 1.15, cy = 0.33 - Math.floor(i / 3) * 0.66;

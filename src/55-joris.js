@@ -17,7 +17,7 @@
   // No lane ever crosses another: the loop is a "W" whose last leg tucks back under the station through a small
   // south turn, so the train always enters the station heading north.
   var PK_JORIS = {
-    name: 'Dragon Ride', ax: 100, az: -1, qz: 1, a: 0x2f6fbf, b: 0xc8452a, spine: 0x8a6a4a, legs: 0x5a4028, ground: 0x8fa080, sign: '#f0c04a'
+    name: 'Dragon Ride', ax: 100, az: -1, qz: 1, a: 0x2f6fbf, b: 0xc8452a, spine: 0x9a7448, legs: 0x7a5636, ground: 0x8fa080, sign: '#f0c04a'
   };
   // local frame -> world: forward (local x) runs north (world -z), yard (local z) runs east (world +x)
   function pkJorisW(lx, lz) { return [PK_JORIS.ax + lz, PK_JORIS.az - lx]; }
@@ -46,32 +46,27 @@
         add(lx, mid + R * Math.sin(th), y0 + (y1 - y0) * t);
       }
     }
-    // the station roll and the lift
+    // the station roll and the lift (unchanged: the hall, the stair and the booth hang off them)
     run(24, D1, 0.6);
     run(54, D1, 22);
-    run(72, D1, 5, { ease: true });                    // the first drop
-    // pass 1, north: two airtime hills
-    run(94, D1, 5, { h: sg > 0 ? 5.5 : 6.5, n: 1 });
-    run(116, D1, 5, { h: sg > 0 ? 7.5 : 6.5, n: 1 });
-    run(123, D1, 6.5);
-    arc(123, D1, D4, 6.5, true);                       // the big outer turn to the far lane
-    // pass 2, south on the outer lane
-    run(100, D4, 5, { h: sg > 0 ? 6.5 : 5, n: 1 });
-    run(76, D4, 5, { h: sg > 0 ? 5.5 : 7, n: 1 });
-    run(54, D4, 5, { h: sg > 0 ? 4.5 : 3.4, n: 2 });
-    run(36, D4, 5, { h: sg > 0 ? 4.0 : 5.5, n: 1 });
-    arc(36, D4, D3, 5, false);                         // the south turn, over to the third lane
-    // pass 3, north
-    run(60, D3, 5, { h: sg > 0 ? 7.0 : 6, n: 1 });
-    run(84, D3, 5, { h: sg > 0 ? 5.5 : 7, n: 1 });
-    run(106, D3, 5, { h: sg > 0 ? 4.8 : 3.6, n: 2 });
-    run(123, D3, 6);
-    arc(123, D3, D2, 6, true);                         // the small north turn
+    run(84, D1, 5, { ease: true });                    // the first drop, long enough that its pull-out is gentle
+    // pass 1, north, level, to the big outer turn (R 9): everything stays south of lx 111 (world z -112), off the railway
+    run(102, D1, 5);
+    arc(102, D1, D4, 5, true);                         // the big outer turn to the far lane
+    // pass 2, south on the outer lane: two airtime hills, then up to the south turn, which sits on a crest so it is slow
+    run(78, D4, 5, { h: sg > 0 ? 3.1 : 2.8, n: 1 });
+    run(56, D4, 5, { h: sg > 0 ? 2.8 : 3.1, n: 1 });
+    run(36, D4, 14, { ease: true });
+    arc(36, D4, D3, 14, false);                        // the south turn, over to the third lane (a trim brake holds it slow)
+    // pass 3, north: down off the crest, a hill, and up to the north turn
+    run(60, D3, 5, { ease: true });
+    run(84, D3, 5, { h: sg > 0 ? 3.1 : 2.8, n: 1 });
+    run(108, D3, 12, { ease: true });
+    arc(108, D3, D2, 12, true);                        // the small north turn on the crest (a trim brake holds it slow)
     // pass 4, south, then the brake run down beside the hall
-    run(102, D2, 5, { h: sg > 0 ? 4.5 : 5.5, n: 1 });
-    run(78, D2, 5, { h: sg > 0 ? 6.5 : 7.5, n: 1 });
-    run(56, D2, 5, { h: sg > 0 ? 4.2 : 3.5, n: 2 });
-    run(40, D2, 4.2, { h: sg > 0 ? 5.0 : 4, n: 1 });
+    run(84, D2, 5, { ease: true });
+    run(60, D2, 5, { h: sg > 0 ? 2.8 : 3.1, n: 1 });
+    run(40, D2, 4.2, { h: sg > 0 ? 2.5 : 2.2, n: 1 });
     run(24, D2, 2.2);
     run(8, D2, 1.2);
     arc(8, D2, D1, 1.0, false);                        // tuck back under the station, now heading north again
@@ -162,19 +157,22 @@
       var pts = pkJorisPoints(yd).map(function (q) { var w = pkJorisW(q[0], q[2]); return [w[0], q[1], w[1]]; });
       var curve = pkCoCurve(pts), len = curve.getLength();
       var park = pkJorisW(22, yd), uP = pkCoUAt(curve, park[0], park[1]);
-      var F = pkCoFrames(curve, 1000, pkCoProfile(curve, len, uP, { rollIn: 12 }), uP, null);
+      // two trim brakes hold the train to 8 m/s on the two small turns that sit on crests (south turn lx 36, north turn lx 108)
+      var tw = function (lx, d) { return pkJorisW(lx, (yd < 0 ? -1 : 1) * d); }, tu = function (lx, d) { var w = tw(lx, d); return pkCoUAt(curve, w[0], w[1]); };
+      var opt = { rollIn: 12, trim: [[tu(41, 20.5), tu(37, 20.5), 8], [tu(103, 14.5), tu(107, 14.5), 8]] };
+      var F = pkCoFrames(curve, 1500, pkCoProfile(curve, len, uP, opt), uP, null);
       var E = { curve: curve, len: len, F: F, gap: 2.35, cars: [], uPark: uP, uOfF: [], run: Math.round(len / 7) };
       pkCoLevel(F, curve, E.uPark, 4 * 2.35 + 1.4, 1.4);
       for (var i = 0; i < 4; i++) { var car = pkJorisCar(col, i === 0); scene.add(car.g); E.cars.push(car); car.seats.forEach(function (s) { seats.push({ par: car.g, x: s.x, y: s.y, z: s.z, ry: 0, guest: null, track: id }); }); }
       pkCoTrackBuild(g, E, { spineMat: wood, supMat: leg, tieMat: std({ color: 0x4a3a28, roughness: 0.8 }), railMat: MAT.steelDark, skip: function () { return true; } });   // no lone legs: pkJorisTrestle frames it
-      pkCoPlan(E, { rollIn: 12 });
+      pkCoPlan(E, opt);
       pkCoPlace(E, E.uPark);
       subs[id] = E;
     });
     var run = Math.max(subs.water.run, subs.vuur.run);
     var a = pkAttr({
       id: 'joris', name: PK_JORIS.name, x: p.x, z: p.z, qx: p.q[0], qz: p.q[1], qdx: -1, g: g, seats: seats,
-      board: 11, run: run, unload: 6, exit: [86.5, -2.0],   // set down west of the dragon gate, clear of the line
+      board: 11, run: run, unload: 6, exit: [86.5, 0.5],   // set down west of the dragon gate on the East Walk, clear of the line and of the footbridge's rail (z -2.2), which held the player fast
       extra: subs, tickRun: function (at2) { pkJorisRun(at2); },
       start: function (at2) { pkJorisStart(at2); }
     });
@@ -191,8 +189,8 @@
     subs.uOfF = subs.water.uOfF;
     subs.u0 = subs.water.u0;
     if (PK_PANEL.joris) PK_PANEL.joris.curve2 = subs.vuur.curve;   // the mimic draws both lanes once this is set (part 14)
-    // where the first drop bottoms out (lx 72), on the Water curve: the race keeps both trains level until here
-    var dropW = pkJorisW(74, -2.5); subs.uDrop = pkCoUAt(subs.water.curve, dropW[0], dropW[1]);
+    // where the first drop bottoms out (lx 84), on the Water curve: the race keeps both trains level until here
+    var dropW = pkJorisW(86, -2.5); subs.uDrop = pkCoUAt(subs.water.curve, dropW[0], dropW[1]);
     // the foot of the lift (lx 24), and where the last car of the train clears its top (lx 54 plus the train's length)
     var liftW = pkJorisW(26, -2.5), topW = pkJorisW(54 + 4 * 2.35, -2.5);
     subs.uLift = pkCoUAt(subs.water.curve, liftW[0], liftW[1]); subs.uTop = pkCoUAt(subs.water.curve, topW[0], topW[1]);
@@ -852,6 +850,17 @@
     PK_FLOOR_RECTS.push({ x0: D0, x1: D1, z0: Z - HW, z1: Z + HW, y: Y, ramp: RL, overhead: true });
     PK_FLOOR_RECTS.push({ x0: D0, x1: D1, z0: Z - HW, z1: Z + HW, y: Y, ramp: RL, rampDir: -1, overhead: true });
   }
+  // nobody walks under the ramps where the deck is lower than a head: a walker on the ground (not on the deck) is stopped
+  // at the 2 m line instead of at the planks. The deck itself, and the high middle where the line passes under, stay open.
+  // (player only: guests and the nav grid never call collides)
+  var _pkJorisPrevCollides = GAME.collides;
+  GAME.collides = function (x, z, opt) {
+    if (_pkJorisPrevCollides && _pkJorisPrevCollides(x, z, opt)) return true;
+    var B = PK_JORIS_BR, xw = B.d0 - B.rl, xe = B.d1 + B.rl;
+    if (PK.playerRide || player.y > 0.45 || Math.abs(z - B.z) > B.hw || x <= xw || x >= xe) return false;
+    var h = x <= B.d0 ? B.y * (x - xw) / B.rl : x >= B.d1 ? B.y * (xe - x) / B.rl : B.y;   // the deck's height here
+    return h > 0.5 && h < 2.0;
+  };
   // ── The operator's desk (pkCabinBuild calls this in place of the kit's desk; the ride panel goes in its middle). In the
   // desk group's own frame: +z toward the chair, -z toward the window, the top at 0.745. A walnut desk the full width of
   // the window with a brass nosing, pedestals at both wings and the knee space in the middle; on the left wing the public

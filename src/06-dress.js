@@ -149,10 +149,7 @@
     });
     pkBevelBox(0.13, 0.16, P + 0.3, MAT.steelDark, xE, 2.28, zE, parent, 0.02);
     pkSign3D(['QUEUE', th.name.toUpperCase()], 1.6, 0.34, xE, 2.58, zE, dir > 0 ? Math.PI / 2 : -Math.PI / 2, { bg: '#1b232c', fg: '#f5b53d' }, parent);
-    // the line's own number plate, so the player can see where it starts
-    var zPlate = zE + sz * (P / 2 + 0.5);
-    pkRoundCyl(0.045, 1.55, MAT.steelDark, xE + dir * 0.30, 0.77, zPlate, parent, 8);
-    pkSign3D(['QUEUE FROM HERE'], 1.25, 0.20, xE + dir * 0.30, 1.62, zPlate, dir > 0 ? Math.PI / 2 : -Math.PI / 2, { bg: '#1b232c', fg: '#eef1f5' }, parent);
+    // (the second board, QUEUE FROM HERE, stood right behind the QUEUE sign and read as a doubled sign: one board is enough)
     }
     // the player's way in: press E at the entry to ride
     hitBox(2.0, 2.2, 2.0, xE + dir * 0.4, 1.1, zE, {
@@ -340,9 +337,10 @@
       box(0.2, 3.0, 0.2, MAT.steel, p.x + 2.4, 1.5, p.z - 6.5, g);
     } else if (a.id === 'flume') {
       // boulders along the channel: lumpy flat-shaded granite at varied scales, half sunk into the ground
-      for (var r = 0; r < 18; r++) pkBoulder(p.x + randf(-4.6, 4.6), p.z + randf(-23, 11), randf(0.55, 1.25), g);
+      // (the channel winds over the whole lawn now: the boulders keep to the west strip, off the queue's lane)
+      for (var r = 0; r < 14; r++) { var bz = randf(-27, -1); if (Math.abs(bz + 9) < 4) bz += 8; pkBoulder(p.x + randf(-15, -10.5), p.z + bz, randf(0.55, 1.25), g); }
       // the log store: a stack of sawn logs under a lean-to, with the board on its post
-      var lgx = p.x + p.r + 2.8, lgz = p.z + 4.0, barkM = pkMats().bark, endM = std({ color: 0xc79a62, roughness: 0.8 });
+      var lgx = p.x - 12.4, lgz = p.z - 9.0, barkM = pkMats().bark, endM = std({ color: 0xc79a62, roughness: 0.8 });
       [[-0.9, 0.4], [0, 0.4], [0.9, 0.4], [-0.45, 1.15], [0.45, 1.15], [0, 1.9]].forEach(function (q) {
         var lg = cyl(0.42, 2.6, barkM, lgx + q[0], q[1], lgz, g, 14); lg.rotation.x = Math.PI / 2;
         [-1.31, 1.31].forEach(function (ez) { var en = new THREE.Mesh(new THREE.CircleGeometry(0.4, 14), endM); en.position.set(lgx + q[0], q[1], lgz + ez); if (ez < 0) en.rotation.y = Math.PI; g.add(en); });
@@ -350,7 +348,7 @@
       [[-1.5, -1.2], [1.5, -1.2], [-1.5, 1.2], [1.5, 1.2]].forEach(function (q) { box(0.16, 2.9, 0.16, std({ color: 0x5c4630, roughness: 0.9 }), lgx + q[0], 1.45, lgz + q[1], g); });
       var lt = box(3.6, 0.1, 3.2, pkMats().slate, lgx, 2.95, lgz, g); lt.rotation.z = 0.12;
       solid(lgx - 1.5, lgx + 1.5, lgz - 1.3, lgz + 1.3, 0, 2.4);
-      sign(['LOGS'], 1.6, 0.5, p.x + p.r + 2.8, 2.6, p.z + 5.32, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
+      sign(['LOGS'], 1.6, 0.5, lgx, 2.6, lgz + 1.32, 0, { bg: '#1b232c', fg: '#f5b53d' }, g);
     } else if (a.id === 'kround') {
       // the kids' quarter: balloons, soft play blocks and a parent's bench under a shade sail, on the west
       // side away from the queue and clear of the station fence and the booth
@@ -414,8 +412,11 @@
     s = s || 1;
     var leaf = std({ color: 0x46763e, roughness: 1 });
     pkRoundCyl(0.34 * s, 0.5, pkMats().stone, x, 0.25, z, parent, 10);
-    var ball = new THREE.Mesh(new THREE.SphereGeometry(0.75 * s, 12, 10), leaf); ball.position.set(x, 1.5 * s, z); ball.castShadow = true; parent.add(ball);
-    sphere(0.4 * s, leaf, x, 2.35 * s, z, parent);
+    // clipped, not smooth: a tapered six-sided tier, a smaller one above it and a faceted crown (two balls read as eggs)
+    leaf.flatShading = true;
+    var low = new THREE.Mesh(new THREE.CylinderGeometry(0.62 * s, 0.82 * s, 1.1 * s, 6, 1), leaf); low.position.set(x, 1.05 * s, z); low.castShadow = true; parent.add(low);
+    var mid = new THREE.Mesh(new THREE.CylinderGeometry(0.4 * s, 0.6 * s, 0.8 * s, 6, 1), leaf); mid.position.set(x, 2.0 * s, z); mid.rotation.y = 0.52; mid.castShadow = true; parent.add(mid);
+    var top = new THREE.Mesh(new THREE.IcosahedronGeometry(0.36 * s, 0), leaf); top.position.set(x, 2.65 * s, z); top.castShadow = true; parent.add(top);
   }
   function pkHedgeRun(x0, z0, x1, z1, parent, h) {
     h = h || 1.0;

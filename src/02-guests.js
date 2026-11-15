@@ -36,7 +36,10 @@
     // makeHuman builds the figure but does not put it in the world: without this every new guest walked, queued and rode
     // unseen, and only the odd one back from the pool showed
     var h = makeHuman(pkGuestLook());
-    h.scale.setScalar(0.95 + Math.random() * 0.1);   // a crowd is not one height
+    // a crowd is not one height, and about one guest in seven is a child (part 59 builds the figure)
+    var kid = Math.random() < 0.14;
+    h.scale.setScalar(kid ? 0.6 + Math.random() * 0.16 : 0.92 + Math.random() * 0.12);
+    h.userData.pkKid = kid;
     scene.add(h); return h;
   }
   function pkParkHuman(g) {

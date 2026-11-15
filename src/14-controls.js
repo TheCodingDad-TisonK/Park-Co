@@ -757,8 +757,8 @@ function pkBuildCoasterConsole(at) {
   // the mimic's sections start at points on the track, laid in lap order from the station
   var HB = pkCtlHood(G, CX, TOP + PH * Math.cos(TILT) + 0.16, CZ + 0.31 - PH * Math.sin(TILT) - 0.06, 2.44, 0.22, 0.2);
   var at0 = function (x, z) { return ((pkCoUAt(PK.curve, x, z) - PK.stationU) % 1 + 1) % 1; };
-  var SEC = [['STATION', 0], ['LIFT', ((PK.liftU[0] - PK.stationU) % 1 + 1) % 1], ['DROP\nLOOP', ((PK.liftU[1] - PK.stationU) % 1 + 1) % 1],
-    ['TURN\nHILLS', at0(-12.4, -28.9)], ['CORK-\nSCREW', at0(16, -28.3)], ['BRAKES', at0(-9, -28.3)], ['STATION', at0(-19, -14)]];
+  var SEC = [['STATION', 0], ['LIFT', ((PK.liftU[0] - PK.stationU) % 1 + 1) % 1], ['DROP\nHELIX', ((PK.liftU[1] - PK.stationU) % 1 + 1) % 1],
+    ['LOOP\nHILLS', at0(3.5, -17.5)], ['CORK-\nSCREW', at0(6, -29.3)], ['BRAKES', at0(-9, -29.3)], ['STATION', at0(-17, -14)]];
   PK.coasterSections = SEC;   // the wall's track display (part 03) names the same sections
   var mimic = [];
   for (var si = 0; si < 6; si++) mimic.push(pkCtlAnnun(HB, -1.08 + si * 0.2, 0, 0.18, 0.12, SEC[si][0], { col: si === 0 ? '#5fd38d' : si === 5 ? '#ff9a52' : '#8fc3ff' }));
@@ -908,7 +908,7 @@ function pkCtlHood(parent, x, y, z, w, h, lean) {
 var PK_CAB_RIDES = [
   ['coaster', 'THE COASTER'], ['carousel', 'CAROUSEL'], ['teacups', 'TEACUPS'], ['ferris', 'FERRIS WHEEL'],
   ['dodgems', 'DODGEMS'], ['droptower', 'DROP TOWER'], ['flume', 'LOG FLUME'], ['danse', 'DANCE RIDE'],
-  ['kround', 'LITTLE ROUNDABOUT'], ['kpots', 'WOBBLY POTS'], ['kpuffin', 'PUFFIN LINE'],
+  ['kround', 'LITTLE ROUNDABOUT'], ['kpots', 'WOBBLY POTS'], ['kpuffin', 'PUFFIN LINE'], ['ktoy', "TEDDY'S TOY TOUR"],
   ['serpent', 'THE SERPENT'], ['baron', "BARON'S DROP"], ['wildhunt', 'THE WILD HUNT'],
   ['mountain', 'THE MOUNTAIN KING'],
   ['droom', 'DREAM FLIGHT'], ['joris', 'DRAGON RIDE']

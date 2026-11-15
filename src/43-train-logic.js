@@ -270,7 +270,7 @@
       if (t.thirdPerson) {
         // Position the player body at the cab/seating spot, facing the right way
         if (!t.playerBody) {
-          t.playerBody = makeHuman({ shirt: std({ color: 0x2a3f5f, roughness: 0.8 }), pants: std({ color: 0x1a1a1a, roughness: 0.9 }) });
+          t.playerBody = makeHuman({ uniform: true, key: 'player' });
           t.playerBody.visible = false;
           t.playerBody.userData.dynamic = true;
           scene.add(t.playerBody);

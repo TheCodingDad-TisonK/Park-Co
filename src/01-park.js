@@ -109,7 +109,7 @@
   // down); the ride circuit follows its own switch and the same night hours, so a ride can be lit with the paths dark.
   // Every glow lens (userData.glow) and every plainly emissive lamp surface is registered here once and split by where it is
   // used: a material that only appears under a ride group is a ride light, everything else stays on the park circuit.
-  var PK_GLOW_PARK = null, PK_GLOW_RIDE = null, PK_GLOW_PARK_ON = null, PK_GLOW_RIDE_ON = null;
+  var PK_GLOW_AT = 0, PK_GLOW_PARK = null, PK_GLOW_RIDE = null, PK_GLOW_PARK_ON = null, PK_GLOW_RIDE_ON = null;
   function pkGlowRideMat(o) {
     for (var p = o; p && p !== scene; p = p.parent) if (p.userData && (p.userData.attr || p.userData.pkRideRoot)) return true;
     return false;
@@ -141,7 +141,10 @@
     PK_GLOW_PARK = park; PK_GLOW_RIDE = ride; PK_GLOW_PARK_ON = null; PK_GLOW_RIDE_ON = null;
   }
   function pkLightsApply(parkOn, rideOn) {
-    if (!PK_GLOW_PARK || !PK_GLOW_RIDE) pkGlowCollect();
+    // lamps built after the first collection (a part that fills in late, an expansion) were never on a switch and stayed dark
+    // while the hub's glowed: look again every twenty seconds
+    var nowMs = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    if (!PK_GLOW_PARK || !PK_GLOW_RIDE || nowMs - PK_GLOW_AT > 20000) { pkGlowCollect(); PK_GLOW_AT = nowMs; }
     var p = !!parkOn, r = !!rideOn;
     if (PK_GLOW_PARK_ON !== p) {
       PK_GLOW_PARK_ON = p;
@@ -570,7 +573,14 @@
       var r = $('h-ride');
       if (r) {
         var pr = PK.playerRide, on = pr ? (pr.kind === 'coaster' ? 'the coaster' : pr.a && pr.a.name) : '';
-        r.textContent = (PK.duty ? 'On duty at ' + PK.duty.name + ' · ' : '') + (on ? 'Riding ' + on + ' · ' : '') + 'Coaster: ' + pkRideWord() + (pkCoasterAuto() ? ' (auto)' : '') + ' · ' + pkOpenCount() + ' of ' + pkRideTotal() + ' rides open';
+        // quiet: the coaster's word only when it is not simply running on auto, the open count only when a ride is shut
+        var parts = [];
+        if (PK.duty) parts.push('On duty at ' + PK.duty.name);
+        if (on) parts.push('Riding ' + on);
+        if (!(pkCoasterAuto() && pkRideWord() === 'running')) parts.push('Coaster: ' + pkRideWord() + (pkCoasterAuto() ? ' (auto)' : ''));
+        if (pkOpenCount() < pkRideTotal()) parts.push(pkOpenCount() + ' of ' + pkRideTotal() + ' rides open');
+        r.textContent = parts.join(' · ');
+        r.style.display = parts.length ? '' : 'none';
       }
     },
     panel: function (kind, tab) { return pkPanel(kind, tab); },

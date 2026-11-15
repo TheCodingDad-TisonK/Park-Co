@@ -52,7 +52,7 @@
   // booking: no guest record, no invisible body - the camera is the rider.
   function pkPlayerSeatAttr(a, seat) {
     seat.player = true; a.riders++;
-    PK.playerRide = { kind: 'attr', a: a, seat: seat, started: a.state === 'running', yaw0: player.yaw, pitch0: player.pitch, eye: 1.30, face: Math.PI + (seat.ry || 0) };
+    PK.playerRide = { kind: 'attr', a: a, seat: seat, started: a.state === 'running', yaw0: player.yaw, pitch0: player.pitch, eye: a.id === 'teacups' ? 1.62 : 1.30, face: Math.PI + (seat.ry || 0) };   // the teacup's wall stood in front of the eye at 1.30
     if (a.state === 'idle') {
       var C = pkCtl(a);
       a.state = 'boarding'; a.t = 0; C.gates = true; pkAttrBarsUp(a, C); a.boarding = 0;

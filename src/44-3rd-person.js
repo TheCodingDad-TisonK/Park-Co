@@ -9,7 +9,7 @@
   // Create the body when needed
   function ensureBody() {
     if (!PK_3P.body) {
-      PK_3P.body = makeHuman({ shirt: std({ color: 0x2a3f5f, roughness: 0.8 }), pants: std({ color: 0x1a1a1a, roughness: 0.9 }) });
+      PK_3P.body = makeHuman({ uniform: true, key: 'player' });
       PK_3P.body.visible = false;
       PK_3P.body.userData.dynamic = true;
       scene.add(PK_3P.body);
